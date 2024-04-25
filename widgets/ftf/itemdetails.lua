@@ -6,6 +6,7 @@ local Widget = require "widgets.widget"
 local Equipment = require "defs.equipment"
 local EquipmentGem = require "defs.equipmentgems"
 local Consumable = require "defs.consumable"
+local Constructable = require "defs.constructable"
 local Power = require "defs.powers"
 local PowerDisplayWidget = require "widgets/ftf/powerdisplaywidget"
 local EquipmentDescriptionWidget = require "widgets/ftf/equipmentdescriptionwidget"
@@ -107,7 +108,7 @@ function ItemDetails:SetItem(slot, itemData)
 	elseif slot == Equipment.Slots.FOOD then
 		self:_ShowFoodDetails(itemData)
 	elseif slot == Consumable.Slots.MATERIALS
-		or slot == Consumable.Slots.PLACEABLE_PROP
+		or Constructable.HasSlot(slot)
 		or slot == Consumable.Slots.KEY_ITEMS
 		or slot == EquipmentGem.Slots.GEMS then
 		self:_ShowMaterialDetails(itemData)

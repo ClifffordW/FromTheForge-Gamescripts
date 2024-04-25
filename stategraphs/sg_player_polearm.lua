@@ -84,11 +84,19 @@ local ATTACKS =
 	},
 }
 
-local LIGHT_ATTACK_HEIGHT_MAX = 1.75
-local LIGHT_ATTACK_HEIGHT_MIN = 1.3
+local LIGHT_ATTACK_DEFAULT_DISTANCE = 6
+local LIGHT_ATTACK_DEFAULT_THICKNESS = 1.75
+local LIGHT_ATTACK_FOCUS_LENGTH = 0.5 --focus band is same length always
 
+local HEAVY_ATTACK_DEFAULT_DISTANCE = 6.2
+local HEAVY_ATTACK_DEFAULT_THICKNESS = 1.75
+local HEAVY_ATTACK_FOCUS_LENGTH = 0.5 --focus band is same length always
 
-local FOCUS_TESTPOINT_ENABLED = false -- jambell: I don't like how this behaves mostly. It nullifies a lot of visually true focus hits.
+local MULTITHRUST_DEFAULT_DISTANCE = 6.3
+local MULTITHRUST_DEFAULT_THICKNESS = 1.75
+local MULTITHRUST_FOCUS_LENGTH = 0.5 --focus band is same length always
+
+local FOCUS_TESTPOINT_ENABLED = false -- NOTE: I don't like how this behaves mostly. It nullifies a lot of visually true focus hits.
 									  -- Because horizontal size of hitboxes is so inconsistent, it's hard to set a good value that works for all mobs.
 									  -- Disabling this but leaving the code in case we change mind. But this favours fun.
 local FOCUS_TESTPOINT_DISTANCE = 5.5
@@ -96,7 +104,7 @@ local FOCUS_TESTPOINT_DISTANCE = 5.5
 local function CheckIfFocusHit(inst, target)
 	local focus = false
 
-	if inst.sg.statemem.drillattack then
+	if inst.sg.statemem.attack_id == "DRILL" then
 
 		inst.sg.statemem.drillcount = inst.sg.statemem.drillcount + 1
 
@@ -135,18 +143,6 @@ local function OnHitBoxTriggered(inst, data)
 	for i = 1, #data.targets do
 		local v = data.targets[i]
 
-		-- if inst.sg.statemem.drillattack then
-		-- 	inst.sg.statemem.drillcount = inst.sg.statemem.drillcount + 1
-		-- 	if inst.sg.statemem.drillcount > 4 then -- only possible when hitting multiple targets -- never focus against a single target.
-		-- 		focushit = true
-		-- 		damage_mod = ATTACK_DAMAGE_MOD.DRILL_FOCUS
-		-- 		pushback = ATTACK_PUSHBACK.DRILL_FOCUS
-		-- 		inst.sg.statemem.knockbackhit = true
-		-- 	elseif inst.sg.statemem.drillcount == 4 then
-		-- 		inst.sg.statemem.knockbackhit = true
-		-- 	end
-		-- end
-
 		local focushit = CheckIfFocusHit(inst, v)
 
 		local hitstoplevel = focushit and ATTACK_DATA.HITSTOP_FOCUS or ATTACK_DATA.HITSTOP
@@ -162,30 +158,34 @@ local function OnHitBoxTriggered(inst, data)
 		attack:SetFocus(focushit)
 		attack:SetID(inst.sg.mem.attack_type)
 		attack:SetNameID(inst.sg.statemem.attack_id)
+		attack:SetHitFlags(Attack.HitFlags.LOW_ATTACK)
 
+		local hit = false
 		if inst.sg.statemem.knockbackhit and inst.sg.statemem.knockbackable then
-			inst.components.combat:DoKnockbackAttack(attack)
+			hit = inst.components.combat:DoKnockbackAttack(attack)
 		else
-			inst.components.combat:DoBasicAttack(attack)
+			hit = inst.components.combat:DoBasicAttack(attack)
 		end
 
-		hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+		if hit then
+			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-		local hitfx_x_offset = 3.2
-		local hitfx_y_offset = 1.5
+			local hitfx_x_offset = 3.2
+			local hitfx_y_offset = 1.5
 
-		local distance = inst:GetDistanceSqTo(v)
-		if distance >= 30 then
-			hitfx_x_offset = hitfx_x_offset + 1.25
-		elseif distance >= 25 then
-			hitfx_x_offset = hitfx_x_offset + 0.75
-		end
-		inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_pierce", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+			local distance = inst:GetDistanceSqTo(v)
+			if distance >= 30 then
+				hitfx_x_offset = hitfx_x_offset + 1.25
+			elseif distance >= 25 then
+				hitfx_x_offset = hitfx_x_offset + 0.75
+			end
+			inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_pierce", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-		-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-		if v.sg ~= nil and v.sg:HasStateTag("block") then
-		else
-			SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+			-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+			if v.sg ~= nil and v.sg:HasStateTag("block") then
+			else
+				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+			end
 		end
 	end
 end
@@ -200,6 +200,8 @@ local function OnMultithrustHitBoxTriggered(inst, data)
 	local hitstoplevel = HitStopLevel.MEDIUM -- For the multithrust, we apply hitstop a little bit differently because of how many hits happen quickly. Usually we'd use SGCommon.Fns.ApplyHitstop()
 	local playerhitstoplevel = hitstoplevel
 	local shouldhitstop = false
+
+	-- printf("[%s] >>> HITBOX TRIGGERED!", GetTick())
 
 	local dir = inst.Transform:GetFacingRotation()
 	for i = 1, #data.targets do
@@ -225,40 +227,44 @@ local function OnMultithrustHitBoxTriggered(inst, data)
 		attack:SetDir(dir)
 		attack:SetID(inst.sg.mem.attack_type)
 		attack:SetNameID(inst.sg.statemem.attack_id)
+		attack:SetHitFlags(Attack.HitFlags.LOW_ATTACK)
 
+		local hit = false
 		if numhits < 7 then
 			attack:SetPushback(pushback)
 			attack:SetHitstunAnimFrames(ATTACK_DATA.HITSTUN)
-			inst.components.combat:DoBasicAttack(attack)
+			hit = inst.components.combat:DoBasicAttack(attack)
 		else
-			-- jambell - tuning: pushback enough to be in range of Heavy
+			-- NOTE about tuning: pushback enough to be in range of Heavy
 			attack:SetHitstunAnimFrames(ATTACK_DATA.HITSTUN_KNOCKBACK)
-			inst.components.combat:DoKnockbackAttack(attack)
+			hit = inst.components.combat:DoKnockbackAttack(attack)
 		end
 		kill = kill and v:IsDead()
 
-		local targethitstoplevel = hitstoplevel
-		if kill then
-			shouldhitstop = true
-			local killstoplevel = v:HasTag("boss") and HitStopLevel.BOSSKILL or HitStopLevel.KILL
-			targethitstoplevel = math.max(targethitstoplevel, killstoplevel)
-			playerhitstoplevel = math.max(playerhitstoplevel, killstoplevel)
-		end
-
-		local fxhitstoplevel
-		if numhits >= 7 then -- used to also include 'numhits =='
-			shouldhitstop = true
-			fxhitstoplevel = targethitstoplevel
-			if v.components.hitstopper ~= nil then
-				v.components.hitstopper:PushHitStop(targethitstoplevel)
+		if hit then
+			local targethitstoplevel = hitstoplevel
+			if kill then
+				shouldhitstop = true
+				local killstoplevel = v:HasTag("boss") and HitStopLevel.BOSSKILL or HitStopLevel.KILL
+				targethitstoplevel = math.max(targethitstoplevel, killstoplevel)
+				playerhitstoplevel = math.max(playerhitstoplevel, killstoplevel)
 			end
 
-			SpawnHurtFx(inst, v, 3.2, dir, fxhitstoplevel)
-		end
+			local fxhitstoplevel
+			if numhits >= 7 then -- used to also include 'numhits =='
+				shouldhitstop = true
+				fxhitstoplevel = targethitstoplevel
+				if v.components.hitstopper ~= nil then
+					v.components.hitstopper:PushHitStop(targethitstoplevel)
+				end
 
-		local hitfx_x_offset = 3.2
-		local hitfx_y_offset = 1.5
-		inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_pierce", v, inst, hitfx_x_offset, hitfx_y_offset, dir, fxhitstoplevel)
+				SpawnHurtFx(inst, v, 3.2, dir, fxhitstoplevel)
+			end
+
+			local hitfx_x_offset = 3.2
+			local hitfx_y_offset = 1.5
+			inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_pierce", v, inst, hitfx_x_offset, hitfx_y_offset, dir, fxhitstoplevel)
+		end
 	end
 
 	if shouldhitstop then
@@ -337,18 +343,13 @@ local states =
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 10 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", 10 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("lightattack", 10 * ANIM_FRAMES)
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.lightattackdistance or LIGHT_ATTACK_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.lightattackthickness or LIGHT_ATTACK_DEFAULT_THICKNESS
 		end,
 
 		timeline =
 		{
-			-- --sounds
-			-- FrameEvent(0, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.Polearm_poke_1
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-
 			FrameEvent(1, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, 3) end),
 			FrameEvent(2, function(inst)
@@ -357,16 +358,16 @@ local states =
 				SGCommon.Fns.SetMotorVelScaled(inst, 1)
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.5, 6, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(3, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .5)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 5.8, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(4, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .25)
-				inst.components.hitbox:PushBeam(0, 5.8, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 				combatutil.EndMeleeAttack(inst)
 			end),
 			FrameEvent(5, function(inst) inst.Physics:Stop() end),
@@ -415,18 +416,13 @@ local states =
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 10 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("lightattack", 10 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", 10 * ANIM_FRAMES)
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.lightattackdistance or LIGHT_ATTACK_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.lightattackthickness or LIGHT_ATTACK_DEFAULT_THICKNESS
 		end,
 
 		timeline =
 		{
-			-- --sounds
-			-- FrameEvent(3, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.Polearm_poke_2
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-
 			FrameEvent(4, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2) end),
 			FrameEvent(5, function(inst)
 				combatutil.StartMeleeAttack(inst)
@@ -434,16 +430,16 @@ local states =
 				SGCommon.Fns.SetMotorVelScaled(inst, 1)
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.5, 6, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(6, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .5)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 5.8, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(7, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .25)
-				inst.components.hitbox:PushBeam(0, 5.8, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 
 				combatutil.EndMeleeAttack(inst)
 			end),
@@ -489,18 +485,13 @@ local states =
 
 			inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", 16 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 16 * ANIM_FRAMES)
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.lightattackdistance or LIGHT_ATTACK_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.lightattackthickness or LIGHT_ATTACK_DEFAULT_THICKNESS
 		end,
 
 		timeline =
 		{
-			-- --sounds
-			-- FrameEvent(6, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.Polearm_poke_3
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-
 			FrameEvent(7, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 10) end),
 			FrameEvent(8, function(inst)
 				combatutil.StartMeleeAttack(inst)
@@ -508,16 +499,16 @@ local states =
 				SGCommon.Fns.SetMotorVelScaled(inst, 1)
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.5, 6, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(9, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .5)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 5.8, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(10, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .25)
-				inst.components.hitbox:PushBeam(0, 5.8, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 
 				combatutil.EndMeleeAttack(inst)
 			end),
@@ -529,7 +520,8 @@ local states =
 			FrameEvent(8, function(inst)
 			end),
 			FrameEvent(16, function(inst)
-				inst.sg.statemem.heavycombostate = "multithrust_attack"
+				-- TODO: after FX and sound are hooked up, -only- use attack_pre and so forth.
+				inst.sg.statemem.heavycombostate = "multithrust_attack_pre"
 				SGPlayerCommon.Fns.TryQueuedAction(inst, "heavyattack")
 			end),
 
@@ -665,18 +657,13 @@ local states =
 			-- If the player clicks dodge or attack while in the air, open the queue up to allow a pre-press.
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 10 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("lightattack", 10 * ANIM_FRAMES)
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.heavyattackdistance or HEAVY_ATTACK_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.heavyattackthickness or HEAVY_ATTACK_DEFAULT_THICKNESS
 		end,
 
 		timeline =
 		{
-			-- --sounds
-			-- FrameEvent(10, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.AAAA_default_event
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-
 			--physics
 			FrameEvent(3, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 6 * inst.sg.statemem.speedmult) end),
 			FrameEvent(4, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 5.5 * inst.sg.statemem.speedmult) end),
@@ -698,10 +685,6 @@ local states =
 			FrameEvent(20, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 0.5 * inst.sg.statemem.speedmult) end),
 			--
 
-			-- FrameEvent(10, function(inst) SGPlayerCommon.Fns.AttachSwipeFx(inst, "fx_polearm_heavy_atk") end),
-			-- FrameEvent(10, function(inst) SGPlayerCommon.Fns.AttachPowerSwipeFx(inst, "fx_polearm_heavy_atk") end),
-
-
 			FrameEvent(2, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, 6.5 * inst.sg.statemem.speedmult)
 				inst.sg:AddStateTag("airborne_high")
@@ -712,14 +695,14 @@ local states =
 
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.7, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(11, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0.5, 6.1, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0.5, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(12, function(inst)
-				inst.components.hitbox:PushBeam(0.5, 6.1, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0.5, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 
 				combatutil.EndMeleeAttack(inst)
 			end),
@@ -759,8 +742,251 @@ local states =
 		end,
 	}),
 
+
+	-- check tags
+	-- and attack pre recovery tags etc
+
 	State({
+		name = "multithrust_attack_pre",
+		tags = { "attack", "busy", "heavy_attack" }, -- CHECK TAGS
+
+		onenter = function(inst)
+			inst:PushEvent("attack_state_start")
+			inst.AnimState:PlayAnimation("polearm_multithrust_atk_pre")
+			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 12 * ANIM_FRAMES)
+			soundutil.PlayCodeSound(inst,fmodtable.Event.Polearm_poke_4_spin,
+				{
+					name = "polearm_multithrust_spin",
+					max_count = 1,
+					is_autostop = true,
+				}
+			)
+		end,
+
+		timeline =
+		{
+			FrameEvent(9, function(inst)
+				soundutil.PlayCodeSound(inst,fmodtable.Event.Polearm_poke_4_thrust,
+					{
+						name = "polearm_multithrust_pre",
+						max_count = 1,
+						is_autostop = true,
+					}	
+				)
+				soundutil.KillSound(inst,"polearm_multithrust_spin")
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("multithrust_attack_loop")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:Stop()
+			inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
+		end,
+	}),
+
+	State({
+		name = "multithrust_attack_loop",
+		tags = { "attack", "busy", "heavy_attack" },
+
+		onenter = function(inst, loopscompleted)
+			inst:PushEvent("attack_state_start")
+			inst.AnimState:PlayAnimation("polearm_multithrust_atk_loop")
+
+			inst.sg.statemem.attack_id = "MULTITHRUST" -- unnecessary, but here for consistancy's sake
+			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 12 * ANIM_FRAMES)
+
+			inst.sg.statemem.multithrustloops = loopscompleted or 0
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.multithrustdistance or MULTITHRUST_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.multithrustthickness or MULTITHRUST_DEFAULT_THICKNESS
+
+			if inst.sg.statemem.multithrustloops then
+				-- We're looping, so continue moving at the speed we were before.
+				SGCommon.Fns.SetMotorVelScaled(inst, .25)
+			else
+				-- This is a new attack, so start at full speed.
+				SGCommon.Fns.SetMotorVelScaled(inst, 3)
+			end
+			-- printf("[%s] onenter", GetTick())
+		end,
+
+		timeline =
+		{
+			FrameEvent(0, function(inst)
+				combatutil.StartMeleeAttack(inst)
+				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(1)
+
+				if inst.sg.statemem.multithrustloops < 1 then
+					SGCommon.Fns.SetMotorVelScaled(inst, 1)
+				end
+
+				inst.sg.statemem.targets = {}
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(1, function(inst)
+				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(2)
+
+				if inst.sg.statemem.multithrustloops < 1 then
+					SGCommon.Fns.SetMotorVelScaled(inst, .5)
+				end
+
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+
+			FrameEvent(2, function(inst)
+				if inst.sg.statemem.multithrustloops < 1 then
+					SGCommon.Fns.SetMotorVelScaled(inst, .25)
+				end
+
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(3, function(inst)
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+
+
+			FrameEvent(4, function(inst)
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(5, function(inst)
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+
+
+			FrameEvent(6, function(inst)
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(7, function(inst)
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+
+
+			FrameEvent(8, function(inst)
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(9, function(inst)
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+
+
+			FrameEvent(10, function(inst)
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(11, function(inst)
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+
+
+			FrameEvent(12, function(inst)
+				inst.sg.statemem.focushit = true
+				-- printf("[%s] Set Focus Hit: TRUE", GetTick())
+				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(4) -- The final hit of the multithrust has longer hitstop, so increase the repeat hit delay so the final non-crit hit doesn't sneak through
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+			end),
+			FrameEvent(13, function(inst)
+				inst.sg.statemem.focushit = false
+				-- printf("[%s] Set Focus Hit: FALSE", GetTick())
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
+
+				combatutil.EndMeleeAttack(inst)
+			end),
+
+			-- Cancels
+			FrameEvent(0, SGPlayerCommon.Fns.SetCanDodge),
+			FrameEvent(22, SGPlayerCommon.Fns.SetCanSkill),
+		},
+
+		onupdate = function(inst)
+			if not inst.components.playercontroller:IsControlHeld("heavyattack") then
+				inst.sg.statemem.releasedheavy = true
+			end
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				if inst.sg.mem.maxmultithrustloops
+					and inst.sg.statemem.multithrustloops < inst.sg.mem.maxmultithrustloops
+					and not inst.sg.statemem.releasedheavy then
+
+					inst.sg.statemem.multithrustloops = inst.sg.statemem.multithrustloops + 1
+					inst.sg:GoToState("multithrust_attack_loop", inst.sg.statemem.multithrustloops)
+				else
+					inst.sg:GoToState("multithrust_attack_pst")
+				end
+			end),
+
+			EventHandler("hitboxtriggered", OnMultithrustHitBoxTriggered),
+		},
+
+		onexit = function(inst)
+			inst.Physics:Stop()
+			SGPlayerCommon.Fns.DetachSwipeFx(inst)
+			SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
+			inst.components.hitbox:StopRepeatTargetDelay()
+		end,
+	}),
+
+	State({
+		name = "multithrust_attack_pst",
+		tags = { "attack", "busy", "heavy_attack" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("polearm_multithrust_atk_pst")
+			SGPlayerCommon.Fns.SetCanDodge(inst)
+			SGPlayerCommon.Fns.SetCanSkill(inst)
+		end,
+
+		timeline =
+		{
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("attack_pst")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:Stop()
+		end,
+	}),
+
+	State({
+		-- DEPRECATED: remove when verified fx and sfx are done for pre/loop/pst version.
 		name = "multithrust_attack",
+		-- DEPRECATED: remove when verified fx and sfx are done for pre/loop/pst version.
 		tags = { "attack", "busy", "heavy_attack" },
 
 		onenter = function(inst)
@@ -770,26 +996,13 @@ local states =
 			inst.sg.statemem.multithrustpowerfx = nil
 			inst.sg.statemem.attack_id = "MULTITHRUST" -- unnecessary, but here for consistancy's sake
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 12 * ANIM_FRAMES)
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.multithrustdistance or MULTITHRUST_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.multithrustthickness or MULTITHRUST_DEFAULT_THICKNESS
 		end,
 
 		timeline =
 		{
-			--sounds
-			-- FrameEvent(0, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.Polearm_poke_4_spin
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-			-- FrameEvent(14, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.Polearm_poke_4_flurry
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-
-			-- FrameEvent(0, function(inst) inst.sg.statemem.multithrustfx = SGPlayerCommon.Fns.AttachSwipeFx(inst, "fx_polearm_multithrust_atk") end),
-			-- FrameEvent(0, function(inst) inst.sg.statemem.multithrustpowerfx = SGPlayerCommon.Fns.AttachPowerSwipeFx(inst, "fx_polearm_multithrust_atk") end),
 
 			FrameEvent(11, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 3) end),
 			FrameEvent(12, function(inst)
@@ -799,73 +1012,72 @@ local states =
 				inst.sg.statemem.targets = {}
 				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(2)
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(13, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .5)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 
 			FrameEvent(14, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, .25)
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(15, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
-
 
 			FrameEvent(16, function(inst)
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(17, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 
 
 			FrameEvent(18, function(inst)
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(19, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 
 
 			FrameEvent(20, function(inst)
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(21, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 
 
 			FrameEvent(22, function(inst)
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(23, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 
 
 			FrameEvent(24, function(inst)
 				inst.sg.statemem.focushit = true
 				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(4) -- The final hit of the multithrust has longer hitstop, so increase the repeat hit delay so the final non-crit hit doesn't sneak through
-				inst.components.hitbox:PushBeam(5.8, 6.3, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxlength - HEAVY_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(25, function(inst)
 				inst.sg.statemem.focushit = false
-				inst.components.hitbox:PushBeam(0, 6.2, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, inst.sg.statemem.hitboxlength - 0.1, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 
 				combatutil.EndMeleeAttack(inst)
 
@@ -876,11 +1088,11 @@ local states =
 			FrameEvent(26, function(inst) inst.Physics:Stop() end),
 
 			-- Cancels
-			-- FrameEvent(0, SGPlayerCommon.Fns.SetCanDodge),
+			FrameEvent(0, SGPlayerCommon.Fns.SetCanDodge),
 			-- FrameEvent(12, SGPlayerCommon.Fns.SetCannotDodge),
 
 			FrameEvent(34, SGPlayerCommon.Fns.SetCanSkill),
-			FrameEvent(34, SGPlayerCommon.Fns.SetCanDodge),
+			-- FrameEvent(34, SGPlayerCommon.Fns.SetCanDodge),
 		},
 
 		events =
@@ -903,26 +1115,28 @@ local states =
 
 	State({
 		name = "rolling_drill_attack_very_far",
-		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack", 1.5) end,
+		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack_pre", 1.5) end,
 	}),
 
 	State({
 		name = "rolling_drill_attack_far",
-		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack", 1.25) end,
+		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack_pre", 1.25) end,
 	}),
 
 	State({
 		name = "rolling_drill_attack_med",
-		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack", .8) end,
+		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack_pre", .8) end,
 	}),
 
 	State({
 		name = "rolling_drill_attack_very_short",
-		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack", .25) end,
+		onenter = function(inst) inst.sg:GoToState("rolling_drill_attack_pre", .25) end,
 	}),
 
 	State({
+		-- DEPRECATED: remove when verified fx and sfx are done for pre/loop/pst version.
 		name = "rolling_drill_attack",
+		-- DEPRECATED: remove when verified fx and sfx are done for pre/loop/pst version.
 		tags = { "attack", "busy", "airborne", "projectile_immune", "light_attack" },
 
 		onenter = function(inst, speedmult)
@@ -934,10 +1148,7 @@ local states =
 			SGCommon.Fns.SetMotorVelScaled(inst, 12 * inst.sg.statemem.speedmult)
 			inst.sg.statemem.hitboxsize = inst.HitBox:GetSize()
 			inst.HitBox:SetNonPhysicsRect(inst.sg.statemem.hitboxsize * 1.5)
-			inst.sg.statemem.drillattack = true
 			inst.sg.statemem.drillcount = 0
-			inst.sg.statemem.drillfrontfx = nil
-			inst.sg.statemem.drillbackfx = nil
 
 			SGCommon.Fns.StartJumpingOverHoles(inst)
 
@@ -954,14 +1165,6 @@ local states =
 
 		timeline =
 		{
-			-- --sounds
-			-- FrameEvent(0, function(inst)
-			-- 	local params = {}
-			-- 	params.fmodevent = fmodtable.Event.Polearm_spin_atk
-			-- 	params.sound_max_count = 1
-			-- 	soundutil.PlaySoundData(inst, params)
-			-- end),
-
 			--physics
 			FrameEvent(14, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 6 * inst.sg.statemem.speedmult) end),
 			FrameEvent(15, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 5 * inst.sg.statemem.speedmult) end),
@@ -972,11 +1175,6 @@ local states =
 			FrameEvent(19, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 1 * inst.sg.statemem.speedmult) end),
 			FrameEvent(20, function(inst) inst.Physics:Stop() end),
 			--
-
-			-- FrameEvent(0, function(inst)
-			-- 	inst.sg.statemem.drillfrontfx = SGPlayerCommon.Fns.AttachSwipeFx(inst, "fx_polearm_roll_atk")
-			-- 	inst.sg.statemem.drillpowerfx = SGPlayerCommon.Fns.AttachPowerSwipeFx(inst, "fx_polearm_roll_atk")
-			-- end),
 
 			FrameEvent(2, function(inst)
 				combatutil.StartMeleeAttack(inst)
@@ -1059,9 +1257,250 @@ local states =
 			SGPlayerCommon.Fns.DetachSwipeFx(inst)
 			SGPlayerCommon.Fns.DetachSwipeFx(inst, true)
 			SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
-			SGCommon.Fns.DestroyFx(inst, "drillfrontfx")
-			SGCommon.Fns.DestroyFx(inst, "drillpowerfx")
-			SGCommon.Fns.DestroyFx(inst, "drillbackfx")
+		end,
+	}),
+
+	State({
+		name = "rolling_drill_attack_pre",
+		tags = { "attack", "busy", "airborne", "projectile_immune", "light_attack" },
+
+		onenter = function(inst, speedmult)
+			inst.AnimState:PlayAnimation("polearm_roll_atk_pre")
+
+			inst.sg.statemem.speedmult = speedmult or 1
+			SGPlayerCommon.Fns.SetRollPhysicsSize(inst)
+			SGCommon.Fns.SetMotorVelScaled(inst, 12 * inst.sg.statemem.speedmult)
+		end,
+
+		timeline =
+		{
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("rolling_drill_attack_loop", { speedmult = inst.sg.statemem.speedmult, loops = 0 })
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:Stop()
+			SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
+			SGCommon.Fns.StopJumpingOverHoles(inst)
+		end,
+	}),
+
+	State({
+		name = "rolling_drill_attack_loop",
+		tags = { "attack", "busy", "airborne", "projectile_immune", "light_attack" },
+
+		onenter = function(inst, data)
+			inst:PushEvent("attack_state_start")
+			inst.AnimState:PlayAnimation("polearm_roll_atk_loop", true)
+
+			inst.sg.statemem.speedmult = data.speedmult or 1
+			SGCommon.Fns.SetMotorVelScaled(inst, 12 * inst.sg.statemem.speedmult)
+
+			SGPlayerCommon.Fns.SetRollPhysicsSize(inst)
+
+			inst.sg.statemem.hitboxsize = inst.HitBox:GetSize()
+			inst.HitBox:SetNonPhysicsRect(inst.sg.statemem.hitboxsize * 1.5)
+
+			inst.sg.statemem.drillcount = 0
+
+			SGCommon.Fns.StartJumpingOverHoles(inst)
+
+			inst.sg.statemem.attack_id = "DRILL"
+			inst.sg.statemem.loops = data.loops or 0
+		end,
+
+		onupdate = function(inst)
+			inst.components.hitbox:PushBeam(0, 4, .85, HitPriority.PLAYER_DEFAULT)
+			inst.components.hitbox:PushBeam(0, 4.5, .5, HitPriority.PLAYER_DEFAULT)
+			inst.components.hitbox:PushBeam(0.5, 2, 1.5, HitPriority.PLAYER_DEFAULT)
+
+			if not inst.components.playercontroller:IsControlHeld("lightattack") then
+				inst.sg.statemem.releasedlight = true
+			end
+		end,
+
+		timeline =
+		{
+			FrameEvent(0, function(inst)
+				combatutil.StartMeleeAttack(inst)
+
+				inst.sg.statemem.focushit = false
+				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(3) --decrease to allow for more hits per drill, increase for less hits for drill
+				inst.sg.statemem.hitting = true
+			end),
+			FrameEvent(1, function(inst)
+				if inst.sg.mem.drill_sound_LP then
+					soundutil.SetInstanceParameter(inst,inst.sg.mem.drill_sound_LP,"polearm_drill_LP_speed",1)
+				end
+			end),
+			FrameEvent(1, function(inst)
+				if inst.sg.mem.maxspinningdrillloops then
+					if not inst.sg.mem.drill_sound_LP then
+						inst.sg.mem.drill_sound_LP = soundutil.PlayCodeSound(inst,fmodtable.Event.Polearm_drill_LP)
+					else
+						soundutil.SetInstanceParameter(inst,inst.sg.mem.drill_sound_LP,"polearm_drill_LP_speed",1)
+					end
+				else
+					soundutil.PlayCodeSound(inst,fmodtable.Event.Polearm_drill_single)
+				end
+			end),
+			FrameEvent(5, function(inst)
+				inst.sg.statemem.knockbackable = true
+			end),
+			FrameEvent(7, function(inst)
+				if inst.sg.mem.drill_sound_LP then
+					if inst.sg.statemem.loops == inst.sg.mem.maxspinningdrillloops then
+						soundutil.KillSound(inst, inst.sg.mem.drill_sound_LP)
+						inst.sg.mem.drill_sound_LP = nil
+					end
+				end
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				if inst.sg.mem.maxspinningdrillloops
+					and inst.sg.statemem.loops < inst.sg.mem.maxspinningdrillloops
+					and not inst.sg.statemem.releasedlight then
+
+					inst.sg.statemem.loops = inst.sg.statemem.loops + 1
+
+					inst.sg:GoToState("rolling_drill_attack_loop", { speedmult = inst.sg.statemem.speedmult, loops = inst.sg.statemem.loops})
+				else
+					inst.sg:GoToState("rolling_drill_attack_pst", { speedmult = inst.sg.statemem.speedmult })
+				end
+			end),
+
+			EventHandler("hitboxtriggered", OnHitBoxTriggered),
+		},
+
+		onexit = function(inst)
+			combatutil.EndMeleeAttack(inst)
+
+			inst.Physics:Stop()
+			inst.HitBox:SetNonPhysicsRect(inst.sg.statemem.hitboxsize)
+			SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
+			inst.components.hitbox:StopRepeatTargetDelay()
+			inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
+			SGCommon.Fns.StopJumpingOverHoles(inst)
+
+			SGPlayerCommon.Fns.DetachSwipeFx(inst)
+			SGPlayerCommon.Fns.DetachSwipeFx(inst, true)
+			SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
+		end,
+	}),
+
+	State({
+		name = "rolling_drill_attack_pst",
+		tags = { "attack", "busy", "airborne", "projectile_immune", "light_attack" },
+
+		onenter = function(inst, data)
+			inst.AnimState:PlayAnimation("polearm_roll_atk_pst")
+
+			inst.sg.statemem.speedmult = data.speedmult or 1
+			SGPlayerCommon.Fns.SetRollPhysicsSize(inst)
+			inst.sg.statemem.hitboxsize = inst.HitBox:GetSize()
+			inst.HitBox:SetNonPhysicsRect(inst.sg.statemem.hitboxsize * 1.5)
+
+			SGCommon.Fns.SetMotorVelScaled(inst, 12 * inst.sg.statemem.speedmult)
+
+			SGCommon.Fns.StartJumpingOverHoles(inst)
+
+			inst.sg.statemem.attack_id = "DRILL"
+		end,
+
+		onupdate = function(inst)
+			if inst.sg.statemem.hitting then
+				inst.components.hitbox:PushBeam(0, 4, .85, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, 4.5, .5, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0.5, 2, 1.5, HitPriority.PLAYER_DEFAULT)
+			end
+		end,
+
+		timeline =
+		{
+			--physics
+			FrameEvent(2, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 6 * inst.sg.statemem.speedmult) end),
+			FrameEvent(3, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 5 * inst.sg.statemem.speedmult) end),
+			FrameEvent(4, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 4 * inst.sg.statemem.speedmult) end),
+			FrameEvent(5, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 3 * inst.sg.statemem.speedmult) end),
+			FrameEvent(6, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2 * inst.sg.statemem.speedmult) end),
+			FrameEvent(7, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 1 * inst.sg.statemem.speedmult) end),
+			FrameEvent(8, function(inst) inst.Physics:Stop() end),
+			--
+
+			FrameEvent(2, function(inst)
+				inst.sg:RemoveStateTag("airborne")
+				SGCommon.Fns.StopJumpingOverHoles(inst)
+			end),
+
+			FrameEvent(6, function(inst)
+				inst.sg.statemem.lightcombostate = "light_attack2"
+
+				local data = inst.components.playercontroller:GetQueuedControl("lightattack")
+				if data ~= nil then
+					if SGPlayerCommon.Fns.IsForwardControl(inst, data) then
+						SGPlayerCommon.Fns.DoAction(inst, data)
+					end
+				end
+			end),
+
+			FrameEvent(11, function(inst)
+				-- Delay some time before setting hitbox size back down.
+				-- Make this later to make this move worse, and make this earlier to make this move better.
+				inst.HitBox:SetNonPhysicsRect(inst.sg.statemem.hitboxsize)
+			end),
+
+			-- Cancels
+			FrameEvent(7, SGPlayerCommon.Fns.SetCanAttackOrAbility),
+			FrameEvent(13, SGPlayerCommon.Fns.SetCanDodge),
+		},
+
+		events =
+		{
+			EventHandler("controlevent", function(inst, data)
+				if data.control == "lightattack" then
+					if inst.sg.statemem.lightcombostate ~= nil then
+						if SGPlayerCommon.Fns.IsForwardControl(inst, data) then
+							SGPlayerCommon.Fns.DoAction(inst, data)
+						end
+					end
+				end
+			end),
+			EventHandler("hitboxtriggered", OnHitBoxTriggered),
+			EventHandler("animover", function(inst)
+				inst.sg.statemem.heavycombostate = "rolling_heavy_attack_med"
+
+				local data = inst.components.playercontroller:GetQueuedControl("heavyattack")
+				if data ~= nil then
+					if SGPlayerCommon.Fns.IsForwardControl(inst, data) then
+						if SGPlayerCommon.Fns.DoAction(inst, data) then
+							return
+						end
+					end
+				end
+
+				inst.sg:GoToState("attack_pst")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:Stop()
+			inst.HitBox:SetNonPhysicsRect(inst.sg.statemem.hitboxsize)
+			SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
+			inst.components.hitbox:StopRepeatTargetDelay()
+			inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
+			SGCommon.Fns.StopJumpingOverHoles(inst)
+
+			SGPlayerCommon.Fns.DetachSwipeFx(inst)
+			SGPlayerCommon.Fns.DetachSwipeFx(inst, true)
+			SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
 		end,
 	}),
 
@@ -1160,6 +1599,11 @@ local states =
 			inst.sg.statemem.speedmult = speedmult or 1
 
 			inst.sg.statemem.attack_id = "REVERSE"
+
+			inst.sg.statemem.hitboxlength = inst.sg.mem.lightattackdistance or LIGHT_ATTACK_DEFAULT_DISTANCE
+			inst.sg.statemem.hitboxthickness = inst.sg.mem.lightattackthickness or LIGHT_ATTACK_DEFAULT_THICKNESS
+
+			inst.sg.statemem.hitboxoffset = 0.2 -- Because we're fading, the hitbox gets offset forward.
 		end,
 
 		timeline =
@@ -1179,16 +1623,16 @@ local states =
 				combatutil.StartMeleeAttack(inst)
 
 				inst.sg.statemem.focushit = true
-				inst.components.hitbox:PushBeam(5.6, 6.1, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxoffset + inst.sg.statemem.hitboxlength - LIGHT_ATTACK_FOCUS_LENGTH, inst.sg.statemem.hitboxoffset + inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 				inst.components.hitbox:StartRepeatTargetDelay()
 			end),
 			FrameEvent(7, function(inst)
 				inst.sg.statemem.focushit = false
 
-				inst.components.hitbox:PushBeam(0.5, 5.6, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxoffset, inst.sg.statemem.hitboxoffset + inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 			end),
 			FrameEvent(8, function(inst)
-				inst.components.hitbox:PushBeam(0.5, 5.6, LIGHT_ATTACK_HEIGHT_MAX, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(inst.sg.statemem.hitboxoffset, inst.sg.statemem.hitboxoffset + inst.sg.statemem.hitboxlength, inst.sg.statemem.hitboxthickness, HitPriority.PLAYER_DEFAULT)
 
 				combatutil.EndMeleeAttack(inst)
 			end),
@@ -1233,7 +1677,7 @@ for i,state in ipairs(states) do
 	if state.name == "roll_loop" then
 		local id = #state.timeline
 		state.timeline[id + 1] = FrameEvent(0, function(inst)
-				inst.sg.statemem.lightcombostate = "rolling_drill_attack"
+				inst.sg.statemem.lightcombostate = "rolling_drill_attack_pre"
 				inst.sg.statemem.heavycombostate = "rolling_heavy_attack_far"
 				inst.sg.statemem.reverselightstate = "fading_light_attack_far"
 				inst.sg.statemem.reverseheavystate = "rolling_heavy_attack_back_far"

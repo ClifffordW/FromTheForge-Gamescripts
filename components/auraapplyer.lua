@@ -25,6 +25,7 @@ local AuraApplyer = Class(function(self, inst)
     self.expectedtargets = {}
     self.seenthistick = {}
 	self.ignoreauratargetcheck = nil
+	self.ignoreairtargets = false
 
     self.power = nil
     self.powerstacks = nil
@@ -58,6 +59,12 @@ function AuraApplyer:OnNetSerialize()
 	if self.power then
 		e:SerializeString(self.power)
 	end
+
+	e:SerializeBoolean(self.rampup)
+	if self.rampup then
+		e:SerializeDoubleAs16Bit(self.rampup_start_dist)
+	end
+	e:SerializeBoolean(self.rampdown)
 
 	-- Count the nr of valid targets:
 	local num_targets = 0;
@@ -114,6 +121,21 @@ function AuraApplyer:OnNetDeserialize()
 		self.power = e:DeserializeString()
 	end
 
+	local rampup = e:DeserializeBoolean(self.rampup)
+	if rampup then
+		self.rampup_start_dist = e:DeserializeDoubleAs16Bit()
+	end
+	if self.rampup ~= rampup then
+		self:EnableRampUp(rampup, self.rampup_start_dist)
+		self.rampup = rampup
+	end
+
+	local rampdown = e:DeserializeBoolean(self.rampdown)
+	if self.rampdown ~= rampdown then
+		self:EnableRampDown(rampdown)
+		self.rampdown = rampdown
+	end
+
 	local nrTargets = e:DeserializeUInt(nrTargetBits)
 
 	local old_targets = self.expectedtargets
@@ -141,6 +163,10 @@ end
 
 function AuraApplyer:OnRemoveEntity()
 	self:OnRemoveFromEntity()
+end
+
+function AuraApplyer:IsEnabled()
+	return self.enabled
 end
 
 function AuraApplyer:Enable()
@@ -177,7 +203,7 @@ function AuraApplyer:OnHitBoxTriggered(data)
 	for _, target in ipairs(data.targets) do -- Iterate through the targets that are present this tick
 		-- Only apply if the hitflags are valid
 		local targethitflags = target.components.hitflagmanager and target.components.hitflagmanager:GetHitFlags() or Attack.HitFlags.DEFAULT
-		if self.hitflags & targethitflags ~= 0 then
+		if self.hitflags & targethitflags ~= 0 and self:_TargetReady(target) then
 			self.seenthistick[target] = true -- Mark them as seen this tick, so that we know they have not stepped out of the aura range. In OnUpdate, we'll compare this list to the targets that were there last tick, to know who "left" the range.
 			if self.expectedtargets[target] == nil then
 				-- This target is new, so let's add our power to it and add it to our list of known targets
@@ -190,6 +216,14 @@ end
 
 function AuraApplyer:SetEffect(power)
 	self.power = power
+end
+
+function AuraApplyer:IgnoreAerialTargets(can_hit)
+	self.ignoreairtargets = can_hit
+end
+
+function AuraApplyer:_TargetReady(target)
+	return (self.ignoreairtargets and target.sg and not target.sg:HasStateTag("airborne") and not target.sg:HasStateTag("airborne_high")) or (not self.ignoreairtargets)
 end
 
 function AuraApplyer:_ShouldApplyEffect(target)
@@ -297,10 +331,12 @@ function AuraApplyer:EnableRampDown(enabled)
 
 	self.disabled_time = GetTime()
 
-	local def = Power.FindPowerByName(self.power)
-	if def then
-		local rarity = Power.GetBaseRarity(def)
-		self.rampdown_velocity = def.tuning[rarity].rampdown_velocity or 0
+	if enabled then
+		local def = Power.FindPowerByName(self.power)
+		if def then
+			local rarity = Power.GetBaseRarity(def)
+			self.rampdown_velocity = def.tuning[rarity].rampdown_velocity or 0
+		end
 	end
 end
 

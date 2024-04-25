@@ -3,9 +3,17 @@ return {
   __displayName="sound_woworm",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "woworm", "aa_test_elaine",},
+  prefab={ "woworm", "woworm_elite",},
   stategraphs={
     sg_woworm={
+      events={
+        barf={  },
+        shellslam_hold={
+          { eventtype="playsound", frame=1, param={ soundevent="woworm_slam_pre",},},
+          { eventtype="playsound", frame=1, param={ soundevent="woworm_slam_pre",},},
+        },
+        shellslam_pre={  },
+      },
       sg_events={
         { eventtype="playfoleysound", name="sfx-footstep", param={ soundtag="Footstep",},},
         { eventtype="playfoleysound", name="sfx-bodyfall", param={ soundtag="Bodyfall",},},
@@ -20,6 +28,22 @@ return {
           name="sfx-breath_in",
           param={ soundevent="woworm_breath_in",},
         },
+        {
+          eventtype="playsound",
+          name="sfx-barf_pre",
+          param={ soundevent="woworm_puke_pre",},
+        },
+        { eventtype="playsound", name="sfx-barf", param={ soundevent="woworm_puke",},},
+        {
+          eventtype="playsound",
+          name="sfx-shell_slam",
+          param={ soundevent="woworm_slam",},
+        },
+        { eventtype="playsound", name="sfx-hit", param={ soundevent="woworm_hit",},},
+        { eventtype="playsound", name="sfx-tell", param={ soundevent="woworm_tell",},},
+        { eventtype="playsound", name="sfx-splash", param={ soundevent="woworm_splash",},},
+        { eventtype="playsound", name="sfx-knockdown", param={ soundevent="Knockdown",},},
+        { eventtype="playsound", name="sfx-whoosh", param={ soundevent="woworm_whoosh",},},
       },
     },
   },

@@ -25,12 +25,6 @@ SceneGen.TIER_COUNT = 10
 
 SceneGen.ROOM_PARTICLE_SYSTEM_TAG = "ROOM_PARTICLE_SYSTEM_TAG"
 
--- Claim sole occupancy of the space in which the entity is located. That is, destroy all
--- other occupants.
-function SceneGen.ClaimSoleOccupancy(entity, radius)
-	entity:AddComponent("soleoccupant", radius or 2.0, {DecorTags[DecorLayer.id.Ground]}, { SceneGen.ROOM_PARTICLE_SYSTEM_TAG })
-end
-
 function SceneGen.InjectClasses(scene_gen)
 	scene_gen.zone_gens = Lume(scene_gen.zone_gens)
 		:enumerate(function(i, zone_gen)
@@ -348,6 +342,10 @@ function SceneGen:BuildScene(world, dungeon_progress, authored_prop_placements)
 		true,
 		true
 	)
+end
+
+function SceneGen:InstallZoneGrid(world)
+	world.zone_grid = ZoneGrid(world.map_layout)
 end
 
 function SceneGen.ApplyEnvironment(world, scene_gen, dungeon_progress, current_room_type_override)

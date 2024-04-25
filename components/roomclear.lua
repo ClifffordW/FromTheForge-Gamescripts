@@ -1,7 +1,7 @@
 local lume = require "util.lume"
 
 -- fallback code to stop room clear soft locks caused by non-interactive enemies
-local ClearEnemyTimeoutEnabled = PLAYTEST_MODE and not IS_QA_BUILD
+local ClearEnemyTimeoutEnabled = not DEV_MODE and not IS_QA_BUILD
 local ClearEnemyTimeoutSeconds = 10.0 -- needs to be large enough value to support wave spawning
 
 local RoomClear = Class(function(self, inst)
@@ -104,72 +104,83 @@ function RoomClear:AfterDespawn(source)
 			-- Fired when enemies are gone, but room may still be locked. Only
 			-- fires if enemies existed.
 			self.inst:PushEvent("room_cleared", {
-					enemy_highwater = self.enemy_highwater,
-					last_enemy = source,
-				})
+				enemy_highwater = self.enemy_highwater,
+				last_enemy = source,
+			})
 		end
 
 		if source:HasTag("boss") then
-			local worldmap = TheDungeon:GetDungeonMap()
-			local progress = worldmap.nav:GetProgressThroughDungeon()
-			if progress >= 1 then
-				-- you killed the boss, good job
-				local x,y,z = source.Transform:GetWorldPosition()
-				local drop = SpawnPrefab("soul_drop_heart")
-				drop.Transform:SetPosition(x, y, z)
-				drop.components.rotatingdrop:SpawnDrops(drop.components.rotatingdrop:BuildDrops())
-
-				local ascension_level = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
-				TheDungeon.progression.components.runmanager:SetCanAbandon(false)
-
-				local function on_complete()
-					local on_drop_consumed = function()
-						-- Networking PSA: this code only runs on hosts
-						-- Use functions like RunManager:Victory to generate side effects on all clients
-						TheDungeon:PushEvent("dungeoncleared", {
-							boss_killed = source,
-							ascension_level = ascension_level
-						})
-					end
-
-					-- If a cine is still active or a new one is playing, wait for it to finish.
-					if source.components.cineactor and source.components.cineactor:IsInCine() then
-						self.inst:ListenForEvent("cine_end", on_complete, source)
-					else
-						drop.components.souldrop:PrepareToShowGem({
-							appear_delay_ticks = TUNING.POWERS.DROP_SPAWN_INITIAL_DELAY_FRAMES,
-						}, on_drop_consumed)
-					end
-				end
-
-				-- Delay firing event to ensure cine has time to start (we both
-				-- listen to "death" event).
-				self.inst:DoTaskInTicks(1, function(inst_)
-					if source.components.cineactor and source.components.cineactor:IsInCine() then
-						self.inst:ListenForEvent("cine_end", on_complete, source)
-					else
-						on_complete()
-					end
-				end)
-			end
+			self:_CheckBossKilled(source)
 		end
 	end
 
-	-- when there are few enemies remaining, add the remaining enemies
-	-- as candidates for camera edge detection
-	if not self.pending_edge_detection_task then
-		self.pending_edge_detection_task = self.inst:DoTaskInTime(2, function()
-			local enemy_count = self:GetEnemyCount()
-			if enemy_count > 0 and enemy_count <= self.focus_threshold then
-				for ent,_ in pairs(self.enemies) do
-					if not ent:HasTag("boss") then
-						TheFocalPoint.components.focalpoint:AddEntityForEdgeDetection(ent)
-					end
+	self:_ManifestPendingEdgeDetectionTask()
+end
+
+function RoomClear:_CheckBossKilled(source)
+	local worldmap = TheDungeon:GetDungeonMap()
+	local progress = worldmap.nav:GetProgressThroughDungeon()
+	if progress < 1 then
+		return
+	end
+
+	-- you killed the boss, good job
+	local x,y,z = source.Transform:GetWorldPosition()
+	local drop = SpawnPrefab("soul_drop_heart")
+	drop.Transform:SetPosition(x, y, z)
+	drop.components.rotatingdrop:SpawnDrops()
+
+	local ascension_level = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+	TheDungeon.progression.components.runmanager:SetCanAbandon(false)
+
+	local function on_cinematic_complete()
+		local on_drop_consumed = function()
+			-- Networking PSA: this code only runs on hosts
+			-- Use functions like RunManager:Victory to generate side effects on all clients
+			TheDungeon:PushEvent("dungeoncleared", {
+				boss_killed = source,
+				ascension_level = ascension_level
+			})
+		end
+
+		-- If a cine is still active or a new one is playing, wait for it to finish.
+		if source.components.cineactor and source.components.cineactor:IsInCine() then
+			self.inst:ListenForEvent("cine_end", on_cinematic_complete, source)
+		else
+			drop.components.souldrop:PrepareToShowGem({
+				appear_delay_ticks = TUNING.POWERS.DROP_SPAWN_INITIAL_DELAY_FRAMES,
+			}, on_drop_consumed)
+		end
+	end
+
+	-- Delay firing event to ensure cine has time to start (we both
+	-- listen to "death" event).
+	self.inst:DoTaskInTicks(1, function(inst_)
+		if source.components.cineactor and source.components.cineactor:IsInCine() then
+			self.inst:ListenForEvent("cine_end", on_cinematic_complete, source)
+		else
+			on_cinematic_complete()
+		end
+	end)
+end
+
+-- when there are few enemies remaining, add the remaining enemies
+-- as candidates for camera edge detection
+function RoomClear:_ManifestPendingEdgeDetectionTask()
+	if self.pending_edge_detection_task then
+		return
+	end
+	self.pending_edge_detection_task = self.inst:DoTaskInTime(2, function()
+		local enemy_count = self:GetEnemyCount()
+		if enemy_count > 0 and enemy_count <= self.focus_threshold then
+			for ent,_ in pairs(self.enemies) do
+				if not ent:HasTag("boss") then
+					TheFocalPoint.components.focalpoint:AddEntityForEdgeDetection(ent)
 				end
 			end
-			self.pending_edge_detection_task = nil
-		end)
-	end
+		end
+		self.pending_edge_detection_task = nil
+	end)
 end
 
 function RoomClear:CleanUpRemainingEnemies()

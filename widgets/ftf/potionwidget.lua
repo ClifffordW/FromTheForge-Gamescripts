@@ -115,7 +115,7 @@ function PotionWidget:RefreshIcons(force_refresh)
 		return
 	end
 
-	TheLog.ch.PotionWidget:printf("Updated potion widget for player %s", self.owner)
+	-- TheLog.ch.PotionWidget:printf("Updated potion widget for player %s", self.owner)
 
 	self.equipped_potion_def = latest_potion_def
 	self.equipped_tonic_def  = latest_tonic_def
@@ -135,7 +135,7 @@ function PotionWidget:RefreshIcons(force_refresh)
 		self:SetToolTip(tip)
 	else
 		self.potion_power = nil
-		self.potion_icon:SetTexture()
+		self.potion_icon:SetTexture("images/global/transparent.tex")
 		self:SetToolTip("")
 	end
 
@@ -157,26 +157,39 @@ function PotionWidget:RefreshUses()
 	end
 	self.last_remaining_uses = uses
 
-	self.text:SetText(uses)
-
 	-- TODO: there is a little chunk in the 'bg' element which has space for this number, but it's baked into the entire BG. If we're hiding the number, we should split out that chunk and hide it too.
-	if max == 1 then
+	if max <= 1 then
 		self.text:Hide()
 	else
+		self.text:SetText(uses)
 		self.text:Show()
 	end
 
 	local ui_icons = self.equipped_potion_def and self.equipped_potion_def.ui_icons or table.empty
+	local texture_name
 	if uses <= 0 then
-		self.text:SetGlyphColor(155/255, 80/255, 80/255, 1)
-		self.potion_icon
-			:SetMultColor(1, 1, 1, 1)
-			:SetTexture(ui_icons.consumed)
+		if max > 1 then
+			self.text:SetGlyphColor(155/255, 80/255, 80/255, 1)
+		end
+		if not ui_icons.consumed then
+			self.last_remaining_uses = nil
+		end
+		texture_name = ui_icons.consumed or "images/global/transparent.tex"
 	else
-		self.text:SetGlyphColor(216/255, 206/255, 163/255, 1)
+		if max > 1 then
+			self.text:SetGlyphColor(216/255, 206/255, 163/255, 1)
+		end
+		if not ui_icons.ready then
+			self.last_remaining_uses = nil
+		end
+		texture_name = ui_icons.ready or "images/global/transparent.tex"
+	end
+
+	if self.texture_name ~= texture_name then
+		self.texture_name = texture_name
 		self.potion_icon
 			:SetMultColor(1, 1, 1, 1)
-			:SetTexture(ui_icons.ready)
+			:SetTexture(texture_name)
 	end
 end
 
@@ -200,6 +213,7 @@ end
 
 function PotionWidget:ABOVE_HEAD()
 	self:BOTTOM_LEFT()
+	return self
 	-- Don't show on the main hud to reduce noise, but show in this temporary
 	-- mode.
 	-- self.hotkeyWidget:Show()

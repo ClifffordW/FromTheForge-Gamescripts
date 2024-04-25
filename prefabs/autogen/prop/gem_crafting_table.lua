@@ -3,7 +3,8 @@ return {
   __displayName="gem_crafting_table",
   clickable=true,
   gridsize={ { h=3, w=3,},},
-  group="town_decor",
+  group="town_buildings",
+  hostspawn=true,
   isminimal=true,
   networked=1,
   parallax={
@@ -17,6 +18,7 @@ return {
   physicstype="dec",
   placer=true,
   script="screenopener",
-  script_args={ screen_require="screens.town.gemscreen", },
+  script_args={ screen_require="screens.town.gemscreen",},
+  sound=true,
   variations=1,
 }

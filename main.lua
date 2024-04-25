@@ -27,10 +27,11 @@ Platform = require "util.platform"
 --defines
 MAIN = 1
 IS_QA_BUILD = TheSim:GetCurrentBetaName() == "huwiz"
-DEV_MODE =  true
+DEV_MODE = RELEASE_CHANNEL == "dev" or IS_QA_BUILD -- For now, QA gets debug tools everywhere.
+IS_BUILD_STRIPPED = not kleifileexists("scripts/prefabs/__readme.txt")
 ENCODE_SAVES = RELEASE_CHANNEL ~= "dev"
 CHEATS_ENABLED = DEV_MODE or (Platform.IsConsole() and CONFIGURATION ~= "PRODUCTION")
-PLAYTEST_MODE = RELEASE_CHANNEL == "demo" or RELEASE_CHANNEL == "playtest"
+PLAYTEST_MODE = RELEASE_CHANNEL == "playtest"
 SOUNDDEBUG_ENABLED = false
 SOUNDDEBUGUI_ENABLED = false
 HITSTUN_VISUALIZER_ENABLED = false
@@ -51,6 +52,15 @@ DEFAULT_SERVER_SAVE_FILE    = "/server_save"
 RELOADING = false
 SHOW_OBSOLETE = false
 
+-- This should ship set to false, but can be temporarily set to true to test version updating.
+-- In DEV_MODE, this will cause version updating to happen as in release builds.
+-- In release builds, this will assert that version updating succeeds rather than silently failing.
+TEST_SAVE_DATA_VERSION_UPDATE = false
+
+-- In DEV_MODE, we do not update versions but instead require devs to simply erase their save data. This keeps the
+-- version updating process simple.
+SAVE_DATA_VERSION_UPDATE_ENABLED = (not DEV_MODE) or TEST_SAVE_DATA_VERSION_UPDATE
+
 --debug.setmetatable(nil, {__index = function() return nil end})  -- Makes  foo.bar.blat.um  return nil if table item not present   See Dave F or Brook for details
 
 ExecutingLongUpdate = false
@@ -60,6 +70,9 @@ if DEBUGGER_ENABLED then
 	Debuggee = require 'debuggee'
 end
 
+function export_timer_names_grab_attacks(attacks)
+	-- empty
+end
 
 TheAudio:SetReverbPreset("default")
 
@@ -94,10 +107,6 @@ if TheSim then
     end
 	-- else, how can TheSim be nil??
 end
-
---if not TheNet:GetIsClient() then
---	require("mobdebug").start()
---end
 
 local strict = require "util.strict"
 strict.forbid_undeclared(_G)
@@ -138,16 +147,10 @@ function utf8.sub(s,i,j)
     return utf8_ex.sub(s,i,j)
 end
 
-local Settings = require("settings.settings")
-TheGameSettings = Settings("gamesettings")
+local gamesettings = require "settings.gamesettings"
+TheGameSettings = gamesettings.CreateSettingsInstance()
 local function LoadGameSettings()
-	local RegisterGameSettings = require "settings.gamesettings"
-	RegisterGameSettings(TheGameSettings)
-	TheGameSettings:Load(function(success) print("Load gamesettings, result = "..tostring(success)) end)
-
-	if Platform.IsBigPictureMode() then
-		TheGameSettings:Set("graphics.fullscreen", true)
-	end
+	gamesettings.LoadSettings(TheGameSettings)
 
 	LOC.DetectLanguage()
 
@@ -158,24 +161,10 @@ Profile = require("playerprofile")() --profile needs to be loaded before languag
 Profile:Load( nil, true ) --true to indicate minimal load required for language.lua to read the profile.
 
 LOC = require "languages.loc"
-require "languages.language"
 require "strings.strings"
 local GameContent = require "gamecontent"
 global "TheGameContent"
 TheGameContent = GameContent():Load()
-
--- Apply a baseline set of translations so that lua in the boot flow can access
--- the correct strings, after the mods are loaded, main.lua will run this again.
---
--- Ideally we wouldn't need to do this, but stuff like maps/levels/forest loads
--- in the boot flow and it caches strings before they've been translated.
---
--- Doing an early translate here is less risky than changing all the cases of
--- early string access. Downside is that it doesn't address the issue for mod
--- transations.
--- TODO(l10n): We defer TheGameContent:SetLanguage() until ModSafeStartup so we
--- have settings loaded. Does that still work?
---~ TranslateStringTable( STRINGS )
 
 require "constants"
 
@@ -248,7 +237,7 @@ TheSystemService:SetStalling(true)
 --instantiate the mixer
 local Mixer = require("mixer")
 TheMixer = Mixer.Mixer()
-require("mixes")
+--~ require("mixes")
 TheMixer:PushMix("start")
 
 
@@ -460,29 +449,27 @@ local function gamepad_analog_input_callback(gamepad_id, ls_x, ls_y, rs_x, rs_y,
 	TheInput:OnGamepadAnalogInput(gamepad_id, ls_x, ls_y, rs_x, rs_y, lt, rt);
 end
 
-local function filedrop(txt)
+local function filedrop(dropped_file)
 	if not DEV_MODE then
-		print("You must be in dev mode to drop files onto the game. Received:", txt)
+		print("You must be in dev mode to drop files onto the game. Received:", dropped_file)
 		return
 	end
 
-	if kstring.endswith(txt, "savedata.zip")
-		or (txt:find("\\savedata",1,true) and kstring.endswith(txt, ".zip")) -- "savedata (1).zip"
+	if kstring.endswith(dropped_file, "savedata.zip")
+		or (dropped_file:find("\\savedata",1,true) and kstring.endswith(dropped_file, ".zip")) -- "savedata (1).zip"
 	then
 		print("dropped a save zip")
-		TheSim:MountSave(txt)
+		TheSim:MountSave(dropped_file)
 		d_loadsaveddungeon()
-	elseif txt:find("\\replay",1,true) then
+	elseif dropped_file:find("\\replay",1,true) then
 		print("dropped a replay")
-		--local f = io.open( txt, "r" )
-		--local savestr = f:read( "*all" )
-		local savestr = TheSim:DevLoadDataFile(txt)
+		local savestr = TheSim:DevLoadDataFile(dropped_file)
 		if savestr then
-			local savepath = "SAVEGAME:replay_dev"
+			local savepath = "SAVEGAME:replay"
 			if TheSim:DevSaveDataFile(savepath, savestr) then
 				local metadata
 				local loadsuccess
-				TheSim:GetPersistentString("replay_dev", function(success, data)
+				TheSim:GetPersistentString("replay", function(success, data)
 					if success and string.len(data) > 0 then
 						success, data = RunInSandbox(data)
 						if success and data ~= nil then
@@ -514,10 +501,10 @@ local function filedrop(txt)
 				print("Failed to save replay to "..savepath)
 			end
 		else
-			print("Failed to load "..txt)
+			print("Failed to load", dropped_file)
 		end
 	else
-		print ("DROP FILE ", txt)
+		print("DROP FILE", dropped_file)
 	end
 end
 
@@ -571,6 +558,7 @@ LoadGameSettings()
 require "prefabs.stategraph_autogen" -- to get around a circular dependency
 
 if not MODS_ENABLED then
+	TheSaveSystem.can_prompt_for_save_deletion = true
 	TheSaveSystem:LoadAll(function(success)
 		ModSafeStartup()
 	end)

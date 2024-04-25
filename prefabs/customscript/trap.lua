@@ -1,7 +1,8 @@
 local lume = require "util.lume"
 local spawnutil = require "util.spawnutil"
-local SceneGen = require "components.scenegen"
+local Power = require "defs.powers"
 local PrefabEditorBase = require "debug.inspectors.prefabeditorbase"
+local DebugDraw = require "util.debugdraw"
 
 ---------------------------------------------------------------------------------------
 --Custom script for auto-generated prop prefabs
@@ -11,14 +12,24 @@ local PrefabEditorBase = require "debug.inspectors.prefabeditorbase"
 -- existing setup. Currently, we want them to have mostly the same setup.
 local trap = {
 	default = {},
+	trap_weed_thorns = {},
+	trap_cold = {},
+	trap_torch = {},
 }
 
 function trap.default.CollectPrefabs(prefabs, args)
 	table.insert(prefabs, "fx_hit_player_round")
+	if args.trap_type == "trap_spores" then
+		local v = TUNING.TRAPS.trap_spores.VARIETIES[args.prefab]
+		if v then
+			table.insert(prefabs, v.burst_fx)
+			table.insert(prefabs, v.target_fx)
+		end
+	end
 end
 
 
-function trap.default.GetTrapTypes()
+function trap.GetTrapTypes()
 	-- These must match the stategraph names.
 	return {
 		"trap_spike",
@@ -27,13 +38,17 @@ function trap.default.GetTrapTypes()
 		"trap_bananapeel",
 		"trap_spores",
 		"trap_acid",
+		"trap_acid_stage",
+		"trap_acidgeyser",
 		"trap_stalactite",
 		"trap_windtotem",
 		"trap_thorns",
+		"trap_cold",
+		"trap_torch",
 	}
 end
 
-function trap.default.GetSporeTypes()
+function trap.GetSporeTypes()
 	return {
 		"juggernaut",
 		"smallify",
@@ -45,7 +60,7 @@ function trap.default.GetSporeTypes()
 	}
 end
 
-function trap.default.GetDirections()
+function trap.GetDirections()
 	return {
 		"Right",
 		"Up",
@@ -67,6 +82,10 @@ function trap.default.CustomInit(inst, opts)
 		end
 		TheSim:LoadPrefabs(prefabs_to_load)
 	end
+	
+	-- TODO @chrisp #traps - pass opts.trap_type for more specific tuning
+	local modifiers = TUNING:GetTrapModifiers()
+	-- TODO @chrisp #traps - apply modifiers to more trap aspects (e.g. cooldown)?
 
 	inst.entity:AddHitBox()
 	inst:AddComponent("hitbox")
@@ -81,6 +100,7 @@ function trap.default.CustomInit(inst, opts)
 
 	inst:AddComponent("combat")
 	inst.components.combat:SetBaseDamage(inst, TUNING.TRAPS[opts.trap_type].BASE_DAMAGE)
+	inst.components.combat:SetDungeonTierDamageMult(inst, modifiers.DungeonTierDamageMult)
 	inst:AddComponent("hitstopper")
 
 	inst:AddComponent("hitshudder")
@@ -96,6 +116,8 @@ function trap.default.CustomInit(inst, opts)
 	if TUNING.TRAPS[opts.trap_type].HEALTH ~= nil then
 		inst:AddComponent("health")
 		inst.components.health:SetMax(TUNING.TRAPS[opts.trap_type].HEALTH, true)
+		-- TODO @chrisp #traps - could scale trap health in the same way we scale enemy health
+		-- inst.components.health:SetMax(TUNING.TRAPS[opts.trap_type].HEALTH * (modifiers.HealthMult + modifiers.BasicHealthMult), true)
 		inst.components.health:SetHealable(false)
 	end
 
@@ -133,21 +155,15 @@ function trap.default.CustomInit(inst, opts)
 
 	if (opts.trap_type == "trap_zucco") then
 		inst:AddTag("zuccobomb")
-	end
-
-	-- Run custom init function, if it exists.
-	local require_succeeded, script_module = pcall(function()
-		return require("prefabs.customscript.".. inst.prefab)
-	end)
-	if require_succeeded then
-		script_module:CustomInit(inst)
+	elseif (opts.trap_type == "trap_acid") then
+		inst:AddTag("dbg_nohistory") -- Add this tag to disable history on this object, for debug performance reasons.
 	end
 
 	inst:SetStateGraph("sg_".. opts.trap_type)
 end
 
 function trap.PropEdit(editor, ui, params)
-	local all_traps = trap.default.GetTrapTypes()
+	local all_traps = trap.GetTrapTypes()
 	local no_trap = 1
 	table.insert(all_traps, no_trap, "")
 
@@ -171,7 +187,7 @@ function trap.PropEdit(editor, ui, params)
 	end
 	if is_trap then
 		local tier
-		changed, tier = ui:DragInt("Tier", params.script_args.tier or 1, 1, 1, 5)
+		changed, tier = ui:DragInt("Tier", params.script_args and params.script_args.tier or 1, 1, 1, 5)
 		if changed then
 			params.script_args.tier = tier
 		end
@@ -201,7 +217,7 @@ function trap.PropEdit(editor, ui, params)
 		end
 
 		if params.script_args.trap_type == "trap_spores" then
-			local all_spores = trap.default.GetSporeTypes()
+			local all_spores = trap.GetSporeTypes()
 
 			local spore_idx = lume.find(all_spores, params.script_args.spore_type)
 			local spore_changed
@@ -265,7 +281,7 @@ end
 function trap.EditEditable(inst, ui)
 	ui:Separator()
 	ui:Text("Spawnable Trap Types:")
-	for _, trap_type in ipairs(trap.default.GetTrapTypes()) do
+	for _, trap_type in ipairs(trap.GetTrapTypes()) do
 		local changed = false
 		changed, inst.trap_types[trap_type] = ui:Checkbox(trap_type, inst.trap_types[trap_type])
 		if changed then
@@ -273,7 +289,7 @@ function trap.EditEditable(inst, ui)
 			local data = inst.components.prop.script_args
 			data.trap_types = {}
 
-			for _, trap_type in ipairs(trap.default.GetTrapTypes()) do
+			for _, trap_type in ipairs(trap.GetTrapTypes()) do
 				if inst.trap_types[trap_type] then
 					table.insert(data.trap_types, trap_type)
 				end
@@ -290,14 +306,14 @@ function trap.EditEditable(inst, ui)
 		ui:SetTooltip("Used to spawn certain traps facing in a certain direction, e.g. wind traps.")
 	end
 	ui:SameLineWithSpace()
-	for i, direction in ipairs(trap.default.GetDirections()) do
+	for i, direction in ipairs(trap.GetDirections()) do
 		local direction_changed = false
 		direction_changed, inst.trap_directions[i - 1] = ui:Checkbox(direction, inst.trap_directions[i - 1])
 		if direction_changed then
 			local data = inst.components.prop.script_args
 			data.trap_directions = {}
 
-			for j, _ in ipairs(trap.default.GetDirections()) do
+			for j, _ in ipairs(trap.GetDirections()) do
 				if inst.trap_directions[j - 1] then
 					table.insert(data.trap_directions, j - 1) -- -1 due to directions being 0-based.
 				end
@@ -306,10 +322,113 @@ function trap.EditEditable(inst, ui)
 			inst.components.prop:OnPropChanged()
 		end
 
-		if i < #trap.default.GetDirections() then
+		if i < #trap.GetDirections() then
 			ui:SameLineWithSpace()
 		end
 	end
+end
+
+
+
+
+for key,val in pairs(trap.default) do
+	-- Use same base setup as default.
+	trap.trap_weed_thorns[key] = val
+end
+
+-- Thorn Traps
+
+local function trap_weed_thorns_OnRoomComplete(inst)
+	inst.sg.mem.is_room_clear = true
+	inst.sg:GoToState("retract")
+end
+
+function trap.trap_weed_thorns.CustomInit(inst, opts)
+	trap.default.CustomInit(inst, opts)
+
+	-- Since thorns have a hitbox, prevent them from being teleported
+	inst:AddTag("no_teleport")
+
+	inst.HitBox:SetHitGroup(HitGroup.NEUTRAL)
+	inst.HitBox:SetHitFlags(HitGroup.PLAYER | HitGroup.NPC | HitGroup.HOSTILES)
+
+	inst:ListenForEvent("room_complete", function() trap_weed_thorns_OnRoomComplete(inst) end, TheWorld)
+
+	return inst
+end
+
+-- Cold Traps
+
+function ApplyCold()
+	local cold = Power.FindPowerByName("cold")
+	local frozen = Power.FindPowerByName("frozen")
+
+	for _, player in ipairs(AllPlayers) do
+		if (player:IsLocal()) then
+			if (not player.components.powermanager:HasPower(frozen) and not player.components.powermanager:HasPower(cold)) then
+				local power = player.components.powermanager:CreatePower(cold)
+				player.components.powermanager:AddPower(power, nil)
+			elseif (not player.components.powermanager:HasPower(frozen) and player.components.powermanager:HasPower(cold)) then
+				player.components.powermanager:DeltaPowerStacks(cold, 5)
+			end
+		end
+	end
+end
+
+function trap.trap_cold.CustomInit(inst, opts)
+	-- The cold power maxes at 600 stacks, the cold trap adds X stacks every 100ms
+	inst:DoPeriodicTask(0.1, ApplyCold)
+
+	-- Remove cold and frozen from players when leaving the room so they dont carry it over to rooms without cold traps
+	inst:ListenForEvent("onremove", function(trap_inst)
+		local cold = Power.FindPowerByName("cold")
+		local frozen = Power.FindPowerByName("frozen")
+		for _, player in ipairs(AllPlayers) do
+			if (player:IsLocal()) then
+				if (player.components.powermanager:HasPower(cold)) then
+					player.components.powermanager:RemovePower(cold, true)
+				end
+				if (player.components.powermanager:HasPower(frozen)) then
+					player.components.powermanager:RemovePower(frozen, true)
+				end
+			end
+		end
+	end)
+
+	return inst
+end
+
+-- Tundra Torch
+
+function ReduceCold(inst)
+	local cold = Power.FindPowerByName("cold")
+	local frozen = Power.FindPowerByName("frozen")
+	local inst_pos = Vector3(inst:GetPosition())
+	local range = 10
+	DebugDraw.GroundCircle(inst_pos.x, inst_pos.z, range, WEBCOLORS.ORANGERED, 0.1, 0.1)
+
+	for _, player in ipairs(AllPlayers) do
+		if (player:IsLocal()) then
+			local player_pos = Vector3(player:GetPosition())
+			local dist = Vector3.dist(inst_pos, player_pos)
+			if (dist < range and not player.components.powermanager:HasPower(frozen) and player.components.powermanager:HasPower(cold)) then
+				player.components.powermanager:DeltaPowerStacks(cold, -20)
+			end
+		end
+	end
+end
+
+function trap.trap_torch.CustomInit(inst, opts)
+	inst.entity:AddHitBox()
+	inst.entity:AddSoundEmitter()
+	inst:AddComponent("combat")
+	inst:AddComponent("hitshudder")
+	MakeObstaclePhysics(inst, 1.5)
+
+	inst:DoPeriodicTask(0.1, ReduceCold, 0.05)
+
+	--inst:SetStateGraph("sg_torch_trap")
+	return inst
 end
 
 return trap

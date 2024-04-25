@@ -21,6 +21,8 @@ local prefabs =
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
 
+	"slowpoke_spit",
+
 	--Drops
 	GroupPrefab("drops_generic"),
 	GroupPrefab("drops_floracrane"),
@@ -28,6 +30,8 @@ local prefabs =
 
 local elite_prefabs = lume.merge(prefabs,
 {
+	"cine_play_miniboss_intro",
+	"cine_floracrane_intro",
 })
 
 prefabutil.SetupDeathFxPrefabs(prefabs, "floracrane")
@@ -38,7 +42,7 @@ local attacks =
 	flurry =
 	{
 		priority = 1,
-		damage_mod = 0.25,
+		damage_mod = 0.4,
 		startup_frames = 20,
 		cooldown = 4,
 		initialCooldown = 0,
@@ -47,21 +51,6 @@ local attacks =
 		loop_hold_anim = true,
 		start_conditions_fn = function(inst, data, trange)
 			return trange:TestBeam(0, 5, 1.25)
-		end
-	},
-	dive_fast =
-	{
-		cooldown = 0.67,
-		damage_mod = 0.75,
-		startup_frames = 5,
-		initialCooldown = 0,
-		pre_anim = "dive_pre",
-		hold_anim = "dive_hold",
-		attack_state_override = "dive",
-		start_conditions_fn = function(inst, data, trange)
-			if inst.sg.statemem.do_dive then -- started through kick
-				return true
-			end
 		end
 	},
 	spear =
@@ -79,13 +68,27 @@ local attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
-local elite_attacks = lume.merge(attacks,
+local elite_attacks =
 {
+	dive_fast =
+	{
+		cooldown = 0.67,
+		damage_mod = 1.2,
+		startup_frames = 5,
+		initialCooldown = 0,
+		pre_anim = "dive_pre",
+		hold_anim = "dive_hold",
+		attack_state_override = "dive",
+		start_conditions_fn = function(inst, data, trange)
+			return false -- started through kick
+		end
+	},
 	dive =
 	{
 		cooldown = 9,
-		damage_mod = 0.75,
+		damage_mod = 1.2,
 		startup_frames = 15,
 		initialCooldown = 7.5,
 		pre_anim = "dive2_pre",
@@ -112,7 +115,7 @@ local elite_attacks = lume.merge(attacks,
 	kick =
 	{
 		priority = 2,
-		damage_mod = 0.5,
+		damage_mod = 1,
 		startup_frames = 45,
 		cooldown = 10, -- The entire kick sequence is about 7 seconds. Do it infrequently.
 		initialCooldown = 0,
@@ -123,7 +126,17 @@ local elite_attacks = lume.merge(attacks,
 			return trange:TestBeam(0, 5, 0.75)
 		end
 	},
-})
+
+	-- For acid ball projectiles spawned on kick
+	mortar =
+	{
+		damage_mod = 0.5,
+		start_conditions_fn = function(inst, data, trange)
+			return false
+		end
+	},
+}
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 1.3
 
@@ -137,8 +150,8 @@ local function fn(prefabname)
 
 	inst.AnimState:SetBank("floracrane_bank")
 	inst.AnimState:SetBuild("floracrane_build")
-	inst.AnimState:PlayAnimation("idle", true)
-	inst.AnimState:SetFrame(math.random(inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
+	--inst.AnimState:PlayAnimation("idle", true) --Was conflicting with a spawn animation flickering the idle for remote players
+	--inst.AnimState:SetFrame(math.random(inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
 
 	inst.components.hitbox:SetHitFlags(HitGroup.ALL)
 
@@ -193,5 +206,14 @@ local function elite_fn(prefabname)
 	return inst
 end
 
+local function miniboss_fn(prefabname)
+	local inst = elite_fn(prefabname)
+	monsterutil.MakeMiniboss(inst)
+	inst:AddComponent("boss")
+
+	return inst
+end
+
 return Prefab("floracrane", normal_fn, assets, prefabs, nil, NetworkType_SharedHostSpawn)
 	, Prefab("floracrane_elite", elite_fn, elite_assets, elite_prefabs, nil, NetworkType_SharedHostSpawn)
+	, Prefab("floracrane_miniboss", miniboss_fn, elite_assets, elite_prefabs, nil, NetworkType_SharedHostSpawn)

@@ -5,8 +5,14 @@ local ParticleSystemHelper = require "util.particlesystemhelper"
 local soundutil = require "util.soundutil"
 local fmodtable = require "defs.sound.fmodtable"
 
-local bullet_prefabs =
-{
+local prefabs = {
+	-- Add anything passed as fx_prefab or power_fx_prefab here!
+	-- TODO: Could we move the CreateProjectile config here so we can extract
+	-- the prefabs?
+	"projectile_cannon",
+	"projectile_cannon_focus",
+	"projectile_cannon_shotgun",
+	"projectile_cannon_shotgun_focus",
 }
 
 local function UpdateCheckAlive(inst)
@@ -45,7 +51,7 @@ local function UpdateProjectile(inst)
 			{
 				max_count = 1,
 				fmodparams = {
-					cannonShotType = inst.cannon_shot_type,
+					cannon_shotType = inst.cannon_shot_type,
 				},
 			})
 		inst:Hide()
@@ -106,7 +112,11 @@ local function OnProjectileHitBoxTriggered(inst, data)
 		end
 	end
 
-	if hit and not inst:HasTag("pierce") then
+	if hit then
+		if inst:HasTag("pierce") then
+			-- TODO: Play pierce sound / FX?
+			return
+		end
 		-- Stop the bullet and keep it planted for a moment so our eye gets a chance to process the connection
 		if inst.sound_handle then
 			soundutil.KillSound(inst, inst.sound_handle)
@@ -130,7 +140,7 @@ local function OnBulletCollided(inst, other)
 	-- inst:DoTaskInTicks(2, inst.Remove)
 end
 
-local function Setup(inst, owner, damage_mod, hitstun_animframes, pushback, speed, range, focus, attacktype, attackid, numberinbatch, maxinbatch)
+local function Setup(inst, owner, damage_mod, hitstun_animframes, pushback, speed, range, focus, attacktype, attackid, numberinbatch, maxinbatch, pierce)
 	inst.owner = owner
 	inst.damage_mod = damage_mod or 1
 	inst.hitstun_animframes = hitstun_animframes or 1
@@ -144,6 +154,10 @@ local function Setup(inst, owner, damage_mod, hitstun_animframes, pushback, spee
 	inst.numberinbatch = numberinbatch
 	inst.maxinbatch = maxinbatch
 	inst.meleehitboxticks = 4
+
+	if pierce then
+		inst:AddTag("pierce")
+	end
 
 	if inst.attacktype == "light_attack" then
 		inst.hitfx = "hits_player_cannon_shot"
@@ -159,6 +173,13 @@ local function Setup(inst, owner, damage_mod, hitstun_animframes, pushback, spee
 	inst:ListenForEvent("hitboxtriggered", OnProjectileHitBoxTriggered)
 	-- inst.components.hitbox:PushBeam(-1.5, 0, 1, HitPriority.PLAYER_PROJECTILE)
 	UpdateProjectile(inst)
+
+	if owner then
+		local weapon_def = owner.components.inventory:GetEquippedWeaponDef()
+		inst.build = weapon_def.build
+
+		inst.AnimState:SetBuild(inst.build)
+	end
 
 	-- if focus then
 	-- 	inst.AnimState:SetBloom( 0/255, 255/255, 255/255, 50/255)
@@ -196,12 +217,13 @@ local function bullet_fn()
 	{
 		physics_size = 0.5,
 		hits_targets = true,
-		hit_group = HitGroup.NONE,
+		hit_group = HitGroup.NEUTRAL,
 		hit_flags = HitGroup.CREATURES,
 		does_hitstop = true,
 		twofaced = true,
 		collision_callback = OnBulletCollided,
 		fx_prefab = "projectile_cannon",
+		no_healthcomponent = true,
 	})
 
 	inst:AddComponent("hittracker")
@@ -229,12 +251,13 @@ local function bullet_focus_fn()
 	{
 		physics_size = 0.5,
 		hits_targets = true,
-		hit_group = HitGroup.NONE,
+		hit_group = HitGroup.NEUTRAL,
 		hit_flags = HitGroup.CREATURES,
 		does_hitstop = true,
 		twofaced = true,
 		collision_callback = OnBulletCollided,
 		fx_prefab = "projectile_cannon_focus",
+		no_healthcomponent = true,
 	})
 
 	inst:AddComponent("hittracker")
@@ -265,12 +288,13 @@ local function shotgun_fn()
 	{
 		physics_size = 0.5,
 		hits_targets = true,
-		hit_group = HitGroup.NONE,
+		hit_group = HitGroup.NEUTRAL,
 		hit_flags = HitGroup.CREATURES,
 		does_hitstop = true,
 		twofaced = true,
 		collision_callback = OnBulletCollided,
 		fx_prefab = "projectile_cannon_shotgun",
+		no_healthcomponent = true,
 	})
 
 	inst:AddComponent("hittracker")
@@ -289,7 +313,7 @@ local function shotgun_fn()
 	params.sound_max_count = 1
 	inst.sound_handle = soundutil.PlaySoundData(inst, params)
 	if inst.sound_handle then
-		soundutil.SetInstanceParameter(inst, inst.sound_handle, "cannonShotType", 1)
+		soundutil.SetInstanceParameter(inst, inst.sound_handle, "cannon_shotType", 1)
 	end
 	inst.cannon_shot_type = 1
 
@@ -301,12 +325,13 @@ local function shotgun_focus_fn()
 	{
 		physics_size = 0.5,
 		hits_targets = true,
-		hit_group = HitGroup.NONE,
+		hit_group = HitGroup.NEUTRAL,
 		hit_flags = HitGroup.CREATURES,
 		does_hitstop = true,
 		twofaced = true,
 		collision_callback = OnBulletCollided,
 		fx_prefab = "projectile_cannon_shotgun_focus",
+		no_healthcomponent = true,
 	})
 
 	inst:AddComponent("hittracker")
@@ -326,14 +351,15 @@ local function shotgun_focus_fn()
 	inst.sound_handle = soundutil.PlaySoundData(inst, params)
 	if inst.sound_handle then
 		soundutil.SetInstanceParameter(inst, inst.sound_handle, "isFocusAttack", 1)
-		soundutil.SetInstanceParameter(inst, inst.sound_handle, "cannonShotType", 1)
+		soundutil.SetInstanceParameter(inst, inst.sound_handle, "cannon_shotType", 1)
 	end
 	inst.cannon_shot_type = 1
 
 	return inst
 end
 
-return 	Prefab("player_cannon_projectile", bullet_fn, nil, bullet_prefabs, nil, NetworkType_ClientAuth),
-		Prefab("player_cannon_focus_projectile", bullet_focus_fn, nil, bullet_prefabs, nil, NetworkType_ClientAuth),
-		Prefab("player_cannon_shotgun_projectile", shotgun_fn, nil, bullet_prefabs, nil, NetworkType_ClientAuth),
-		Prefab("player_cannon_shotgun_focus_projectile", shotgun_focus_fn, nil, bullet_prefabs, nil, NetworkType_ClientAuth)
+return
+	Prefab("player_cannon_projectile", bullet_fn, nil, prefabs, nil, NetworkType_ClientAuth),
+	Prefab("player_cannon_focus_projectile", bullet_focus_fn, nil, prefabs, nil, NetworkType_ClientAuth),
+	Prefab("player_cannon_shotgun_projectile", shotgun_fn, nil, prefabs, nil, NetworkType_ClientAuth),
+	Prefab("player_cannon_shotgun_focus_projectile", shotgun_focus_fn, nil, prefabs, nil, NetworkType_ClientAuth)

@@ -47,7 +47,7 @@ function LocationBossesWidget:SetMonsters(monsters)
 	end
 
 	-- Add bosses
-	local bossIconSize = 550
+	local bossIconSize = 540
 	if monsters.bosses then
 		for k, bossId in ipairs(monsters.bosses) do
 			-- Check if this boss has been seen
@@ -73,7 +73,7 @@ function LocationBossesWidget:SetMonsters(monsters)
 end
 
 function LocationBossesWidget:Layout()
-	self.monsterIconsRoot:LayoutChildrenInRow(50, "bottom")
+	self.monsterIconsRoot:LayoutChildrenInRow(30, "bottom")
 	return self
 end
 

@@ -1,5 +1,6 @@
 local fmodtable = require "defs.sound.fmodtable"
 local soundutil = require "util.soundutil"
+local spawnutil = require "util.spawnutil"
 local SGCommon = require "stategraphs.sg_common"
 
 -- storing these values here for now, likely will move into trap.lua though
@@ -12,6 +13,8 @@ local MAX_SPAWNS = 10
 local MOB_PREFAB = "mothball"
 local NUM_MOBS_TO_SPAWN_MIN = 2
 local NUM_MOBS_TO_SPAWN_MAX = 4
+
+local TARGET_AREA_RANGE = 10
 
 local function SpawnMobs(source)
 	for i = 1, math.random(NUM_MOBS_TO_SPAWN_MIN, NUM_MOBS_TO_SPAWN_MAX) do
@@ -73,12 +76,14 @@ local states =
 			-- Shake the camera for all players
 			ShakeAllCameras(CAMERASHAKE.VERTICAL, 1.5, 0.02, 1)
 
-			-- Start rumble sound
-			local params = {}
-			local soundevent = fmodtable.Event.earthquake_low_rumble_LP
-			params.fmodevent = soundevent
-			params.sound_max_count = 1
-			soundutil.PlaySoundData(inst, params, "rumble", inst)
+			inst.sg.mem.rumble_sound_LP = soundutil.PlayCodeSound(
+				inst,
+				fmodtable.Event.earthquake_low_rumble_LP,
+				{
+					name = "rumble",
+					max_count = 1,
+				}
+			)
 
 			inst.sg:SetTimeout(1)
 		end,
@@ -89,6 +94,13 @@ local states =
 			end
 			inst.sg:GoToState("drop")
 		end,
+
+		onexit = function(inst)
+			if inst.sg.mem.rumble_sound_LP then
+				soundutil.KillSound(inst, inst.sg.mem.rumble_sound_LP)
+				inst.sg.mem.rumble_sound_LP = nil
+			end
+		end,
 	}),
 
 	State({
@@ -98,7 +110,9 @@ local states =
 		onenter = function(inst)
 			local prefab = SpawnPrefab("swamp_stalactite_network", inst)
 			if prefab then
-				local pos = TheWorld.Map:GetRandomPointInWalkable(5)
+				-- Pick a random spot around a random target player.
+				local player = AllPlayers[math.random(1, #AllPlayers)]
+				local pos = spawnutil.GetRandomPointAroundTarget(player, TARGET_AREA_RANGE)
 				prefab.Transform:SetPosition(pos:Get())
 
 				if not inst.sg.mem.has_listener then

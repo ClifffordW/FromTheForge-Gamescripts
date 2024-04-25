@@ -23,6 +23,7 @@ local prefabs =
 	GroupPrefab("drops_beets"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "beets")
+prefabutil.SetupDeathFxPrefabs(prefabs, "beets_elite")
 
 local attacks =
 {
@@ -42,6 +43,8 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local elite_attacks =
 {
@@ -61,6 +64,8 @@ local elite_attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local MONSTER_SIZE = 1
 

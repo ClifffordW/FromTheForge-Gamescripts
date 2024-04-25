@@ -2,16 +2,11 @@
 return {
   __displayName="ogre_red_eye_color_1",
   cosmetic_data={
-    color={ 0.0027777777777778, 0.5, 1.0,},
-    colorgroup="EYE_COLOR",
+    color={ 0.0039215688593686, 0.4285714328289, 0.88803088665009,},
     color_species="ogre",
+    colorgroup="EYE_COLOR",
     multi_species=true,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

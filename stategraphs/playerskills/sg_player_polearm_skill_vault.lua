@@ -30,8 +30,9 @@ local states =
 				inst.Physics:StartPassingThroughObjects()
 			end),
 
-			FrameEvent(15, function(inst)
+			FrameEvent(14, function(inst)
 				inst.sg:AddStateTag("airborne_high")
+				inst.sg:AddStateTag("airborne")
 				SGCommon.Fns.StartJumpingOverHoles(inst)
 			end),
 		},
@@ -45,14 +46,14 @@ local states =
 
 		onexit = function(inst)
 			inst.AnimState:SetSymbolFG("weapon_back01", false)
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 			SGCommon.Fns.StopJumpingOverHoles(inst)
 		end,
 	}),
 
 	PlayerSkillState({
 		name = "skill_polearm_vault_pst",
-		tags = { "busy", "airborne_high" },
+		tags = { "busy", "airborne", "airborne_high" },
 
 		onenter = function(inst)
 			inst:FlipFacingAndRotation()
@@ -74,7 +75,8 @@ local states =
 			end),
 
 			FrameEvent(8, function(inst)
-				inst.Physics:StopPassingThroughObjects()
+				inst.sg:RemoveStateTag("airborne")
+				SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 				SGPlayerCommon.Fns.SetCanDodge(inst)
 			end),
 			FrameEvent(13, SGPlayerCommon.Fns.RemoveBusyState),

@@ -6,7 +6,7 @@ return {
   bloom=100.0,
   build="fx_dust",
   glowcolor="00BBFFFF",
-  group="player_ground_hits",
+  group="player_skills",
   layer="bg",
   multcolor="FFFFFF80",
   onground=true,

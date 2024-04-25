@@ -6,7 +6,7 @@ return {
     { script_args={ light_color="4D453FFF",}, variation=1, x=5.45, z=5.25,},
     { script_args={ light_color="4D453FFF",}, variation=1, x=-3.28, z=-2.18,},
   },
-  room_loot={ { x=-0.5, z=-0.5,}, { x=5.5, z=5.5,},},
+  room_loot={ { x=0.5, z=-0.5,},},
   spawner_creature={
     { script_args={ creature_spawner_type="perimeter",}, x=8.68, z=19.23,},
     { script_args={ creature_spawner_type="perimeter",}, x=-7.29, z=18.87,},
@@ -47,13 +47,9 @@ return {
     { script_args={ trap_types={ "trap_exploding", "trap_spike",},}, z=4.0,},
     { script_args={ trap_types={ "trap_exploding",},}, x=-2.0, z=-5.0,},
     { script_args={ trap_types={ "trap_exploding",},}, x=-11.0,},
-    { script_args={ trap_types={ "trap_exploding",},}, x=-15.0, z=-12.0,},
+    { script_args={ trap_types={ "trap_exploding",},}, x=-14.5, z=-11.5,},
     { script_args={ trap_types={ "trap_exploding",},}, x=13.0, z=9.0,},
     { script_args={ trap_types={ "trap_exploding",},}, x=-16.0, z=6.0,},
-    {
-      script_args={ trap_types={ "trap_exploding", "trap_spike",},},
-      x=-11.0,
-      z=-11.0,
-    },
+    { script_args={ trap_types={ "trap_exploding",},}, x=-10.5, z=-10.5,},
   },
 }

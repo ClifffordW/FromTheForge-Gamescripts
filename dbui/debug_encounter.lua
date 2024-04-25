@@ -73,7 +73,7 @@ function DebugEncounter:RenderPanel( ui, panel )
 
 		-- Load the room we just selected
 		local scenegen = self.sb.biome_location:GetSceneGen()
-		local layouts = scenegenutil.FindLayoutsForRoomSuffix(scenegen, "_arena_nesw")
+		local layouts = scenegenutil.FindLayoutsForRoomSuffix(scenegen, "_arena", "_nesw")
 		local prefab = layouts and layouts[1]
 		kassert.assert_fmt(prefab, "Failed to find destination room in scenegen[%s]. Is SceneGen configured for '%s'?", scenegen, self.biome_name)
 		self:ReopenNodeAfterReset()
@@ -167,7 +167,7 @@ function DebugEncounter:RenderPanel( ui, panel )
 		local prefab = nil
 		if TheDungeon:GetDungeonMap():IsCurrentRoomDungeonEntrance() then
 			-- No spawners in entrance, pick a valid room.
-			if self.biome_name == "kanft_swamp" then
+			if self.biome_name == "bandi_swamp" then
 				prefab = "swamp_arena_nesw"
 			else
 				prefab = "startingforest_arena_ew"

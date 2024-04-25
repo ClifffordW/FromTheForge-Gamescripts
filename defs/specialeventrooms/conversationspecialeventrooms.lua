@@ -49,7 +49,6 @@ local function HostAttacksPlayer(inst, player, damage, knockdown)
 		fmodtable.Event.Hit_player,
 		{
 			fmodparams = {
-				max_count = 1,
 				faction = player:IsLocal() and 1 or 2,
 			},
 		})
@@ -102,8 +101,9 @@ SpecialEventRoom.AddConversationSpecialEventRoom("coin_flip_max_health_or_damage
 		}
 		local coin_fx = powerutil.SpawnFxOnEntity(coin_prefab, player, params)
 
-		-- local coin_fx = SpawnPrefab(coin_prefab, inst)
-		-- coin_fx.Transform:SetPosition(position.x, position.y + y_offset, position.z)
+		if player and player.sg then
+			player.sg:GoToState("sheathed_wait_four_seconds") -- This state is made for this event: it makes the player lose control and wait, sheathed, for 4 seconds, then let them out after a few seconds.
+		end
 
 		coin_fx:ListenForEvent("onremove", function()
 			local hold_prefab = "coinflip_hold_"..coin_flip
@@ -351,6 +351,7 @@ SpecialEventRoom.AddConversationSpecialEventRoom("free_power_epic",
 		options = powerdropmanager:FilterByDroppable(options, player)
 		options = powerdropmanager:FilterByHas(options, player)
 		options = powerdropmanager:FilterByEligible(options, player)
+		options = powerdropmanager:FilterByRunCount(options, player)
 		local newpower = powerdropmanager:GetRandomPowerOfRarity(options, Power.Rarity.EPIC)
 
 		local pm = player.components.powermanager
@@ -387,6 +388,7 @@ SpecialEventRoom.AddConversationSpecialEventRoom("free_power_legendary",
 		options = powerdropmanager:FilterByDroppable(options, player)
 		options = powerdropmanager:FilterByHas(options, player)
 		options = powerdropmanager:FilterByEligible(options, player)
+		options = powerdropmanager:FilterByRunCount(options, player)
 		local newpower = powerdropmanager:GetRandomPowerOfRarity(options, Power.Rarity.LEGENDARY)
 
 		local pm = player.components.powermanager
@@ -444,7 +446,7 @@ SpecialEventRoom.AddConversationSpecialEventRoom("no_thing",
 	prefabs = { },
 
 	prerequisite_fn = function(inst, players)
-		return false -- jambell: disable for now
+		return false -- disable for now
 	end,
 
 	on_init_fn = function(inst)

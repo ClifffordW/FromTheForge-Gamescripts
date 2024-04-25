@@ -72,10 +72,28 @@ local bossdef = {
 		},
 		]]
 
+		crystroll_miniboss =
+		{
+			id = "yammo_elite",
+			name = STRINGS.NAMES.yammo_elite,
+			icon = "research_widget_yammo.tex",
+			icon_locked = "research_widget_yammo.tex",
+			icon_scale = 0.5,
+		},
+
 		yammo =
 		{
 			id = "yammo",
 			name = STRINGS.NAMES.yammo,
+			icon = "research_widget_yammo.tex",
+			icon_locked = "research_widget_yammo.tex",
+			icon_scale = 0.5,
+		},
+
+		yammo_miniboss =
+		{
+			id = "yammo_elite",
+			name = STRINGS.NAMES.yammo_elite,
 			icon = "research_widget_yammo.tex",
 			icon_locked = "research_widget_yammo.tex",
 			icon_scale = 0.5,
@@ -90,6 +108,15 @@ local bossdef = {
 			icon_scale = 0.5,
 		},
 
+		floracrane_miniboss =
+		{
+			id = "floracrane_elite",
+			name = STRINGS.NAMES.floracrane_elite,
+			icon = "research_widget_floracrane.tex",
+			icon_locked = "research_widget_floracrane.tex",
+			icon_scale = 0.5,
+		},
+
 		gourdo =
 		{
 			id = "gourdo",
@@ -99,10 +126,28 @@ local bossdef = {
 			icon_scale = 0.5,
 		},
 
+		gourdo_miniboss =
+		{
+			id = "gourdo_elite",
+			name = STRINGS.NAMES.gourdo_elite,
+			icon = "research_widget_gourdo.tex",
+			icon_locked = "research_widget_gourdo.tex",
+			icon_scale = 0.5,
+		},
+
 		groak =
 		{
 			id = "groak",
 			name = STRINGS.NAMES.groak,
+			icon = "research_widget_groak.tex",
+			icon_locked = "research_widget_groak.tex",
+			icon_scale = 0.5,
+		},
+
+		groak_miniboss =
+		{
+			id = "groak_elite",
+			name = STRINGS.NAMES.groak_elite,
 			icon = "research_widget_groak.tex",
 			icon_locked = "research_widget_groak.tex",
 			icon_scale = 0.5,

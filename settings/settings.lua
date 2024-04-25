@@ -140,12 +140,14 @@ local Settings = Class(function(self, savename)
 	self.registered_settings = {}
 	self.settings = {}
 	self.savename = savename
-
-	self.systemsettings = CreateEntity("SystemSettingsInterface")
-	self.systemsettings.entity:AddGraphicsOptions()
 end)
 
 function Settings:GetGraphicsOptions()
+	if not self.systemsettings then
+		self.systemsettings = CreateEntity("SystemSettingsInterface")
+			:MakeSurviveRoomTravel()
+		self.systemsettings.entity:AddGraphicsOptions()
+	end
 	return self.systemsettings.GraphicsOptions
 end
 
@@ -261,7 +263,7 @@ end
 function Settings:Load(callback)
 	TheSim:GetPersistentString(self:GetSaveName(),
 		function(load_success, str)
-			local data = str and #str > 0 and TrackedAssert("Settings:Load",  json.decode, str) or nil
+			local data = str and #str > 0 and TrackedAssert("Settings:Load", json.decode, str) or nil
 			local success = self:SetSaveData(data)
 			for key,setting in pairs(self.settings) do
 				-- Since SetSaveData uses raw (it gets data from save file),
@@ -273,6 +275,18 @@ function Settings:Load(callback)
 			end
 			callback(success)
 		end, false)
+end
+
+-- Load without being able to apply settings. See gamesettings.cpp
+function Settings:LoadAsReadOnly(save_data)
+	assert(save_data)
+	for key,setting in pairs(self.settings) do
+		-- Don't trigger applyfunction on load. We only want to read values.
+		setting.applyfunction = nil
+	end
+	local data = save_data and #save_data > 0 and TrackedAssert("Settings:Load", json.decode, save_data) or nil
+	self:SetSaveData(data)
+	-- Don't care if SetSaveData fails. That just means we return to defaults.
 end
 
 return Settings

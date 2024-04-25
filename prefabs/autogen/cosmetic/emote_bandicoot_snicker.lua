@@ -8,9 +8,9 @@ return {
     name_key="emote_bandicoot_snicker",
   },
   group="PLAYER_EMOTE",
-  hidden=false,
+  
   locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  
+  
+  
 }

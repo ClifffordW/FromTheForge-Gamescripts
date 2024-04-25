@@ -2,7 +2,10 @@
 return {
   __displayName="bench_swamp_2",
   gridsize={ { h=2, w=3,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
+  networked=1,
   parallax={
     { anim="bench_front", dist=-0.2, shadow=true,},
     { anim="bench_mid", shadow=true,},

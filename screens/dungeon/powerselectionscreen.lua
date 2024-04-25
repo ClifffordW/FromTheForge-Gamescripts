@@ -6,6 +6,7 @@
 
 -- Useful for stuff like picking a power to upgrade or remove.
 
+local Enum = require "util.enum"
 local Screen = require("widgets/screen")
 local Widget = require("widgets/widget")
 local Image = require("widgets/image")
@@ -18,6 +19,7 @@ local PowerDescriptionButton = require "widgets.ftf.powerdescriptionbutton"
 local fmodtable = require "defs.sound.fmodtable"
 local Consumable = require "defs.consumable"
 local Power = require "defs.powers.power"
+local lume = require "util.lume"
 
 
 local ConfirmAction = PowerConfirmationScreen.ConfirmAction
@@ -147,7 +149,7 @@ local PowerSelectionScreen = Class(Screen, function(self, player, powers, action
 		self.cancel_button = self.nav_buttons:AddChild(ActionButton())
 			:SetSize(BUTTON_W, BUTTON_H)
 			:SetText(STRINGS.UI.POWERSELECTIONSCREEN.CANCEL_BUTTON)
-			:SetOnClick(function() self:CloseScreen() end)
+			:SetOnClick(function() self:_CloseScreen(self.CompleteState.s.Exit) end)
 	end
 
 	self:BuildPowerGrid()
@@ -158,10 +160,10 @@ local PowerSelectionScreen = Class(Screen, function(self, player, powers, action
 	self.nav_buttons:LayoutBounds("center", "below", self.list_hitbox)
 		:Offset(0, -60)
 
-	-- victorc: hack - player status on screen
+	-- hack - player status on screen
 	self.player_unit_frames = self:AddChild(PlayerUnitFrames())
 
-	-- victorc: hack - player status on screen
+	-- hack - player status on screen
 	TheDungeon.HUD.player_unit_frames:Hide()
 
 end)
@@ -213,17 +215,23 @@ PowerSelectionScreen.CONTROL_MAP = {
 		end,
 		fn = function(self)
 			if not self.prevent_cancel then
-				self:CloseScreen()
+				self:_CloseScreen(self.CompleteState.s.Exit)
 				return true
 			end
 		end,
 	},
 }
 
+PowerSelectionScreen.CompleteState = Enum{
+	"ShowAgainAfterAnim",
+	"Exit",
+}
 
-function PowerSelectionScreen:CloseScreen()
+function PowerSelectionScreen:_CloseScreen(complete_state)
+	dbassert(self.CompleteState:Contains(complete_state))
+	self.complete_state = complete_state
 	TheFrontEnd:PopScreen(self)
-	-- victorc: hack - player status on screen
+	-- hack - player status on screen
 	TheDungeon.HUD.player_unit_frames:Show()
 	-- TheDungeon.HUD:Show()
 end
@@ -242,7 +250,7 @@ function PowerSelectionScreen:OnSelectPower(power)
 	-- show a confirmation screen depending on the action that the player is doing
 
 	local on_confirm_fn = function()
-		self:CloseScreen()
+		self:_CloseScreen(self.CompleteState.s.ShowAgainAfterAnim)
 		-- do the action that was confirmed
 		-- consume the currency that was charged
 
@@ -252,7 +260,6 @@ function PowerSelectionScreen:OnSelectPower(power)
 
 		local price = CalcPrice(power, self.free) --currently this price is the same for remove or upgrade... should that be true?
 		local inventory = self.owningplayer.components.inventoryhoard
-		-- victorc: hack - local multiplayer, use the same inventory as main player
 
 		if price ~= nil and price > 0 then
 			inventory:RemoveStackable(Consumable.Items.MATERIALS.konjur, price)
@@ -314,6 +321,39 @@ function PowerSelectionScreen:BuildPowerGrid()
 
 	self.power_container
 		:LayoutBounds("center", "center", self.list_hitbox)
+
+	self:RenavControls()
+end
+
+function PowerSelectionScreen:RenavControls()
+	local children = self.power_container:GetChildren()
+	if #children < 1 or self.cancel_button == nil then
+		return
+	end
+
+	local lowest_widgets = {}
+	local children_copy = shallowcopy(children)
+	children_copy = lume.sort(children_copy, function(a, b)
+		local a_x, a_y = a:GetPos()
+		local b_x, b_y = b:GetPos()
+
+		return b_y > a_y
+	end)
+
+	local _, lowest_y = children_copy[1]:GetPos()
+	local lowest_widgets = {}
+	for i, child in ipairs(children_copy) do
+		local _, child_y = child:GetPos()
+		if child_y > lowest_y then
+			break
+		end
+
+		table.insert(lowest_widgets, child)
+	end
+
+	for i, widget in ipairs(lowest_widgets) do
+		widget:SetFocusDir("down", self.cancel_button)
+	end
 end
 
 function PowerSelectionScreen:SetActionUpgrade()

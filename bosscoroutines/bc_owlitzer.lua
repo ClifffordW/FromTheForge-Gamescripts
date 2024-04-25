@@ -69,8 +69,39 @@ local SUPER_FLAP_PATTERNS =
 local BossCoroOwlitzer = Class(BossCoroutine, function(self, inst)
 	BossCoroutine._ctor(self, inst)
 	-- Check for phase changes
-	-- self:CheckHealthPhaseTransition(PHASE_THRESHOLDS)
+	self:CheckHealthPhaseTransition(PHASE_THRESHOLDS)
 end)
+
+function BossCoroOwlitzer:OnNetSerialize()
+	local e = self.inst.entity
+
+	e:SerializeBoolean(self.music_phase ~= nil)
+	if self.music_phase then
+		e:SerializeUInt(self.music_phase, 3) -- 0 thru 4
+	end
+end
+
+function BossCoroOwlitzer:OnNetDeserialize()
+	local e = self.inst.entity
+
+	local has_music_phase = e:DeserializeBoolean()
+	if has_music_phase then
+		local new_music_phase = e:DeserializeUInt(3)
+		if not self.music_started then
+			TheLog.ch.Audio:print("***///***bc_owlitzer.lua: Fight in progress, starting boss music.")
+			if new_music_phase then
+				TheLog.ch.Audio:print("***///***bc_owlitzer.lua: Skipping to phase" .. new_music_phase .. " .")
+				TheWorld.components.ambientaudio:StartBossMusic(new_music_phase)
+			else
+				TheWorld.components.ambientaudio:StartBossMusic()
+			end
+			self.music_started = true
+		end
+		if new_music_phase ~= self.music_phase then
+			self:SetMusicPhase(new_music_phase)
+		end
+	end
+end
 
 function BossCoroOwlitzer:SpawnSetDressing(data)
 	BossCoroOwlitzer._base.SpawnSetDressing(self, data)
@@ -85,6 +116,7 @@ end
 
 function BossCoroOwlitzer:SetMusicPhase(phase)
 	TheAudio:SetPersistentSoundParameter(audioid.persistent.boss_music, "Music_BossPhase", phase)
+	self.music_phase = phase
 end
 
 function BossCoroOwlitzer:SetUpFight()
@@ -108,7 +140,6 @@ function BossCoroOwlitzer:SummonWave(wave)
 		spawner:SpawnWave(wave, 0, 0)
 	end
 	sc:StartCustomEncounter(custom_encounter)
-	self:SetMusicPhase(4)
 end
 
 -----------------------------------------------------------
@@ -146,12 +177,12 @@ function BossCoroOwlitzer:DoBarf()
 	self:WaitForEvent("barf_over")
 end
 
-function BossCoroOwlitzer:DoPhaseChange()
+--[[function BossCoroOwlitzer:DoPhaseChange()
 	-- self:WaitForNotBusy()
-	self:SendEvent("do_phase_change")
+	self:SendEvent("boss_phase_changed")
 	self:WaitForEvent("superflap_over")
 	self:SetPhase(self:CurrentPhase() + 1)
-end
+end]]
 -----------------------------------------------------------
 
 -- Starting phase. Melee/Wind Flap/Dive Bomb
@@ -264,23 +295,20 @@ function BossCoroOwlitzer:Main()
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(PHASE_THRESHOLDS[1]) end)
 	self:DoUntilHealthPercent(PHASE_THRESHOLDS[1], self.PhaseOne)
 
-	self:DoPhaseChange() -- from 1 to 2
-	self:StartNewPhase()
+	self:WaitForNotBusy()
 
 	-- Phase 2:
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(PHASE_THRESHOLDS[2]) end)
 	self:DoUntilHealthPercent(PHASE_THRESHOLDS[2], self.PhaseTwo)
 
-	self:DoPhaseChange() -- from 2 to 3
-	self:StartNewPhase()
+	self:WaitForNotBusy()
 
 	-- Phase 3:
 	SetupLowHealthPhase(self.inst) -- Enable low health behaviours.
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(PHASE_THRESHOLDS[3]) end)
 	self:DoUntilHealthPercent(PHASE_THRESHOLDS[3], self.PhaseThree)
 
-	self:DoPhaseChange() -- from 3 to 4
-	self:StartNewPhase()
+	self:WaitForNotBusy()
 
 	-- Phase 4:
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(0) end)

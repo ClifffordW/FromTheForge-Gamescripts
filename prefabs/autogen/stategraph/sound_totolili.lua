@@ -3,11 +3,31 @@ return {
   __displayName="sound_totolili",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "totolili",},
+  prefab={ "totolili", "totolili_elite",},
   stategraphs={
     sg_totolili={
       sg_events={
         { eventtype="playfoleysound", name="sfx-footstep", param={ soundtag="Footstep",},},
+        { eventtype="playsound", name="sfx-tell", param={ soundevent="totolili_tell",},},
+        {
+          eventtype="playsound",
+          name="sfx-whoosh",
+          param={ soundevent="totolili_whoosh",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-toss",
+          param={ soundevent="totolili_toss_spin",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-spin_pst",
+          param={ soundevent="totolili_toss_spin_pst",},
+        },
+        { eventtype="playsound", name="sfx-vo", param={ soundevent="totolili_vo1",},},
+        { eventtype="playsound", name="sfx-foley", param={ soundevent="totolili_foley",},},
+        { eventtype="playfoleysound", name="sfx-bodyfall", param={ soundtag="Bodyfall",},},
+        { eventtype="playsound", name="sfx-knockdown", param={ soundevent="Knockdown",},},
       },
     },
   },

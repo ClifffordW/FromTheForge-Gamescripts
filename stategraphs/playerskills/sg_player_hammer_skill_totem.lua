@@ -20,7 +20,8 @@ end
 
 local function CreateTotem(inst)
 	local x_offset = 3 -- put totem in front of player; facing accounted for in SpawnAtDist
-	local totem = SGCommon.Fns.SpawnAtDist(inst, "totem_prototype", x_offset)
+	local totem = SGCommon.Fns.SpawnAtDist(inst, "player_totem", x_offset)
+
 	if totem then
 		totem:Setup(inst)
 		inst.sg.mem.hammerskilltotem = totem

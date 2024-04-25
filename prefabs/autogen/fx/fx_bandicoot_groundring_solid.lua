@@ -6,6 +6,7 @@ return {
   bloom=48.0,
   build="fx_bandicoot_groundring",
   glowcolor="D100FFFF",
+  group="fx_bandicoot",
   onground=true,
   scalex=0.60000002384186,
   scaley=0.60000002384186,

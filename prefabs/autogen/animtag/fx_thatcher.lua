@@ -3,15 +3,42 @@ return {
   __displayName="fx_thatcher",
   anim_events={
     thatcher_bank={
+      acid_splash={
+        events={
+          { frame=4, name="vfx-acid_splash",},
+          { frame=34, name="vfx-acid_splatter_burst",},
+        },
+      },
       double_short_slash={ events={ { frame=11, name="vfx-double_short_slash",},},},
       full_swing={ events={ { frame=14, name="vfx-full_swing",},},},
+      full_swing_mobile_attack_loop={ events={ { frame=0, name="vfx-full_swing_mobile_loop",},},},
       hook={ events={ { frame=14, name="vfx-hook",},},},
       hook_shoryuken={ events={ { frame=23, name="vfx-hook_shoryuken",},},},
-      intro={ events={ { frame=38, name="vfx-intro",},},},
-      swing_long={ events={ { frame=9, name="vfx-swing_long",},},},
+      intro={ events={ { frame=45, name="vfx-intro",},},},
+      shoryuken={
+        events={ { frame=12, name="vfx-shoryuken",}, { frame=31, name="vfx-shoryuken_impact",},},
+      },
+      shoryuken_dash_loop={
+        events={
+          { frame=1, name="vfx-shoryuken_dash_impact",},
+          { frame=0, name="vfx-shoryuken_dash_impact",},
+          { frame=2, name="vfx-shoryuken_dash_impact",},
+          { frame=3, name="vfx-shoryuken_dash_impact",},
+          { frame=4, name="vfx-shoryuken_dash_impact",},
+          { frame=5, name="vfx-shoryuken_dash_impact",},
+        },
+      },
+      shoryuken_dash_pre={ events={ { frame=10, name="vfx-shoryuken_dash_pre_impact",},},},
+      swing_long={ events={ { frame=8, name="vfx-swing_long",},},},
       swing_short={ events={ { frame=4, name="vfx-swing_short",},},},
-      swing_smash={ events={ { frame=12, name="vfx-swing_smash",},},},
+      swing_smash={
+        events={
+          { frame=12, name="vfx-swing_smash",},
+          { frame=62, name="vfx-swing_smash_impact",},
+        },
+      },
       swing_smash_pre={ events={ { frame=7, name="vfx-swing_smash_pre",},},},
+      swing_smash_pst={ events={ { frame=7, name="vfx-swing_smash_pst_impact",},},},
       swing_uppercut={ events={ { frame=28, name="vfx-swing_uppercut",},},},
     },
   },

@@ -50,8 +50,7 @@ local function AncestorHasTag(inst, tag)
 end
 
 local function CanTrackHistory(entity, required_native_components)
-	return not entity:HasTag("entityproxy")
-		and not AncestorHasTag(entity, "dbg_nohistory")
+	return not (entity:HasTag("entityproxy") or entity:HasTag("dbg_nohistory") or AncestorHasTag(entity, "dbg_nohistory"))
 end
 
 function EntityTracker:WillTrackEntity(entity)

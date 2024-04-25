@@ -11,11 +11,21 @@ require "util"
 local TabGroup = Class(Widget, function(self)
 	Widget._ctor(self, "TabGroup")
 	self.tabs = {}
+	self.tabs_container = self:AddChild(Widget())
+		:SetName("Tabs container")
 	self:SetTheme_DarkOnLight()
+	self.tab_spacing = 40
 end)
 
-function TabGroup:OnRemoved()
+function TabGroup:_RemoveListeners()
+	self.inst:RemoveEventCallback("input_device_changed", self._ondevicechange_fn, self:GetOwningPlayer())
+	self.inst:RemoveEventCallback("input_device_changed_kbm", self._ondevicechange_fn, self:GetOwningPlayer())
 	TheInput:UnregisterForDeviceChanges(self._ondevicechange_fn)
+	self._ondevicechange_fn = nil
+end
+
+function TabGroup:OnRemoved()
+	self:_RemoveListeners()
 end
 
 
@@ -54,6 +64,11 @@ function TabGroup:SetTabSize(w,h)
 	return self
 end
 
+function TabGroup:SetTabSpacing(tab_spacing)
+	self.tab_spacing = tab_spacing or 40
+	return self
+end
+
 function TabGroup:SetTabOnClick(onclickfn)
 
 	-- Save callback function
@@ -82,7 +97,7 @@ function TabGroup:SelectTab(index, trigger_click)
 			self.current = tab
 			self.current:Select()
 			if trigger_click then
-				onclickfn(tab)
+				self.on_click_fn(tab)
 			end
 		end
 	end
@@ -130,26 +145,34 @@ function TabGroup:AddCycleIcons(icon_size, icon_margin, icon_color)
 	self._ondevicechange_fn = function(old_device_type, device_type)
 		self:RefreshHotkeyIcon()
 	end
-	TheInput:RegisterForDeviceChanges(self._ondevicechange_fn)
+	local owning_player = self:GetOwningPlayer()
+	if owning_player then
+		self.inst:ListenForEvent("input_device_changed", self._ondevicechange_fn, owning_player)
+		self.inst:ListenForEvent("input_device_changed_kbm", self._ondevicechange_fn, owning_player)
+	else
+		TheInput:RegisterForDeviceChanges(self._ondevicechange_fn)
+	end
+
 
 	icon_size = icon_size or 50
-	icon_margin = icon_margin or 20
+	self.icon_margin = icon_margin or 20
 	icon_color = icon_color or self.colors.normal
 
-	self.prev_icon = self:AddChild(Image())
-		:SetSize(icon_size, icon_size)
-		:SetMultColor(icon_color)
-		:SetHiddenBoundingBox(true)
-		:LayoutBounds("before", "center", self.tabs[1])
-		:Offset(-icon_margin, 0)
-	self.next_icon = self:AddChild(Image())
-		:SetSize(icon_size, icon_size)
-		:SetMultColor(icon_color)
-		:SetHiddenBoundingBox(true)
-		:LayoutBounds("after", "center", self.tabs[#self.tabs])
-		:Offset(icon_margin, 0)
-	self:RefreshHotkeyIcon()
-	self.prev_icon:SendToBack() -- so it's first in children if we do LayoutChildrenInGrid.
+	if not self.prev_icon then
+		self.prev_icon = self:AddChild(Image())
+			:SetSize(icon_size, icon_size)
+			:SetMultColor(icon_color)
+			:SetHiddenBoundingBox(true)
+	end
+	if not self.next_icon then
+		self.next_icon = self:AddChild(Image())
+			:SetSize(icon_size, icon_size)
+			:SetMultColor(icon_color)
+			:SetHiddenBoundingBox(true)
+		self:RefreshHotkeyIcon()
+	end
+
+	self:Layout()
 	return self
 end
 
@@ -159,7 +182,10 @@ function TabGroup:SetIsSubTab(is_subtab)
 end
 
 function TabGroup:RefreshHotkeyIcon()
-	if TheFrontEnd:IsRelativeNavigation() then
+	local owner = self:GetOwningPlayer()
+	local playercontroller = owner and owner.components.playercontroller
+	local nav = playercontroller or TheFrontEnd
+	if nav:IsRelativeNavigation() then
 		local prev_control = Controls.Digital.MENU_TAB_PREV
 		local next_control = Controls.Digital.MENU_TAB_NEXT
 
@@ -170,16 +196,15 @@ function TabGroup:RefreshHotkeyIcon()
 
 		-- Fall back to last input device so TabGroup works in main menu or
 		-- screens not tied to a single player.
-		local owner = self:GetOwningPlayer()
-		local input_source = owner and owner.playercontroller or TheInput
+		local input_source = playercontroller or TheInput
 
 		self.prev_icon:SetTexture(input_source:GetTexForControl(prev_control))
 			:Show()
 		self.next_icon:SetTexture(input_source:GetTexForControl(next_control))
 			:Show()
 	else
-		-- TODO(dbriscoe): For now, hide the icons when using mouse because
-		-- they don't match the size of gamepad and are a bit ugly.
+		-- Hide the keyboard icons because they don't match the size of gamepad
+		-- and are a bit ugly.
 		self.prev_icon:Hide()
 		self.next_icon:Hide()
 	end
@@ -192,13 +217,14 @@ function TabGroup:_HookupTab(tab)
 		self.current = tab
 	end
 	if self.on_click_fn then tab:SetOnClick(function() self.on_click_fn(tab) end) end
+	self:Layout()
 	return tab
 end
 
 -- A tab with an icon and tooltip.
 -- TODO(dbriscoe): Rename to AddIconTab
 function TabGroup:AddTab(icon)
-	local tab = self:AddChild(ImageButton(icon))
+	local tab = self.tabs_container:AddChild(ImageButton(icon))
 		:SetImageNormalColour(self.colors.normal)
 		:SetImageFocusColour(self.colors.focus)
 		:SetImageDisabledColour(self.colors.disabled)
@@ -211,7 +237,7 @@ end
 function TabGroup:AddIconTextTab(icon, text)
 	assert(icon)
 	assert(text)
-	local tab = self:AddChild(Clickable())
+	local tab = self.tabs_container:AddChild(Clickable())
 	tab.icon = tab:AddChild(Image(icon))
 		:SetMultColor(WEBCOLORS.WHITE)
 
@@ -247,7 +273,7 @@ end
 -- A tab with just text.
 function TabGroup:AddTextTab(label, font_size)
 	font_size = font_size or self.font_size
-	local tab = self:AddChild(TextButton())
+	local tab = self.tabs_container:AddChild(TextButton())
 		-- All colors are white because we tint the text for prettier fades.
 		:SetTextColour(WEBCOLORS.WHITE)
 		:SetTextFocusColour(WEBCOLORS.WHITE)
@@ -286,15 +312,14 @@ function TabGroup:_ApplyFancyTint(tab)
 end
 
 function TabGroup:RemoveAllTabs()
-	self:RemoveAllChildren()
-	TheInput:UnregisterForDeviceChanges(self._ondevicechange_fn)
-	self._ondevicechange_fn = nil
+	self.tabs_container:RemoveAllChildren()
+	self:_RemoveListeners()
 	self.tabs = {}
 	self.current = nil
 	return self
 end
 
--- TODO(dbriscoe): POSTVS We should have some way of preventing tab cycling
+-- TODO(ui): POSTVS We should have some way of preventing tab cycling
 -- during screen animations. IgnoreInput, Disable, etc.
 --~ function TabGroup:OnEnable()
 --~ 	for _,tab in ipairs(self.tabs) do
@@ -307,5 +332,32 @@ end
 --~ 		tab:Disable()
 --~ 	end
 --~ end
+
+function TabGroup:SetGridLayout(max_columns, vertical_spacing)
+	self.max_columns = max_columns or nil
+	self.tab_spacing_vertical = vertical_spacing or 15
+	self:Layout()
+	return self
+end
+
+function TabGroup:Layout()
+
+	-- Layout all the tabs
+	if self.tab_spacing_vertical then	-- If this is set, it's a grid
+		self.tabs_container:LayoutChildrenInGrid(self.max_columns or 100000, {h = self.tab_spacing, v = self.tab_spacing_vertical})
+	else
+		self.tabs_container:LayoutChildrenInRow(self.tab_spacing)
+	end
+
+	-- If there are prev and next icons, position those accordingly
+	if self.prev_icon then
+		self.prev_icon:LayoutBounds("before", "center", self.tabs_container):Offset(-self.icon_margin, 0)
+	end
+	if self.next_icon then
+		self.next_icon:LayoutBounds("after", "center", self.tabs_container):Offset(self.icon_margin, 0)
+	end
+
+	return self
+end
 
 return TabGroup

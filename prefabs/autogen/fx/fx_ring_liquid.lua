@@ -6,6 +6,7 @@ return {
   bloom=50.0,
   build="fx_ring_liquid",
   glowcolor="D0D641FF",
+  group="fx_acid",
   layer="bg",
   multcolor="BFFFBFFF",
   onground=true,

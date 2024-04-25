@@ -4,6 +4,7 @@ return {
   bank="npc_template",
   bankfile="npc_template",
   build="npc_dojo_master",
+  default_feeling="neutral",
   head="npc_dojo_master_head",
   home="dojo_1",
   role="hunter",

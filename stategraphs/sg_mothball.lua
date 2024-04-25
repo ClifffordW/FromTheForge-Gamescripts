@@ -9,6 +9,7 @@ local function OnClawHitboxTriggered(inst, data)
 	SGCommon.Events.OnHitboxTriggered(inst, data, {
 		attackdata_id = "claw",
 		hitstoplevel = HitStopLevel.LIGHT,
+		hitflags = Attack.HitFlags.LOW_ATTACK,
 		pushback = 1,
 		hitstun_anim_frames = 5,
 		combat_attack_fn = "DoBasicAttack",
@@ -21,6 +22,7 @@ local function OnBiteHitboxTriggered(inst, data)
 	SGCommon.Events.OnHitboxTriggered(inst, data, {
 		attackdata_id = "bite",
 		hitstoplevel = HitStopLevel.LIGHT,
+		hitflags = Attack.HitFlags.LOW_ATTACK,
 		pushback = 1,
 		hitstun_anim_frames = 5,
 		combat_attack_fn = "DoKnockbackAttack",
@@ -90,7 +92,7 @@ local states =
 
 		onenter = function(inst, attack_fn)
 			inst.AnimState:PlayAnimation("intro_bandicoot")
-			inst.Physics:SetEnabled(false)
+			inst.Physics:StartPassingThroughObjects()
 		end,
 
 		timeline =
@@ -118,7 +120,7 @@ local states =
 		},
 
 		onexit = function(inst)
-			inst.Physics:SetEnabled(true)
+			inst.Physics:StopPassingThroughObjects()
 		end,
 	}),
 
@@ -213,7 +215,7 @@ local states =
 		onenter = function(inst, target)
 			inst.AnimState:PlayAnimation("pierce")
 			if (target) then
-				SGCommon.Fns.FaceTarget(inst, target, true)
+				SGCommon.Fns.FaceTargetClampedAngle(inst, target, 50)
 			end
 		end,
 

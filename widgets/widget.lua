@@ -8,6 +8,7 @@ local easing = require "util.easing"
 local fmodtable = require "defs.sound.fmodtable"
 local kassert = require "util.kassert"
 local lume = require "util.lume"
+local playerutil = require "util.playerutil"
 require "mathutil"
 
 -- Global because we use it so much.
@@ -41,7 +42,7 @@ local Widget = Class(function(self, name)
 
 	self.enabled = true
 	self.shown = true
-	self.focus = false
+	self.focus_owner = {}
 	self.can_fade_alpha = true
 	self.propagate_bb = true
 
@@ -128,21 +129,47 @@ function Widget:GetOwningPlayer()
 	end
 end
 
-function Widget:IsDeepestFocus()
-	if self.focus then
+function Widget:GetFocusForOwner()
+	local owner = self:GetOwningPlayer()
+	local hunter_id = owner and owner:GetHunterId()
+	return self:GetFE():GetFocusWidget(hunter_id)
+end
+
+-- Probably only FrontEnd needs to call this. It should automatically limit
+-- player interactions to widgets they own.
+function Widget:CanDeviceInteract(input_device)
+	dbassert(input_device)
+	local device_type, device_id = input_device:unpack()
+	local owningplayer = self:GetOwningPlayer()
+	if device_type == "mouse" and playerutil.CountLocalPlayers() <= 1 then
+		-- Always allow mouse use in local 1p or mainscreen (0 players) for user convenience.
+		return true
+
+	elseif owningplayer then
+		return owningplayer == input_device:GetPlayer()
+
+	elseif self.owningdevice then
+		return (self.owningdevice.device_type == device_type
+			and self.owningdevice.device_id == device_id)
+	end
+	return true
+end
+
+function Widget:IsDeepestFocus(hunter_id)
+	if self.focus_owner[hunter_id] then
 		for k,v in pairs(self.children) do
-			if v.focus then return false end
+			if v.focus_owner[hunter_id] then return false end
 		end
 	end
 
 	return true
 end
 
-function Widget:OnMouseButton(button, down, x, y)
-	if not self.focus then return false end
+function Widget:OnMouseButton(hunter_id, button, down, x, y)
+	if not self.focus_owner[hunter_id] then return false end
 
 	for k,v in pairs (self.children) do
-		if v.focus and v:OnMouseButton(button, down, x, y) then return true end
+		if v.focus_owner[hunter_id] and v:OnMouseButton(hunter_id, button, down, x, y) then return true end
 	end
 end
 
@@ -220,12 +247,26 @@ local function ScoreFocusChangeCandidate(dir, from, to)
 	end
 end
 
+function Widget:HasMatchingFocusOwner(original_widget, input_player)
+	if not input_player then
+		-- If we don't have a player, then anything goes. This may occur in the
+		-- main menu or initial character slot screen.
+		return true
+	end
+	local original_owner = original_widget and original_widget:GetOwningPlayer()
+	local new_owner = self:GetOwningPlayer()
+	return (not original_owner and not new_owner)
+		or not new_owner
+		or new_owner == input_player
+		or new_owner == original_owner
+end
 
-function Widget:FindFocusWidget(dir, from, ignore_child)
-	assert( dir and from )
+function Widget:FindFocusWidget(dir, from, ignore_child, input_player)
+	dbassert( dir and from )
 	if not self.shown
 		or self.ignore_input
 		or self.dragging
+		or not self:HasMatchingFocusOwner(from, input_player)
 	then
 		return
 	end
@@ -250,7 +291,7 @@ function Widget:FindFocusWidget(dir, from, ignore_child)
 
 		for i, child in ipairs( self.children ) do
 			if child ~= ignore_child then
-				local widget, score = child:FindFocusWidget( dir, from )
+				local widget, score = child:FindFocusWidget( dir, from, nil, input_player )
 				if widget and (best_score == nil or score < best_score) then
 					best_widget, best_score = widget, score
 				end
@@ -267,27 +308,35 @@ function Widget:FindFocusWidget(dir, from, ignore_child)
 		local to = self:GetFocusDir( dir ) or self.parent
 		if to ~= self then
 			assert( not self:IsAncestorOf( to ))
-			return to:FindFocusWidget( dir, from, self )
+			return to:FindFocusWidget( dir, from, self, input_player )
 		end
 	end
 end
 
-function Widget:OnFocusMove(dir, down)
---print ("OnFocusMove", self._widgetname or "?", self.focus, dir, down)
+-- Respond to directional input to move focus widget.
+--
+-- dir: string value of the FocusMove enum.
+-- input_device: The InputDevice requesting the move.
+--
+-- OnFocusMove returns one of three values:
+-- * widget: give focus to this widget
+-- * true: ignore the focus move
+-- * false: didn't handle the focus move
+function Widget:OnFocusMove(dir, input_device)
+	--print ("OnFocusMove", self._widgetname or "?", next(self.focus_owner), dir, input_device)
 	-- Unlike GL, we generally call OnFocusMove on the focused widget (instead
-	-- of every widget trying to move focus). Use SetFocus if you need to make
-	-- another widget focused first.)
+	-- of every widget trying to move focus). Use SetFocus if you need to focus
+	-- another widget first.
 	local to = self:GetFocusDir( dir ) or self.parent
 	-- print( "OnFocusMove", self, dir, to )
 	if to == self then
 		self:OnFocusNudge( dir )
 		return true
 	else
-		local focus, score = to:FindFocusWidget( dir, self, self )
+		local focus, score = to:FindFocusWidget( dir, self, self, input_device:GetPlayer() )
 		if focus then
 			-- print( "\tNew Focus:", focus, score )
-			focus:SetFocus()
-			return true
+			return focus
 		else
 			self:OnFocusNudge( dir )
 			return false
@@ -352,43 +401,47 @@ function Widget:IsVisible()
 	return self.shown and (self.parent == nil or self.parent:IsVisible())
 end
 
-function Widget:OnRawKey(key, down)
+function Widget:OnRawKey(key, down, input_device)
 	if down then
-		self:OnRawKeyDown(key)
+		self:OnRawKeyDown(key, input_device)
 	else
-		self:OnRawKeyUp(key)
+		self:OnRawKeyUp(key, input_device)
 	end
 end
 
-function Widget:OnRawKeyDown(key)
-	if not self.focus then return false end
+function Widget:OnRawKeyDown(key, input_device)
+	local hunter_id = input_device:GetOwnerId()
+	if not self.focus_owner[hunter_id] then return false end
 	for k,v in pairs (self.children) do
-		if v.focus and v:OnRawKeyDown(key) then return true end
+		if v.focus_owner[hunter_id] and v:OnRawKeyDown(key, input_device) then return true end
 	end
-        if self.HandleRawKeyDown and self:HandleRawKeyDown(key) then
-       	    return true
+	if self.HandleRawKeyDown and self:HandleRawKeyDown(key, input_device) then
+		return true
 	end
 end
 
-function Widget:OnRawKeyUp(key)
-	if not self.focus then return false end
+function Widget:OnRawKeyUp(key, input_device)
+	local hunter_id = input_device:GetOwnerId()
+	if not self.focus_owner[hunter_id] then return false end
 	for k,v in pairs (self.children) do
-		if v.focus and v:OnRawKeyUp(key) then return true end
+		if v.focus_owner[hunter_id] and v:OnRawKeyUp(key, input_device) then return true end
 	end
-        if self.HandleRawKeyUp and self:HandleRawKeyUp(key) then
-       	    return true
+	if self.HandleRawKeyUp and self:HandleRawKeyUp(key, input_device) then
+		return true
 	end
 end
 
 function Widget:OnTextInput(text)
 	--print ("text", self, text)
-	if not self.focus then return false end
+	local hunter_id = TheInput.device_mouse:GetOwnerId()
+	if not self.focus_owner[hunter_id] then return false end
+	-- Don't pass hunter_id to text input since there's only one keyboard.
 	for k,v in pairs (self.children) do
-		if v.focus and v:OnTextInput(text) then return true end
+		if v.focus_owner[hunter_id] and v:OnTextInput(text) then return true end
 	end
-        if self.HandleTextInput and self:HandleTextInput(text) then
-            return true
-        end
+	if self.HandleTextInput and self:HandleTextInput(text) then
+		return true
+	end
 
 end
 
@@ -413,71 +466,76 @@ function Widget:OnInputModeChanged(old_device_type, new_device_type)
 end
 
 
-function Widget:OnControl(controls, down, device_type, trace, device_id)
+function Widget:OnControl(controls, down, trace)
 end
 
 
 
-function Widget:OnControlDown(controls, device_type, trace, device_id)
+function Widget:OnControlDown(controls, trace)
 	if trace then
 		trace:PushWidget( self )
 	end
 
-	if not self.ignore_input and self.shown then
+	if self.ignore_input
+		or not self.shown
+	then
+		if trace then
+			trace:PopWidget( "false" )
+		end
+		return
+	end
 
-		if self.enabled then
+	local input_device = controls:GetDevice()
+	local hunter_id = input_device:GetOwnerId()
 
-			if self.HandlePreControlDown and self:HandlePreControlDown(controls, device_type, trace, device_id) then
-				if trace then
-					trace:PopWidget( "true: handled by self" )
-				end
-				return true
+	if self.enabled then
+		if self.HandlePreControlDown and self:HandlePreControlDown(controls, trace) then
+			if trace then
+				trace:PopWidget( "true: handled by self" )
 			end
+			return true
+		end
 
-			for k = 1, #self.children do
-				local v = self.children[k]
-				if v and (v.focus or v.hover) then
-					if v:OnControlDown(controls, device_type, trace, device_id) then
-						if trace then
-							trace:PopWidget( "true: handled by child" )
-						end
-						return true
+		for k = 1, #self.children do
+			local v = self.children[k]
+			if v and (v.focus_owner[hunter_id] or v.hover == hunter_id) then
+				if v:OnControlDown(controls, trace) then
+					if trace then
+						trace:PopWidget( "true: handled by child" )
 					end
+					return true
 				end
-			end
-
-			if self.HandleControlDown and self:HandleControlDown(controls, device_type, trace, device_id) then
-				if trace then
-					trace:PopWidget( "true: handled by self" )
-				end
-				return true
 			end
 		end
 
-
-		-- Unlike GL, we send OnFocusMove from FrontEnd so we can control
-		-- repeat delay instead of doing it here.
-
-		if not self.enabled then
+		-- Like Griftlands, we handle OnFocusMove here, but it's done from
+		-- Screen:HandleControlDown.
+		if self.HandleControlDown and self:HandleControlDown(controls, trace) then
 			if trace then
-				trace:PopWidget( "false: not enabled" )
+				trace:PopWidget( "true: handled by self" )
 			end
-			return self.blocks_mouse and ( device_type == "mouse" or device_type == "touch" )
-		 end
-
-
-		if self.blocks_mouse and ( device_type == "mouse" or device_type == "touch" ) then
-			if not controls:Has(Controls.Digital.MENU_SCROLL_FWD, Controls.Digital.MENU_SCROLL_BACK) then
-				if trace then
-					trace:PopWidget( "true: blocks_mouse" )
-				end
-				return true
-			end
+			return true
 		end
 	end
 
-	if trace then
-		trace:PopWidget( "false" )
+
+	local device_type, device_id = input_device:unpack()
+
+	if not self.enabled then
+		if trace then
+			trace:PopWidget( "false: not enabled" )
+		end
+		return self.blocks_mouse and ( device_type == "mouse" or device_type == "touch" )
+	end
+
+
+	if self.blocks_mouse and ( device_type == "mouse" or device_type == "touch" ) then
+		if not controls:Has(Controls.Digital.MENU_SCROLL_FWD, Controls.Digital.MENU_SCROLL_BACK) then
+			if trace then
+				trace:PopWidget( "true: blocks_mouse" )
+			end
+			return true
+		end
 	end
 end
 
@@ -492,7 +550,7 @@ end
 --~ 	handled = handled or {}
 --~ 	if self.children then
 --~ 		for k,v in ipairs(self.children) do
---~ 			if v.focus then
+--~ 			if v.focus_owner[hunter_id] then
 --~ 				v:CollectControlHints(left, right, handled)
 --~ 			end
 --~ 		end
@@ -512,53 +570,60 @@ end
 --~ end
 
 -- Shims so we can use our old OnControl. I still don't know if we should pull apart into ControlUp and ControlDown
-function Widget:HandleControlDown(controls, device_type, trace, device_id)
-	return self:OnControl(controls, true, device_type, trace, device_id)
+function Widget:HandleControlDown(controls, trace)
+	return self:OnControl(controls, true, trace)
 end
 
-function Widget:HandleControlUp(controls, device_type, trace, device_id)
-	return self:OnControl(controls, false, device_type, trace, device_id)
+function Widget:HandleControlUp(controls, trace)
+	return self:OnControl(controls, false, trace)
 end
 
-function Widget:OnControlUp(controls, device_type, trace, device_id)
-	if not self.ignore_input and self.shown then
-		if not self.enabled then
-			return self.blocks_mouse
-		end
+function Widget:OnControlUp(controls, trace)
+	if self.ignore_input
+		or not self.shown
+	then
+		return
+	end
 
-		for k = 1, #self.children do
-			local v = self.children[k]
-			if v and (v.focus or v.hover) then
-				if v:OnControlUp(controls, device_type, trace, device_id) then
-					return true
-				end
+	if not self.enabled then
+		return self.blocks_mouse
+	end
+
+	local input_device = controls:GetDevice()
+	local hunter_id = input_device:GetOwnerId()
+
+	for k = 1, #self.children do
+		local v = self.children[k]
+		if v and (v.focus_owner[hunter_id] or v.hover == hunter_id) then
+			if v:OnControlUp(controls, trace) then
+				return true
 			end
 		end
+	end
 
-		local control_map, owner = self:GetControlMap()
-
-		if control_map then
-			for _,mapping in ipairs(control_map) do
-				if (mapping.control and controls:Has( mapping.control ))
-					or (mapping.controls and controls:Has( table.unpack( mapping.controls )))
-				then
-					if not mapping.test or mapping.test(owner, device_type, device_id) then
-						if mapping.fn and mapping.fn(owner) then
-							return true
-						end
+	local control_map, owner = self:GetControlMap()
+	if control_map then
+		for _,mapping in ipairs(control_map) do
+			if (mapping.control and controls:Has( mapping.control ))
+				or (mapping.controls and controls:Has( table.unpack( mapping.controls )))
+			then
+				if not mapping.test or mapping.test(owner, input_device) then
+					if mapping.fn and mapping.fn(owner) then
+						return true
 					end
 				end
 			end
 		end
+	end
 
-		if self.HandleControlUp and self:HandleControlUp(controls, device_type, trace, device_id) then
+	if self.HandleControlUp and self:HandleControlUp(controls, trace) then
+		return true
+	end
+
+	local device_type = input_device.device_type
+	if self.blocks_mouse and ( device_type == "mouse" or device_type == "touch" ) then
+		if not controls:Has(Controls.Digital.MENU_SCROLL_FWD, Controls.Digital.MENU_SCROLL_BACK) then
 			return true
-		end
-
-		if self.blocks_mouse and ( device_type == "mouse" or device_type == "touch" ) then
-			if not controls:Has(Controls.Digital.MENU_SCROLL_FWD, Controls.Digital.MENU_SCROLL_BACK) then
-				return true
-			end
 		end
 	end
 end
@@ -1096,6 +1161,7 @@ function Widget:DebugDraw_AddSection(ui, panel)
 		end
 		ui:Value("IsShown", self:IsShown())
 		ui:Value("IsVisible (recursive)", self:IsVisible())
+		ui:Value("Focus", serpent.line(self.focus_owner))
 
 		local in_x,in_y = self:GetPosition()
 		local has_modified_x, out_x = ui:DragFloat("x position", in_x, 1, -4000, 4000)
@@ -1449,66 +1515,83 @@ function Widget:SetOnLoseFocus( fn )
 	return self
 end
 
-function Widget:HasFocus()
-	return self.focus == true
+function Widget:HasFocus(hunter_id)
+	if hunter_id then
+		return self.focus_owner[hunter_id]
+	else
+		return next(self.focus_owner)
+	end
 end
 
 -- Child widgets may call this to simulate refreshing state due to focus gain.
-function Widget:GainFocus()
-	self.focus = true
+function Widget:GainFocus(hunter_id)
+	dbassert(hunter_id)
+	self.focus_owner[hunter_id] = hunter_id
 	self:OnGainFocus()
 	if self.ongainfocusfn then
 		self.ongainfocusfn()
 	end
 end
 
+function Widget:RefreshFocus()
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		if self.focus_owner[hunter_id] then
+			self:GainFocus(hunter_id)
+		else
+			self:LoseFocus(hunter_id)
+		end
+	end
+end
+
 -- This should only be called from FrontEnd:SetFocusWidget.
 -- focus_widget: the terminal Widget receiving focus.
-function Widget:GiveFocus( focus_widget )
+function Widget:GiveFocus(hunter_id, focus_widget)
+	dbassert(hunter_id)
 
 	if self.parent then
-		self.parent:GiveFocus( focus_widget or self )
+		self.parent:GiveFocus(hunter_id, focus_widget or self)
 	end
 
 	-- Don't modify default_focus here. We want that to be static. Screens
 	-- often get focus and shouldn't assign default_focus to themselves.
 
-	if not self.focus then
-		if self.gainfocus_sound then
---            AUDIO:PlayEvent( self.gainfocus_sound )
+	if not self.focus_owner[hunter_id] then
+		if self.gainfocus_sound and self:CanPlayFocusSounds() then
+			TheFrontEnd:GetSound():PlaySound(self.gainfocus_sound)
 		end
 
 		dbassert(self.GainFocus == Widget.GainFocus, "Override OnGainFocus, not GainFocus.")
-		self:GainFocus()
+		self:GainFocus(hunter_id)
 	end
 	return self
 end
 
 -- Prefer using TheFrontEnd:SetFocusWidget() or TheFrontEnd:ClearFocusWidget
 -- unless you're just refreshing the visual state.
-function Widget:LoseFocus()
-	self.focus = false
+function Widget:LoseFocus(hunter_id)
+	dbassert(hunter_id)
+	self.focus_owner[hunter_id] = nil -- so next() checks any focus
 	self:OnLoseFocus()
 	if self.onlosefocusfn then
 		self.onlosefocusfn()
 	end
-
 end
 
 -- This should only be called from FrontEnd:ClearFocusWidget.
 -- focus_widget: the terminal Widget receiving focus, if switching focus.
-function Widget:RemoveFocus( focus_widget )
-	if self.focus
+function Widget:RemoveFocus(hunter_id, focus_widget)
+	dbassert(hunter_id)
+	if self.focus_owner[hunter_id]
 		and (focus_widget == nil
 			-- Ignore focus changes if still in the hierarchy of focus so a
 			-- larger widget doesn't visually stutter because the mouse moved
 			-- over a button inside it.
 			or (focus_widget ~= self and not self:IsAncestorOf(focus_widget)))
 	then
-		self:LoseFocus()
+		self:LoseFocus(hunter_id)
 
 		if self.parent then
-			self.parent:RemoveFocus( focus_widget )
+			self.parent:RemoveFocus(hunter_id, focus_widget)
 		end
 	end
 end
@@ -1519,21 +1602,20 @@ function Widget:SetFocusChangeDir(dir, widget, ...)
 	return self:SetFocusDir(dir, widget)
 end
 
-function Widget:GetDeepestFocus()
-	if self.focus then
+function Widget:GetDeepestFocus(hunter_id)
+	dbassert(hunter_id)
+	if self.focus_owner[hunter_id] then
 		for k,v in pairs(self.children) do
-			if v.focus then
-				return v:GetDeepestFocus()
+			if v.focus_owner[hunter_id] then
+				return v:GetDeepestFocus(hunter_id)
 			end
 		end
-
 		return self
 	end
 end
 
 function Widget:GetDeepestHover()
 	if self.hover then
-
 		if self.children then
 			for k = 1, #self.children do
 				local v = self.children[k]
@@ -1549,10 +1631,11 @@ function Widget:GetDeepestHover()
 	return self
 end
 
-function Widget:GetFocusChild()
-	if self.focus then
+function Widget:GetFocusedChild(hunter_id)
+	dbassert(hunter_id)
+	if self.focus_owner[hunter_id] then
 		for k,v in pairs(self.children) do
-			if v.focus then
+			if v.focus_owner[hunter_id] then
 				return v
 			end
 		end
@@ -1561,22 +1644,54 @@ function Widget:GetFocusChild()
 end
 
 
-function Widget:SetFocus()
+function Widget:SetFocus(hunter_id)
+	-- nil hunter_id means all
 	if self.focus_forward then
-		-- Only supporting passing focus to widgets.
+		-- Can only pass focus to widgets! If functions seem useful see FindDefaultFocus instead.
+		--
+		-- If your default_focus is invalid, implement Screen:SetDefaultFocus
+		-- or use FindDefaultFocus instead. That gives the parent more control
+		-- if there isn't valid focus and prevents accidental focus jumping
+		-- (mousing on a panel and that jumps focus to its first element).
 		kassert.typeof('table', self.focus_forward)
 		assert(self.focus_forward ~= self, "Pointless to focus_forward to self. It will infinitely recurse.")
-		self.focus_forward:SetFocus()
+		self.focus_forward:SetFocus(hunter_id)
 	else
 		dbassert(not self.ignore_input, "Don't set focus on something ignoring input.")
-		TheFrontEnd:SetFocusWidget(self)
+		TheFrontEnd:SetFocusWidget(self, hunter_id)
 	end
 	return self
 end
 
-function Widget:ClearFocus()
-	if self.focus then
-		TheFrontEnd:ClearFocusWidget()
+-- Add forward_default_focus (a widget or function that returns a widget) on
+-- your widget to defer determining the default focus to another widget. Call
+-- FindDefaultFocus in your screen's SetDefaultFocus to get something to focus,
+-- or if nothing do some default.
+local function ExtractDefault(fwd, hunter_id)
+	if Widget.is_instance(fwd) and fwd.forward_default_focus then
+		fwd = fwd.forward_default_focus
+	end
+	return fwd
+end
+function Widget:FindDefaultFocus(hunter_id)
+	local fwd = ExtractDefault(self.forward_default_focus)
+	while type(fwd) == "function" do
+		fwd = fwd(hunter_id)
+		fwd = ExtractDefault(fwd)
+	end
+	return fwd
+end
+
+function Widget:ClearFocus(hunter_id)
+	-- nil hunter_id means all
+	if hunter_id then
+		if self.focus_owner[hunter_id] then
+			TheFrontEnd:ClearFocusWidget()
+		end
+	else
+		for h_id=1,MAX_PLAYER_COUNT do
+			self:ClearFocus(h_id)
+		end
 	end
 	return self
 end
@@ -1586,7 +1701,7 @@ function Widget:GetStr(indent)
 	local indent_str = string.rep("\t",indent)
 
 	local str = {}
-	table.insert(str, string.format("%s%s%s%s\n", indent_str, tostring(self), self.focus and " (FOCUS) " or "", self.enabled and " (ENABLE) " or "" ))
+	table.insert(str, string.format("%s%s%s%s\n", indent_str, tostring(self), self:HasFocus() and " (FOCUS) " or "", self.enabled and " (ENABLE) " or "" ))
 
 	for k,v in pairs(self.children) do
 		table.insert(str, v:GetStr(indent + 1))
@@ -1662,7 +1777,6 @@ function Widget:AddChild(child, idx)
 
 	child.parent = self
 	child.hover = false
-	--child.focus = false -- KAJ: No, we rely on this being correct
 
 	if self.children == table.empty then
 		self.children = {}
@@ -2390,18 +2504,18 @@ function Widget:AddChildren(child1, ...)
 end
 
 -- Lays out this widget relative to the bounding box of 'prev'
-function Widget:LayoutBounds( hreg, vreg, prev, _y )
-	local dx, dy = self:CalcLayoutBoundsOffset( hreg, vreg, prev, _y )
+function Widget:LayoutBounds( hreg, vreg, prev, y )
+	local dx, dy = self:CalcLayoutBoundsOffset( hreg, vreg, prev, y )
 	self:Offset( dx, dy )
 	return self
 end
 
-function Widget:CalcLayoutBoundsOffset( hreg, vreg, prev, _y )
+function Widget:CalcLayoutBoundsOffset( hreg, vreg, prev, y )
 	local px1, py1, px2, py2
 	local ancestor
 	if prev and type(prev) == "number" then
 		ancestor = self.parent
-		px1, py1 = prev, _y or 0
+		px1, py1 = prev, y or 0
 		px2, py2 = px1, py1
 
 	else
@@ -2425,6 +2539,7 @@ function Widget:CalcLayoutBoundsOffset( hreg, vreg, prev, _y )
 				print( "No common ancestor:", prev, self )
 				print( prev.removed, self.removed)
 			end
+			assert(ancestor, "No common ancestor. Did you call EnableFocusBracketsForGamepad before a screen has focus? Or try to layout a widget relative to something in another screen?")
 
 			px1, py1, px2, py2 = prev:GetBoundingBox()
 			px1, py1 = ancestor:TransformFromWidget( prev, px1, py1 )
@@ -2813,12 +2928,17 @@ function Widget:LayoutInDiagonal(max_columns, spacing_h, spacing_v, evenrow_offs
 		if current_row > 1 then
 			-- Link up to the above widget
 			-- This is trickier because of the difference in column counts between odd and even rows
-			-- If we're on an even row, subtract the number of columns in the row before (odd)
-			-- If we're on an odd row, subtract the number of columns in the row before (even)
+			-- If we're on an even row, subtract the number of columns in that row (even)
+			-- If we're on an odd row, subtract the number of columns in that row (odd)
+			-- Though, if on an odd row (more columns), the first column going back that much would go up two rows. So we +1 and it stays in the previous row
 			if even_row then
-				v:SetFocusDir("up", to_layout[index - oddrow_columns], true)
-			else
 				v:SetFocusDir("up", to_layout[index - evenrow_columns], true)
+			else
+				if current_column == 1 then
+					v:SetFocusDir("up", to_layout[index - oddrow_columns + 1], true)
+				else
+					v:SetFocusDir("up", to_layout[index - oddrow_columns], true)
+				end
 			end
 		end
 		------------------------------------------------------------------------------------
@@ -3249,7 +3369,6 @@ end
 
 -- AddColor
 function Widget:SetAddColor(r,g,b,a)
-
 	if r and g and b then
 		a = a or 0
 	elseif r then
@@ -3632,7 +3751,7 @@ function Widget:DisableToolTip(should_disable)
 end
 
 function Widget:SetToolTip(tt)
-	--assert(tt == nil or type(tt) == "string", "Why do you want to set nonstring data in a tooltip?")
+	assert(self.tooltip_class or not tt or type(tt) == "string", "If using a custom tooltip (which only accept strings), SetToolTipClass before SetToolTip.")
 	assert(self.tooltipfn == nil, "Text Tooltip will be ignored after calling SetToolTipFn.")
 
 	if type(tt) == "string" and #tt == 0 then
@@ -3665,6 +3784,13 @@ end
 function Widget:ShowToolTipOnFocus( show )
 	self.show_tooltip_on_focus = show ~= false
 	return self
+end
+
+function Widget:ShowToolTipOnFocusRecursive(show)
+	for i, child in ipairs(self.children) do
+		child:ShowToolTipOnFocus(show)
+		child:ShowToolTipOnFocusRecursive(show)
+	end
 end
 
 function Widget:SetToolTipDirty( dirty )
@@ -3840,7 +3966,7 @@ function Widget:SetHover(from_child)
 		if self.parent then
 			self.parent:SetHover(self)
 		end
-		self.hover = true
+		self.hover = TheInput:GetMouse():GetOwnerId() -- not strict so mouse can still trigger p1's tooltips.
 		if self.hover_sound then
 			TheFrontEnd:GetSound():PlaySound(self.hover_sound)
 		end
@@ -3896,9 +4022,9 @@ end
 
 function Widget:IgnoreInput(ignore)
 	self.ignore_input = ignore ~= false
-	if self.ignore_input and self.focus then
+	if self.ignore_input and next(self.focus_owner) then
 		-- We check ignore_input elsewhere when trying to give focus, but
-		-- otherwise only check self.focus for interactions. So you should
+		-- otherwise only check self.focus_owner for interactions. So you should
 		-- never have focus when ignoring input.
 		self:ClearFocus()
 	end
@@ -4063,6 +4189,17 @@ function Widget:SetNavFocusable( focusable )
 	return self
 end
 
+-- Used to force the player navigation bracket size
+function Widget:GetBracketSizeOverride()
+	return self.bracket_override_w, self.bracket_override_h
+end
+
+function Widget:SetBracketSizeOverride(w, h)
+	self.bracket_override_w = w
+	self.bracket_override_h = h
+	return self
+end
+
 -- void shim
 function Widget:Bloom()
 --	print("*** not implemented - Widget:Bloom ***")
@@ -4072,17 +4209,18 @@ end
 
 -- Play a sound with parameters describing where it's positioned on screen. Use
 -- with either / one of the "SpatialUI_" stereo panner presets in FMOD.
-function Widget:PlaySpatialSound(eventname, params, volume, isautostop, ispredicted)
+function Widget:PlaySpatialSound(eventname, params, isautostop, ispredicted)
 	local pos = self:GetNormalizedScreenPosition()
 	local all_params = {
 		screenPosition_X = pos.x,
 		screenPosition_Y = pos.y,
 	}
 	all_params = lume.overlaymaps(all_params, params)
+
+	-- we weren't using this argument regularly and isautostop needed to be prioritized
+	local volume = 1
+
 	-- defaults
-	if not volume then
-		volume = 1
-	end
 	if not isautostop then
 		isautostop = 1
 	end
@@ -4110,6 +4248,10 @@ end
 function Widget:SetGainFocusSound(sound)
 	self.gainfocus_sound = sound
 	return self
+end
+
+function Widget:CanPlayFocusSounds()
+	return self:IsEnabled() and TheFrontEnd:GetFadeLevel() <= 0
 end
 
 Widget:add_mixin(TrackEntity)

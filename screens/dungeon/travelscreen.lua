@@ -6,7 +6,7 @@ local kassert = require "util.kassert"
 local lume = require "util.lume"
 local templates = require "widgets.ftf.templates"
 local fmodtable = require "defs.sound.fmodtable"
-
+local soundutil = require "util.soundutil"
 
 local TravelScreen = Class(Screen, function(self, cardinal)
 	Screen._ctor(self, "TravelScreen")
@@ -76,11 +76,32 @@ function TravelScreen:TryCancelTravel(cb)
 	end
 end
 
+function TravelScreen:OnOpen()
+	TheWorld.components.ambientaudio:SetTravelling(true)
+	local player = AllPlayers[1]
+	soundutil.PlayLocalCodeSound(player,fmodtable.Event.travelScreen_walk)
+	-- TheFrontEnd:GetSound():PlaySound(fmodtable.Event.travelScreen_walk)
+	local room = TheDungeon:GetDungeonMap():GetRoomData(self.travel_room_id)
+	-- if room.roomtype == "wanderer" then
+	-- 	TheLog.ch.Audio:print("***///***ambientaudio.lua: Hack. Stopping world music on room exit when traveling to wanderer room so that it doesn't fade up as snapshot releases.")
+	-- 	TheWorld.components.ambientaudio:StopWorldMusic()
+	-- end
+
+	if room.roomtype == "miniboss" or room.roomtype == "hype" or room.roomtype == "boss" then
+		TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.g_fadeOutMusicAndSendToReverb, 1)
+		TheWorld:DoTaskInTime(1, function()
+			TheLog.ch.Audio:print("***///***ambientaudio.lua: Stopping all music because next clearing is miniboss or hype room.")
+			TheWorld.components.ambientaudio:StopAllMusic()
+			TheAudio:StopFMODSnapshot(fmodtable.Snapshot.Mute_Music_Dungeon)
+		end)
+	end
+end
+
+function TravelScreen:OnClose()
+end
 
 function TravelScreen:OnBecomeActive()
 	TravelScreen._base.OnBecomeActive(self)
-
-	TheWorld.components.ambientaudio:SetTravelling(true)
 
 	local worldmap = TheDungeon:GetDungeonMap()
 	if worldmap:ShouldSkipMapTransitionFromCurrentRoom() then

@@ -25,6 +25,7 @@ local ATTACKS =
 		RADIUS = 3,
 		FOCUS = false,
 		COMBAT_FN = "DoKnockbackAttack",
+		name_id = "THUMP_TIER0",
 	},
 
 	TIER1 =
@@ -37,6 +38,7 @@ local ATTACKS =
 		RADIUS = 3.25,
 		FOCUS = false,
 		COMBAT_FN = "DoKnockbackAttack",
+		name_id = "THUMP_TIER1",
 	},
 
 	TIER2 =
@@ -49,6 +51,7 @@ local ATTACKS =
 		RADIUS = 4,
 		FOCUS = true,
 		COMBAT_FN = "DoKnockdownAttack",
+		name_id = "THUMP_TIER2",
 	},
 }
 
@@ -57,7 +60,7 @@ local CHARGE_THRESHOLD_TIER2 = 16 -- These thresholds match the other hammer att
 local FOCUS_TARGETS_THRESHOLD = 1 -- When more than this amount of targets are struck in one swing, every subsequent hit should be a focus
 
 local function OnThumpHitBoxTriggered(inst, data)
-	local attack = ATTACKS[inst.sg.statemem.attackid]
+	local attack = ATTACKS[inst.sg.statemem.chargelevel]
 
 	local focushit = false
 	local numtargets = 0
@@ -86,13 +89,14 @@ local function OnThumpHitBoxTriggered(inst, data)
 	end
 
 	local hit = SGCommon.Events.OnHitboxTriggered(inst, data, {
-		attackdata_id = "hammer_thump",
+		attack_id = "skill",
+		attack_name_id = attack.name_id,
 		damage_mod = damage_mod,
 		damage_override = damage_override ~= nil and damage_override or nil,
 		hitstoplevel = attack.HITSTOP,
 		pushback = attack.PUSHBACK,
 		focus_attack = focushit,
-		hitflags = Attack.HitFlags.GROUND,
+		hitflags = Attack.HitFlags.LOW_ATTACK,
 		combat_attack_fn = attack.COMBAT_FN,
 		hit_fx = "hits_player_blunt",
 		hit_fx_offset_x = 0,
@@ -101,6 +105,7 @@ local function OnThumpHitBoxTriggered(inst, data)
 	})
 
 	if hit then
+		inst:PushEvent("skill_hit")
 		inst:PushEvent("hammer_thumped")
 	end
 end
@@ -176,16 +181,18 @@ local states =
 			-- inst.components.combat:SetDamageReceivedMult("superarmor", .2) -- Disabling this because other charge attacks don't use it
 
 			if frames > CHARGE_THRESHOLD_TIER1 then
-				inst.sg.statemem.attackid = "TIER1"
+				inst.sg.statemem.chargelevel = "TIER1"
+				inst.sg.statemem.attack_id = "THUMP_TIER1"
 			else
-				inst.sg.statemem.attackid = "TIER0"
+				inst.sg.statemem.chargelevel = "TIER0"
+				inst.sg.statemem.attack_id = "THUMP_TIER0"
 			end
 		end,
 
 		timeline =
 		{
 			FrameEvent(3, function(inst)
-				inst.components.hitbox:PushCircle(1, 0, ATTACKS[inst.sg.statemem.attackid].RADIUS, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushCircle(1, 0, ATTACKS[inst.sg.statemem.chargelevel].RADIUS, HitPriority.PLAYER_DEFAULT)
 				inst.AnimState:SetSymbolBloom("weapon_back01", 0, 0, 0, 0)
 				combatutil.StartMeleeAttack(inst)
 			 end),
@@ -195,7 +202,7 @@ local states =
 			 end),
 
 			FrameEvent(5, function(inst) --FRAME0, FRAME7, FRAME10 FOR THREE RECOVERY WINDOWS for TIER0, TIER1, TIER2. This is frame0. Frame7 is in pst
-				if inst.sg.statemem.attackid == "TIER0" then
+				if inst.sg.statemem.chargelevel == "TIER0" then
 					SGPlayerCommon.Fns.SetCanDodge(inst)
 					SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
 					SGPlayerCommon.Fns.TryQueuedAction(inst, "dodge")
@@ -207,7 +214,7 @@ local states =
 		{
 			EventHandler("hitboxtriggered", OnThumpHitBoxTriggered),
 			EventHandler("animover", function(inst)
-				inst.sg:GoToState("skill_hammer_thump_pst", inst.sg.statemem.attackid)
+				inst.sg:GoToState("skill_hammer_thump_pst", inst.sg.statemem.chargelevel)
 			end),
 		},
 	}),
@@ -221,23 +228,30 @@ local states =
 			inst:PushEvent("attack_state_start")
 			inst.AnimState:PlayAnimation("hammer_skill_thump_strong_atk")
 			-- inst.components.combat:SetDamageReceivedMult("superarmor", .2) -- Disabling this because other charge attacks don't use it
-			inst.sg.statemem.attackid = "TIER2"
+			inst.sg.statemem.chargelevel = "TIER2"
 			inst.AnimState:SetSymbolBloom("weapon_back01", TUNING.FLICKERS.WEAPONS.HAMMER.FOCUS_SWING.COLOR[1], TUNING.FLICKERS.WEAPONS.HAMMER.FOCUS_SWING.COLOR[2], TUNING.FLICKERS.WEAPONS.HAMMER.FOCUS_SWING.COLOR[3], TUNING.FLICKERS.WEAPONS.HAMMER.FOCUS_SWING.COLOR[4])
+
+			inst.sg.statemem.attack_id = "THUMP_TIER2"
+
 		end,
 
 		timeline =
 		{
 			FrameEvent(7, function(inst)
+				combatutil.StartMeleeAttack(inst)
+
 				inst.components.hitbox:PushCircle(1, 0, ATTACKS.TIER2.RADIUS, HitPriority.PLAYER_DEFAULT)
 				inst.AnimState:SetSymbolBloom("weapon_back01", 0, 0, 0, 0)
 			 end),
+
+			FrameEvent(8, combatutil.EndMeleeAttack),
 		},
 
 		events =
 		{
 			EventHandler("hitboxtriggered", OnThumpHitBoxTriggered),
 			EventHandler("animover", function(inst)
-				inst.sg:GoToState("skill_hammer_thump_pst", inst.sg.statemem.attackid)
+				inst.sg:GoToState("skill_hammer_thump_pst", inst.sg.statemem.chargelevel)
 			end),
 		},
 	}),
@@ -248,9 +262,9 @@ local states =
 
 		onenter = function(inst, chargetier)
 			inst.AnimState:PlayAnimation("hammer_skill_thump_pst")
-			inst.sg.statemem.attackid = chargetier
+			inst.sg.statemem.chargelevel = chargetier
 
-			if inst.sg.statemem.attackid == "TIER0" or inst.sg.statemem.attackid == "TIER1" then
+			if inst.sg.statemem.chargelevel == "TIER0" or inst.sg.statemem.chargelevel == "TIER1" then
 				SGPlayerCommon.Fns.SetCanDodge(inst)
 				SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
 			end
@@ -260,7 +274,7 @@ local states =
 		{
 			-- Same cancel windows as hammer reverse heavy swing
 			FrameEvent(7, function(inst)
-				if inst.sg.statemem.attackid == "TIER2" then
+				if inst.sg.statemem.chargelevel == "TIER2" then
 					SGPlayerCommon.Fns.SetCanDodge(inst)
 					SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
 				end

@@ -13,7 +13,11 @@ local EquipmentStatDisplay = {
             local str = Weight.GetWeightStringForValue(amount)
             return str
         end,
-        hide_delta_value = true,
+
+        deltavalue_fn = function(value, delta)
+            return value + delta
+        end
+        --hide_delta_value = true,
     },
     [EQUIPMENT_STATS.s.ARMOUR] =
     {

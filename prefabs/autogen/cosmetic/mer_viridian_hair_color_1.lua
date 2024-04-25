@@ -2,16 +2,11 @@
 return {
   __displayName="mer_viridian_hair_color_1",
   cosmetic_data={
-    color={ 0.50277777777778, 0.64, 0.34,},
-    colorgroup="HAIR_COLOR",
+    color={ 0.50277775526047, 0.57142859697342, 0.47104245424271,},
     color_species="mer",
+    colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

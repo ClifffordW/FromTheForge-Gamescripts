@@ -3,8 +3,11 @@ return {
   __displayName="well",
   clickable=true,
   gridsize={ { h=3, w=3,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
   looping=true,
+  networked=1,
   parallax={
     { anim="front", dist=-0.4, shadow=true,},
     { anim="well", dist=-0.2, shadow=true,},

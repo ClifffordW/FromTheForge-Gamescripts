@@ -26,6 +26,7 @@ local prefabs =
 	GroupPrefab("drops_zucco"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "zucco")
+prefabutil.SetupDeathFxPrefabs(prefabs, "zucco_elite")
 
 local attacks =
 {
@@ -90,6 +91,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -166,6 +168,8 @@ local elite_attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local function ShouldHide(inst)
 	-- are only zuccos left in the room?

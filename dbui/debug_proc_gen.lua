@@ -7,6 +7,7 @@ local ZoneGrid = require "map.zone_grid"
 local iterator = require "util.iterator"
 local lume = require "util.lume"
 local spawnutil = require "util.spawnutil"
+local SceneElement = require "proc_gen.scene_element"
 
 -- Visit each child and add any propagated meta-property they have into the 'propagated' table
 -- in our meta-table.
@@ -72,6 +73,7 @@ end
 local DebugProcGen = Class(DebugNodes.DebugNode, function(self)
 	DebugNodes.DebugNode._ctor(self, "Debug Proc Gen")
 	self.draw_zone = false
+	self.draw_tile_types = false
 	self.draw_featured_locations = false
 	self.draw_tile_info = false
 	self.draw_decor_physics = false
@@ -115,6 +117,13 @@ function DebugProcGen:_CancelDrawDecorPhysics()
 	end
 end
 
+function DebugProcGen:_CancelDrawTileTypes()
+	if self.tasks.tile_types then
+		self.tasks.tile_types:Cancel()
+		self.tasks.tile_types = nil
+	end
+end
+
 function DebugProcGen:OnDeactivate()
 	self:_ClearState()
 	TheWorld:RemoveEventCallback("onremove", self._on_world_remove)
@@ -124,6 +133,7 @@ function DebugProcGen:_ClearState()
 	self:_CancelDraw()
 	self:_CancelDrawFeaturedLocations()
 	self:_CancelDrawDecorPhysics()
+	self:_CancelDrawTileTypes()
 	assert(next(self.tasks) == nil, "Forgot to cleanup a task.")
 
 	self.zone = nil
@@ -137,6 +147,7 @@ end
 
 function DebugProcGen:RenderPanel( ui, panel )
 	self:ZoneUi(ui, panel)
+	self:TileTypesUi(ui, panel)
 	self:SceneGenUi(ui, panel)
 	self:FeaturedLocationsUi(ui, panel)
 end
@@ -222,7 +233,7 @@ function DebugProcGen:ZoneUi(ui, panel)
 	local zones = deepcopy(PropProcGen.Zone:Ordered())
 	table.insert(zones, "NO ZONE!")
 	local zone = ui:_Combo( "Zone"..id, self.zone or 1, zones )
-	if zone == self.zone then
+	if not new_draw_zone and zone == self.zone then
 		AddTreeNodeEnder(ui)
 		return
 	end
@@ -281,6 +292,73 @@ function DebugProcGen:ZoneUi(ui, panel)
 	if self.draw_tile_info then
 		self:_SpawnTileInfos()
 	end
+
+	AddTreeNodeEnder(ui)
+end
+
+function DebugProcGen:TileTypesUi(ui, panel)
+	if not ui:TreeNode("Tile Types", ui.TreeNodeFlags.DefaultClosed) then
+		return
+	end
+
+	local id = "##TileTypesUi"
+
+	local new_draw_tile_types
+	new_draw_tile_types, self.draw_tile_types = ui:Checkbox("Draw Enabled"..id, self.draw_tile_types)
+
+	local colors = {
+		[PropProcGen.Tile.id.path] = WEBCOLORS.CORAL,
+		[PropProcGen.Tile.id.rough] = WEBCOLORS.DEEPPINK,
+		[PropProcGen.Tile.id.pool] = WEBCOLORS.BLUE,
+	}
+
+	if self.draw_tile_types then
+		ui:PushStyleColor(ui.Col.Text, colors[PropProcGen.Tile.id.rough])
+		ui:Text(PropProcGen.Tile.s.rough)
+		ui:PushStyleColor(ui.Col.Text, colors[PropProcGen.Tile.id.path])
+		ui:SameLineWithSpace()
+		ui:Text(PropProcGen.Tile.s.path)
+		ui:PushStyleColor(ui.Col.Text, colors[PropProcGen.Tile.id.pool])
+		ui:SameLineWithSpace()
+		ui:Text(PropProcGen.Tile.s.pool)
+		ui:PopStyleColor(3)
+	end
+
+	if not new_draw_tile_types then
+		AddTreeNodeEnder(ui)
+		return
+	end
+
+	self:_CancelDraw()
+
+	self.zone_grid = self.zone_grid or ZoneGrid(TheWorld.map_layout)
+	local seconds = 0.5
+	local thick = 2
+
+	self.tasks.tile_types = TheWorld:DoPeriodicTask(seconds, function(_)
+		if not self.draw_tile_types then 
+			return
+		end
+		self.zone_grid:ForEachCell(function(_cell, x, z)
+			local tile_index = self.zone_grid:TilEdGridToIndex(x, z)
+			local external_tile_id = self.zone_grid.tile_layer.data[tile_index]
+			local tile_name = TheWorld.map_layout.tilegroup.ExternalOrder[external_tile_id]
+			local tile_type = SceneElement.TileNameToType(tile_name)
+			if not tile_type then
+				return
+			end		
+			local world_point = self.zone_grid:GridToWorld({ x = x, z = z })
+			local color = colors[PropProcGen.Tile.id[tile_type]]
+			DebugDraw.GroundSquare
+				( world_point.x
+				, world_point.z
+				, ZoneGrid.WORLD_TILE_SIZE * 0.96
+				, color
+				, thick
+				, seconds
+			)
+		end)
+	end)
 
 	AddTreeNodeEnder(ui)
 end

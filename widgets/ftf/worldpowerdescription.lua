@@ -9,7 +9,7 @@ local SkillIconWidget = require("widgets/skilliconwidget")
 local Text = require("widgets/text")
 local Widget = require("widgets/widget")
 local easing = require "util.easing"
-
+local WorldPowerToolTip = require "widgets.ftf.worldpowertooltip"
 
 --- Common base for displaying a power and its description in a clickable button.
 --
@@ -25,6 +25,10 @@ local WorldPowerDescription = Class(Widget, function(self, scale)
     self.padding = 35 * HACK_FOR_4K
     self.iconScale = self.scale * 1.2
 		self.skillScale = self.scale * 1 -- Alternate scale if it's a skill
+
+	self.timeActive = 0
+	self.tooltipTimeThreshold = 1 -- How many seconds should it take before the tooltip comes out?
+	self.enableTooltip = true
 
 	self.image = self:AddChild(Image("images/ui_ftf_relic_selection/relic_bg_black.tex"))
 		:SetSize(self.width, self.height)
@@ -46,7 +50,7 @@ local WorldPowerDescription = Class(Widget, function(self, scale)
 
     --RBS
     self.title = self.image:AddChild(RoomBonusButtonTitle(self, "images/ui_ftf_relic_selection/relic_nameornament.tex"))
-    	:ApplyWorldPowerDescriptionStyle()
+		:ApplyWorldPowerDescriptionStyle()
 
 	self.description = self.textContainer:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.INWORLD_POWER_DESCRIPTION))
 		:SetGlyphColor(UICOLORS.LIGHT_TEXT)
@@ -65,47 +69,22 @@ local WorldPowerDescription = Class(Widget, function(self, scale)
 	self.bottomOrnament = self.image:AddChild(Image("images/ui_ftf_relic_selection/relic_bg_bottom_ornament.tex"))
 		:SetScale(self.scale)
 		--Laid out after laying out text+description
+
+	self.tooltips = self:AddChild(Widget("Tooltips")) -- A table of tooltips to be laid out to the side of this.
 end)
 
-function WorldPowerDescription:SetPowerToolTip(btn_idx, num_buttons, is_lucky)
-	assert(self.power, "Call SetPower first.")
-	assert(btn_idx <= num_buttons)
-
-	local def = self.power:GetDef()
-	local tooltip = slotutil.BuildToolTip(def, { is_lucky = is_lucky, })
-
-	-- TODO: Should we unconditionally set this? Maybe that prevents a weird
-	-- tooltip from showing from some parent?
-	self:ShowToolTipOnFocus(true)
-
-	if tooltip then
-		self:SetToolTip(tooltip)
-		self:SetToolTipLayoutFn(function(w, tooltip_widget)
-			tooltip_widget:LayoutBounds("center", "below", w)
-				:Offset(0, -40)
-		end)
-	end
-	return self
-end
-
-function WorldPowerDescription:SetPrice(price, is_free)
-	assert(self.price_widget, "Call AddPriceDisplay!")
-
-	self.price_widget:SetPrice(price)
-	if is_free then
-		self.price_widget:Hide()
-	else
-		self.price_widget:LayoutBounds("center", "bottom", self.image)
-			:Offset(125, 75)
-	end
+function WorldPowerDescription:SetEnableTooltip(toggle)
+	self.enableTooltip = toggle
 end
 
 function WorldPowerDescription:SetPower(power, islucky)
 	self.power = power
-	
+
 	if not power then
 		return self
 	end
+
+	self.tooltips:RemoveAllChildren()
 
 	local def = self.power:GetDef()
 
@@ -154,11 +133,76 @@ function WorldPowerDescription:SetPower(power, islucky)
 			:Offset(titleXOffset, -100 * HACK_FOR_4K)
 	end
 
+	local tooltips = power:GetDef().tooltips
+
+	for i,tt_key in ipairs(tooltips) do
+		local tt_widget = WorldPowerToolTip()
+		tt_widget:SetTooltip(tt_key)
+
+		self.tooltips:AddChild(tt_widget)
+	end
+
+	local tips = #self.tooltips.children
+	if tips > 0 then
+		local x_offset = 5
+		self.tooltips:LayoutChildrenInColumn(5)
+		if tips > 1 then
+			self.tooltips:LayoutBounds("after", "bottom", self.image)
+				:Offset(x_offset, 0)
+		else
+			self.tooltips:LayoutBounds("after", "top", self.image)
+				:Offset(x_offset, -55) -- y line up with the ridge of the power background
+		end
+	end
+
+	-- Don't cause tooltips to re-center the content, and hide it so we can show it later.
+	self.tooltips:SetHiddenBoundingBox(true)
+	self.tooltips:Hide()
+
+	self.inst:StartUpdatingComponent(self)
+
 	return self
+end
+
+function WorldPowerDescription:OnUpdate(dt)
+
+	if not self.enableTooltip or self.tooltips_animated then
+		-- Must keep updating because the widget needs to move.
+		return
+	end
+
+	self.timeActive = self.timeActive + dt
+
+	if self.timeActive >= self.tooltipTimeThreshold then
+		self.tooltips:Show()
+		self:AnimateInTooltips()
+	end
 end
 
 function WorldPowerDescription:GetPower()
 	return self.power
+end
+
+function WorldPowerDescription:AnimateInTooltips()
+
+	local delay_btwn_anim = 0.05
+
+	for i,widget in pairs(self.tooltips.children) do
+		local x, y = widget:GetPosition()
+		widget:ScaleTo(0.9, 1, 0.15, easing.outQuad)
+			:SetPosition(x - 50, y)
+			:MoveTo(x, y, 0.25 + ((i-1) * delay_btwn_anim), easing.outQuad )
+	end
+
+	self.tooltips_animated = true
+
+	return self
+end
+
+function WorldPowerDescription:SetStyle_IconOnly()
+	self.icon:LayoutBounds("center", "center", self.image)
+	self.image:Hide()
+	return self
 end
 
 return WorldPowerDescription

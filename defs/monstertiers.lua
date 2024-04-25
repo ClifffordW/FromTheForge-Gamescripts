@@ -139,7 +139,7 @@ local monstertiers = {
 	tierlist = {}, -- descending order of tier
 }
 
--- TODO(dbriscoe): Define roles with AddMonster instead.
+-- TODO(combat): Define roles with AddMonster instead.
 function monstertiers.AddMonster(prefab, role, tier_data)
 	monstertiers.roles[role][prefab] = tier_data
 	monstertiers.is_dirty = true
@@ -212,7 +212,7 @@ function monstertiers.ConvertRoleToMonster(biome_location, role, tier, count, rn
 			end
 		end
 	end
-	TheLog.ch.Spawn:printf("Error: failed to find monster in biome '%s' for role '%s'.", biome_location.id, role)
+	TheLog.ch.Spawn:printf("Could not find monster in biome '%s' for role '%s'.", biome_location.id, role)
 	return nil, 0
 end
 
@@ -272,7 +272,7 @@ local function test_monstertiers()
 	kassert.equal(prefab, "cabbagerolls")
 	kassert.equal(count, 3)
 
-	b = biomes.locations.kanft_swamp
+	b = biomes.locations.bandi_swamp
 	local battier = monstertiers.roles.melee.battoad.tier
 	prefab, count = monstertiers.ConvertRoleToMonster(b, "melee", battier, 1, rng)
 	kassert.equal(prefab, "battoad")

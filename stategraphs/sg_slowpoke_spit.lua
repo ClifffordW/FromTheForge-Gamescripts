@@ -2,7 +2,11 @@ local EffectEvents = require "effectevents"
 local SGCommon = require "stategraphs.sg_common"
 local easing = require("util/easing")
 local monsterutil = require "util.monsterutil"
+local spawnutil = require "util.spawnutil"
 local fmodtable = require "defs.sound.fmodtable"
+local ParticleSystemHelper = require "util.particlesystemhelper"
+
+local MAX_PERMANENT_ACID_TRAPS <const> = 30
 
 local events =
 {
@@ -32,6 +36,11 @@ local states =
 	State({
 		name = "spit",
 		tags = { "airborne" },
+
+		default_data_for_tools = function()
+			return Vector3.zero
+		end,
+
 		onenter = function(inst, targetpos)
 			local x, y, z = inst.Transform:GetWorldPosition()
 		    local dx = targetpos.x - x
@@ -61,6 +70,11 @@ local states =
 	State({
 		name = "slam_spit",
 		tags = { "airborne" },
+
+		default_data_for_tools = function()
+			return Vector3.zero
+		end,
+
 		onenter = function(inst, targetpos)
 			local x, y, z = inst.Transform:GetWorldPosition()
 		    local dx = targetpos.x - x
@@ -78,28 +92,26 @@ local states =
 	State({
 		name = "land",
 
+		default_data_for_tools = function()
+			return Vector3.zero
+		end,
+
 		onenter = function(inst, pos)
 			inst:Hide()
 			inst.Transform:SetPosition(pos.x, 0, pos.z)
 			inst.components.hitbox:StartRepeatTargetDelay()
 			inst.sg:SetTimeoutAnimFrames(3)
 
-			-- spawn hurt zone here
+			-- Spawn permanent acid. If there's already too many on the map, spawn temporary acid instead
+			local ents = TheSim:FindEntitiesXZ(0, 0, 100, { "permanent" })
+			local lifetime_frames = #ents > MAX_PERMANENT_ACID_TRAPS and 90 or nil
+			spawnutil.SpawnAcidTrap(inst, "medium", lifetime_frames)
 
-			local aoe = SGCommon.Fns.SpawnAtDist(inst, "trap_acid", 0) -- This trap sits in the "init" state until we have told it to proceed. We need to tell it what its transform size + hitbox sizes should be first.
-			aoe.Transform:SetPosition(pos.x, 0, pos.z)
-			local trapdata =
-			{
-				size = "medium",
-				temporary = true,
-			}
-			EffectEvents.MakeNetEventPushEventOnMinimalEntity(aoe, "acid_start", trapdata)
+			--local splat_fx = SpawnPrefab("fx_acid_projectile_land", inst)
+			--splat_fx:SetupDeathFxFor(inst)
 
-			local splat_fx = SpawnPrefab("fx_battoad_projectile_land", inst)
-			splat_fx:SetupDeathFxFor(inst)
-
-			local splat_ground_fx = SpawnPrefab("fx_battoad_projectile_land_ground", inst)
-			splat_ground_fx:SetupDeathFxFor(inst)
+			--local splat_ground_fx = SpawnPrefab("fx_acid_projectile_land_ground", inst)
+			--splat_ground_fx:SetupDeathFxFor(inst)
 		end,
 
 		timeline =

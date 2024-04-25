@@ -5,8 +5,11 @@ return {
   build="hammock_basic",
   clickable=true,
   gridsize={ { h=3, w=3,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
   looping=true,
+  networked=1,
   parallax={
     { anim="post_front", dist=-0.4, shadow=true,},
     { anim="bar_front", dist=-0.2, shadow=true,},

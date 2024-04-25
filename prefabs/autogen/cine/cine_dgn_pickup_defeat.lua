@@ -6,11 +6,7 @@ return {
   scene_init={  },
   subactors={  },
   timelines={
-    allmusicstop={  },
-    ambientstop={ { 100, 100, { eventtype="ambientstop", is_unedited=true, param={  },},},},
-    attachswipefx={  },
-    blurscreen={  },
-    bossmusicstop={ { 0, 100, { eventtype="bossmusicstop", is_unedited=true, param={  },},},},
+    allsoundstop={ { 100, 100, { eventtype="allsoundstop", is_unedited=true, param={  },},},},
     cameradist={
       {
         0,
@@ -42,7 +38,6 @@ return {
         },
       },
     },
-    cameraoffset={  },
     camerapitch={
       {
         0,
@@ -85,23 +80,8 @@ return {
         },
       },
     },
-    cameratargetend={  },
-    cameratargetoverride={  },
-    detachswipefx={  },
-    disableplayinput={  },
-    facing={  },
     fade={ { 70, 100, { eventtype="fade", param={ duration=30, fade_in=false,},},},},
-    gameevent={  },
-    gotostate={  },
     letterbox={ { 0, 100, { eventtype="letterbox", param={  },},},},
-    levelmusicstop={  },
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
-    musicbossstart={  },
-    musicbossstop={  },
-    playcountedsound={  },
-    playfoleysound={  },
     playsound={
       {
         0,
@@ -146,7 +126,6 @@ return {
         },
       },
     },
-    playsound_window={  },
     pushanim={
       {
         1,
@@ -169,21 +148,7 @@ return {
         },
       },
     },
-    roommusicstop={  },
-    runintoscene={  },
-    setsheathed={  },
-    setsoundparameter={  },
-    setvisible={  },
-    shakecamera={  },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
     stopsound={ { 23, 28, { eventtype="stopsound", param={ duration=5, name="ratchet",},},},},
-    teleport={  },
-    titlecard={  },
-    uibosshealthbar={  },
     uihidehud={ { 0, 100, { eventtype="uihidehud", param={  },},},},
   },
 }

@@ -3,6 +3,11 @@
 
 local DungeonProgress = require "proc_gen.dungeon_progress"
 local Enum = require "util.enum"
+local PropProcGen = require "proc_gen.prop_proc_gen"
+local Lume = require "util.lume"
+
+local TILE_TYPES = PropProcGen.Tile:AlphaSorted()
+setmetatable(TILE_TYPES, nil)
 
 local RADIUS_MAXIMUM = 5
 local COUNT_MAXIMUM = 10
@@ -16,10 +21,18 @@ DecorType = Enum {
 	"Fx"
 }
 
+TileTypeFilterShape = Enum {
+	"Point",
+	"Circle"
+}
+
 local SceneElement = Class(function(self)
 	self.dungeon_progress_constraints = DungeonProgress.DefaultConstraints()
 	self.enabled = true
 	self.name = nil
+	self.filter_by_tile_type = false
+	self.tile_types = nil
+	self.tile_type_filter_shape = TileTypeFilterShape.s.Point
 end)
 
 SceneElement.PLACEMENT_CONTEXT = "++PLACEMENT_CONTEXT"
@@ -28,8 +41,26 @@ function SceneElement:GetDecorType()
 	return DecorType.s.Unknown
 end
 
-function SceneElement:CanPlaceOnTile(_)
-	return true
+-- TODO @chrisp #scenegen - hard-coded tile types
+local tile_types = {
+	DIRT = PropProcGen.Tile.s.path,
+	MOLD = PropProcGen.Tile.s.path,
+	MOLDDIRT = PropProcGen.Tile.s.path,
+	GRASS = PropProcGen.Tile.s.rough,
+	FUZZ = PropProcGen.Tile.s.rough,
+	FUZZGRASS = PropProcGen.Tile.s.rough,
+	ACIDPOOL = PropProcGen.Tile.s.pool,
+}
+
+function SceneElement.TileNameToType(name)
+	return tile_types[name]
+end
+
+-- Return true if the specified tile_name maps to an accepted tile_type, or if the tile_name is unknown.
+-- Return false if the specified tile_name is known but not in the whitelist of accepted tile types.
+function SceneElement:CanPlaceOnTile(tile_name)
+	return not self.filter_by_tile_type 
+		or Lume(self.tile_types):find(tile_types[tile_name]):result()
 end
 
 -- Placement radius is the effective size of the prop when it is being placed. By setting the buffer to be
@@ -110,6 +141,22 @@ function SceneElement:Ui(ui, id)
 	end
 
 	DungeonProgress.Ui(ui, id.."DungeonProgressConstraintsUi", self)
+	
+	self.filter_by_tile_type = ui:_Checkbox(id.."FilterByTileType", self.filter_by_tile_type)
+	ui:SameLineWithSpace()
+	if not self.filter_by_tile_type then
+		ui:PushDisabledStyle()
+		ui:CollapsingHeader("Tile Types")
+		ui:PopDisabledStyle()
+	else
+		if not self.tile_types then
+			self.tile_types = {}
+		end
+		ui:FlagRadioButtons("Tile Types" .. id, TILE_TYPES, self.tile_types)
+		ui:Indent()
+		self.tile_type_filter_shape = ui:_ComboAsString("Shape"..id, self.tile_type_filter_shape, TileTypeFilterShape:Ordered())
+		ui:Unindent()
+	end
 end
 
 return SceneElement

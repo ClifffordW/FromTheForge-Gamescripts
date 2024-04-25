@@ -96,6 +96,7 @@ return {
             param={
               autostop=true,
               name="fx_heal_revive_LP",
+              sound_max_count=1.0,
               soundevent="fx_heal_revive_LP",
               stopatexitstate=true,
             },
@@ -116,6 +117,7 @@ return {
         },
         run_pre={ { eventtype="playfoleysound", frame=1, param={ soundtag="Footstep",},},},
         run_pst={ { eventtype="playsound", frame=1, param={ soundevent="Dirt_run_stop",},},},
+        sheathe_fast={  },
         skill_bananapeel_eat={  },
         skill_buffnextattack={ { eventtype="playsound", frame=7, param={ soundevent="AAAA_default_event",},},},
         skill_cannon_butt={  },
@@ -176,6 +178,7 @@ return {
         turn_pre={ { eventtype="playfoleysound", frame=2, param={ soundtag="Footstep",},},},
         turn_pre_run_pre={ { eventtype="playfoleysound", frame=2, param={ soundtag="Footstep",},},},
         turn_pst={ { eventtype="playfoleysound", frame=2, param={ soundtag="Footstep",},},},
+        unsheathe_fast={  },
       },
       sg_events={  },
     },

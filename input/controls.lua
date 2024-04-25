@@ -1,5 +1,9 @@
 local strict = require "util.strict"
 
+local NAV_REPEAT_RATE = 1/0.25
+local SPINNER_REPEAT_RATE = 1/0.25
+local SCROLL_REPEAT_RATE = 1/.05
+
 local t =
 {
 
@@ -125,6 +129,11 @@ local t =
 		{
 		},
 
+		FLIP_PLACER =
+		{
+
+		},
+
 		-- UI controls
 		RADIAL_ACTION = -- RS-click
 		{
@@ -133,26 +142,28 @@ local t =
 		-- Gamepad mostly uses MENU_PAGE_UP/DOWN, and not SCROLL.
 		MENU_SCROLL_FWD = -- Scroll down or to the right.
 		{
+			repeat_rate = SCROLL_REPEAT_RATE,
 		},
 		MENU_SCROLL_BACK = -- Scroll up or to the left.
 		{
+			repeat_rate = SCROLL_REPEAT_RATE,
 		},
 
 		MENU_UP =  -- d-pad up
 		{
-			repeat_rate = 10, -- see also NAV_REPEAT_TIME
+			repeat_rate = NAV_REPEAT_RATE,
 		},
 		MENU_DOWN = -- d-pad down
 		{
-			repeat_rate = 10,
+			repeat_rate = NAV_REPEAT_RATE,
 		},
 		MENU_LEFT = -- d-pad left
 		{
-			repeat_rate = 10,
+			repeat_rate = NAV_REPEAT_RATE,
 		},
 		MENU_RIGHT = -- d-pad right
 		{
-			repeat_rate = 10,
+			repeat_rate = NAV_REPEAT_RATE,
 		},
 
 		Y =
@@ -248,9 +259,11 @@ local t =
 		},
 		PREVVALUE =
 		{
+			repeat_rate = SPINNER_REPEAT_RATE,
 		},
 		NEXTVALUE =
 		{
+			repeat_rate = SPINNER_REPEAT_RATE,
 		},
 
 		FEEDBACK =
@@ -312,9 +325,6 @@ local t =
 		{
 		},
 		SHOW_PLAYERS_LIST =
-		{
-		},
-		SHOW_PLAYER_LOADOUT =
 		{
 		},
 

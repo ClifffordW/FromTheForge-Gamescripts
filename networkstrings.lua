@@ -96,14 +96,14 @@ local manual_str_list = {
 
 
 function FindAllNetworkStrings()
-	TheSim:AddKnownStrings(require("gen.allprefabs"))
-	TheSim:AddKnownStrings(require("gen.eventslist"))
-	TheSim:AddKnownStrings(require("gen.timerslist"))
-	TheSim:AddKnownStrings(require("gen.sgnameslist"))
+	local strings = {}
+	TheNet:AddKnownStrings(require("gen.allprefabs"))
+	TheNet:AddKnownStrings(require("gen.eventslist"))
+	TheNet:AddKnownStrings(require("gen.timerslist"))
+	TheNet:AddKnownStrings(require("gen.sgnameslist"))
 
 	-- Equipment:
 	local Equipment = require("defs.equipment")
-	local strings = {}
 
 	for slotname, v in pairs(Equipment.Slots) do
 		table.insert(strings, slotname);
@@ -182,6 +182,15 @@ function FindAllNetworkStrings()
 		table.insert(strings, v)
 	end
 
+	-- all mastery categories and names
+	local Mastery = require("defs.mastery.mastery")
+	for slot,items in pairs (Mastery.Items) do
+		table.insert(strings, slot)
+		for name, _def in pairs(items) do
+			table.insert(strings, name)
+		end
+	end
+
 	-- all player attack names like LIGHT_ATTACK_1, LIGHT_ATTACK_2, etc.
 	for _weapon,names in pairs(STRINGS.PLAYER_ATTACKS) do
 		-- likely duplicates for common ids but expecting them to get internally filtered
@@ -199,9 +208,7 @@ function FindAllNetworkStrings()
 	-- for items synced during gameplay (i.e. konjur)
 	local Consumable = require("defs.consumable")
 	for id,itemdef in pairs(Consumable.Items.MATERIALS) do
-		if itemdef.tags["netserialize"] then
-			table.insert(strings, id)
-		end
+		table.insert(strings, id)
 	end
 
 	-- special event room names
@@ -227,8 +234,17 @@ function FindAllNetworkStrings()
 		table.insert(strings, v);
 	end
 
-	TheSim:AddKnownStrings(strings)
-	TheSim:FinalizeStrings();
+
+	
+	-- timer names constructed from the attack.."_cd"
+	local attacks = require("gen.allattacks")
+	for _, name in pairs(attacks) do
+		table.insert(strings, name .. "_cd");
+	end
+
+
+	TheNet:AddKnownStrings(strings)
+	TheNet:FinalizeStrings();
 
 	-- Tags:
 	local tags = require("gen.tagslist")	-- Add the list of known tags
@@ -244,11 +260,149 @@ function FindAllNetworkStrings()
 --	print("*** BEGIN TAGS ***")
 --	dumptable(tags)
 --	print("*** END TAGS ***")
-	TheSim:SetKnownTagNames(tags)	-- tags are saved as individual bits, so this can't easily be combined with the prefabs
+	TheNet:SetKnownTagNames(tags)	-- tags are saved as individual bits, so this can't easily be combined with the prefabs
+
+end
+
+
+local Power = require"defs.powers"
+
+local powerCategoriesToInclude = 
+{
+	Power.Slots.PLAYER,
+	Power.Slots.ELECTRIC,
+	Power.Slots.SHIELD,
+	Power.Slots.SUMMON,
+}
+
+local function FindPlayerDataStrings()
+
+	local strings = {}
+
+	-- Categories:
+	for _, cat in pairs(UNLOCKABLE_CATEGORIES:Ordered()) do
+		table.insert(strings, cat)
+	end
+
+	-- Location names:
+	local Biomes = require"defs.biomes"
+	for key, def in pairs(Biomes.locations) do
+		if def.type == Biomes.location_type.DUNGEON then
+			table.insert(strings, key)
+		end
+	end
+
+	-- Region names:
+	for key, def in pairs(Biomes.regions) do
+		table.insert(strings, key)
+		table.insert(strings, string.upper(key))
+	end
+
+	-- Weapon types:
+	for _, val in pairs(WEAPON_TYPES) do
+		table.insert(strings, val)
+	end
+
+
+	-- Powers:
+	local itemcatalog = require"defs.itemcatalog"
+
+	for _, items in pairs(itemcatalog.Power.Items) do
+		for id, def in pairs(items) do
+			table.insert(strings, id)
+		end
+	end
+
+	-- Flags:
+		local Flags = require"gen.flagslist"
+		for _, flag in pairs(Flags) do
+			table.insert(strings, flag)
+		end
+	
+		-- Location flags:
+		for id, def in pairs(Biomes.locations) do
+			if def.type == Biomes.location_type.DUNGEON then
+				table.insert(strings, ("pf_%s_reveal"):format(def.id))
+			end
+		end
+		
+		-- Heart Flags:
+		local Consumable = require"defs.consumable"
+		local hearts = Consumable.GetItemList(Consumable.Slots.MATERIALS, {"konjur_heart"})
+		for _, def in ipairs(hearts) do
+			local flag_str = ("pf_deposited_%s"):format(def.name)
+			table.insert(strings, flag_str)
+		end
+
+
+		local mapgen = require "defs.mapgen"
+
+		for _, room_type in pairs(mapgen.roomtypes.RoomType:Ordered()) do
+			local flag_str = ("pf_seen_room_%s"):format(room_type)
+			table.insert(strings, flag_str)
+		end
+
+		-- Quest flags:
+		local content_db = TheGameContent:GetContentDB()
+
+		for name, data in pairs(content_db.data.Quest) do
+			table.insert(strings, ("qc_%s"):format(name))
+		end
+
+
+--	print("*** BEGIN PLAYERDATA STRINGS ***")
+--	dumptable(strings)
+--	print("*** END PLAYERDATA STRINGS ***")
+
+	TheNet:AddKnownStrings(strings, "PlayerData");
+	TheNet:FinalizeStrings(strings, "PlayerData");
+
+end
+
+
+local function FindWorldDataStrings()
+
+	-- WorldData strings:
+	local strings = {}
+	table.insert(strings, "FLAG")
+	table.insert(strings, "LOCATION")
+	table.insert(strings, "REGION")
+
+	-- Location names:
+	local Biomes = require"defs.biomes"
+	for key, def in pairs(Biomes.locations) do
+		if def.type == Biomes.location_type.DUNGEON then
+			table.insert(strings, key)
+		end
+	end
+		
+	-- Region names:
+	for key, def in pairs(Biomes.regions) do
+		table.insert(strings, key)
+	end
+
+	-- Flags:
+		local Flags = require"gen.flagslist"
+		for _, flag in pairs(Flags) do
+			table.insert(strings, flag)
+		end
+
+		-- npc flags: TODO: Iterate through prefabs/autogen/npc/npc*.lua, and generate the strings:
+		--string.format("wf_seen_%s", filename)
+
+
+--	print("*** BEGIN WORLDDATA STRINGS ***")
+--	dumptable(strings)
+--	print("*** END WORLDDATA STRINGS ***")
+	TheNet:AddKnownStrings(strings, "WorldData");
+	TheNet:FinalizeStrings(strings, "WorldData");
+
 end
 
 
 
 if RUN_GLOBAL_INIT then
 	FindAllNetworkStrings()
+	FindPlayerDataStrings()
+	FindWorldDataStrings()
 end

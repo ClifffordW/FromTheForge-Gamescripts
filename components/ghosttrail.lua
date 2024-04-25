@@ -84,7 +84,7 @@ function GhostTrail:OnUpdate()
 					ghost:AddComponent("charactercreator")
 					ghost:AddComponent("inventory")
 					ghost:AddComponent("equipmentdyer")
-					ghost.components.charactercreator:OnLoad(self.inst.components.charactercreator:OnSave())
+					ghost.components.charactercreator:CloneComponent(self.inst.components.charactercreator)
 					ghost.components.inventory:OnLoad(self.inst.components.inventory:OnSave())
 
 					local dye_data = self.inst.components.equipmentdyer:OnSave()

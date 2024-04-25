@@ -6,8 +6,11 @@ return {
   children={  },
   glowcolor="E839D3FF",
   gridsize={ { h=1, w=1,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
   looping=true,
+  networked=1,
   parallax={
     { anim="1", dist=-0.019999999552965, shadow=true,},
     { anim="2", dist=-0.0099999997764826, shadow=true,},

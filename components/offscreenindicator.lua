@@ -12,7 +12,7 @@ local OffScreenIndicator = Class(function(self, inst)
     self.inst = inst
 
 	self._onentityoffscreenchanged_fn = function(_inst, data)
-		TheLog.ch.UI:printf("entityoffscreenchanged - %s, %s", tostring(data.entity), tostring(data.isVisible))
+		TheLog.ch.UI:printf("entityoffscreenchanged - %s, visible=%s", tostring(data.entity), tostring(data.isVisible))
 		self.inst.Transform:SetPosition(data.entity.Transform:GetWorldPosition())
 		self:SetTargetEntity(data.entity, data.isVisible)
 		if not data.entity.offscreen or not data.entity.offscreen.silent then

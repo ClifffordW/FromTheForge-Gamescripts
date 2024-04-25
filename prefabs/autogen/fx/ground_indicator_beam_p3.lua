@@ -8,7 +8,7 @@ return {
   build="fx_item_pickup_untex",
   finaloffset=-1,
   glowcolor="62FFD5FF",
-  group="item_drops",
+  group="UI",
   looping=true,
   multcolor="FFFFFF1F",
 }

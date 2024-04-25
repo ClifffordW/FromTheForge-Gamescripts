@@ -49,7 +49,7 @@ function WorldMap:_Init()
 		TheInput:SetEditMode("worldmap", true)
 	elseif TheDungeon:IsInTown() then
 		kassert.equal(reset_action, RESET_ACTION.LOAD_TOWN_ROOM)
-		local data = TheSaveSystem.town:GetValue("worldmap")
+		local data = TheSaveSystem:GetActiveTownSave():GetValue("worldmap")
 		if data ~= nil then
 			self:LoadMapData(data)
 		else
@@ -436,6 +436,7 @@ local function set_world_for_room(nav, rng, room, biome_location)
 		resource = '_mat',
 		boss = '_%s_boss',
 		hype = '_%s_hype', -- requires boss name
+		metaunlock = "_metaunlock",
 	}
 	local exits_suffix = build_world_suffix(room)
 	assert(exits_suffix:len() > 1)
@@ -448,7 +449,7 @@ local function set_world_for_room(nav, rng, room, biome_location)
 	local scene_gen = biome_location:GetSceneGen(scenegenutil.ASSERT_ON_FAIL)
 
 	-- Obtain layout from SceneGen.
-	local layouts = scenegenutil.FindLayoutsForRoomSuffix(scene_gen, roomtype_suffix..exits_suffix)
+	local layouts = scenegenutil.FindLayoutsForRoomSuffix(scene_gen, roomtype_suffix, exits_suffix)
 	if layouts then
 		layout = next(layouts) and rng:PickFromArray(layouts)
 	end
@@ -1193,6 +1194,7 @@ local function create_empty_map(size, biome_location, rng)
 		is_fresh_map = true,
 		region_id = biome_location.region_id,
 		location_id = biome_location.id,
+		difficulty = biome_location.difficulty,
 		boss_prefab = nil,
 		miniboss_prefab = nil,
 		layout = {
@@ -1554,11 +1556,19 @@ function WorldMap:_GetScoutLevel()
 	return 1
 end
 
--- victorc: This can't be called from a Lua thread until after all TheSaveSystem calls are done
-function WorldMap:StartRun(biome_location, cb, seed, alt_mapgen_id, quest_params)
+-- This can't be called from a Lua thread until after all TheSaveSystem calls are done
+function WorldMap:StartRun(dungeon_run_params, quest_params, cb)
+	kassert.typeof('table', dungeon_run_params)
+	assert(dungeon_run_params.seed)
+	assert(dungeon_run_params.region_id)
+	assert(dungeon_run_params.location_id)
+	assert(not dungeon_run_params.alt_mapgen_id or type(dungeon_run_params.alt_mapgen_id) == 'number')
+
+	local biome_location = biomes.regions[dungeon_run_params.region_id].locations[dungeon_run_params.location_id]
 	kassert.typeof('table', biome_location)
 	kassert.typeof('string', biome_location.id, biome_location.region_id)
-	--~ kassert.typeof('table', quest_params) -- don't pass an empty table! -- TODO(questroom): enable post demo
+	kassert.typeof('table', quest_params) -- don't pass an empty table!
+	TheLog.ch.WorldMap:printf("StartRun called: %s", tabletoordereddictstring(dungeon_run_params))
 
 	-- Broadcast *first* so other systems can write before we save!
 	for _,p in ipairs(AllPlayers or {}) do
@@ -1572,7 +1582,7 @@ function WorldMap:StartRun(biome_location, cb, seed, alt_mapgen_id, quest_params
 	-- Only need to save current room if we're in town.
 	if self.inst:IsInTown() then
 		local current_room_id = self.data.current
-		TheSaveSystem.town:SaveCurrentRoom(current_room_id, _cb:AddInstance())
+		TheSaveSystem:SaveActiveTownSlotRoom(current_room_id, _cb:AddInstance())
 	end
 
 	-- TEMP JBELL KONJUR DEBUG SAVE SYSTEM
@@ -1583,7 +1593,7 @@ function WorldMap:StartRun(biome_location, cb, seed, alt_mapgen_id, quest_params
 
 	TheSaveSystem.dungeon:ClearAllRooms(_cb:AddInstance())
 
-	self:GenerateDungeonMap(biome_location, seed, alt_mapgen_id, quest_params)
+	self:GenerateDungeonMap(biome_location, dungeon_run_params.seed, dungeon_run_params.alt_mapgen_id, quest_params)
 	local entrance = self.nav:get_entrance_room()
 	assert(entrance.is_entrance, "Failed to tag first room as entrance or need to update StartRun for how entrance is determined.")
 	assert(entrance.world, "Failed to set world for entrance.")
@@ -1613,7 +1623,7 @@ function WorldMap:StartRun(biome_location, cb, seed, alt_mapgen_id, quest_params
 			dbassert(false)
 		end
 		if cb ~= nil then
-			cb()
+			cb(dungeon_run_params)
 		end
 		if TheNet:IsHost() then
 			TheLog.ch.WorldMap:printf("StartRun Host loading room: %s room_id=%d room_seed=%d", next_level_name, next_room_id, next_room_seed)
@@ -1668,7 +1678,7 @@ function WorldMap:EndRun(run_state, cb)
 
 	if self.nav:GetProgressThroughDungeon() > 0 then
 		-- if you at least left the first room
-		TheSaveSystem.progress:IncrementValue("num_runs")
+		TheSaveSystem:GetActiveAboutSlot():IncrementValue("num_runs")
 		TheSaveSystem.permanent:IncrementValue("num_runs")
 	end
 
@@ -1840,15 +1850,25 @@ function WorldMap:Debug_StartArena(level, room_overrides)
 	TheSaveSystem.dungeon:SetValue("worldmap", data)
 	TheSaveSystem:SaveAllExcludingRoom(_cb:AddInstance())
 
+	RoomLoader.ResetNextLoad()
+
 	local scene_gen = biome_location:GetSceneGen(scenegenutil.ASSERT_ON_FAIL)
 	_cb:WhenAllComplete(function(success)
 		dbassert(success, "WARNING: Failed to save/clear data before loading new dungeon.")
 		-- Even though this is debug, we load the real level because want to
 		-- see it load normally.
 		if TheNet:IsHost() then
-			TheNet:HostStartArena(level, room_overrides.roomtype, room_overrides.location or biome_location.id, mother_seed)
+			local arena_dungeon_run_params =
+			{
+				arena_world_prefab = level,
+				roomtype = room_overrides.roomtype,
+				location_id = room_overrides.location or biome_location.id,
+				seed = mother_seed,
+			}
+
+			TheNet:HostStartArena(arena_dungeon_run_params)
 			-- wait for remote generation confirmation, but that confirmation does not exist
-			RoomLoader.LoadDungeonLevel(level, scene_gen, rid)
+			RoomLoader.LoadDungeonLevel(level, scene_gen, rid, true)
 		else
 			TheLog.ch.WorldMap:printf("Waiting for host to start arena via room load...")
 		end
@@ -1946,8 +1966,9 @@ local roomtype_to_key = {
 	chest = "chest",
 	potion = "potion",
 	market = "market",
+	metaunlock = "metaunlock",
 	powerupgrade = "powerupgrade",
-	mystery = "specialevent", --TODO(jambell): replace with mystery-named icon
+	mystery = "specialevent", --TODO: replace with mystery-named icon
 	wanderer = "specialevent", -- This only shows up when one of these rooms is explicitly placed in the mapgen. Otherwise, hidden behind 'mystery'
 	ranger = "specialevent", -- This only shows up when one of these rooms is explicitly placed in the mapgen. Otherwise, hidden behind 'mystery'
 	quest = "quest",
@@ -1996,6 +2017,7 @@ local reward_to_key = {
 	skill = "skill%d",
 	small_token = "smalltoken%d",
 	big_token = "bigtoken%d",
+	material = "material%d",
 }
 
 -- Returns the identifier we use for various bits of art that represent a room
@@ -2116,7 +2138,7 @@ function WorldMap:_SetMysteryEvent(next_room, current_room, replaymode, _cb)
 	end
 end
 
--- TODO: networking2022, victorc - cleanup this messy replay mode
+-- TODO: networking2022, cleanup this messy replay mode
 -- Possibly integrate this with debug dungeon stepping
 function WorldMap:TravelCardinalDirection(cardinal, cb, replaymode)
 	if not replaymode then
@@ -2158,7 +2180,7 @@ function WorldMap:TravelCardinalDirection(cardinal, cb, replaymode)
 		-- HACK(dbriscoe): Debug info for failing assert.
 		TheLog.ch.WorldMap:print("Trying to go", cardinal, "current_room:", table.inspect(current_room), "\nrooms:", table.inspect(self.data.rooms, { depth = 2, }))
 	end
-	assert(next_room, "Trying to travel to invalid room")
+	assert(next_room, "Trying to travel to invalid room, if you are running the map path editor you need to run it from a non starting room")
 	assert(next_room.world, "Trying to travel to room without a world.")
 	next_level_name = next_room.world
 	next_room_id = next_room.index
@@ -2183,7 +2205,7 @@ function WorldMap:TravelCardinalDirection(cardinal, cb, replaymode)
 	if not replaymode then
 		if isintown then
 			dbassert(false, "Not supported YET")
-			TheSaveSystem.town:SetValue("worldmap", data)
+			TheSaveSystem:GetActiveTownSave():SetValue("worldmap", data)
 		else
 			TheSaveSystem.dungeon:SetValue("worldmap", data)
 		end
@@ -2227,7 +2249,6 @@ function WorldMap:_StepDungeon(cardinal)
 	-- this happens at the start of the room lifecycle (see LoadMapData)
 	self.rng = krandom.CreateGenerator(self.data.current_room_seed)
 	self:_MarkRoomIdVisited(self.data.current)
-	-- self.nav = WorldMap.RoomNavigator(self.data.current) -- TODO: networking2022, doesn't seem needed and actually breaks things?
 	self.encounter_deck = EncounterDeck(
 		self.rng,
 		self.data.location_id,

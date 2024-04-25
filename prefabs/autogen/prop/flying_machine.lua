@@ -3,7 +3,10 @@ return {
   __displayName="flying_machine",
   bank="flying_machine",
   build="flying_machine",
+  clickable=true,
   gridsize={ { h=5, w=5,},},
+  hostspawn=true,
+  networked=1,
   parallax={
     { anim="1", dist=-0.30000001192093, shadow=true,},
     { anim="2", shadow=true,},
@@ -13,4 +16,5 @@ return {
   physicssize=2.5,
   physicstype="smdec",
   script="dungeonstarter",
+  sound=true,
 }

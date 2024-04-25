@@ -350,6 +350,8 @@ local states =
 					SGCommon.Fns.SpawnAtDist(inst, "swamp_stalagmite", 0)
 					if inst.owner then
 						inst.owner:PushEvent("stalactite_landed", inst)
+					elseif inst.trap_spawner then
+						inst.trap_spawner:PushEvent("stalactite_landed", inst)
 					end
 				end
 

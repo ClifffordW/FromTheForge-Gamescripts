@@ -5,5 +5,6 @@ return {
   bank="fx_player_revive",
   bloom=100.0,
   build="fx_player_revive",
+  group="player_skills",
   multcolor="FFFFFF80",
 }

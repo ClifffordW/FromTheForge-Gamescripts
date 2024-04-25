@@ -1,0 +1,60 @@
+return {
+  biome_exploration_store={
+    {
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1.0,
+        interact_radius=3.0,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 2",
+        status_widget_location="Prop",
+        xp_per_currency=100.0,
+      },
+      variation=1,
+      x=7.0,
+      z=3.0,
+    },
+    {
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1.0,
+        interact_radius=3.0,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 4",
+        status_widget_location="Prop",
+        xp_per_currency=100.0,
+      },
+      variation=1,
+      x=7.0,
+      z=-9.0,
+    },
+    {
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1.0,
+        interact_radius=3.0,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 1",
+        status_widget_location="Prop",
+        xp_per_currency=100.0,
+      },
+      variation=1,
+      x=-7.0,
+      z=3.0,
+    },
+    {
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1.0,
+        interact_radius=3.0,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 3",
+        status_widget_location="Prop",
+        xp_per_currency=100.0,
+      },
+      variation=1,
+      x=-7.0,
+      z=-9.0,
+    },
+  },
+}

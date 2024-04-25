@@ -10,9 +10,15 @@ return {
   group="swamp_props",
   layer="auto",
   parallax={
-    { anim="frontcut", dist=-0.25,},
-    { anim="midcut",},
-    { anim="backcut", dist=1.0,},
+    { anim="frontcut", autosortlayer="above", dist=-0.25,},
+    { anim="midcut_above", autosortlayer="above",},
+    { anim="backcut", autosortlayer="above", dist=1.0,},
+    {
+      anim="midcut_below",
+      autosortlayer="below",
+      dist=9.9999997473788e-05,
+      underground=true,
+    },
   },
   proptype=1,
   randomize=true,

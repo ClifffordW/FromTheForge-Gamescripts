@@ -4,7 +4,15 @@ return {
   fade={ bottom=-3.56, top=-0.25,},
   group="swamp_props",
   layer="auto",
-  parallax={ { anim="tree",},},
+  parallax={
+    { anim="tree_above", autosortlayer="above",},
+    {
+      anim="tree_below",
+      autosortlayer="below",
+      dist=-9.9999997473788e-06,
+      underground=true,
+    },
+  },
   proptype=1,
   randomize=true,
   variations=4,

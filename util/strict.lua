@@ -39,7 +39,7 @@ function strict.forbid_undeclared(target)
 	target.__STRICT = true
 	mt.__declared = {}
 
-	-- TODO(dbriscoe): I'm not sure this works. I can't intentionally make it
+	-- Note: I'm not sure this works. I can't intentionally make it
 	-- fail. Maybe because everywhere I try shows up as main?
 	mt.__newindex = function (t, n, v)
 		if target.__STRICT and not mt.__declared[n] then
@@ -110,7 +110,7 @@ end
 
 
 local function readonly_err(t, k, v)
-	error("Attempt to modify read-only table "..tostring(k).." = "..tostring(v))
+	error(string.format("Attempt to modify read-only table [%s]: %s = %s", tostring(t), tostring(k), tostring(v)))
 end
 
 -- Prevent modification of the table.

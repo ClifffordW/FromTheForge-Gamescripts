@@ -34,6 +34,7 @@ function vendingmachines.ConfigureShopItem(inst, opts)
 
 	inst:AddComponent("vendingmachine")
 	inst:AddComponent("soundtracker")
+	inst:AddComponent("townhighlighter")
 
 	if opts.machine_type then
 		-- If vending machines need to have custom components, stategraphs, etc. done, define it in the function in vendingmachines.lua

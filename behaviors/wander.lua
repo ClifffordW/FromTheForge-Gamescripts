@@ -4,7 +4,7 @@ local Wander = Class(BehaviorNode, function(self, inst, home, maxdist)
 	BehaviorNode._ctor(self, "Wander")
 	self.inst = inst
 	self.home = home
-	self.maxdist = maxdist
+	self.maxdist = maxdist or 3
 	self.shouldmove = false
 	self.movetime = { min = 2, max = 4 }
 	self.standtime = { min = 1, max = 3 }
@@ -17,6 +17,11 @@ Wander.UseCollisionAvoidance = true
 function Wander:Visit()
 	TheSim:ProfilerPush(self.name)
 	local t = GetTime()
+
+	--If home is not set, set it to the entities start position here, setting in the constructor doesnt work since the position is still 0,0,0 at that point
+	if not self.home then
+		self.home = Vector3(self.inst.Transform:GetWorldPosition())
+	end
 
 	if self.status == BNState.READY then
 		self.delayendtime = t + self.standtime.min + math.random() * (self.standtime.max - self.standtime.min)

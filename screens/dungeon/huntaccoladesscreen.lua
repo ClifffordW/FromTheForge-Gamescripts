@@ -44,10 +44,6 @@ end)
 -- TODO: someone -- copied from RunSummaryScreen, review presentation BEGIN
 function HuntAccoladesScreen:OnBecomeActive()
 	self._base.OnBecomeActive(self)
-	if self.is_defeat then
-		TheWorld.components.ambientaudio:SetEveryoneDead(true)
-	end
-
 	-- self:AnimateIn()
 	TheDungeon.HUD:AnimateOut()
 end
@@ -55,20 +51,13 @@ end
 function HuntAccoladesScreen:OnBecomeInactive()
 	self._base.OnBecomeInactive(self)
 	-- Debug Flow: If you cheat health on this screen, restore previous state.
-	self:_StopAudio()
 	TheDungeon.HUD:AnimateIn()
 end
 
-function HuntAccoladesScreen:_StopAudio()
-	if self.is_defeat then
-		TheWorld.components.ambientaudio:SetEveryoneDead(false)
-	end
-end
 -- TODO: someone -- copied from RunSummaryScreen, review presentation END
 
 function HuntAccoladesScreen:OnContinueClicked()
 	self.should_progress = true
-	self.continue_btn:Disable()
 end
 
 function HuntAccoladesScreen:ShouldProgressSequence()

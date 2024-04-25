@@ -57,6 +57,8 @@ function slotutil.GetPrettyStrings(slot, name)
 end
 
 function slotutil.GetPrettyStringsByType(slot, type, name)
+	--~ dbassert(STRINGS.ITEMS[slot], slot)
+	--~ dbassert(STRINGS.ITEMS[slot][type], type)
 	local slot_strings = STRINGS.ITEMS[slot][type]
 	return slot_strings and slot_strings[name]
 end
@@ -64,12 +66,14 @@ end
 function slotutil.ValidateSlotStrings(t)
 	for _,slot in pairs(t.Slots) do
 		assert(STRINGS.ITEM_CATEGORIES[slot], "Missing category name string for slot [".. slot .."]. Please add to STRINGS.ITEM_CATEGORIES."..slot)
+		local slot_key = t.slot_string_keys and t.slot_string_keys[slot]
+		local slot_key_msg = slot_key and (slot_key ..".") or ""
 		for name,def in pairs(t.Items[slot]) do
 			if def.show_in_ui or def.show_in_ui == nil then
 				-- Only check for slot string if there are items to support runtime
 				-- slot placeholders.
-				assert(STRINGS.ITEMS[slot], "Missing strings for slot [".. slot.."]. Please add to STRINGS.ITEMS."..slot)
-				local msg = ("Missing strings for item STRINGS.ITEMS.%s.%s"):format(slot, name)
+				kassert.assert_fmt(slot_key and STRINGS.ITEMS[slot_key][slot] or STRINGS.ITEMS[slot], "Missing strings for slot [%s]. Please add to STRINGS.ITEMS.%s%s", slot, slot_key_msg, slot)
+				local msg = ("Missing strings for item STRINGS.ITEMS.%s%s.%s"):format(slot_key_msg, slot, name)
 				assert(def.pretty, msg)
 				assert(def.pretty.name, msg)
 				-- Power strings can use one desc per rarity instead of just desc
@@ -79,7 +83,7 @@ function slotutil.ValidateSlotStrings(t)
 	end
 end
 
-local function GetToolTipAsString(def, tt)
+function slotutil.GetToolTipTable(tt)
 	if type(tt) == "function" then
 		-- Define a tooltip as a function when it needs to be more elaborate
 		-- (refer to other powers).
@@ -88,13 +92,19 @@ local function GetToolTipAsString(def, tt)
 	return STRINGS.UI.TOOLTIPS[tt]
 end
 
+local function GetToolTipAsString(def, tt)
+	local tip = slotutil.GetToolTipTable(tt)
+	local TOOLTIP_FMT = "<#RED>{NAME}</>\n{DESC}"
+	return tip and TOOLTIP_FMT:subfmt(tip)
+end
+
 -- We only store tooltip keys so when we get their value, we always get the
 -- translated string.
 function slotutil.BuildToolTip(def, config)
 	config = config or table.empty
 	local tooltip
 	if config.is_lucky then
-		tooltip = STRINGS.UI.TOOLTIPS.LUCKY
+		tooltip = GetToolTipAsString(STRINGS.UI.TOOLTIPS.LUCKY)
 	end
 	for i,tt in ipairs(def.tooltips) do
 		local str = GetToolTipAsString(def, tt)
@@ -106,8 +116,9 @@ end
 function slotutil.ValidateAllTooltipsExist(def)
 	local is_valid = true
 	for i,tt in ipairs(def.tooltips) do
+		kassert.assert_fmt(type(STRINGS.UI.TOOLTIPS[tt]) ~= "string", "Def '%s' used a raw string instead of table for tooltip 'STRINGS.UI.TOOLTIPS.%s'.", def.name, tt)
 		local str = GetToolTipAsString(def, tt)
-		kassert.assert_fmt(str, "Def '%s' used undefined tooltip string 'STRINGS.UI.TOOLTIPS.%s' (or tooltip function returned nil).", def.name, tt)
+		kassert.assert_fmt(str, "Def '%s' used undefined tooltip 'STRINGS.UI.TOOLTIPS.%s' (or tooltip function returned nil).", def.name, tt)
 		is_valid = str and is_valid
 	end
 	return is_valid

@@ -15,7 +15,7 @@ local MenuSteamFriendRow = Class(ImageButton, function(self, width, friend_data)
 
 	-- Store data
 	self.friend_data = friend_data
-	self.friend_name = friend_data.name
+	self.friend_name = friend_data.name:sanitize_user_text()
 	self.friend_lobby = friend_data.lobby
 
 	-- Prepare sizes
@@ -31,18 +31,22 @@ local MenuSteamFriendRow = Class(ImageButton, function(self, width, friend_data)
 		:SetSize(self.width, self.height)
 
 	-- Add widgets
-	self.row_avatar = self:AddChild(Image("images/global/square.tex"))
+	self.row_avatar = self:AddChild(Image(friend_data.avatarfilename or "images/global/square.tex"))
 		:SetName("Avatar")
 		:SetSize(self.avatar_size, self.avatar_size)
 		:LayoutBounds("left", "center", self:GetImage())
 		:Offset(self.padding_h)
-		:SetMultColor(UICOLORS.LIGHT_BACKGROUNDS_MID)
-		:SetMultColorAlpha(0.35)
+
+	if not friend_data.avatarfilename then 
+		self.row_avatar:SetMultColor(UICOLORS.LIGHT_BACKGROUNDS_MID)
+						:SetMultColorAlpha(0.35)
+	end
+
 	self.row_username = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
 		:SetName("Username")
 		:SetGlyphColor(UICOLORS.SPEECH_BUTTON_TEXT)
 		:SetAutoSize(self.width - self.padding_h*4 - self.avatar_size - self.join_btn_width)
-		:SetText(self.friend_name)
+		:SetTextRaw(self.friend_name)
 		:LayoutBounds("after", "center", self.row_avatar)
 		:Offset(self.padding_h)
 

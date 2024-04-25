@@ -7,6 +7,7 @@ return {
   bloom=50.0,
   build="fx_portal",
   glowcolor="FE6100FF",
+  group="portals",
   looping=true,
   multcolor="FFB34DFF",
   onground=true,

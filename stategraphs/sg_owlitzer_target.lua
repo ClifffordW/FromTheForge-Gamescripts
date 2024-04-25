@@ -7,7 +7,7 @@ local events =
 	end),
 
 	EventHandler("done_attack", function(inst)
-		inst.sg:GoToState("despawn")
+		inst.sg:GoToState("pst")
 	end),
 }
 
@@ -48,7 +48,7 @@ local states =
 	}),
 
 	State({
-		name = "despawn",
+		name = "pst",
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("out")
@@ -57,10 +57,19 @@ local states =
 		events =
 		{
 			EventHandler("animover", function(inst)
-				inst.fx:Remove()
-				inst:Remove()
+				inst.sg:GoToState("despawn")
 			end),
 		},
+	}),
+
+	State({
+		name = "despawn",
+		onenter = function(inst)
+			inst:DoTaskInTime(0, function()
+				inst.fx:Remove()
+				inst:Remove()
+			end)
+		end,
 	}),
 }
 

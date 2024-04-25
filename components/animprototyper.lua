@@ -56,7 +56,7 @@ function AnimPrototyper:HookupAnimationRedirector(config)
 				assert(target_animstate ~= this, "Calling PlayAnimation or self will infinite loop.")
 				target_animstate:Resume()
 				target_animstate:PlayAnimation(anim, loop)
-				self:Logf("[%s] PlayAnimation '%s'.", partname, anim)
+				self:Logf("<%s> PlayAnimation '%s'.", partname, anim)
 
 			else
 				local when_inactive = self.config.anim_when_inactive[partname]
@@ -67,7 +67,7 @@ function AnimPrototyper:HookupAnimationRedirector(config)
 						part.AnimState:SetFrame(when_inactive.frame)
 						part.AnimState:Pause()
 					end
-					self:Logf("[%s]  Inactive. Play '%s'.", partname, when_inactive.anim)
+					self:Logf("<%s>  Inactive. Play '%s'.", partname, when_inactive.anim)
 				end
 			end
 		end

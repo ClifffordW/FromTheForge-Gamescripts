@@ -113,6 +113,10 @@ function ProjectileHitbox:OnHitBoxTriggered(data)
 		return
 	end
 
+	if self.inst.owner and not self.inst.owner:IsValid() then
+		self.inst.owner = nil
+	end
+
 	-- If this projectile is local --> only hit local objects. Pass through remote objects
 	-- If this projectile is remote --> only hit local objects. Take control when they hit.
 	-- If this projectile is created by a local player. Detect remote and local entities since we want the projectile to be as responsive as possible

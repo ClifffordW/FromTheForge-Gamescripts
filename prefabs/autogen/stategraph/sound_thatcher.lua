@@ -57,6 +57,14 @@ return {
             },
           },
         },
+        death_cinematic={
+          { eventtype="stopsound", frame=114, param={ name="hold_LP",},},
+          {
+            eventtype="playsound",
+            frame=84,
+            param={ name="hold_LP", soundevent="thatcher_hold", volume=52.0,},
+          },
+        },
         dormant_getup_pst={
           {
             eventtype="playsound",
@@ -70,6 +78,7 @@ return {
           },
           { eventtype="stopsound", frame=10, param={ name="twirl",},},
         },
+        full_swing_mobile_loop={ { eventtype="stopsound", frame=1, param={ name="full_hold",},},},
         hook={
           {
             eventtype="playsound",
@@ -96,6 +105,28 @@ return {
           { eventtype="playsound", frame=30, param={ soundevent="thatcher_swipe",},},
         },
         idle={  },
+        introduction={
+          { eventtype="stopsound", frame=68, param={ name="thatcher_twirl_LP",},},
+          {
+            eventtype="setsoundparameter",
+            frame=47,
+            param={
+              param_name="twirl_LP_speed",
+              param_value=0.95999997854233,
+              sound_name="thatcher_twirl_LP",
+            },
+          },
+          {
+            eventtype="playsound",
+            frame=45,
+            param={
+              autostop=true,
+              name="thatcher_twirl_LP",
+              soundevent="thatcher_twirl_LP",
+              stopatexitstate=true,
+            },
+          },
+        },
         swing_smash_pre={
           {
             eventtype="playsound",
@@ -149,11 +180,6 @@ return {
         },
         {
           eventtype="playsound",
-          name="sfx-full_hold",
-          param={ soundevent="thatcher_swing_hold",},
-        },
-        {
-          eventtype="playsound",
           name="sfx-hold",
           param={
             autostop=true,
@@ -182,6 +208,35 @@ return {
           param={ soundevent="thatcher_puke", stopatexitstate=true,},
         },
         { eventtype="playsound", name="sfx-catch", param={ soundevent="thatcher_catch",},},
+        {
+          eventtype="playsound",
+          name="sfx-full_hold",
+          param={ name="full_hold", soundevent="thatcher_swing_hold",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-foley",
+          param={ soundevent="thatcher_foley", volume=47.0,},
+        },
+        { eventtype="playsound", name="sfx-dash", param={ soundevent="thatcher_dash",},},
+        { eventtype="playsound", name="sfx-yell", param={ soundevent="thatcher_yell",},},
+        {
+          eventtype="playsound",
+          name="sfx-ground_hit",
+          param={ soundevent="thatcher_ground_hit",},
+        },
+        {
+          eventtype="playsound",
+          name="mus-guitar_jam",
+          param={ soundevent="Mus_Thatcher_GuitarJam",},
+        },
+        { eventtype="playsound", name="sfx-death", param={ soundevent="thatcher_death",},},
+        { eventtype="playsound", name="sfx-hit", param={ soundevent="thatcher_hit",},},
+        {
+          eventtype="playsound",
+          name="sfx-taunt",
+          param={ soundevent="thatcher_taunt_1",},
+        },
       },
     },
   },

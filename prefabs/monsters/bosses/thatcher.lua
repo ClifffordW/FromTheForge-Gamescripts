@@ -8,15 +8,22 @@ local assets =
 {
 	Asset("ANIM", "anim/thatcher_bank.zip"),
 	Asset("ANIM", "anim/thatcher_build.zip"),
+	Asset("ANIM", "anim/fx_shadow.zip"),
 }
 
 local prefabs =
 {
 	"fx_hurt_sweat",
 	"fx_death_thatcher",
+	GroupPrefab("fx_acid"),
 
-	"slowpoke_spit",
+	"thatcher_acidball",
 	"trap_acid",
+	"trap_acid_stage",
+
+	"cine_boss_death_hit_hold",
+	"cine_thatcher_death",
+	"cine_thatcher_intro",
 
 	--Drops
 	GroupPrefab("drops_generic"),
@@ -37,6 +44,11 @@ local attacks =
 		cooldown = 2,
 		initialCooldown = 1,
 		pre_anim = "swing_short_pre",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			local current_phase = inst.boss_coro:CurrentPhase()
+			return current_phase == SECOND_PHASE
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			local current_phase = inst.boss_coro:CurrentPhase()
 			return current_phase == SECOND_PHASE and trange:IsInRange(6)
@@ -51,6 +63,11 @@ local attacks =
 		cooldown = 2,
 		initialCooldown = 1,
 		pre_anim = "swing_short_pre",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			local current_phase = inst.boss_coro:CurrentPhase()
+			return current_phase == FIRST_PHASE
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			local current_phase = inst.boss_coro:CurrentPhase()
 			return current_phase == FIRST_PHASE and trange:IsInRange(6)
@@ -69,20 +86,20 @@ local attacks =
 	-- Acid projectiles will reference this attack for its damage_mod!
 	acid_spit =
 	{
-		priority = 1,
+		priority = 2,
 		damage_mod = 0.3,
 		startup_frames = 32,
-		cooldown = 10,
-		initialCooldown = 3,
+		cooldown = 4,
+		initialCooldown = 12,
 		pre_anim = "acid_pre",
 		hold_anim = "acid_hold",
 		start_conditions_fn = function(inst, data, trange)
 			local current_phase = inst.boss_coro:CurrentPhase()
-			return current_phase <= SECOND_PHASE
+			return current_phase <= FIRST_PHASE
 		end,
 	},
 
-	hook =
+	--[[hook =
 	{
 		priority = 1,
 		damage_mod = 0.8,
@@ -103,7 +120,7 @@ local attacks =
 		start_conditions_fn = function(inst, data, trange)
 			return false -- Follow-up attack from hook
 		end,
-	},
+	},]]
 
 	double_short_slash =
 	{
@@ -112,6 +129,11 @@ local attacks =
 		startup_frames = 28,
 		cooldown = 3,
 		initialCooldown = 3,
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			local current_phase = inst.boss_coro:CurrentPhase()
+			return current_phase == THIRD_PHASE
+		end,
 		pre_anim = "double_short_slash_pre",
 		hold_anim = "double_short_slash_hold",
 		start_conditions_fn = function(inst, data, trange)
@@ -120,30 +142,54 @@ local attacks =
 		end,
 	},
 
-	full_swing =
+	--[[full_swing =
 	{
-		priority = 1,
+		cooldown = 0,
 		damage_mod = 0.3,
 		startup_frames = 44,
-		cooldown = 0,
-		initialCooldown = 0,
 		pre_anim = "full_swing_pre",
-		hold_anim = "full_swing_hold",
-		is_hitstun_pressure_attack = true,
+		hold_anim = "full_swing_loop",
 		start_conditions_fn = function(inst, data, trange)
 			return false -- Phase 1 special attack called via the boss coroutine.
+		end,
+	},]]
+
+	full_swing_mobile =
+	{
+		cooldown = 0,
+		damage_mod = 0.4,
+		startup_frames = 90,
+		pre_anim = "full_swing_mobile_pre",
+		hold_anim = "full_swing_mobile_loop",
+		loop_hold_anim = true,
+		start_conditions_fn = function(inst, data, trange)
+			return false -- Phase 1 special attack called via the boss coroutine.
+		end,
+	},
+
+	dash_uppercut =
+	{
+		cooldown = 0,
+		damage_mod = 1.2,
+		startup_frames = 90,
+		pre_anim = "shoryuken_pre",
+		hold_anim = "shoryuken_loop",
+		loop_hold_anim = true,
+		start_conditions_fn = function(inst, data, trange)
+			return false -- Phase 2 special attack called via the boss coroutine.
 		end,
 	},
 
 	swing_smash =
 	{
 		priority = 1,
-		damage_mod = 1,
-		startup_frames = 41,
+		damage_mod = 1.3,
+		startup_frames = 90,
 		cooldown = 5,
 		initialCooldown = 3,
 		pre_anim = "swing_smash_pre",
-		hold_anim = "swing_smash_hold",
+		hold_anim = "swing_smash_loop",
+		loop_hold_anim = true,
 		start_conditions_fn = function(inst, data, trange)
 			return false -- Phase 3 special attack called via the boss coroutine.
 		end,
@@ -158,19 +204,19 @@ local attacks =
 
 	acid_splash =
 	{
-		priority = 2,
+		priority = 1,
 		damage_mod = 0.3,
 		startup_frames = 41,
-		cooldown = 15,
-		initialCooldown = 3,
+		cooldown = 0,
 		pre_anim = "acid_splash_pre",
 		hold_anim = "acid_splash_hold",
 		start_conditions_fn = function(inst, data, trange)
-			local current_phase = inst.boss_coro:CurrentPhase()
-			return current_phase == THIRD_PHASE
+			return false -- Special attack called via the boss coroutine.
 		end,
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 --[[local function CreateHeadHitBox()
 	local inst = CreateEntity()
@@ -240,6 +286,8 @@ local function fn(prefabname)
 
 	inst:AddComponent("monstertranslator")
 
+	inst:AddTag("ACID_IMMUNE")
+
 	inst:AddComponent("cineactor")
 	inst.components.cineactor:AfterEvent_PlayAsLeadActor("dying", "cine_boss_death_hit_hold", { "cine_thatcher_death" })
 	inst.components.cineactor:QueueIntro("cine_thatcher_intro")
@@ -259,7 +307,10 @@ end
 -- Acid projectile
 local acid_prefabs =
 {
-	GroupPrefab("fx_battoad"),
+	--GroupPrefab("fx_battoad"),
+	"fx_ground_target_red",
+	"fx_thatcher_acid_blob",
+	GroupPrefab("fx_acid"),
 }
 
 local debug_thatcher
@@ -267,6 +318,8 @@ local function OnEditorSpawn_dosetup(inst, editor)
 	debug_thatcher = debug_thatcher or DebugSpawn("thatcher")
 	debug_thatcher:Stupify("OnEditorSpawn")
 	inst:Setup(debug_thatcher)
+	debug_thatcher.Physics:SetEnabled(false)
+	debug_thatcher:Hide()
 end
 
 local function acid_fn(prefabname)
@@ -275,11 +328,11 @@ local function acid_fn(prefabname)
 		name = prefabname,
 		hits_targets = true,
 		stategraph = "sg_thatcher_acidball",
-		fx_prefab = "fx_battoad_projectile"
+		fx_prefab = "fx_thatcher_acid_blob",
 	})
 
-	inst.components.complexprojectile:SetHorizontalSpeed(30)
-	inst.components.complexprojectile:SetGravity(-1)
+	local scale = (math.random() - 0.5) * 0.4 + 0.8 -- 0.8 +/- 0.2
+	inst.AnimState:SetScale(scale, scale) -- random scale to add some visual variance with spawned acid projectiles
 
 	inst.Setup = monsterutil.BasicProjectileSetup
 	inst.OnEditorSpawn = OnEditorSpawn_dosetup
@@ -288,78 +341,91 @@ local function acid_fn(prefabname)
 end
 
 ---------------------------------------------------------------------------------------
+-- Geyser acid projectile
+local function geyser_acid_local_fn(prefabname)
+	local inst = spawnutil.CreateProjectile(
+	{
+		name = prefabname,
+		hits_targets = true,
+		hit_group = HitGroup.NONE,
+		hit_flags = HitGroup.CHARACTERS,
+		no_healthcomponent = true,
+		stategraph = "levelprops/sg_thatcher_geyser_acid",
+		fx_prefab = "fx_acid_projectile",
+		motor_vel = 0,
+	})
 
---[[local deathfx_prefabs =
-{
-	"death_boss_frnt",
-	"death_boss_grnd",
-}
+	inst.Setup = monsterutil.BasicProjectileSetup
 
-local function OnChildFxRemoved(child)
-	local inst = child.entity:GetParent()
-	inst._numchildren = inst._numchildren - 1
-	if inst._numchildren == 0 then
-		inst:DoTaskInTicks(0, inst.Remove)
+	inst.AnimState:SetScale(2, 2) -- Temp(?): should we scale the actual FX instead?
+
+	inst.Physics:SetSnapToGround(false)
+	inst.Physics:SetEnabled(false)
+
+	inst.components.combat:SetBaseDamage(inst, TUNING.TRAPS["trap_acid"].BASE_DAMAGE)
+
+	inst:AddComponent("fallingobject")
+
+	inst.OnSetSpawnInstigator = function(_, instigator)
+		-- Set the owner if it isn't a trap that spawns stalactites (e.g. Thatcher)
+		local has_owner = instigator and instigator.owner and not instigator.owner:HasTag("trap")
+		inst.owner = has_owner and instigator.owner or nil
 	end
+
+	inst.OnEditorSpawn = OnEditorSpawn_dosetup
+
+	return inst
 end
 
-local function SetupDeathFxFor(inst, target)
-	local x, z = target.Transform:GetWorldXZ()
-	inst.Transform:SetPosition(x, 0, z)
-	inst.frnt.Transform:SetRotation(target.Transform:GetRotation())
+local function geyser_acid_medium_local_fn(prefabname)
+	local inst = geyser_acid_local_fn(prefabname)
+	inst.sg.mem.is_medium = true
+	return inst
 end
 
-local function DoDeathFxTint(inst, tint)
-	local k = 1 - tint
-	inst.components.colormultiplier:PushColor("death", k, k, k, 1)
-	inst.components.coloradder:PushColor("death", tint, tint, tint, 0)
-	TheWorld.components.lightcoordinator:SetIntensity(k)
+local function geyser_acid_permanent_local_fn(prefabname)
+	local inst = geyser_acid_local_fn(prefabname)
+	inst.sg.mem.is_permanent = true
+	inst.sg.mem.is_boss_acid = true
+	return inst
 end
 
-local function deathfx_fn()
+local function geyser_acid_fn(prefabname)
+	-- For networking, spawn local versions of this on each networked machine.
 	local inst = CreateEntity()
+	inst:SetPrefabName(prefabname)
 
 	inst.entity:AddTransform()
+	inst.entity:AddAnimState()
 
-	inst:AddTag("FX")
-	inst:AddTag("NOCLICK")
-	inst.persists = false
+	inst.AnimState:SetBank("fx_acid")
+	inst.AnimState:SetBuild("fx_acid")
 
-	inst.frnt = SpawnPrefab("death_boss_frnt", inst)
-	inst.grnd = SpawnPrefab("death_boss_grnd", inst)
+	inst:SetStateGraph("levelprops/sg_thatcher_geyser_acid")
 
-	inst.frnt.entity:SetParent(inst.entity)
-	inst.grnd.entity:SetParent(inst.entity)
+	inst.OnSetSpawnInstigator = function(_, instigator)
+		inst.owner = instigator ~= nil and instigator.components.combat and instigator or nil
+	end
 
-	inst:AddComponent("colormultiplier")
-	inst.components.colormultiplier:AttachChild(inst.frnt)
-	inst.components.colormultiplier:AttachChild(inst.grnd)
+	-- Delay until the next update so that everything is initialized.
+	inst:DoTaskInTime(0, function()
+		local acid_prefab = "thatcher_geyser_acid_local"
+		if inst.sg.mem.is_permanent then
+			acid_prefab = "thatcher_geyser_acid_permanent_local"
+		elseif inst.sg.mem.is_medium then
+			acid_prefab = "thatcher_geyser_acid_medium_local"
+		end
+		inst.sg:GoToState("init", acid_prefab)
+	end)
 
-	inst:AddComponent("coloradder")
-	inst.components.coloradder:AttachChild(inst.frnt)
-	inst.components.coloradder:AttachChild(inst.grnd)
-
-	inst._numchildren = 2
-	inst:ListenForEvent("onremove", OnChildFxRemoved, inst.frnt)
-	inst:ListenForEvent("onremove", OnChildFxRemoved, inst.grnd)
-
-	inst.SetupDeathFxFor = SetupDeathFxFor
-
-	DoDeathFxTint(inst, .8)
-	inst:DoTaskInAnimFrames(1, DoDeathFxTint, .2)
-	inst:DoTaskInAnimFrames(2, DoDeathFxTint, 0)
-
-	inst.components.foleysounder:SetFootstepSound(fmodtable.Event.cabbageroll_footstep)
-	inst.components.foleysounder:SetBodyfallSound(fmodtable.Event.cabbageroll_bodyfall)
-
-	inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
-    inst.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.AAAA_default_event)
-    inst.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.AAAA_default_event)
 	return inst
-end]]
+end
 
 ---------------------------------------------------------------------------------------
 
 return Prefab("thatcher", fn, assets, prefabs, nil, NetworkType_HostAuth)
-	, Prefab("thatcher_acidball", acid_fn, nil, acid_prefabs, nil, NetworkType_ClientAuth)
-	--, Prefab("fx_death_thatcher", deathfx_fn, nil, deathfx_prefabs, nil, NetworkType_HostAuth)
+	, Prefab("thatcher_acidball", acid_fn, nil, acid_prefabs, nil, NetworkType_HostAuth)
+	, Prefab("thatcher_geyser_acid_local", geyser_acid_local_fn, assets, prefabs, nil, NetworkType_Minimal)
+	, Prefab("thatcher_geyser_acid_medium_local", geyser_acid_medium_local_fn, assets, prefabs, nil, NetworkType_Minimal)
+	, Prefab("thatcher_geyser_acid_permanent_local", geyser_acid_permanent_local_fn, assets, prefabs, nil, NetworkType_Minimal)
+	, Prefab("thatcher_geyser_acid", geyser_acid_fn, nil, acid_prefabs, nil, NetworkType_SharedHostSpawn)

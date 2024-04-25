@@ -4,6 +4,7 @@ return {
   anim="1",
   bank="destructible_bandiforest_ceiling",
   build="destructible_bandiforest_ceiling",
+  group="bombs_traps",
   looping=true,
   randomstartframe=true,
 }

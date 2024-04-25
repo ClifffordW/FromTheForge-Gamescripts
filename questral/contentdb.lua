@@ -79,7 +79,13 @@ function ContentDB:AddContentItem(content)
             end
             if data.quips then
                 for k, quip in ipairs(data.quips) do
-                    local path = string.format( "%s.%s.QUIP.%s.%d", key, id, quip.primary_tag, k )
+                    -- Including all positive tags helps translators understand
+                    -- context. Omitting notags since I think they'd just be
+                    -- confusing.
+                    local tags = tostring(quip.tags)
+                    -- po_vault doesn't allow spaces in identifiers.
+                    tags = tags:gsub(" ", "")
+                    local path = string.format( "%s.%s.QUIP.%s:%s.%d", key, id, quip.primary_tag, tags, k )
                     self:AddQuip( quip, path )
                 end
             end
@@ -168,25 +174,56 @@ function ContentDB:setCurrentLocalization( localization )
     self.current_localization = localization
 end
 
+function ContentDB:HasTranslationApplied()
+    return self.current_localization and not self.current_localization.is_game_authored_language
+end
+
 function ContentDB:GetAllStrings()
     return self.strings
 end
 
+-- Returns the string and whether the translation was missing.
 function ContentDB:GetString( id, language_id )
     local localization = self.current_localization
     if language_id then
         localization = self:Get(Localization, language_id)
     end
 
+    local missing_translation = false
     if localization then
-        return localization:GetString(id) or self.strings[id] or string.format( "MISSING:%s", id)
-    else
-        return self.strings[id] or string.format( "MISSING:%s", id)
+        local translated = localization:GetString(id)
+        if translated then
+            return translated, false
+        end
+        missing_translation = not localization.is_game_authored_language
+    end
+    local str = self.strings[id] or string.format( "MISSING:%s", id)
+    return str, missing_translation
+end
+
+local questral_prefixes = {
+    "Convo.",
+    "Quest.",
+    "Quip.",
+}
+local function IsQuestralStringId(id)
+    for _,prefix in ipairs(questral_prefixes) do
+        if id:find(prefix, nil, true) == 1 then
+            return true
+        end
     end
 end
 
 function ContentDB:AddString( id, str )
+    -- Trim strings to reduce the noisy whitespace. Keep one space to preserve
+    -- minimal indentation structure and for whole word searches.
+    if IsQuestralStringId(id) then
+        str = str:gsub("\n%s+", "\n ")
+            :trim()
+    end
     self.strings[id] = str
+    -- Rotwood strings are in textures loaded in global or town_deps.
+    --~ self:_PreloadStringTextures(id, str)
 end
 
 function ContentDB:AddQuip( quip, path )
@@ -206,19 +243,23 @@ function ContentDB:AddStringTable( start_t, start_path )
     local function harvest(t, path)
         for k,v in pairs(t) do
             if loc.IsValidStringKey(k) then
-                local id = path and string.format("%s.%s", path, k ) or k
-                assert( self.strings[ id ] == nil, tostring(id) ) -- let's be defensive for now.
-                self.strings[id] = v
-            end
+                if type(v) == "string" then
+                    local id = path and string.format("%s.%s", path, k ) or k
+                    assert( self.strings[ id ] == nil, tostring(id) ) -- let's be defensive for now.
+                    self:AddString(id, v)
+                end
 
-            if type(k) == "string"
-                and type(v) == "table"
-            then
-                harvest(v, path and string.format("%s.%s", path, k) or k)
+                if type(v) == "table" then
+                    harvest(v, path and string.format("%s.%s", path, k) or k)
+                end
             end
         end
     end
     harvest(start_t, start_path)
+end
+
+function ContentDB:GetAllQuips()
+    return self.quips
 end
 
 function ContentDB:GetQuips(primary_tag)

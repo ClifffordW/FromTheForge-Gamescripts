@@ -2,12 +2,47 @@ local EffectEvents = require "effectevents"
 local SGCommon = require "stategraphs.sg_common"
 local monsterutil = require "util.monsterutil"
 
+local function OnMapCollision(inst)
+	-- Transition into pst if collided with map physics.
+	inst:DoTaskInTime(0, function()
+		inst.sg:GoToState("charge_pst", true) -- Delay until the next tick, or a hard crash occurs.
+	end)
+end
+
 local function OnChargeHitboxTriggered(inst, data)
 	SGCommon.Events.OnHitboxTriggered(inst, data, {
 		attackdata_id = inst.sg.statemem.attack_id or "charge",
 		hitstoplevel = HitStopLevel.HEAVY,
 		pushback = 2,
 		combat_attack_fn = "DoKnockdownAttack",
+		hit_fx = monsterutil.defaultAttackHitFX,
+		hit_fx_offset_x = 0.5,
+		reduce_friendly_fire = true,
+	})
+
+	-- Transition into pst if it hit a player.
+	local hit_player = false
+	for _, target in ipairs(data.targets) do
+		for _, playertag in ipairs(TargetTagGroups.Players) do
+			if target:HasTag(playertag) then
+				hit_player = true
+				break
+			end
+		end
+	end
+
+	if hit_player then
+		inst.sg:GoToState("charge_pst", true)
+	end
+end
+
+local function OnChargePstHitboxTriggered(inst, data)
+	SGCommon.Events.OnHitboxTriggered(inst, data, {
+		attackdata_id = inst.sg.statemem.attack_id or "charge",
+		damage_mod = 0.8,
+		hitstoplevel = HitStopLevel.MEDIUM,
+		pushback = 1.5,
+		combat_attack_fn = "DoKnockbackAttack",
 		hit_fx = monsterutil.defaultAttackHitFX,
 		hit_fx_offset_x = 0.5,
 		reduce_friendly_fire = true,
@@ -36,7 +71,7 @@ monsterutil.AddOptionalMonsterEvents(events,
 })
 SGCommon.Fns.AddCommonSwallowedEvents(events)
 
-local CHARGE_SPEED = 10
+local CHARGE_SPEED = 20
 
 local states =
 {
@@ -44,36 +79,40 @@ local states =
 		name = "charge",
 		tags = { "attack", "busy", "nointerrupt" },
 
-		onenter = function(inst, target)
+		onenter = function(inst)
 			inst.AnimState:PlayAnimation("charge_run_pre")
 			inst.AnimState:PushAnimation("charge_run_loop", true)
 
 			inst.sg:SetTimeout(3)
 
-			inst.sg.statemem.attack_state = "charge_pst"
-			inst.sg.statemem.target = target
-
-			inst.sg.statemem.initial_rot = inst.Transform:GetRotation()
-			inst.sg.statemem.turning_speed = 45 * TICKS
+			local target = inst.components.combat:GetTarget()
+			if target then
+				SGCommon.Fns.FaceTarget(inst, target, true)
+				inst.sg.statemem.target = target
+			end
 
 			inst.components.hitbox:StartRepeatTargetDelay()
 		end,
 
 		onupdate = function(inst)
-			--inst.components.hitbox:PushBeam(1.8, 3.0, 2, HitPriority.MOB_DEFAULT)
+			if inst.sg.statemem.charging then
+				inst.components.hitbox:PushBeam(0.5, 3.0, 2, HitPriority.MOB_DEFAULT)
+			end
 		end,
 
 		timeline =
 		{
-			FrameEvent(2, function(inst)
+			FrameEvent(6, function(inst)
 				inst.sg.statemem.charging = true
 				SGCommon.Fns.SetMotorVelScaled(inst, CHARGE_SPEED)
+				inst.Physics:StartPassingThroughObjects()
 			end),
 		},
 
 		events =
 		{
 			EventHandler("hitboxtriggered", OnChargeHitboxTriggered),
+			EventHandler("mapcollision", OnMapCollision),
 		},
 
 		ontimeout = function(inst)
@@ -82,6 +121,7 @@ local states =
 
 		onexit = function(inst)
 			inst.Physics:Stop()
+			inst.Physics:StopPassingThroughObjects()
 			inst.components.hitbox:StopRepeatTargetDelay()
 			inst.components.attacktracker:CompleteActiveAttack()
 		end,
@@ -91,9 +131,11 @@ local states =
 		name = "charge_pst",
 		tags = { "attack", "busy", "nointerrupt" },
 
-		onenter = function(inst)
-			inst.sg.statemem.numanims = 0
+		onenter = function(inst, ishit)
 			inst.AnimState:PlayAnimation("charge_run_pst")
+			inst.components.hitbox:StartRepeatTargetDelay()
+
+			inst.sg.statemem.ishit = ishit
 		end,
 
 		timeline = {
@@ -103,9 +145,16 @@ local states =
 			FrameEvent(6, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, CHARGE_SPEED * 0.4) end),
 			FrameEvent(8, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, CHARGE_SPEED * 0.2) end),
 			FrameEvent(10, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, CHARGE_SPEED * 0) end),
+
+			FrameEvent(0, function(inst)
+				if inst.sg.statemem.ishit then
+					inst.components.hitbox:PushCircle(2.0, 0, 3.0, HitPriority.MOB_DEFAULT)
+				end
+			end),
 		},
 
 		events = {
+			EventHandler("hitboxtriggered", OnChargePstHitboxTriggered),
 			EventHandler("animover", function(inst)
 				inst.sg:GoToState("idle")
 			end)
@@ -113,6 +162,7 @@ local states =
 
 		onexit = function(inst)
 			inst.Physics:Stop()
+			inst.components.hitbox:StopRepeatTargetDelay()
 		end
 	}),
 }

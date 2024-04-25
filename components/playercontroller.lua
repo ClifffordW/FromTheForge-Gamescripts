@@ -2,6 +2,7 @@ local DebugDraw = require "util.debugdraw"
 local cursor = require "content.cursor"
 local easing = require "util.easing"
 local PlayersScreen = require "screens.playersscreen"
+local lume = require"util.lume"
 
 local function OnPlayerActivated(inst)
 	inst.components.playercontroller:Activate()
@@ -25,6 +26,8 @@ local PlayerController = Class(function(self, inst)
 
 	self.aim_pointer = nil
 
+	self.input_stealers = {}
+
 	self.handler = nil
 	self.gamepadhandler = nil
 
@@ -40,7 +43,7 @@ local PlayerController = Class(function(self, inst)
 		["potion"] = 6,
 		["interact"] = 4,
 	}
-	-- victorc: 60Hz, double tick length for 30Hz timings
+	-- 60Hz, double tick length for 30Hz timings
 	for k,v in pairs(self.controlqueueticks) do
 		self.controlqueueticks[k] = v * ANIM_FRAMES
 	end
@@ -108,6 +111,11 @@ function PlayerController:HasGamepad()
 	return self.gamepad_id ~= nil and self.gamepad_id >= 0
 end
 
+-- Does the user want to use mouse position for aiming.
+function PlayerController:ShouldAimAtMouse()
+	return TheInputProxy:IsMouseAiming() and not self:HasGamepad()
+end
+
 function PlayerController:GetInputImageAtlas()
 	return TheInput:GetDeviceImageAtlas(self:_GetInputTuple())
 end
@@ -124,10 +132,16 @@ function PlayerController:_GetInputTuple()
 	end
 end
 
+-- For passing into many Input functions.
+-- Returns: InputDevice instance. Or nil if we have none.
+function PlayerController:GetInputDevice()
+	return self.input:GetInputDevice(self:_GetInputTuple())
+end
+
 -- Texture name for input control to show button icons with Image widget.
 function PlayerController:GetLabelForDevice()
 	if self.inst:IsLocal() then
-		return TheInput:GetLabelForDevice(self:_GetInputTuple())
+		return TheInput:GetLabelForDevice(self:GetInputDevice())
 	end
 	return string.format("<p img='images/ui_ftf/input_remote.tex' color=0 scale=1.5>")
 end
@@ -157,8 +171,8 @@ function PlayerController:_ReleaseGamepad(clearInputID)
 
 	if self.gamepad_id then
 		-- Remove deviceunregistered callback first so we don't get our own message.
-		self.inst:RemoveEventCallback("deviceunregistered", self._OnDeviceUnregistered)
-		self.input:UnregisterDeviceOwner("gamepad", self.gamepad_id)
+		self.inst:RemoveEventCallback("deviceunregistered", self._ondeviceunregisteredfn)
+		self.input:UnregisterDeviceOwner(self.input:GetGamepad(self.gamepad_id))
 
 		if clearInputID then
 			-- Clear inputID so input system doesn't think we still have it setup.
@@ -207,23 +221,24 @@ function PlayerController:ReInitInputs(clearInputID)
 	end
 
 	if self.inputID and self.inputID ~= KEYBOARD_INPUT_ID then		-- a gamepad is assigned to this Player
-		local device_ent = self.input:GetDeviceOwner("gamepad", self.inputID)
-		local is_valid = self.input:IsDeviceValid("gamepad", self.inputID)
+		local input_device = self.input:GetGamepad(self.inputID)
+		local device_ent = self.input:GetDeviceOwner(input_device)
+		local is_valid = self.input:IsDeviceValid(input_device)
 		if not is_valid or (device_ent and device_ent ~= self.inst) then
 			TheLog.ch.Player:printf("Failed to use native-assigned gamepad id %d (in use[%s] or invalid[%s]).", self.inputID, device_ent, not is_valid)
 			self.gamepad_id = nil
 		else
-			self.gamepad_id = self.input:RegisterDeviceOwner(self.inst, "gamepad", self.inputID)
+			self.gamepad_id = self.input:RegisterGamepadOwner(self.inst, input_device)
 			if self.gamepad_id then
 				TheLog.ch.Player:printf("Registered gamepad %s to player %s", self.inputID, self.inst.Network:GetPlayerID())
 
-				self._OnDeviceUnregistered =
+				self._ondeviceunregisteredfn =
 					function(ent, data)
 						-- TheLog.ch.Player:printf("deviceunregistered: ent=%s device=%s id=%s", tostring(ent), data.device_type, data.device_id)
-						self:OnDeviceUnregistered(data.device_type, data.device_id)
+						self:_OnDeviceUnregistered(data)
 					end
 
-				self.inst:ListenForEvent("deviceunregistered", self._OnDeviceUnregistered)
+				self.inst:ListenForEvent("deviceunregistered", self._ondeviceunregisteredfn)
 			end
 		end
 	end
@@ -283,20 +298,6 @@ function PlayerController:IsEnabled()
 	return true
 end
 
-function PlayerController:IsControlDown(control)
-	local device_type = self.gamepad_id ~= nil and "gamepad" or ""
-	return self.input:IsControlDown(control, device_type, self.gamepad_id)
-end
-
-function PlayerController:IsAnyOfControlsDown(...)
-	local device_type = self.gamepad_id ~= nil and "gamepad" or ""
-	for i, v in ipairs({...}) do
-		if self.input:IsControlDown(v, device_type, self.gamepad_id) then
-			return true
-		end
-	end
-end
-
 --------------------------------------------------------------------------
 
 function PlayerController:DeferControls(controls, down)
@@ -353,34 +354,59 @@ function PlayerController:ProcessDeferredControls()
 	dbassert(next(self.deferredcontrols) == nil)
 end
 
-function PlayerController:SetInputStealer(target)
-	self.input_stealer = target
+function PlayerController:AddInputStealer(widget)
+	if not lume.find(self.input_stealers, widget) then
+		table.insert(self.input_stealers, widget)
+	end
+end
+
+function PlayerController:RemoveInputStealer(widget)
+	lume.remove(self.input_stealers, widget)
 end
 
 function PlayerController:GetLastInputDeviceType()
 	return self.last_input.device_type
 end
 
+-- Returns true for both keyboard and gamepad navigation.
+function PlayerController:IsRelativeNavigation()
+	local last_device = self:GetLastInputDeviceType()
+	if last_device ~= "keyboard" then
+		return last_device ~= "mouse"
+	end
+	-- else: playercontroller doesn't update during screens, so keyboard
+	-- might actually be using mouse. Fallback to TheFrontEnd which tracks
+	-- mouse movement.
+	return TheFrontEnd:IsRelativeNavigation()
+end
+
+
 function PlayerController:_SetLastInputDeviceType(device_type)
 	if self.last_input.device_type ~= device_type then
 		--TheLog.ch.Player:printf("Last Input Device Change for Player (%s) old=%s new=%s",
 		--	tostring(self.inst), self.last_input.device_type, device_type)
 		self.last_input.device_type = device_type
-		-- Listen to input_device_changed instead so you can tell multiple
-		-- gamepads apart (they might have different icons).
-		-- self.inst:PushEvent("input_type_changed", device_type)
+		if not self:HasGamepad() then
+			-- Fire to signal our keyboard <-> mouse transition to adjust minor
+			-- UI to match IsRelativeNavigation. But this event will fire
+			-- frequently so beware flickering! Uses the same arguments as
+			-- input_device_changed so you can use the same handler for both
+			-- (you should listen to both).
+			self.inst:PushEvent("input_device_changed_kbm", { self:_GetInputTuple() })
+		end
 	end
 end
 
-function PlayerController:OnControl(controls, down)
+function PlayerController:OnControl(controls, down, ...)
 	if not self:IsEnabled() or self.input:IsEditingBlockingGameplay() then
 		return
 	end
 
 	self:_SetLastInputDeviceType(controls:GetDeviceTypeName())
 
-	if self.input_stealer then
-		self.input_stealer:OnControl(controls, down)
+	if #self.input_stealers > 0 then
+		-- use the most recently added input stealer
+		self.input_stealers[#self.input_stealers]:OnControl(controls, down)
 		return
 	end
 
@@ -391,10 +417,19 @@ function PlayerController:OnControl(controls, down)
 				self:OnCommitPlacer()
 			elseif controls:Has(Controls.Digital.CLICK_SECONDARY, Controls.Digital.CANCEL) then
 				self:OnCancelPlacer()
-			elseif controls:Has(Controls.Digital.SKILL) then
+			elseif controls:Has(Controls.Digital.FLIP_PLACER) then
 				self:OnFlipPlacer()
 			elseif controls:Has(Controls.Digital.USE_POTION) then
 				self:OnAdvanceVariation()
+			end
+		end
+		return
+	elseif self:IsRemovingProp() then
+		if down then
+			if controls:Has(Controls.Digital.CLICK_PRIMARY, Controls.Digital.ACCEPT) then
+				self:OnRemoveProp()
+			elseif controls:Has(Controls.Digital.CLICK_SECONDARY, Controls.Digital.CANCEL) then
+				self:OnCancelPropRemover()
 			end
 		end
 		return
@@ -441,24 +476,25 @@ function PlayerController:OnControl(controls, down)
 		self:OnLightAttackButton(down, ismousebtn)
 	end
 
-	if controls:Has(Controls.Digital.SHOW_PLAYER_STATUS) then
-		self.inst:PeekFollowStatus({showPlayerId = true, showPotionStatus = true, showPowers = true, toggleMode = down and "down" or "up"})
-	end
+	if controls:Has(Controls.Digital.SHOW_PLAYER_STATUS) and down then
+		local peek_data = {
+			show_radial = true,
+		}
 
-	if controls:Has(Controls.Digital.SHOW_PLAYER_LOADOUT) then
-		if not self.inst:IsSpectating() then
-			self.inst:PeekPlayerLoadout({ toggleMode = down and "down" or "up" })
-		end
+		self.inst:PeekFollowStatus(peek_data, false)
+		self:ClearControlQueue()
 	end
 
 	if controls:Has(Controls.Digital.SHOW_EMOTE_RING) then
 		if not self.inst:IsSpectating() then
 			self.inst:PeekEmoteRing({toggleMode = down and "down" or "up"})
+			self:ClearControlQueue()
 		end
 	end
 
 	if controls:Has(Controls.Digital.SHOW_PLAYERS_LIST) then
 		TheFrontEnd:PushScreen(PlayersScreen())
+		self:ClearControlQueue()
 	end
 end
 
@@ -470,17 +506,17 @@ function PlayerController:GetAnalogDir()
 	end
 
 	if self.inputID ~= nil then
-		local device_type, device_id = self.input:ConvertFromInputID(self.inputID)
+		local input_device = self.input:GetInputDevice(self.input:ConvertFromInputID(self.inputID)) or table.empty
 
-		local ignoreDigitalInput = device_type == "gamepad"
-		local xdir = self.input:GetAnalogControlValue(Controls.Analog.MOVE_RIGHT, device_type, device_id, ignoreDigitalInput) - self.input:GetAnalogControlValue(Controls.Analog.MOVE_LEFT, device_type, device_id, ignoreDigitalInput)
-		local ydir = self.input:GetAnalogControlValue(Controls.Analog.MOVE_DOWN, device_type, device_id, ignoreDigitalInput) - self.input:GetAnalogControlValue(Controls.Analog.MOVE_UP, device_type, device_id, ignoreDigitalInput)
+		local ignoreDigitalInput = input_device.device_type == "gamepad"
+		local xdir = self.input:GetAnalogControlValue(Controls.Analog.MOVE_RIGHT, input_device, ignoreDigitalInput) - self.input:GetAnalogControlValue(Controls.Analog.MOVE_LEFT, input_device, ignoreDigitalInput)
+		local ydir = self.input:GetAnalogControlValue(Controls.Analog.MOVE_DOWN, input_device, ignoreDigitalInput) - self.input:GetAnalogControlValue(Controls.Analog.MOVE_UP, input_device, ignoreDigitalInput)
 
 		-- analogs sticks take priority over dpad
 		local check_digital_movement = true
-		if check_digital_movement and xdir == 0 and ydir == 0 and device_type == "gamepad" and self.gamepad_id then
-			xdir = xdir + (self.input:GetDigitalControlValue(Controls.Digital.MOVE_RIGHT, device_type, device_id) - self.input:GetDigitalControlValue(Controls.Digital.MOVE_LEFT, device_type, device_id))
-			ydir = ydir + (self.input:GetDigitalControlValue(Controls.Digital.MOVE_DOWN, device_type, device_id) - self.input:GetDigitalControlValue(Controls.Digital.MOVE_UP, device_type, device_id))
+		if check_digital_movement and xdir == 0 and ydir == 0 and input_device.device_type == "gamepad" and self.gamepad_id then
+			xdir = xdir + (self.input:GetDigitalControlValue(Controls.Digital.MOVE_RIGHT, input_device) - self.input:GetDigitalControlValue(Controls.Digital.MOVE_LEFT, input_device))
+			ydir = ydir + (self.input:GetDigitalControlValue(Controls.Digital.MOVE_DOWN, input_device) - self.input:GetDigitalControlValue(Controls.Digital.MOVE_UP, input_device))
 		end
 
 		local had_input
@@ -493,8 +529,9 @@ end
 
 function PlayerController:GetRadialMenuDir()
 	local device_type = self.gamepad_id ~= nil and "gamepad" or ""
-	local xdir = self.input:GetAnalogAxisValue(Controls.Analog.RADIAL_RIGHT, Controls.Analog.RADIAL_LEFT, device_type, self.gamepad_id)
-	local ydir = self.input:GetAnalogAxisValue(Controls.Analog.RADIAL_DOWN, Controls.Analog.RADIAL_UP, device_type, self.gamepad_id)
+	local input_device = self.input:GetInputDevice(device_type, self.gamepad_id) or table.empty
+	local xdir = self.input:GetAnalogAxisValue(Controls.Analog.RADIAL_RIGHT, Controls.Analog.RADIAL_LEFT, input_device)
+	local ydir = self.input:GetAnalogAxisValue(Controls.Analog.RADIAL_DOWN, Controls.Analog.RADIAL_UP, input_device)
 	local had_input
 	xdir, ydir, had_input = self.input:ApplyDeadZone(xdir, ydir)
 
@@ -701,7 +738,7 @@ function PlayerController:MoveCameraTowardsMouse(dt)
 	local offset = TheCamera:GetOffset()
 	local x = offset.x + (horizontal_speed * dt)
 	local z = offset.z + (vertical_speed * dt)
-	TheCamera:SetOffset(x, offset.y, z)
+	TheCamera:SetOffset(self, x, offset.y, z)
 end
 
 function PlayerController:OnUpdate(dt)
@@ -732,16 +769,16 @@ function PlayerController:OnUpdate(dt)
 	end
 
 	if self:IsPlacing() then
-		self:ClearControlQueue()
+		--self:ClearControlQueue()
 		-- self:SetInteractTarget(nil)
 
-		if self.inst.sg:HasStateTag("moving") then
-			self.inst.components.locomotor:Stop()
-		end
+		-- if self.inst.sg:HasStateTag("moving") then
+		-- 	self.inst.components.locomotor:Stop()
+		-- end
 
-		self:MoveCameraTowardsMouse(dt)
+		--self:MoveCameraTowardsMouse(dt)
 
-		return
+		--return
 	end
 
 	if not self.inst.sg:HasStateTag("interact") then
@@ -756,7 +793,7 @@ function PlayerController:OnUpdate(dt)
 	if canmove then
 		self:_UpdateMovement()
 
-		if self.changed_cursor or self:GetLastInputDeviceType() == "keyboard" then
+		if self.changed_cursor or self:GetLastInputDeviceType() == "mouse" then
 			local target = self:GetInteractTarget()
 			if target
 				and self:GetInteractableUnderMouse() == target
@@ -807,29 +844,19 @@ end
 
 --------------------------------------------------------------------------
 
-function PlayerController:StartPlacer(name, validatefn, onplacefn, oncancelfn, isbuilding)
+function PlayerController:StartPlacer(name, validatefn, onplacefn, oncancelfn)
 	if self.placer == nil then
 		local isenabled, reason = self:IsEnabled()
 		if isenabled or reason == "console" then
 			self.placer = SpawnPrefab(name, self.inst)
 			if self.placer ~= nil then
+				self.placer.components.placer:SetPlayer(self.inst)
 				self.placer.components.placer:SetValidateFn(validatefn)
 				self.placer.components.placer:SetOnPlaceFn(onplacefn)
 				self.placer.components.placer:SetOnCancelFn(oncancelfn)
-				self.placer.components.placer.isbuilding = isbuilding
 
-				--if DEV_MODE then
-				-- if self.placer.components.snaptogrid ~= nil then
-				-- 	self.placer.components.snaptogrid:SetDrawGridEnabled(true, RGB(0,255,0,255))
-				-- end
-				--end
-
-				-- self:SetInteractTarget(nil)
+				self:SetInteractTarget(nil)
 				self.inst.sg:GoToState("idle")
-				self.inst:RemoveFromScene()
-				-- TheCamera:SetTarget(TheWorld)
-				TheCamera:SetZoom(15)
-				TheCamera:SetOffset(0, 0, -2)
 				TheWorld:PushEvent("startplacing", self.placer)
 				return self.placer
 			end
@@ -843,11 +870,27 @@ function PlayerController:StopPlacer()
 		self.placer:Remove()
 		self.placer = nil
 		self.inst.sg:GoToState("idle")
-		self.inst:ReturnToScene()
-		TheCamera:SetTarget(TheFocalPoint)
-		TheCamera:SetZoom(0)
-		TheCamera:SetOffset(0, 0, 0)
 		TheWorld:PushEvent("stopplacing", wasplaced)
+	end
+end
+
+function PlayerController:StartPropRemover()
+	self:SetInteractTarget(nil)
+	self.inst.sg:GoToState("idle")
+	TheWorld:PushEvent("startplacing")
+	TheWorld:PushEvent("start_prop_remover")
+	self.is_removing_prop = true
+	self.inst.components.propremover:Activate()
+end
+
+function PlayerController:StopPropRemover(reopen_screen)
+	self.is_removing_prop = false
+	self.inst.sg:GoToState("idle")
+	TheWorld:PushEvent("stopplacing")
+	TheWorld:PushEvent("stop_prop_remover")
+	self.inst.components.propremover:Deactivate()
+	if reopen_screen then
+		TheDungeon.HUD.townHud:OnCraftButtonClicked(self.inst)
 	end
 end
 
@@ -855,12 +898,17 @@ function PlayerController:IsPlacing()
 	return self.placer ~= nil
 end
 
+function PlayerController:IsRemovingProp()
+	return self.is_removing_prop
+end
+
+function PlayerController:IsPlacingOrRemoving()
+	return self:IsPlacing() or self:IsRemovingProp()
+end
+
 function PlayerController:OnCommitPlacer()
 	if self.placer.components.placer:CanPlace() then
-		if not self.placer.components.placer:OnPlace() then
-			print("Failed to place "..tostring(self.placer.components.placer.placed_prefab))
-		end
-		-- self:StopPlacer()
+		self.placer.components.placer:OnPlace()
 	end
 end
 
@@ -878,6 +926,14 @@ end
 
 function PlayerController:OnCancelPlacer()
 	self:StopPlacer()
+end
+
+function PlayerController:OnRemoveProp()
+	self.inst.components.propremover:PickSelectedProp()--:RemoveSelectedProp()
+end
+
+function PlayerController:OnCancelPropRemover()
+	self:StopPropRemover(true)
 end
 
 --------------------------------------------------------------------------
@@ -938,7 +994,7 @@ end
 function PlayerController:OnControlDownEvent(control, data)
 	for i = 1, #self.controlqueue do
 		if self.controlqueue[i].control == control then
-			dbassert(self.controlqueue[i].released)
+			dbassert(self.controlqueue[i].released, "Button marked as held down. Missing ClearControlQueue() after opening input-consuming screen?")
 			table.remove(self.controlqueue, i)
 			break
 		end
@@ -1063,7 +1119,7 @@ function PlayerController:UpdateControlQueue()
 	end
 end
 
---Flush all queued controls
+-- Flush all queued controls.
 function PlayerController:FlushControlQueue()
 	local j = 1
 	for i = 1, #self.controlqueue do
@@ -1111,7 +1167,10 @@ function PlayerController:FlushControlQueueAt(targetdata)
 	end
 end
 
---Clears our control state as if every control was released
+-- Clears our control state as if every control was released.
+--
+-- Call before opening UI that consumes input. It may swallow our button up
+-- events and we'll be in a bad state.
 function PlayerController:ClearControlQueue()
 	for i = 1, #self.controlqueue do
 		local data = self.controlqueue[i]
@@ -1125,6 +1184,7 @@ end
 
 --------------------------------------------------------------------------
 
+-- TODO(player): Rename GetAimDirection and internally use ShouldAimAtMouse.
 function PlayerController:GetMouseActionDirection()
 	local angle_degrees
 	if TheInputProxy:IsMouseAiming() then
@@ -1165,7 +1225,7 @@ function PlayerController:OnLightAttackButton(down, ismousebtn)
 		end
 
 		local data = {}
-		if ismousebtn then
+		if ismousebtn and self:ShouldAimAtMouse() then
 			data.target = self.input:GetWorldEntityUnderMouse()
 			if data.target ~= nil then
 				data.dir = self.inst:GetAngleTo(data.target)
@@ -1193,7 +1253,7 @@ function PlayerController:OnHeavyAttackButton(down, ismousebtn)
 		end
 
 		local data = {}
-		if ismousebtn then
+		if ismousebtn and self:ShouldAimAtMouse() then
 			data.target = self.input:GetWorldEntityUnderMouse()
 			if data.target ~= nil then
 				data.dir = self.inst:GetAngleTo(data.target)
@@ -1221,7 +1281,7 @@ function PlayerController:OnDodgeButton(down, ismousebtn)
 		end
 
 		local data = {}
-		if ismousebtn then
+		if ismousebtn and self:ShouldAimAtMouse() then
 			data.dir = self.inst:GetAngleToXZ(self.input:GetWorldXZWithHeight(0))
 		else
 			data.dir = self:GetAnalogDir()
@@ -1244,7 +1304,9 @@ function PlayerController:OnSkillButton(down, ismousebtn)
 		end
 
 		local data = {}
-		if ismousebtn or TheInputProxy:IsMouseAiming() and self:GetLastInputDeviceType() == "keyboard" then
+		-- Ignore ismousebtn because skills feel like attacks so they should
+		-- also follow mouse when mouse aiming.
+		if self:ShouldAimAtMouse() then
 			data.dir = self:GetMouseActionDirection()
 		else
 			data.dir = self:GetAnalogDir()
@@ -1261,17 +1323,13 @@ function PlayerController:OnPotionButton(down, ismousebtn)
 		-- Don't allow accidental drinks while travelling.
 		return
 	end
-	if TheDungeon.HUD:IsCraftMenuOpen() then
-		-- potion and navigating tabs are the same key.
-		return
-	end
 	if down then
 		if ismousebtn and self.input:GetHUDEntityUnderMouse() ~= nil then
 			return
 		end
 
 		local data = {}
-		if ismousebtn then
+		if ismousebtn and self:ShouldAimAtMouse() then
 			data.dir = self.inst:GetAngleToXZ(self.input:GetWorldXZWithHeight(0))
 		else
 			data.dir = self:GetAnalogDir()
@@ -1315,16 +1373,16 @@ function PlayerController:OnActionButton(down, ismousebtn)
 	end
 end
 
-function PlayerController:OnDeviceUnregistered(device_type, device_id)
-	if device_type == "gamepad" and device_id == self.gamepad_id then
-		TheLog.ch.Player:printf("Player [%s] unregistered device [%s,%s]", self.inst, device_type, device_id)
+function PlayerController:_OnDeviceUnregistered(input_device)
+	if input_device.device_type == "gamepad" and input_device.device_id == self.gamepad_id then
+		TheLog.ch.Player:printf("Player [%s] unregistered device [%s,%s]", self.inst, input_device:unpack())
 		self:_ReleaseGamepad(true)
 
 		-- Owner should be released, but we can't do this assert because native
 		-- input assignment is deferred. Can't even DoTaskInTime because
 		-- unregister could occur during pause (and we're about to pause
 		-- anyway).
-		-- assert(TheInput:GetDeviceOwner(device_type, device_id) == nil, "Native didn't release the input owner.")
+		-- assert(TheInput:GetDeviceOwner(input_device) == nil, "Native didn't release the input owner.")
 
 		if InGamePlay() then
 			TheDungeon.HUD:ShowGamepadDisconnectedPopup()

@@ -1,3 +1,6 @@
+-- This is the old armor screen that's only one player at a time.
+--
+--
 local ItemCodex = require("widgets/ftf/itemcodex")
 local UpgradeableItemDetails = require("widgets/ftf/upgradeableitemdetails")
 local Image = require("widgets/image")
@@ -23,7 +26,7 @@ local ForgeArmourScreen = Class(Screen, function(self, player)
 		:Offset(RES_X * 0.05, 0)
 		:SetOnItemClick(function(...) self:OnItemClicked(...) end)
 		:SetOnItemFocused(function(...) self:OnItemFocused(...) end)
-		:SetOnBiomeChangedFn(function() self:OnBiomeChanged() end)
+		:SetOnBiomeChangedFn(function() self:OnBiomeChanged(player) end)
 
 	self.upgradeableItemDetails = self:AddChild(UpgradeableItemDetails(1500, RES_Y))
 		:SetOnUnlockFn(function() self:OnUnlockButton() end)
@@ -47,20 +50,17 @@ function ForgeArmourScreen:SetOwningPlayer(owningplayer)
 	self.player = owningplayer -- need this for existing logic
 	ForgeArmourScreen._base.SetOwningPlayer(self, owningplayer)
 	self:Refresh()
+	return self
 end
 
-function ForgeArmourScreen:OnBiomeChanged()
+function ForgeArmourScreen:OnBiomeChanged(player)
 	-- The player moved to a different biome
 	-- Re-apply focus to a creature
 	self.focused_on_creatures = true
 	self.itemCodex:SetFocusLock(self.focused_on_creatures)
 	self.upgradeableItemDetails:SetFocusLock(not self.focused_on_creatures)
-	if TheFrontEnd:IsRelativeNavigation() and self.itemCodex:HasCreatures() then
+	if self:IsRelativeNavigation() and self.itemCodex:HasCreatures() then
 		self.itemCodex:FocusOnIndex(1)
-		local focus = self:GetDeepestFocus()
-		self:_UpdateSelectionBrackets(focus, true)
-		-- local focus = self:GetDeepestFocus()
-		-- self:_UpdateFocusBrackets(focus)
 	end
 end
 
@@ -68,10 +68,8 @@ function ForgeArmourScreen:OnUnlockButton()
 	-- The player unlocked a creature's armor set
 	-- Re-apply focus
 	local focus = self.upgradeableItemDetails:GetFocusableItem()
-	if TheFrontEnd:IsRelativeNavigation() and focus then
+	if self:IsRelativeNavigation() and focus then
 		focus:SetFocus()
-		-- focus = self:GetDeepestFocus()
-		-- self:_UpdateFocusBrackets(focus)
 	end
 end
 
@@ -97,12 +95,8 @@ function ForgeArmourScreen:OnItemClicked(widget, player, id, armour)
 	self.itemCodex:SetFocusLock(self.focused_on_creatures)
 	self.upgradeableItemDetails:SetFocusLock(not self.focused_on_creatures)
 	local focus = self.upgradeableItemDetails:GetFocusableItem()
-	if TheFrontEnd:IsRelativeNavigation() and focus then
+	if self:IsRelativeNavigation() and focus then
 		focus:SetFocus()
-		-- focus = self:GetDeepestFocus()
-		-- if focus then
-		-- 	self:_UpdateFocusBrackets(focus)
-		-- end
 	end
 end
 
@@ -119,10 +113,8 @@ ForgeArmourScreen.CONTROL_MAP =
 				self.focused_on_creatures = true
 				self.itemCodex:SetFocusLock(self.focused_on_creatures)
 				self.upgradeableItemDetails:SetFocusLock(not self.focused_on_creatures)
-				if TheFrontEnd:IsRelativeNavigation() and self.itemCodex:HasCreatures() then
+				if self:IsRelativeNavigation() and self.itemCodex:HasCreatures() then
 					self.itemCodex:FocusOnIndex(self.last_focused_creature_idx or 1)
-					-- local focus = self:GetDeepestFocus()
-					-- self:_UpdateFocusBrackets(focus)
 				end
 			end
 			return true
@@ -213,7 +205,7 @@ function ForgeArmourScreen:OnOpen()
 
 	----------------------------------------------------------------------
 	-- Focus selection brackets
-	self:EnableFocusBracketsForGamepad("images/ui_ftf_gems/selection_brackets.tex", 78, 94, 80, 96)
+	self:EnableFocusBracketsForGamepad()
 	-- self:EnableFocusBracketsForGamepadAndMouse()
 	----------------------------------------------------------------------
 end

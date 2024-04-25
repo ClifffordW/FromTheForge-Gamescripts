@@ -47,7 +47,7 @@ function GemXpBar:ShowLevelUp(gem)
 	self.gem = gem
 	if self.gem then
 		local gem_def = self.gem:GetDef()
-		local completed_gem_level = self.gem.ilvl - 1
+		local completed_gem_level = self.gem:GetEffectiveItemLevel() - 1
 		local gem_type = gem_def.gem_type
 		local target_exp = gem_def.base_exp[completed_gem_level]
 
@@ -65,7 +65,7 @@ function GemXpBar:SetGem(gem)
 	self.gem = gem
 	if self.gem then
 		local gem_def = self.gem:GetDef()
-		local gem_level = self.gem.ilvl
+		local gem_level = self.gem:GetEffectiveItemLevel()
 		local gem_type = gem_def.gem_type
 		local current_exp = self.gem.exp
 		local target_exp = gem_def.base_exp[gem_level]

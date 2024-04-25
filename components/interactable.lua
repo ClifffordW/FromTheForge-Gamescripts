@@ -24,7 +24,7 @@ local Interactable = Class(function(self, inst)
 
 	-- is_locked_on_focus is a mode, not a state variable. An Interactable with is_locked_on_focus set to true will
 	-- permit only a single player to gain focus and a subsequent locked interaction.
-	-- This mode needs to be enforced by the client by ensuring that OnGainInteractFocus is only invoked if 
+	-- This mode needs to be enforced by the client by ensuring that OnGainInteractFocus is only invoked if
 	-- CanPlayerInteract is true.
 	self.is_locked_on_focus = false
 
@@ -38,7 +38,7 @@ local Interactable = Class(function(self, inst)
 	self:SetInteractCondition_Always()
 
 	TheWorld:PushEvent("registerinteractable", self.inst)
-	
+
 	self._onplayerexited = function(source, player)
 		if Lume(self.focused_players):find(player):result() or self.lock == player then
 			self:ForceClearInteraction(player)
@@ -60,10 +60,10 @@ function Interactable:OnRemoveFromEntity()
 	local focused_player_count = self:GetFocusedPlayerCount()
 	if focused_player_count ~= 0 or self.lock then
 		TheLog.ch.Interact:printf(
-			"OnRemoveFromEntity() while active on <%s>. lock[%s] focused_players count[%d] IsLocalOrMinimal[%s]", 
-			self.inst, 
-			self.lock, 
-			focused_player_count, 
+			"OnRemoveFromEntity() while active on <%s>. lock[%s] focused_players count[%d] IsLocalOrMinimal[%s]",
+			self.inst,
+			self.lock,
+			focused_player_count,
 			self.inst:IsLocalOrMinimal()
 		)
 	end
@@ -71,10 +71,12 @@ function Interactable:OnRemoveFromEntity()
 	self:ForceClearAllInteractions()
 
 	kassert.assert_fmt(
-		not self.lock, 
-		"The state on SetAbortStateName should not restart interaction! Are we stuck in the interaction now? In OnRemoveFromEntity() on [%s] while active on [%s] and transitioned to [%s].", 
-		self.inst, 
-		self.lock, 
+		not self.lock
+		or self.lock:HasTag("created_by_debugspawn")
+		or self:HasTag("created_by_debugspawn"),
+		"The state on SetAbortStateName should not restart interaction! Are we stuck in the interaction now? In OnRemoveFromEntity() on [%s] while active on [%s] and transitioned to [%s].",
+		self.inst,
+		self.lock,
 		self.abort_state_name
 	)
 
@@ -263,7 +265,7 @@ function Interactable:_SetupForPrompt(prompt_type, label, ongainfocusfn, onlosef
 			prompt = TheDungeon.HUD:ShowPrompt(inst, player)
 				:SetTextAndResizeToFit(text, 50, 25)
 				:SetOnClick(function()
-					if TheFrontEnd:IsRelativeNavigation() then
+					if player.components.playercontroller:IsRelativeNavigation() then
 						-- keyboard and gamepad click the button without going through onclick.
 						return
 					end
@@ -426,7 +428,7 @@ function Interactable:OnLoseInteractFocus(player)
 	if not player:IsLocal() then
 		return
 	end
-	
+
 	TheLog.ch.InteractSpam:printf("OnLoseInteractFocus(%s)", player)
 	TheLog.ch.InteractSpam:indent()
 
@@ -527,9 +529,9 @@ function Interactable:_ClearInteract(player, retain_target, suppress_busy_filter
 	self.lock = nil
 	player.components.interactor:UnlockInteraction(self)
 
-	-- Typically you should not need to retain the target. This is a bit of a workaround to allow the player to 
-	-- remain in one state for a long time and repeatedly start, perform, and complete an interaction within one frame, 
-	-- while allowing the UI to stay up. See the interaction with vending machines, sg_player_common's deposit_currency 
+	-- Typically you should not need to retain the target. This is a bit of a workaround to allow the player to
+	-- remain in one state for a long time and repeatedly start, perform, and complete an interaction within one frame,
+	-- while allowing the UI to stay up. See the interaction with vending machines, sg_player_common's deposit_currency
 	-- at time of writing.
 	retain_target = retain_target and self:CanPlayerInteract(player, true, suppress_busy_filter)
 
@@ -542,7 +544,7 @@ function Interactable:_ClearInteract(player, retain_target, suppress_busy_filter
 			self:OnLoseInteractFocus(player)
 		end
 		dbassert(
-			not Lume.find(self.focused_players, player), 
+			not Lume.find(self.focused_players, player),
 			"Failed to clear focus. Calling ClearInteract from wrong (non interacting) player?"
 		)
 	end
@@ -589,12 +591,12 @@ function Interactable:ForceClearInteraction(player)
 	TheLog.ch.Interact:printf(
 		"ForceClearInteraction(%s) on <%s>. lock=<%s>, focused=<%d>",
 		player,
-		self.inst, 
-		self.lock, 
+		self.inst,
+		self.lock,
 		self:GetFocusedPlayerCount()
 	)
 	TheLog.ch.Interact:indent()
-	if self.lock == player then 
+	if self.lock == player then
 		self.lock.sg:GoToState(self.abort_state_name)
 		-- lock is usually cleared now, but for safety:
 		if self.lock then
@@ -613,7 +615,7 @@ end
 function Interactable:ForceClearAllInteractions()
 	local players_to_unfocus = shallowcopy(self.focused_players)
 	Lume(players_to_unfocus):each(function(player)
-		self:ForceClearInteraction(player)		
+		self:ForceClearInteraction(player)
 	end)
 	dbassert(self:GetFocusedPlayerCount() == 0)
 end

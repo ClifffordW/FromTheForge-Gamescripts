@@ -1,4 +1,5 @@
 local Agent = require "questral.agent"
+local NpcAutogenData = require "prefabs.npc_autogen_data"
 local kstring = require "util.kstring"
 
 
@@ -15,6 +16,19 @@ function RotwoodActor:SetNpcRole(role)
     return self
 end
 
+function RotwoodActor:FillOutQuipTags(tag_dict)
+    RotwoodActor._base.FillOutQuipTags(self, tag_dict)
+
+    if self.role then
+        tag_dict["role_"..self.role] = true
+    end
+
+    -- TODO(quest): Can we just rely on the above so the npc entity isn't required?
+    if self.inst and self.inst.components.npc then
+        tag_dict["role_"..self.inst.components.npc:GetRole()] = true
+    end
+end
+
 function RotwoodActor:OverrideInteractingPlayerEntity(player)
     -- used for checking if hooks are valid
     self.player_override = player
@@ -29,9 +43,36 @@ function RotwoodActor:__tostring()
     return string.format("RotwoodActor[%s %s]", tostring(self.inst), kstring.raw(self))
 end
 
-function RotwoodActor:GetName()
+function RotwoodActor:GetPrettyName()
     if self.prefab then
         return STRINGS.NAMES[self.prefab]
+    end
+end
+
+function RotwoodActor:_GetNpcData()
+    if self.prefab then
+        return NpcAutogenData[self.prefab]
+    end
+end
+
+function RotwoodActor:GetRole()
+    local data = self:_GetNpcData()
+    if data then
+        return data.role
+    end
+end
+
+function RotwoodActor:GetSpecies()
+    local data = self:_GetNpcData()
+    if data then
+        return data.species
+    end
+end
+
+function RotwoodActor:GetHome()
+    local data = self:_GetNpcData()
+    if data then
+        return data.home
     end
 end
 

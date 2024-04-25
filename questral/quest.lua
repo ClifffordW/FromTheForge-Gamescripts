@@ -1,24 +1,15 @@
 local qconstants = require "questral.questralconstants"
 local GameNode = require "questral.gamenode"
-local ScenarioTrigger = require "questral.scenariotrigger"
 local ContentNode = require "questral.contentnode"
 local TagSet = require "questral.util.tagset"
 local contentutil = require "questral.util.contentutil"
-
 local Enum = require "util.enum"
 local iterator = require "util.iterator"
 local lume = require "util.lume"
 local kstring = require "util.kstring"
 local kassert = require "util.kassert"
 local loc = require "questral.util.loc"
-local krandom = require "util.krandom"
-local mapgen = require "defs.mapgen"
 local playerutil = require"util.playerutil"
-
--- Game-specific modules
-local RotwoodActor = require "questral.game.rotwoodactor"
-local RotwoodLocation = require "questral.game.rotwoodlocation"
-
 local QuestObjectiveDef = require "questral.questobjectivedef"
 local QuestCastDef = require "questral.questcastdef"
 
@@ -36,6 +27,8 @@ local QuestCastDef = require "questral.questcastdef"
 -- Quests have some weird calling conventions where sometimes we use : to call
 -- class methods. These should all be guarded with asserts.
 
+-- Quests live in TheGameContent:GetContentDB().data.Quest
+
 local Quest = Class(GameNode, function(self, ...) self:init(...) end)
 Quest:add_mixin( ContentNode )
 Quest:SetContentKey("Quest")
@@ -52,6 +45,7 @@ Quest.QUEST_TYPE = Enum{
     "STORY",
     "DISABLED",
     "CONTRACT",
+    "LOGIC",
 }
 
 Quest.MAX_RANK = 5
@@ -82,6 +76,10 @@ function Quest.GetStatusColour( state )
     end
 end
 
+function Quest:__tostring()
+    return string.format( "Quest[%s %s]", self._classname, kstring.raw(self) )
+end
+
 function Quest.Create( quest_type, classname )
     assert(Quest.QUEST_TYPE:Contains(quest_type), quest_type)
     classname = (classname or debug.getinfo(2, "S").source:match("^.*/(.*).lua$")):lower()
@@ -100,17 +98,13 @@ function Quest.Create( quest_type, classname )
         convo_hooks = {},
         formatters = {},
         event_handlers = {},
-        scenario_event_handlers = {},
         tags = TagSet(),
         opinion_events = {},
-        scenario_triggers_by_id = {},
-        scenario_triggers = {},
         variables = {},
         min_rank = 1,
         max_rank = Quest.MAX_RANK,
         network_sync = {}, -- by default, no state changes are synced.
         local_sync = {}, -- by default, no state changes are synced.
-        rate_limited = true,
         chat_cost = DEFAULT_CHAT_COST,
 
         unlock_player_flags_on_complete = {},
@@ -121,6 +115,7 @@ function Quest.Create( quest_type, classname )
 
         marked_locations = {},
         importance = QUEST_IMPORTANCE.s.DEFAULT,
+        quester_type = QUESTER_TYPE.s.PLAYER,
     }
     class.def.tags:Add( classname )
     return class
@@ -140,11 +135,8 @@ function Quest.InheritFrom( quest_name, base_quest_class )
         convo_hooks = {},
         formatters = shallowcopy(base_quest_class.def.formatters),
         event_handlers = {},
-        scenario_event_handlers = {},
         tags = base_quest_class.def.tags:Clone(),
         opinion_events = shallowcopy(base_quest_class.def.opinion_events),
-        scenario_triggers_by_id = {},
-        scenario_triggers = shallowcopy(base_quest_class.def.scenario_triggers),
         min_rank = base_quest_class.def.min_rank,
         max_rank = base_quest_class.def.max_rank,
     }
@@ -153,16 +145,8 @@ function Quest.InheritFrom( quest_name, base_quest_class )
         class.def.convo_hooks[hook] = shallowcopy(convos)
     end
 
-    for event, handlers in pairs(base_quest_class.def.scenario_event_handlers) do
-        class.def.scenario_event_handlers[event] = shallowcopy(handlers)
-    end
-
     for event, handlers in pairs(base_quest_class.def.event_handlers) do
         class.def.event_handlers[event] = shallowcopy(handlers)
-    end
-
-    for id, handlers in pairs(base_quest_class.def.scenario_triggers_by_id) do
-        class.def.scenario_triggers_by_id[id] = shallowcopy(handlers)
     end
 
     class.def.tags:Add( quest_name )
@@ -216,7 +200,7 @@ function Quest:ValidateDef()
 end
 
 -- Never complete or save state.
--- TODO(dbriscoe): Instead of being recurring, I think we should spawn these
+-- TODO(quest): Instead of being recurring, I think we should spawn these
 -- when we want to use them. Potionmaster can spawn their potion quest and it
 -- doesn't save any data at all (not even completion). That reduces the amount
 -- of ongoing quests to ones that are actually relevant.
@@ -241,6 +225,11 @@ end
 function Quest.CreateJob()
     local Q = Quest.Create(Quest.QUEST_TYPE.s.JOB, contentutil.BuildClassNameFromCallingFile())
     Q:AddCast("giver")
+    return Q
+end
+
+function Quest.CreateLogic()
+    local Q = Quest.Create(Quest.QUEST_TYPE.s.LOGIC, contentutil.BuildClassNameFromCallingFile())
     return Q
 end
 
@@ -298,6 +287,14 @@ function Quest:SetVar(var, val)
         end
     end
     return val
+end
+
+function Quest:HasDoneOneTimeConvo(id)
+    return self:GetVar(id)
+end
+
+function Quest:FinishOneTimeConvo(id)
+    self:SetVar(id, true)
 end
 
 function Quest:Debug_GetDebugName()
@@ -397,13 +394,6 @@ function Quest:AddOpinionEvent(args)
     return self
 end
 
-function Quest:OnScenarioEvent(event, fn)
-    assert(self:is_class(), "Don't call this on an instance")
-    assert(self._class.def.scenario_event_handlers[event] == nil, "Duplicate event handler.")
-    self._class.def.scenario_event_handlers[event] = fn
-    return self
-end
-
 function Quest:TriggerChange()
     self:GetQuestManager():OnQuestChanged(self)
 end
@@ -439,15 +429,6 @@ function Quest:FillCast(id, root)
         end
         return new_member, clean_up_on_fail
     end
-end
-
-function Quest:CanDistributeAgent( cast_member )
-    for cast_id, node in pairs(self.cast_members) do
-        if node == cast_member and cast_id ~= "giver" then
-            return false
-        end
-    end
-    return true
 end
 
 function Quest.SpawnQuestByName(classname, root, rank, params, cast_assignments)
@@ -505,13 +486,29 @@ function Quest:SpawnQuestFromClass(root, rank, params, cast_assignments)
 
             if ok then
                 quest:AssignCastMember(id, cast_assignments[id])
+
+                -- We need to add these again if the cast member was created previously, but not successfully cast
+                if #cast_def.on_cast_fns > 0 then
+                    if node.inst then
+                        for _, fn in ipairs(cast_def.on_cast_fns) do
+                            fn(node)
+                        end
+                    elseif node.is_reservation then
+                        for _, fn in ipairs(cast_def.on_cast_fns) do
+                            node:OnFillReservation(fn)
+                        end
+                    end
+                end
+
             else
                 quest:Log("Supplied cast failed validation: ", tostring(reason), id, tostring(cast_assignments[id]))
                 failed = true
             end
         else
             if not cast_def.is_deferred then
-                local new_member, clean_up_on_fail = quest:FillCast(id, root)
+                local cast_manager = root.GetCastManager and root:GetCastManager() or root
+
+                local new_member, clean_up_on_fail = quest:FillCast(id, cast_manager)
                 if not new_member then
                     if cast_def:IsOptional() then
                         quest:Log("Did not cast optional member:", id)
@@ -583,9 +580,10 @@ function Quest:OnActivate( root )
 
     self.sim = self:GetQC()
     self.inst = CreateEntity(self:GetContentID())
+        :MakeSurviveRoomTravel()
 
     self.state = QUEST_OBJECTIVE_STATE.s.ACTIVE
-    self.activate_time = self.sim:GetCyclesPassed()
+    self.activate_time = self.sim:GetRunCount()
 
     local listening = {}
     for id, cast_member in pairs(self.cast_members) do
@@ -639,6 +637,48 @@ function Quest:OnActivate( root )
     end
 end
 
+function Quest:EvaluateSpawnConditions(quester)
+    if not self.Quest_EvaluateSpawn then return false end
+
+    -- returns false by default, if quests do not have an evaluatespawn function defined then it must be spawned manually
+    -- can also return "spawn variables" if desired. should be in table form like so:
+
+    -- local spawn_variables = 
+    -- {
+    --     rank = 1,
+    --     params = {},
+    --     cast_assignments = {},
+    -- }
+
+    local quester_type = self:GetQuesterType()
+
+    if (quester:HasTag("player") and quester_type == QUESTER_TYPE.s.PLAYER) or
+        (quester.world and quester_type == QUESTER_TYPE.s.WORLD) then
+
+        return self:Quest_EvaluateSpawn(quester)
+    end
+end
+
+function Quest:IsStillValid(quester)
+    if not self.Quest_EvaluateDespawn then return true end
+
+    -- returns true by default. If quests do not have an EvaluateDespawn function they will only advance state when told to.
+    -- when returning false, the function an also return a QUEST_OBJECTIVE_STATE to set the quest to. Defaults to CANCELED
+    -- only return states: 
+        -- QUEST_OBJECTIVE_STATE.s.FAILED
+        -- QUEST_OBJECTIVE_STATE.s.CANCELED
+        -- QUEST_OBJECTIVE_STATE.s.COMPLETED
+
+    local quester_type = self:GetQuesterType()
+
+    if (quester:HasTag("player") and quester_type == QUESTER_TYPE.s.PLAYER) or
+        (quester.world and quester_type == QUESTER_TYPE.s.WORLD) then
+        local should_despawn, new_state = self:Quest_EvaluateDespawn(quester)
+        -- if should_despawn == true then isvalid == false
+        return not should_despawn, new_state
+    end
+end
+
 function Quest:OnDeactivate( root )
     if self:GetQuestManager():GetMainQuest() == self then
         self:GetQuestManager():SetMainQuest(nil)
@@ -681,29 +721,6 @@ function Quest:_CleanupQuest()
     self.inst = nil
 end
 
-function Quest:DoPopulateScenario( scenario )
-    -- Check current_scenario so we do not double-Populate for quests added during Scenario creation (from Quest:OnActivate and then QuestManager:OnScenarioStart)
-    if self.current_scenario == nil then
-        self.current_scenario = scenario
-        self:ResetScenarioState()
-        if self.Quest_PopulateScenario then
-            self:Quest_PopulateScenario( scenario )
-        end
-    end
-end
-
-function Quest:DoDepopulateScenario( scenario )
-    if self.current_scenario == scenario then
-        if self.Quest_DepopulateScenario then
-            self:Quest_DepopulateScenario( scenario )
-        end
-        self:ResetScenarioState()
-        self.current_scenario = nil
-    end
-
-    self:_ClearTasks()
-end
-
 -- Debug logging.
 -- Each quest collects its own log messages for easier debugging.
 function Quest:Log(...)
@@ -718,7 +735,9 @@ function Quest:OnSave()
     local data = { verbatim = {}, }
     data.verbatim.activate_time = self.activate_time
     data.verbatim.rank = self.rank
+    data.verbatim.quest_accepted = self.quest_accepted
     data.verbatim.quest_created_from_debug = self.quest_created_from_debug
+    data.verbatim.run_deadline = self.run_deadline
     if not self.skip_state_persist then
         data.verbatim.objective_state = self.objective_state
         data.verbatim.state = self.state
@@ -734,7 +753,6 @@ function Quest:OnSave()
     return data
 end
 
--- TODO(dbriscoe): Not sure how this works on gln
 function Quest:__deserialize()
     self.def = contentutil.GetContentDB():Get(Quest, self._classname).def
     self.log = {}
@@ -783,20 +801,6 @@ function Quest:HandleEvent(event, ...)
     end
 end
 
-function Quest:HandleScenarioEvent(event, scenario, ...)
-    if self.def.scenario_event_handlers[event] then
-        self.def.scenario_event_handlers[event](self, scenario, ...)
-    end
-
-    for id, dat in pairs(self.def.objective) do
-        if self:GetObjectiveState(id) == QUEST_OBJECTIVE_STATE.s.ACTIVE then
-            if dat.scenario_event_handlers[event] then
-                dat.scenario_event_handlers[event](self, ...)
-            end
-        end
-    end
-end
-
 --add a character to the list of available speakers/targets for a quest
 function Quest:AddCast(id)
     assert(self:is_class(), "Don't call this on an instance")
@@ -822,9 +826,18 @@ function Quest:AddFormatter(id, fn)
     return self
 end
 
+-- Deprecated: Call GetQuestOwner instead!
 function Quest:GetPlayer()
     -- self.parent:GetQC() is used to ensure we avoid infinite recursion if self.parent == nil.
-    return self.parent:GetQC():GetPlayer()
+    return self:GetQuestOwner()
+end
+
+function Quest:GetQuestOwner()
+    return self.parent:GetQC():GetQuestOwner()
+end
+
+function Quest:IsPlayerOwned()
+    return self.parent:GetQC():IsPlayerOwned()
 end
 
 function Quest:GetCastMember(id)
@@ -854,7 +867,7 @@ function Quest:GetCastMembers()
 end
 
 -- Any game-specific hooks here.
--- TODO(dbriscoe): Move to QuestCentral?
+-- TODO(quest): Move to QuestCentral?
 local function IsValidRotwoodHook(hook, quest, node, sim)
 	if hook == Quest.CONVO_HOOK.s.CHAT_DUNGEON then
 		if TheWorld:HasTag("town") then
@@ -879,11 +892,15 @@ function Quest:AddHook(hook, objective_id, cast_id, filter_fn)
     local state = self:AddConvo(convo_id, nil, objective_id)
 
     -- Whether it's valid to start this hook.
-    local fn = function(quest, node, sim)
+    local fn = function(quest, node, sim, convo_target)
 		if not IsValidRotwoodHook(hook, quest, node, sim) then
 			return false
 		end
 
+        if state.convo:IsOneTimeConvo() and quest:HasDoneOneTimeConvo(state:GetFullID()) then
+            quest:Log("  EvaluateHook [objective]: can't have a one time convo more than once!", objective_id, state:GetFullID())
+            return false
+        end
 
         if objective_id then
             if not quest:IsActive(objective_id) then
@@ -901,7 +918,7 @@ function Quest:AddHook(hook, objective_id, cast_id, filter_fn)
         end
 
         if filter_fn then
-            if not filter_fn(quest, node, sim, objective_id) then
+            if not filter_fn(quest, node, sim, objective_id, convo_target) then
                 quest:Log("  EvaluateHook [fail]: filter_fn failed on", objective_id)
                 return false
             end
@@ -927,52 +944,30 @@ function Quest:AddHook(hook, objective_id, cast_id, filter_fn)
             end
         end
 
-        flags = state:GetConvo().required_player_flags
-        if flags then
-            for _, flag in ipairs(flags) do
-                if not quest:GetPlayer():IsFlagUnlocked(flag) then
-                    quest:Log("  EvaluateHook [flags]: didn't have required player flag:", flag)
-                    return false
-                end
-            end
+        local player = quest:GetQuestOwner()
+
+        if self:GetQuesterType() == QUESTER_TYPE.s.WORLD then
+            player = convo_target
         end
 
-        flags = state:GetConvo().forbidden_player_flags
-        if flags then
-            for _, flag in ipairs(flags) do
-                if quest:GetPlayer():IsFlagUnlocked(flag) then
-                    quest:Log("  EvaluateHook [flags]: has forbidden player flag:", flag)
-                    return false
+        if player ~= nil then
+            flags = state:GetConvo().required_player_flags
+            if flags then
+                for _, flag in ipairs(flags) do
+                    if not player:IsFlagUnlocked(flag) then
+                        quest:Log("  EvaluateHook [flags]: didn't have required player flag:", flag)
+                        return false
+                    end
                 end
             end
-        end
 
-        if TheWorld:HasTag("town") and sim:GetTownQuests() ~= nil then
-            -- You're in town and we've already selected which town chats should be valid this visit.
-            -- Make sure you're in the list if you are a rate-limited quest.
-            local objective = quest.def.objective[objective_id]
-
-            -- if this objective isn't rate limited then it ignores the selected quests.
-            if objective:IsRateLimited() then
-                local town_quests = sim:GetTownQuests()
-
-                if town_quests[quest] == nil then
-                    quest:Log("  EvaluateHook [rate limit]: quest/ objective is rate limited:", quest._classname, objective_id)
-                    return false
-                end
-
-                -- Is this the same convo we determined was valid before?
-
-                -- This is a check for a specific hook if we need to get this specific.
-                -- If we start having multiple convos per objective, we may need to switch back to this.
-                -- I changed it look at objective_id instead for simplicity sake & to make other systems easier
-                -- town_quests[quest].hook.state ~= state.convo:GetDefaultState()
-
-                -- If we need to compare exact NPC too, we can add this check
-                -- or town_quests[quest].cast ~= node
-                if not lume.find(town_quests[quest], objective_id) then
-                    quest:Log("  EvaluateHook [rate limit]: quest/ objective is rate limited:", quest._classname, objective_id)
-                    return false
+            flags = state:GetConvo().forbidden_player_flags
+            if flags then
+                for _, flag in ipairs(flags) do
+                    if player:IsFlagUnlocked(flag) then
+                        quest:Log("  EvaluateHook [flags]: has forbidden player flag:", flag)
+                        return false
+                    end
                 end
             end
         end
@@ -1003,13 +998,20 @@ function Quest:Debug_MakeConvoPicker(ui, colorscheme)
     ui:PopID()
 end
 
--- TODO(dbriscoe): Move these to a game-specific location?
-Quest.Filters = {}
-function Quest.Filters.RequireMainPlayer(quest, node, sim)
-    -- TODO(dbriscoe): Actual implementation
-    return node == ThePlayer
+function Quest:Debug_CollectNotReadyToTranslate()
+    local convos = {}
+    for hook_id,hooks in iterator.sorted_pairs(self.def.convo_hooks) do
+        for _,hook in ipairs(hooks) do
+            if hook.state.convo.is_intentionally_untranslated then
+                convos[hook.objective_id] = hook.state.convo
+            end
+        end
+    end
+    return convos
 end
 
+-- TODO(quest): Move these to a game-specific location?
+Quest.Filters = {}
 function Quest.Filters.InDungeon_Entrance(quest, node, sim)
     return TheWorld:IsCurrentRoomType("entrance")
 end
@@ -1037,7 +1039,6 @@ end
 function Quest.Filters.CanCraft(quest, node, sim, slots, include_unlocks)
     local Equipment = require"defs.equipment"
     local recipes = require"defs.recipes"
-    local playerutil = require"util.playerutil"
     local qplayer = node:GetInteractingPlayerEntity()
 
     slots = slots or { Equipment.Slots.WEAPON, Equipment.Slots.HEAD, Equipment.Slots.BODY }
@@ -1092,7 +1093,6 @@ end
 
 -- Hub: Menu items at a location. Doesn't make sense in Rotwood.
 function Quest:OnHub(...)
-    error("No hub in Rotwood.")
     return self:AddHook(Quest.CONVO_HOOK.s.HUB, ...)
 end
 
@@ -1118,7 +1118,7 @@ end
 -- EvaluateHook(Quest.CONVO_HOOK.s.ATTRACT, qm) will return the highest
 -- priority Convo created with OnAttract with a successful condition function
 -- (passed to OnAttract).
-function Quest:EvaluateHook(hook_id, node, sim)
+function Quest:EvaluateHook(hook_id, node, sim, convo_target)
     dbassert(Quest.CONVO_HOOK:Contains(hook_id))
     local hooks = self.def.convo_hooks[hook_id]
     local best_state, best_priority
@@ -1128,7 +1128,7 @@ function Quest:EvaluateHook(hook_id, node, sim)
         local best_hook
         for _, hook in ipairs(hooks) do
             -- PERF: Consider inverting this order to evaluate priority first.
-            if hook.fn(self, node, sim) then
+            if hook.fn(self, node, sim, convo_target) then
                 local priority = hook.state.convo:GetPriority()
                 if best_priority == nil or best_priority < priority then
                     best_hook, best_priority = hook, priority
@@ -1159,14 +1159,6 @@ function Quest:CollectHook(hook_id, node, sim, ret)
             end
         end
     end
-end
-
-function Quest:ScenarioTrigger(id, objective_id, filter_fn)
-    assert(self:is_class(), "Don't call this on an instance")
-    local trig = ScenarioTrigger(id, objective_id, filter_fn)
-    table.insert( self._class.def.scenario_triggers, trig)
-    self._class.def.scenario_triggers_by_id[id] = trig
-    return trig
 end
 
 function Quest:AddObjective(id)
@@ -1204,18 +1196,25 @@ function Quest:_RegisterCastMember(node)
     if not self:IsListening() then
         -- We shouldn't even get here, but QuestManager:LoadQuestData is
         -- loading old quests attached and active.
-        -- TODO(dbriscoe): Can we load all quests without being active?
         return
     end
 
     if node.inst then
         self:_ListenForEventsOnCast(node)
+
+        local id = self:FindCastID(node)
+        local cast_def = self.def.cast[id]
+        if cast_def.on_cast_fns then
+            for _, fn in ipairs(cast_def.on_cast_fns) do
+                fn(node)
+            end
+        end
     else
         node:OnFillReservation(function()
              -- time may have passed since previous check
             if self:IsListening() and self:FindCastID(node) then
                 self:_ListenForEventsOnCast(node)
-            end            
+            end
         end)
     end
 end
@@ -1276,8 +1275,6 @@ function Quest:_ListenForEventsOnCast(cast_member)
     end
 
     TheDungeon:PushEvent("cast_member_filled", cast_member)
-
-    self:GetQC():UpdateQuestMarks()
 end
 
 function Quest:_RemoveListenersOnCast(cast_member)
@@ -1290,8 +1287,6 @@ function Quest:_RemoveListenersOnCast(cast_member)
         self.inst:RemoveEventCallback(eventname, fn, cast_member.inst)
     end
     self.cast_event_fns[cast_member] = nil
-
-    self:GetQC():UpdateQuestMarks()
 end
 
 function Quest:UnassignCastMember(id)
@@ -1333,7 +1328,7 @@ function Quest:ReceivedCastEvent(event, cast_member, ...)
         fn(self, cast_member, ...)
     end
 
-    -- TODO(dbriscoe): gln removed objective cast events. Do we want them?
+    -- TODO(quest): gln removed objective cast events. Do we want them?
     for obj_id, dat in pairs(self.def.objective) do
         if self:GetObjectiveState(obj_id) == QUEST_OBJECTIVE_STATE.s.ACTIVE then
             --print (obj_id, cast_id, event, dat.cast_event_handlers[cast_id] and dat.cast_event_handlers[cast_id][event])
@@ -1427,18 +1422,22 @@ function Quest:Complete(id)
             local player = self:GetPlayer()
 
             for _, flag in ipairs(def.unlock_player_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.PLAYER, "Cannot change Player Flags in a non-Player Quest")
                 player:UnlockFlag(flag)
             end
 
             for _, flag in ipairs(def.lock_player_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.PLAYER, "Cannot change Player Flags in a non-Player Quest")
                 player:LockFlag(flag)
             end
 
             for _, flag in ipairs(def.unlock_world_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.WORLD, "Cannot change World Flags in a non-World Quest")
                 TheWorld:UnlockFlag(flag)
             end
 
             for _, flag in ipairs(def.lock_world_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.WORLD, "Cannot change World Flags in a non-World Quest")
                 TheWorld:LockFlag(flag)
             end
 
@@ -1446,7 +1445,7 @@ function Quest:Complete(id)
                 self:Quest_Complete()
             end
 
-            self:Detach()
+            self:Detach() -- Triggers OnDetachChild in QuestManager
         end
     end
 end
@@ -1514,7 +1513,7 @@ function Quest:ShouldNetworkSync(state)
 end
 
 function Quest:LocalSyncStates(states)
-    dbassert(bool ~= nil)
+    dbassert(states ~= nil)
     for _, state in ipairs(states) do
         self._class.def.local_sync[state] = true
     end
@@ -1533,18 +1532,6 @@ end
 
 function Quest:CanBeDuplicated()
     return self._class.def.allow_duplicates
-end
-
-function Quest:SetRateLimited(bool)
-    -- sets the default for objectives in this quest.
-    -- objectives can still optionally overwrite this by calling it on themselves.
-    dbassert(bool ~= nil)
-    self._class.def.rate_limited = bool
-    return self
-end
-
-function Quest:IsRateLimited()
-    return self._class.def.rate_limited
 end
 
 function Quest:SetChatCost(num)
@@ -1591,26 +1578,44 @@ function Quest:GetPriority()
     return self._class.def.priority or QUEST_PRIORITY.LOWEST -- Higher numbers are higher priority
 end
 
+function Quest:SetWorldQuester()
+    self._class.def.quester_type = QUESTER_TYPE.s.WORLD
+    return self
+end
+
+function Quest:SetPlayerQuester()
+    self._class.def.quester_type = QUESTER_TYPE.s.PLAYER
+    return self
+end
+
+function Quest:GetQuesterType()
+    return self._class.def.quester_type
+end
+
 --------
 -- Flags that either lock or unlock when the objective is completed
 --------
 
 function Quest:UnlockPlayerFlagsOnComplete(flags)
+    dbassert(type(flags) == "table")
     self._class.def.unlock_player_flags_on_complete = flags
     return self
 end
 
 function Quest:LockPlayerFlagsOnComplete(flags)
+    dbassert(type(flags) == "table")
     self._class.def.lock_player_flags_on_complete = flags
     return self
 end
 
 function Quest:UnlockWorldFlagsOnComplete(flags)
+    dbassert(type(flags) == "table")
     self._class.def.unlock_world_flags_on_complete = flags
     return self
 end
 
 function Quest:LockWorldFlagsOnComplete(flags)
+    dbassert(type(flags) == "table")
     self._class.def.lock_world_flags_on_complete = flags
     return self
 end
@@ -1639,18 +1644,22 @@ function Quest:_SetObjectiveState(objective_id, state, playerID, ignore_rate_lim
             local player = self:GetPlayer()
 
             for _, flag in ipairs(def.unlock_player_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.PLAYER, "Cannot change Player Flags in a non-Player Quest")
                 player:UnlockFlag(flag)
             end
 
             for _, flag in ipairs(def.lock_player_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.PLAYER, "Cannot change Player Flags in a non-Player Quest")
                 player:LockFlag(flag)
             end
 
             for _, flag in ipairs(def.unlock_world_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.WORLD, "Cannot change World Flags in a non-World Quest")
                 TheWorld:UnlockFlag(flag)
             end
 
             for _, flag in ipairs(def.lock_world_flags_on_complete) do
+                assert(self:GetQuesterType() == QUESTER_TYPE.s.WORLD, "Cannot change World Flags in a non-World Quest")
                 TheWorld:LockFlag(flag)
             end
 
@@ -1704,13 +1713,16 @@ function Quest:SetObjectiveState(objective_id, new_state, ignore_rate_limit)
 
     -- only do this if the new_state is going from active to something else.
     if old_state ~= new_state then
-        local player_id = self:GetPlayer().Network:GetPlayerID()
-        local objective = self.def.objective[objective_id]
+        local player_id = self:GetQuesterType() == QUESTER_TYPE.s.PLAYER and self:GetPlayer().Network:GetPlayerID() or nil
 
-        if old_state == QUEST_OBJECTIVE_STATE.s.ACTIVE then
+        -- if this is not a player quest, it cannot be network synced. 
+        -- by design, world quests must be completed on each world - no shared completion
 
+        if player_id ~= nil and old_state == QUEST_OBJECTIVE_STATE.s.ACTIVE  then
+
+            local objective = self.def.objective[objective_id]
             if objective:ShouldNetworkSync(new_state) then -- Should other players (LOCAL & REMOTE) also complete this objective?
-                TheNet:ClientRequestCompleteQuest(player_id, self:GetContentID(), objective_id, new_state) 
+                TheNet:ClientRequestCompleteQuest(player_id, self:GetContentID(), objective_id, new_state)
             end
 
             if objective:ShouldLocalSync(new_state) then -- Should other LOCAL players also complete this objective?
@@ -1799,8 +1811,9 @@ function Quest:FillLogEntries(t)
     if self:IsActive() then
         table.clear(t)
 
-        if self.time_left and self.quest_accepted then
-            table.insert(t, loc.format( self:LOC "TIME_LEFT", self.time_left + 1 ))
+        local time_left = self:GetTimeLeft()
+        if time_left and self.quest_accepted then
+            table.insert(t, loc.format( self:LOC "TIME_LEFT", time_left ))
         end
 
         for id,state in pairs(self.objective_state) do
@@ -1817,68 +1830,33 @@ function Quest:FillLogEntries(t)
     end
 end
 
-function Quest:SetTimeLeft(t)
-    self.time_left = t
+
+-- Job-like quest functions {{{
+
+function Quest:SetTimeLeft(remaining_runs)
+    assert(not self:is_class(), "Must call on an instance")
+    self.run_deadline = remaining_runs + self.activate_time
 end
 
 function Quest:GetTimeLeft()
-    return self.time_left
-end
-
--- TODO(dbriscoe): What is this?
-function Quest:CanDrop()
-    return (self:IsJob()
-        and self:IsQuestAccepted() and self:IsActive())
+    if self.run_deadline then
+        return self.run_deadline - self:GetQC():GetRunCount()
+    end
 end
 
 function Quest:IsQuestAccepted()
     return self.quest_accepted
 end
 
-function Quest:__tostring()
-    return string.format( "Quest[%s %s]", self._classname, kstring.raw(self) )
-end
-
 function Quest:AcceptQuest()
     self.quest_accepted = true
-    --~ self:FollowQuest()
-
-    -- TODO(dbriscoe): Automatic renown granting for accepting quests? Who does it go to?
-    --~ if self:IsJob() then
-    --~     local giver = self:GetCastMember( "giver" )
-    --~     if giver then
-    --~         giver:AddOpinion( "TOOK_JOB", { quest = self } )
-    --~     end
-    --~ end
-
-    -- TODO(dbriscoe): Notification for new quest?
-    --~ if self:IsJob() then
-    --~     local NewQuestNotification = require "sim.notifications.newquestnotification"
-    --~     self:GetQC():Notify( NewQuestNotification( self ))
-    --~ end
 end
+
+-- }}}
+
 
 function Quest:GetQuestManager()
     return self.parent
-end
-
---~ function Quest:FollowQuest( is_following )
---~     if is_following ~= self.is_following then
---~         self.is_following = is_following
---~         self:GetQC():BroadcastEvent("FOLLOW_QUEST_CHANGED", self)
---~     end
---~ end
-
---~ function Quest:IsFollowing()
---~     return self.is_following
---~ end
-
-function Quest:GetScenario()
-    return self.sim:GetCurrentScenario()
-end
-
-function Quest:DoScenarioConvo(id, speaker, hide_player)
-    self.sim:GetCurrentScenario():DoQuestConvo(self, id, speaker, hide_player)
 end
 
 function Quest:GetOpinionEvent(opinion_id)
@@ -1902,40 +1880,6 @@ function Quest:GrantOpinion(cast_id, opinion_id)
 
     assert(cast, "Invalid cast for opinion event.")
     return cast:AddOpinion( event:GetContentID() )
-end
-
-function Quest:ResetScenarioState()
-    self.scenario_state = nil
-end
-
-function Quest:GetScenarioState()
-    self.scenario_state = self.scenario_state or {}
-    self.scenario_state.trigger_states = self.scenario_state.trigger_states or {}
-    return self.scenario_state
-end
-
-function Quest:OnScenarioUpdate(scenario, dt)
-    --make a state for each quest this scenario
-    local state = self:GetScenarioState()
-
-    for _, trigger in ipairs(self._class.def.scenario_triggers) do
-        state.trigger_states[trigger.id] = state.trigger_states[trigger.id] or {}
-        trigger:ProcessTrigger(self, scenario, state, state.trigger_states[trigger.id], dt)
-    end
-
-    for id,state in pairs(self.objective_state) do
-        if state == QUEST_OBJECTIVE_STATE.s.ACTIVE then
-            local def = self.def.objective[id]
-            if def.scenario_update_fn then
-                def.scenario_update_fn(self, scenario, dt)
-            end
-        end
-    end
-
-    if self.Quest_ScenarioUpdate then
-        self:Quest_ScenarioUpdate(scenario, dt)
-    end
-
 end
 
 function Quest:OnAddContent(db)

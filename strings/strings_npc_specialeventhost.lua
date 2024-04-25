@@ -1,14 +1,12 @@
 return
 {
 	--NOTE TO WRITERS:
-	--This lil weirdo is under Jambell's care. Please run changes by him first before implementing -Kris
+	--This lil weirdo is under jambell's care. Please run changes by him first before implementing -Kris
 
 	QUESTS =
 	{
 		dgn_mystery =
 		{
-			TITLE = "Mysterious Wanderer Encounters",
-
 			chat_only =
 			{
 				TALK_CHAT_ONLY = [[
@@ -127,7 +125,7 @@ return
 
 			upgrade_random_power =
 			{
-				-- TODO(dbriscoe): Should use something like PlayRecipeMenu to better visualize the cost and rewards. Discuss w/ jambell.
+				-- TODO: Could use something like PlayRecipeMenu to better visualize the cost and rewards. Discuss w/ design team.
 				TALK_UPGRADE_RANDOM_POWER = [[
 					agent:
 						!clap

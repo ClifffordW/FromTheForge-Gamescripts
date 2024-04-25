@@ -15,7 +15,7 @@ return {
   parallax_use_baseanim_for_idle=true,
   script="plots",
   script_args={
-    building_prefab="armorer_1",
+    building_prefab="armorer",
     owner_prefab="npc_armorsmith",
     skins={ groups={  }, sets={  }, symbols={  },},
     spawn_flag="wf_town_has_armorsmith",

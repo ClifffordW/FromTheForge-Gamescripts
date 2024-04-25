@@ -1,55 +1,36 @@
 local EffectEvents = require "effectevents"
 local SGCommon = require "stategraphs.sg_common"
-local playerutil = require "util.playerutil"
+local spawnutil = require "util.spawnutil"
 local monsterutil = require "util.monsterutil"
-local TargetRange = require "targetrange"
 
-local SPRAY_SPEED = 5
-
-local function SpawnAcid(inst, trap_size)
-	local trap = SGCommon.Fns.SpawnAtDist(inst, "trap_acid", 0)
-	local trapdata =
-	{
-		size = trap_size, -- small, medium, large
-		temporary = true,
-	}
-
-	EffectEvents.MakeNetEventPushEventOnMinimalEntity(trap, "acid_start", trapdata)
+local function OnHitBoxTriggered(inst, data)
+	SGCommon.Events.OnHitboxTriggered(inst, data, {
+		attackdata_id = "shellslam",
+		hitstoplevel = HitStopLevel.MEDIUM,
+		pushback = 1.4,
+		combat_attack_fn = "DoKnockdownAttack",
+		hit_fx = monsterutil.defaultAttackHitFX,
+		hit_fx_offset_x = 0.5,
+		hitflags = Attack.HitFlags.LOW_ATTACK,
+	})
 end
 
 local function ChooseIdleBehavior(inst)
-	--[[if not inst.components.timer:HasTimer("idlebehavior_cd") then
-		local threat = playerutil.GetRandomLivingPlayer()
-		if not threat then
-			inst.sg:GoToState("idle_behaviour")
-			return true
-		end
-	end]]
 	return false
 end
-
---[[local function DropAoE(inst)
-	-- if not TheWorld.components.roomclear:IsRoomComplete() then
-	local aoe = SGCommon.Fns.SpawnAtDist(inst, "trap_acid", 0) -- This trap sits in the "init" state until we have told it to proceed. We need to tell it what its transform size + hitbox sizes should be first.
-	local trapdata =
-	{
-		size = "small",
-		temporary = true,
-	}
-
-	EffectEvents.MakeNetEventPushEventOnMinimalEntity(aoe, "acid_start", trapdata)
-
-	-- TODO: networking2022, effectevents?
-	local burst = SGCommon.Fns.SpawnAtDist(inst, "mosquito_trail_burst", 0)
-	burst:DoTaskInAnimFrames(15, function()
-		burst.components.particlesystem:StopThenRemoveEntity()
-	end)
-	burst:ListenForEvent("onremove", function() burst:Remove() end, aoe)
-end]]
 
 local function OnDeath(inst, data)
 	EffectEvents.MakeEventFXDeath(inst, data.attack, "death_woworm")
 	inst.components.lootdropper:DropLoot()
+
+	local prefab_name = inst:HasTag("elite") and "woworm_shell_elite" or "woworm_shell"
+	local inst_facing = inst.Transform:GetFacing()
+	local shell = SpawnPrefab(prefab_name, inst)
+	local x, y, z = inst.Transform:GetWorldPosition()
+	x = (inst_facing == FACING_RIGHT) and x - 0.8 or x + 0.8
+	z = z + 0.05
+	shell.Transform:SetPosition(x, y, z)
+	spawnutil.SetFacing(shell, inst_facing)
 end
 
 local events = {}
@@ -66,78 +47,18 @@ SGCommon.Fns.AddCommonSwallowedEvents(events)
 
 local states =
 {
-	--[[State({
-		name = "spray",
-		tags = { "attack", "busy", "flying" },
-
-		onenter = function(inst, target)
-			inst.AnimState:PlayAnimation("spray_loop_pre")
-		end,
-
-		events =
-		{
-			EventHandler("animover", function(inst)
-				inst.sg:GoToState("spray_loop")
-			end),
-		},
-	}),
-
 	State({
-		name = "spray_loop",
-		tags = { "attack", "busy", "flying" },
+		name = "barf",
+		tags = { "attack", "busy" },
 
 		onenter = function(inst, target)
-			inst.AnimState:PlayAnimation("spray_loop", true)
-			inst.sg:SetTimeoutAnimFrames(45)
-			local speed = inst:HasTag("elite") and SPRAY_SPEED_ELITE or SPRAY_SPEED
-			SGCommon.Fns.SetMotorVelScaled(inst, speed)
-			inst.sg.statemem.next_spawn = inst.tuning.spray_interval or 1
-			inst.Physics:StartPassingThroughObjects()
-
-			DropDeathAoE(inst)--DropAoE(inst)
+			inst.AnimState:PlayAnimation("puke")
 		end,
 
-		onupdate = function(inst)
-			inst.sg.statemem.next_spawn = inst.sg.statemem.next_spawn - 1
-			if inst.sg.statemem.next_spawn <= 0 then
-				DropDeathAoE(inst)--DropAoE(inst)
-				inst.sg.statemem.next_spawn = inst.tuning.spray_interval or 1
-			end
-		end,
-
-		ontimeout = function(inst)
-			inst.sg.statemem.spray_done = true -- don't transition yet... set a flag that it -can- transition on the next anim loop
-		end,
-
-		onexit = function(inst)
-			inst.Physics:StopPassingThroughObjects()
-			inst.components.attacktracker:CompleteActiveAttack()
-			inst.Physics:Stop()
-		end,
-
-		events =
+		timeline =
 		{
-			EventHandler("animover", function(inst)
-				if inst.sg.statemem.spray_done then
-					inst.sg:GoToState("spray_pst")
-				end
-			end),
+			FrameEvent(6, function(inst) spawnutil.SpawnAcidTrap(inst, "medium", 150, 3.5, true) end),
 		},
-	}),
-
-	State({
-		name = "spray_pst",
-		tags = { "attack", "busy", "flying" },
-
-		onenter = function(inst, target)
-			inst.AnimState:PlayAnimation("spray_pst")
-			local speed = inst:HasTag("elite") and SPRAY_SPEED_ELITE or SPRAY_SPEED
-			SGCommon.Fns.SetMotorVelScaled(inst, speed * 0.33)
-		end,
-
-		onexit = function(inst)
-			inst.Physics:Stop()
-		end,
 
 		events =
 		{
@@ -145,11 +66,65 @@ local states =
 				inst.sg:GoToState("idle")
 			end),
 		},
-	}),]]
+
+		onexit = function(inst)
+			inst.components.attacktracker:CompleteActiveAttack()
+		end,
+	}),
+	State({
+		name = "shellslam",
+		tags = { "attack", "busy" },
+
+		onenter = function(inst, target)
+			inst.AnimState:PlayAnimation("shell_slam")
+			inst.components.hitbox:StartRepeatTargetDelay()
+			SGCommon.Fns.FaceTargetClampedAngle(inst, target, 5)
+		end,
+
+		timeline =
+		{
+			FrameEvent(4, function(inst) inst.Physics:MoveRelFacing(26/150) end),
+			FrameEvent(6, function(inst) inst.Physics:MoveRelFacing(48/150) end),
+			FrameEvent(8, function(inst) inst.Physics:MoveRelFacing(42/150) end),
+			FrameEvent(10, function(inst) inst.Physics:MoveRelFacing(48/150) end),
+			FrameEvent(12, function(inst) inst.Physics:MoveRelFacing(36/150) end),
+			FrameEvent(14, function(inst) inst.Physics:MoveRelFacing(16/150) end),
+			FrameEvent(20, function(inst)
+				local target = inst.components.combat:GetTarget()
+				SGCommon.Fns.FaceTargetClampedAngle(inst, target, 20)
+				inst.Physics:SetMotorVel(24)
+				inst.Physics:StartPassingThroughObjects()
+			end),
+			FrameEvent(24, function(inst)
+				inst.Physics:Stop()
+				inst.components.hitbox:PushOffsetCircle(1, 0, 3, HitPriority.MOB_DEFAULT)
+				spawnutil.SpawnAcidTrap(inst, "large", 90, 1, true)
+			end),
+			FrameEvent(25, function(inst) inst.Physics:StopPassingThroughObjects() end),
+		},
+
+		events =
+		{
+			EventHandler("hitboxtriggered", OnHitBoxTriggered),
+			EventHandler("animover", function(inst)
+				inst.Transform:FlipFacingAndRotation()
+				inst.sg:GoToState("idle")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.components.attacktracker:CompleteActiveAttack()
+			inst.components.hitbox:StopRepeatTargetDelay()
+			inst.Physics:StopPassingThroughObjects()
+			inst.Physics:Stop()
+		end,
+	}),
 }
 
---[[SGCommon.States.AddAttackPre(states, "spray")
-SGCommon.States.AddAttackHold(states, "spray")]]
+SGCommon.States.AddAttackPre(states, "barf")
+SGCommon.States.AddAttackHold(states, "barf")
+SGCommon.States.AddAttackPre(states, "shellslam")
+SGCommon.States.AddAttackHold(states, "shellslam")
 
 SGCommon.States.AddSpawnBattlefieldStates(states,
 {
@@ -160,7 +135,7 @@ SGCommon.States.AddSpawnBattlefieldStates(states,
 	{
 		FrameEvent(0, function(inst) inst:PushEvent("leave_spawner") end),
 		FrameEvent(1, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2) end),
-		FrameEvent(37, function(inst)
+		FrameEvent(16, function(inst)
 			inst.sg:RemoveStateTag("airborne")
 			inst.sg:AddStateTag("caninterrupt")
 			inst.Physics:Stop()
@@ -187,11 +162,11 @@ SGCommon.States.AddWalkStates(states,
 {
 	looptimeline =
 	{
-		FrameEvent(12, function(inst) SpawnAcid(inst, "small") end),
+		FrameEvent(12, function(inst) spawnutil.SpawnAcidTrap(inst, "small", 160, 0, true) end),
 	},
 	turnpretimeline =
 	{
-		FrameEvent(5, function(inst) SpawnAcid(inst, "small") end),
+		FrameEvent(5, function(inst) spawnutil.SpawnAcidTrap(inst, "small", 160, 1, true) end),
 	}
 })
 SGCommon.States.AddTurnStates(states)

@@ -5,10 +5,13 @@ local Widget = require("widgets/widget")
 local bossdef = require "defs.monsters.bossdata"
 local easing = require "util.easing"
 
-local BossHealthBar =  Class(Widget, function(self)
+local BossHealthBar =  Class(Widget, function(self, id)
 	Widget._ctor(self, "BossHealthBar")
 
 	self.target = nil
+
+	self.id = id
+	self.total_bars = 1
 
 	-- Widgets container
 	self.container = self:AddChild(Widget())
@@ -23,7 +26,7 @@ local BossHealthBar =  Class(Widget, function(self)
 	self.portraitIcon = self.portrait:AddChild(Image())
 		:SetHiddenBoundingBox(true)
 		:SetStencilTest(true)
-		:SetMultColor(UICOLORS.LIGHT_TEXT_DARK)
+		:SetMultColor(UICOLORS.OVERLAY)
 		-- :Hide()
 
 	-- Setup boss name bar
@@ -76,15 +79,35 @@ local BossHealthBar =  Class(Widget, function(self)
 		end
 	end
 
+	self.inst:ListenForEvent("minibossactivated", function(world, target_table)
+		if #target_table > 1 then
+			assert(#target_table <= 2, "We don't yet support miniboss encounters with 3 minibosses. Please update bosshealthbar implementation to support that!")
+			self:SetTarget(target_table[self.id])
+			self.total_bars = #target_table
+		else
+			local single_miniboss = target_table[1]
+			self:SetTarget(single_miniboss)
+
+			if self.id > 1 then
+				self:Hide()
+			end
+		end
+	end, TheWorld)
+
 	self.inst:ListenForEvent("bossactivated", function(world, target)
-		self:SetTarget(target)
+		-- If we ever want to have multiple bosses in one room, match bossactivated's behaviour to minibossactivated above
+		if self.id == 1 then
+			self:SetTarget(target)
+		else
+			self:Hide()
+		end
 	end, TheWorld)
 
 end)
 
 function BossHealthBar:_GetAnimOffscreenY()
 	local _, h = self:GetSize()
-	return (h + 15)
+	return (h + 100 * self.total_bars)
 end
 
 function BossHealthBar:AnimateIn(force)

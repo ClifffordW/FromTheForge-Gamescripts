@@ -14,4 +14,5 @@ return {
   parallax_use_baseanim_for_idle=true,
   procedural_placement_params={ role="destructible",},
   script="prop_destructible",
+  sound=true,
 }

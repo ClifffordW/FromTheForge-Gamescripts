@@ -36,7 +36,7 @@ Health = Class(function(self, inst)
 	self.inst:ListenForEvent("start_new_run", self._new_run_fn)
 	self.inst:ListenForEvent("end_current_run", self._new_run_fn)
 
-	self._on_max_health_changed_fn = function()
+	self._on_max_health_changed_fn = function(_inst)
 		if self.current > self:GetMax() then
 			self:SetCurrent(self:GetMax(), true)
 		end
@@ -44,7 +44,7 @@ Health = Class(function(self, inst)
 
 	self.inst:ListenForEvent("maxhealthchanged", self._on_max_health_changed_fn)
 
-	self.inst:ListenForEvent("done_dying", self._on_done_dying)
+	self.inst:ListenForEvent("done_dying", function(_inst) self:_on_done_dying() end)
 end)
 
 -- Used to determine the death state a player is in. Everything should check for these values instead of relying on HP = 0.
@@ -349,11 +349,10 @@ end
 -- Only "public" for networking
 function Health:UpdateDeathStats()
 	if self.inst:HasTag("mob") or self.inst:HasTag("boss") then
-		local local_players = TheNet:GetLocalPlayerList()
 		local is_active_player_present = false
 
 		-- all active players that are present get credit for this, not just the player who got the killing blow
-		for _i, id in ipairs(local_players) do
+		for _i, id in ipairs(TheNet:GetLocalPlayerList()) do
 			local player = GetPlayerEntityFromPlayerID(id)
 			if player and not player:IsSpectating() then
 				is_active_player_present = true
@@ -365,6 +364,11 @@ function Health:UpdateDeathStats()
 
 					if self.inst:HasTag("boss") then
 						progresstracker:IncrementKillValue("boss")
+
+						-- Send an event to all present players that a boss was killed
+						-- This doesn't mean this was the killing blow, only that they were present for a kill.
+						-- The killing blow is handled in combat.lua, "kill" event.
+						player:PushEvent("boss_kill", self.inst)
 					end
 
 					if self.inst:HasTag("elite") then
@@ -383,25 +387,24 @@ function Health:UpdateDeathStats()
 end
 
 function Health:_on_done_dying()
-	local hc = self.components.health
-	if hc.inst:HasTag("player") and not hc:CanActuallyDie() then
+	if self.inst:HasTag("player") and not self:CanActuallyDie() then
 		-- only allow players to actually revert back to alive while dying
-		hc.status = Health.Status.id.ALIVE
-		hc.inst:PushEvent("avoided_death", hc.inst)
+		self.status = Health.Status.id.ALIVE
+		self.inst:PushEvent("avoided_death", self.inst)
 	else
 		-- Actually dead now.
-		hc.status = Health.Status.id.DEAD
+		self.status = Health.Status.id.DEAD
 
-		if hc.inst.components.lootdropper then
+		if self.inst.components.lootdropper then
 			-- specifically not doing this with an event so it happens BEFORE all the other "death" event triggers.
-			hc.inst.components.lootdropper:OnDeath()
+			self.inst.components.lootdropper:OnDeath()
 			-- TODO: networking2022, fix how this is called
-			hc.inst.components.lootdropper:OnDeathKonjur()
+			self.inst.components.lootdropper:OnDeathKonjur()
 		end
 
-		hc.inst:PushEvent("death", self)
-		if hc.inst:IsNetworked() then
-			TheNetEvent:DeathStat(hc.inst.GUID)
+		self.inst:PushEvent("death", self.inst)
+		if self.inst:IsNetworked() then
+			TheNetEvent:DeathStat(self.inst.GUID)
 		else
 			self:UpdateDeathStats()
 		end
@@ -485,7 +488,7 @@ end
 function Health:OnNetSerialize()
 	local e = self.inst.entity
 
-	-- TODO: networking2022, victorc - Safe to serialize like this for
+	-- TODO: networking2022, Safe to serialize like this for
 	-- entities that don't change ownership (i.e. players, host auth stuff)
 	-- and it would avoid needing to serialize modifiers.
 	-- Not safe to do this for transferable entities since the modifiers to

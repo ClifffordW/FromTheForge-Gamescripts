@@ -34,7 +34,7 @@ end
 function PlayerBusyIndicator:UpdateIndicator()
 	if self.busy and not self.busyindicator then
 		-- Spawn the busy indicator
-        self.busyindicator = SpawnPrefab("questmarker")
+        self.busyindicator = SpawnPrefab("npcmarker")
         self.busyindicator.entity:SetParent(self.inst.entity)
 
 		self.busyindicator.Follower:FollowSymbol(self.inst.GUID, "head01")

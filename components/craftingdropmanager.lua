@@ -39,19 +39,27 @@ local ENUM_TO_DROP =
 }
 
 function CraftingDropManager:OnRoomComplete()
-	if TheNet:IsHost() and ShouldSpawnLootInThisRoom() then
-		self.inst:RemoveEventCallback("room_complete", self._on_room_complete_fn)
-
-		local reward = TheDungeon:GetDungeonMap():GetRewardForCurrentRoom()
-		local drop = ENUM_TO_DROP[reward]
-		if drop then
-			local spawners = TheWorld.components.powerdropmanager.spawners
-			table.sort(spawners, EntityScript.OrderByXZDistanceFromOrigin)
-			self.rng:Shuffle(spawners)
-
-			self:SpawnCraftingDrop(spawners[1], drop)
-		end
+	if not TheNet:IsHost() then
+		return
 	end
+
+	if not ShouldSpawnLootInThisRoom() then
+		return
+	end
+
+	self.inst:RemoveEventCallback("room_complete", self._on_room_complete_fn)
+
+	local reward = TheDungeon:GetDungeonMap():GetRewardForCurrentRoom()
+	local drop = ENUM_TO_DROP[reward]
+	if not drop then
+		return
+	end
+
+	local spawners = TheWorld.components.powerdropmanager.spawners
+	-- TODO @chrisp #loot - sort then shuffle? wut? I think this has just been left here in order to clone TheWorld.components.powerdropmanager.spawners
+	table.sort(spawners, EntityScript.OrderByXZDistanceFromOrigin)
+	self.rng:Shuffle(spawners)
+	self:SpawnCraftingDrop(spawners[1], drop)
 end
 
 function CraftingDropManager:SpawnCraftingDrop(spawner, drop)
@@ -71,6 +79,37 @@ function CraftingDropManager:SpawnCraftingDrop(spawner, drop)
 			appear_delay_ticks = TUNING.POWERS.DROP_SPAWN_INITIAL_DELAY_FRAMES,
 		})
 	return drop
+end
+
+local get_num_corestones = function(rng)
+	dbassert(TheNet:IsHost(), "trying to find soul count when you're not the host")
+	local difficulty = TheDungeon:GetCurrentDifficulty()
+	local bag_name = "corestone_reward_"..difficulty
+	local local_players = TheNet:GetLocalPlayerList()
+
+	--pick from host player grabbag		
+	if #local_players > 0 then
+		local player = GetPlayerEntityFromPlayerID(local_players[1])
+		if player then
+			return player.components.grabbag:PickFromBag( bag_name, TUNING.CORESTONE_REWARD_MODIFIER[difficulty], rng )
+		end
+	end
+
+	return rng:PickValue(TUNING.CORESTONE_REWARD_MODIFIER[difficulty])
+end
+
+-- Given that lesser souls have been chosen as the room reward, return the number that should be bundled into a
+-- single pickup.
+function CraftingDropManager:GetSoulDropCount(soul_type)
+	if soul_type == "konjur_soul_lesser" then
+		return get_num_corestones(self.rng)
+	elseif soul_type == "konjur_soul_greater" then
+		return 1
+	elseif soul_type == "konjur_heart" then
+		return 1
+	else
+		dbassert(false, "Unrecognized soul_type: "..soul_type)
+	end
 end
 
 return CraftingDropManager

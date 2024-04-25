@@ -2,9 +2,10 @@ local DebugDraw = require "util.debugdraw"
 local DebugNodes = require "dbui.debug_nodes"
 local DebugPanel = require "dbui.debug_panel"
 local kassert = require "util.kassert"
-local kstring = require "util.kstring"
 local krandom = require "util.krandom"
+local kstring = require "util.kstring"
 local lume = require "util.lume"
+local mapgen = require "defs.mapgen"
 local playerutil = require"util.playerutil"
 require "util"
 
@@ -231,7 +232,7 @@ end
 
 function d_open_screen(screen_module, target_player, ...)
     target_player = target_player or ConsoleCommandPlayer()
-    print("d_open_screen: showing screen over top of", TheFrontEnd:GetFocusWidget())
+    print("d_open_screen: showing screen over top of", TheFrontEnd:GetActiveScreen())
 
     if DEBUG_CACHE.screens.scr then
         TheFrontEnd:PopScreen(DEBUG_CACHE.screens.scr)
@@ -437,6 +438,44 @@ function d_playerfollow(follower, leader, behavior)
     end
 end
 
+-- Make local players follow a leader player. Add to localexec so you only need
+-- to control one player:
+--   if TheNet:IsHost() then
+--      d_playerfollowlocal("attack")
+--   else
+--      d_playerfollowremote("attack")
+--   end
+function d_playerfollowlocal(behavior)
+	if DEBUG_CACHE.ents.playerfollowlocal then
+		DEBUG_CACHE.ents.playerfollowlocal:Remove()
+	end
+	DEBUG_CACHE.ents.playerfollowlocal = CreateEntity("d_playerfollowlocal")
+		:MakeSurviveRoomTravel()
+	local localleader = nil
+	local function ApplyToPlayer(source, player)
+		if localleader and localleader:IsValid() then
+			if player ~= localleader and player:IsLocal() then
+				d_playerfollow(player, localleader, behavior)
+			end
+		elseif player:IsLocal() then
+			localleader = player
+			TheLog.ch.Cheat:printf("d_playerfollowlocal assigned localleader=<%s>", localleader)
+			for id,ent in playerutil.LocalPlayers() do
+				d_playerfollow(ent, localleader, behavior)
+			end
+		end
+	end
+	-- Immediately apply in case players are already spawned.
+	local first_localleader = lume(AllPlayers)
+		:filter(EntityScript.IsLocal)
+		:first()
+		:result()
+	if first_localleader then
+		ApplyToPlayer(TheDungeon, first_localleader)
+	end
+	DEBUG_CACHE.ents.playerfollowlocal:ListenForEvent("playerentered", ApplyToPlayer, TheDungeon)
+end
+
 -- Make local players follow an arbitrary remote player. Add to localexec to
 -- make clients follow a remote:
 --   if not TheNet:IsHost() then
@@ -635,7 +674,7 @@ local function get_worldmap_safe()
 end
 
 function d_startdailyrun(location_id)
-    location_id = location_id or "kanft_swamp"
+    location_id = location_id or "bandi_swamp"
     local date = os.date("*t")
     local seed = os.time{year = date.year, month = date.month, day = date.day}
     d_startrun(location_id, seed)
@@ -645,30 +684,55 @@ end
 -- ascension override can only be used when launching from within an active world
 function d_startrun(location_id, rng_seed, alt_mapgen_id, ascension, quest_params)
     TheSaveSystem.cheats:SetValue("skip_new_game_flow", true)
-    TheLog.ch.Cheat:print("d_startrun", location_id, rng_seed, alt_mapgen_id, ascension, quest_params)
-    location_id = location_id or "kanft_swamp"
+    TheLog.ch.Cheat:print("d_startrun: raw params=", location_id, rng_seed, alt_mapgen_id, ascension, quest_params)
+    location_id = location_id or "bandi_swamp"
 	-- quest_params are optional: default is handled in RoomLoader.
     local biomes = require "defs.biomes"
-    TheAudio:StopAllSounds() -- Not normal flow, so clean up sounds.
+	if not biomes.locations[location_id] then
+		TheLog.ch.DebugCommands:printf("d_startrun: invalid location %s", location_id)
+		return
+	end
 
-    local start_fn = function()
-        local RoomLoader = require "roomloader"
-        RoomLoader.StartRunWithLocationData(biomes.locations[location_id], rng_seed, alt_mapgen_id, ascension, quest_params)
-    end
+	local debug_dungeon_run_params =
+	{
+		location_id = biomes.locations[location_id].id,
+		region_id = biomes.locations[location_id].region_id,
+		seed = rng_seed,
+		alt_mapgen_id = alt_mapgen_id,
+		ascension = ascension,
+	}
+	TheLog.ch.Cheat:printf("d_startrun: passed params=%s", tabletoordereddictstring(debug_dungeon_run_params))
+	d_startrunwithparams(debug_dungeon_run_params, quest_params)
+end
 
-    if not TheNet:IsInGame() then
-        TryStartNetwork()
-        TheGlobalInstance:DoTaskInTime(1, function()
-            start_fn()
-        end)
-    else
-        start_fn()
-    end
+function d_startrunwithparams(dungeon_run_params, quest_params)
+	if type(dungeon_run_params) ~= 'table' then
+		TheLog.ch.Cheat:print("d_startrun: invalid run params")
+		return
+	elseif quest_params and type(quest_params) ~= 'table' then
+		TheLog.ch.Cheat:print("d_startrun: invalid quest params")
+		return
+	end
+
+	TheAudio:StopAllSounds() -- Not normal flow, so clean up sounds.
+	local start_fn = function()
+		local RoomLoader = require "roomloader"
+		RoomLoader.StartRun(dungeon_run_params, quest_params)
+	end
+
+	if not TheNet:IsInGame() then
+		TryStartNetwork()
+		TheGlobalInstance:DoTaskInTime(1, function()
+			start_fn()
+		end)
+	else
+		start_fn()
+	end
 end
 
 local function start_specific_room(roomtype, location_id, world)
     TheSaveSystem.cheats:SetValue("skip_new_game_flow", true)
-    location_id = location_id or "kanft_swamp"
+    location_id = location_id or "bandi_swamp"
     local biomes = require "defs.biomes"
     local biome_location = biomes.locations[location_id]
     if not world then
@@ -684,6 +748,10 @@ local function start_specific_room(roomtype, location_id, world)
         })
 end
 
+function d_returntotown()
+    TheDungeon:GetDungeonMap():ReturnToTown()
+end
+
 function d_starthype(location_id)
     return start_specific_room("hype", location_id)
 end
@@ -696,6 +764,15 @@ function d_startboss(location_id)
     return start_specific_room("boss", location_id)
 end
 
+function d_startmetaunlock(location_id)
+    return start_specific_room("metaunlock", location_id)
+end
+
+function d_startsmallroom(roomtype, location_id)
+    assert(mapgen.roomtypes.Trivial:Contains(roomtype), "Need to know what goes in the small room (powerupgrade, potion, etc)?")
+    return start_specific_room(roomtype, location_id, "swamp_small_nesw")
+end
+
 function d_startmarket(location_id)
     if TheWorld then
         d_fill_markets()
@@ -704,16 +781,16 @@ function d_startmarket(location_id)
 end
 
 function d_restartrun()
-    if InGamePlay() and TheNet:IsHost() and TheNet:IsInGame() and TheWorld and not TheWorld:HasTag("town") then
-        local mode, world, regionID, locationID, seed, altMapGenID, ascension, _seqNr, questParams = TheNet:GetRunData()
-        if mode == STARTRUNMODE_DEFAULT then
-            d_startrun(locationID, seed, altMapGenID, ascension, questParams)
-        elseif mode == STARTRUNMODE_ARENA then
-            start_specific_room(regionID, locationID, world) -- regionID is roomtype for arenas
-        else
-            assert(false, "Unhandled start run mode: %d", mode)
-        end
-    end
+	if InGamePlay() and TheNet:IsHost() and TheNet:IsInGame() and TheWorld and not TheWorld:HasTag("town") then
+		local mode, _seqNr, dungeon_run_params, quest_params = TheNet:GetRunData()
+		if mode == STARTRUNMODE_DEFAULT then
+			d_startrunwithparams(dungeon_run_params, quest_params)
+		elseif mode == STARTRUNMODE_ARENA then
+			start_specific_room(dungeon_run_params.roomtype, dungeon_run_params.location_id, dungeon_run_params.arena_world_prefab)
+		else
+			assert(false, "Unhandled start run mode: %d", mode)
+		end
+	end
 end
 
 function d_loadempty(world)
@@ -837,6 +914,7 @@ end
 
 --Force load ALL prefab files for dev
 function d_allprefabs()
+    print("Ran d_allprefabs()")
     local existing = {}
     for i = 1, #PREFABFILES do
         existing[PREFABFILES[i]] = true
@@ -959,7 +1037,6 @@ end
 function d_powerup(count)
     local powers = {
         "pwr_attack_dice",
-        "pwr_grand_entrance",
         "pwr_retribution",
         "pwr_damage_until_hit",
         "pwr_heal_on_focus_kill",
@@ -975,6 +1052,13 @@ function d_powerup(count)
         "pwr_volatile_weaponry",
         "pwr_pump_and_dump",
         "pwr_momentum",
+		"pwr_down_to_business",
+		"pwr_grand_entrance",
+		"pwr_extroverted",
+		"pwr_heal_on_quick_rise",
+		"pwr_introverted",
+		"pwr_wrecking_ball",
+		"pwr_getaway",
     }
 
     count = count or #powers
@@ -1092,21 +1176,20 @@ end
 
 function d_slide(on_done)
     local flags = nil
---      TheGame:FE():FadeTransition( function()
-    local on_done = function()
-                print("done with slideshow!")
-            end
+    -- TheGame:FE():FadeTransition( function()
+    on_done = on_done or function()
+        print("done with slideshow!")
+    end
     --function FrontEnd:Fade(in_or_out, time_to_take, cb, fade_delay_time, delayovercb, fadeType)
 
     TheFrontEnd:Fade(FADE_OUT, 0.5, function()
-                    local SlideshowScreen = require "screens.slideshowscreen"
-                    TheFrontEnd:PushScreen( SlideshowScreen( "rotwood_intro", on_done, flags) )
-                    TheFrontEnd:Fade(FADE_IN, 0.5)
-                      end)
+        local SlideshowScreen = require "screens.slideshowscreen"
+        TheFrontEnd:PushScreen( SlideshowScreen( "rotwood_intro", on_done, flags) )
+        TheFrontEnd:Fade(FADE_IN, 0.5)
+    end)
 end
 
 local function load_mystery(mystery_type, mystery_name, world, force_reload)
-    local mapgen = require "defs.mapgen"
     assert(mapgen.roomtypes.Trivial:Contains(mystery_type), "Not a valid mystery roomtype.")
 
     if not mystery_name or mystery_name:len() == 0 then
@@ -1144,7 +1227,7 @@ end
 function d_minigamestart()
     for k,v in pairs(Ents) do
         if v.prefab == "npc_specialeventhost" then
-            -- jambell: Gross temporary way of doing this for now, until specialeventroommanager is registered on TheWorld
+            -- TODO Gross temporary way of doing this for now, until specialeventroommanager is registered on TheWorld
             v.specialeventroommanager.components.specialeventroommanager:StartCountdown(ConsoleCommandPlayer())
             break
         end
@@ -1152,7 +1235,7 @@ function d_minigamestart()
 end
 
 --[[
-TODO(jambell): make one function that loads a minigame and starts into it immediately. notes from dbriscoe:
+TODO: make one function that loads a minigame and starts into it immediately. notes from dbriscoe:
 
 Use cheats to pass cheat data between instances:
 
@@ -1396,7 +1479,7 @@ function d_set_equipped_ilvl(num)
         for i, slot in ipairs(SLOTS) do
             local item = inventoryhoard:GetEquippedItem(slot)
             if item then
-                item:SetItemLevel(num)
+                item:DebugForceSetItemLevel(num)
             end
         end
     end
@@ -1463,29 +1546,38 @@ function d_owlforestmaterials(runs)
 
     local epic_drops = {
     }
+    c_lessersoul(runs)
     -- d_runmaterials(runs, regular_drops, epic_drops)
 end
 
 function d_bandiswampmaterials(runs)
     local regular_drops = {}
     local epic_drops = {}
+    c_lessersoul(runs)
     -- d_runmaterials(runs, regular_drops, epic_drops)
 end
 
-function d_advanceruns(runs, region, progress, victory)
+function d_thatcherswampmaterials(runs)
+    local regular_drops = {}
+    local epic_drops = {}
+    c_lessersoul(runs)
+    -- d_runmaterials(runs, regular_drops, epic_drops)
+end
+
+function d_advanceruns(runs, dungeon, progress, victory)
     for i=1, runs do
-        d_metaprogressrun(region, progress, victory)
+        d_metaprogressrun(dungeon, progress, victory)
     end
 end
 
-function d_metaprogressrun(region, progress, victory)
-    region = region or "forest"
+function d_metaprogressrun(dungeon, progress, victory)
+    dungeon = dungeon or "treemon_forest"
     progress = progress or 1
     if victory == nil then
         victory = true
     end
 
-    TheDungeon.progression.components.runmanager:Debug_PushProgress(region, progress, victory)
+    TheDungeon.progression.components.runmanager:Debug_PushProgress(dungeon, progress, victory)
 end
 
 function d_quickstart(checkpoint)
@@ -1493,46 +1585,32 @@ function d_quickstart(checkpoint)
         -- The menu for debugkeys. Here to easily keep the labels in sync.
         return {
             {
-                name = "(1) Mother Treek/Killed Miniboss",
-                fn = function()
-                d_quickstart(1)
-                end,
-            },
-
-            {
-                name = "(2) Mother Treek/Killed Boss",
+                name = "(1) Mother Treek/Killed Boss",
                 fn = function()
                 d_quickstart(2)
                 end,
             },
 
             {
-                name = "(3) Owlitzer/Killed Miniboss",
-                fn = function()
-                d_quickstart(3)
-                end,
-            },
-
-            {
-                name = "(4) Owlitzer/Killed Boss",
+                name = "(2) Owlitzer/Killed Boss",
                 fn = function()
                 d_quickstart(4)
                 end,
             },
 
             {
-                name = "(5) Swamp/Killed Miniboss",
-                fn = function()
-                d_quickstart(5)
-                end,
-            },
-
-            {
-                name = "(6) Swamp/Killed Boss (cook)",
+                name = "(3) Enigmox/Killed Boss",
                 fn = function()
                 d_quickstart(6)
                 end,
             },
+
+            {
+                name = "(4) Thatcher/Killed Boss",
+                fn = function()
+                d_quickstart(7)
+                end,
+            }
         }
     end
     if not TheWorld:HasTag("town") then
@@ -1559,6 +1637,14 @@ function d_quickstart(checkpoint)
         end)
     end
 
+    local function TryCompleteWorldQuest(quest_id, obj_id)
+        local qm = TheDungeon.progression.components.questcentral:GetQuestManager()
+        local quest = qm:FindQuestByID(quest_id)
+        if quest and not quest:IsComplete() then
+            quest:Complete(obj_id)
+        end
+    end
+
     local function TrySpawnHousedNpc(npc_prefab)
         local npc_found = c_find(npc_prefab)
         local home = npc_found and npc_found.components.npc:GetHome()
@@ -1578,42 +1664,36 @@ function d_quickstart(checkpoint)
         function() -- 1
             d_treeforestmaterials()
             d_advanceruns(10)
-            TryComplete("main_defeat_megatreemon", "quest_intro")
-            TryComplete("main_defeat_megatreemon", "find_target_miniboss")
-            TryComplete("main_defeat_megatreemon", "defeat_target_miniboss")
-            TryComplete("intro_meeting_armorsmith")
-            TryComplete("twn_unlock_polearm")
 
-            TheWorld:UnlockFlag("wf_seen_room_bonus")
+            TryCompleteWorldQuest("wrld_intro_meeting_armorsmith")
+            TryCompleteWorldQuest("lgc_npc_spawn_conditions", "spawn_npc_armorsmith_in_dungeon")
 
             playerutil.DoForAllLocalPlayers(function(player)
-            player.components.unlocktracker:UnlockEnemy("cabbageroll")
-            player.components.unlocktracker:UnlockRecipe("cabbageroll")
+                player:UnlockFlag("pf_has_taken_power")
 
-            player.components.unlocktracker:UnlockEnemy("blarmadillo")
-            player.components.unlocktracker:UnlockRecipe("blarmadillo")
+                player.components.unlocktracker:UnlockEnemy("cabbageroll")
+                player.components.unlocktracker:UnlockRecipe("cabbageroll")
 
-            player.components.unlocktracker:UnlockEnemy("beets")
-            player.components.unlocktracker:UnlockRecipe("beets")
+                player.components.unlocktracker:UnlockEnemy("blarmadillo")
+                player.components.unlocktracker:UnlockRecipe("blarmadillo")
 
-            player.components.unlocktracker:UnlockEnemy("zucco")
-            player.components.unlocktracker:UnlockRecipe("zucco")
+                player.components.unlocktracker:UnlockEnemy("beets")
+                player.components.unlocktracker:UnlockRecipe("beets")
 
-            player.components.unlocktracker:UnlockEnemy("yammo")
-            player.components.unlocktracker:UnlockRecipe("yammo")
+                player.components.unlocktracker:UnlockEnemy("zucco")
+                player.components.unlocktracker:UnlockRecipe("zucco")
 
-            player.components.unlocktracker:UnlockWeaponType(WEAPON_TYPES.POLEARM)
-            player.components.unlocktracker:UnlockRecipe("polearm_basic")
-            player.components.unlocktracker:UnlockRecipe("polearm_startingforest")
-            player.components.inventoryhoard:Debug_GiveItem("WEAPON", "polearm_basic", 1, true)
+                player.components.unlocktracker:UnlockEnemy("yammo")
+                player.components.unlocktracker:UnlockRecipe("yammo")
+
+                player.components.unlocktracker:UnlockWeaponType(WEAPON_TYPES.POLEARM)
+                player.components.inventoryhoard:Debug_GiveItem("WEAPON", "polearm_basic", 1, true)
             end)
         end,
 
         -- Beat Treemon Forest boss
         -- Unlock Owl Forest
         function() -- 2
-            TryComplete("main_defeat_megatreemon")
-            TryComplete("main_defeat_owlitzer", "quest_intro")
             d_advanceruns(10)
             c_konjurheart("megatreemon")
             d_treeforestmaterials()
@@ -1621,7 +1701,10 @@ function d_quickstart(checkpoint)
             TheDungeon.progression.components.ascensionmanager:DEBUG_UnlockAscension("treemon_forest", 1)
 
             playerutil.DoForAllLocalPlayers(function(player)
-            player.components.unlocktracker:UnlockEnemy("megatreemon")
+                player.components.unlocktracker:UnlockEnemy("megatreemon")
+                player.components.unlocktracker:UnlockFlag("pf_owlitzer_forest_reveal")
+                player.components.progresstracker:IncrementKillValue("megatreemon")
+                player.components.huntunlocker:EvaluateHuntUnlocks()
             end)
         end,
 
@@ -1630,23 +1713,19 @@ function d_quickstart(checkpoint)
         function() -- 3
             d_owlforestmaterials()
             d_advanceruns(10)
-            TryComplete("main_defeat_owlitzer", "find_target_miniboss")
-            TryComplete("main_defeat_owlitzer", "defeat_target_miniboss")
-            TryComplete("intro_meeting_cook")
 
             playerutil.DoForAllLocalPlayers(function(player)
-            player.components.unlocktracker:UnlockEnemy("gnarlic")
-            player.components.unlocktracker:UnlockRecipe("gnarlic")
+                player.components.unlocktracker:UnlockEnemy("gnarlic")
+                player.components.unlocktracker:UnlockRecipe("gnarlic")
 
-            player.components.unlocktracker:UnlockEnemy("windmon")
-            player.components.unlocktracker:UnlockRecipe("windmon")
+                player.components.unlocktracker:UnlockEnemy("windmon")
+                player.components.unlocktracker:UnlockRecipe("windmon")
 
-            player.components.unlocktracker:UnlockEnemy("gourdo")
-            player.components.unlocktracker:UnlockRecipe("gourdo")
+                player.components.unlocktracker:UnlockEnemy("gourdo")
+                player.components.unlocktracker:UnlockRecipe("gourdo")
 
-            player.components.unlocktracker:UnlockEnemy("battoad")
-            player.components.unlocktracker:UnlockRecipe("battoad")
-
+                player.components.unlocktracker:UnlockEnemy("battoad")
+                player.components.unlocktracker:UnlockRecipe("battoad")
             end)
         end,
 
@@ -1654,16 +1733,20 @@ function d_quickstart(checkpoint)
         -- Invite Hamish to Town
         -- Unlock Bandi Swamp
         function() -- 4
-            TryComplete("main_defeat_owlitzer")
-            TryComplete("intro_meeting_blacksmith", "meet_in_dungeon")
             d_advanceruns(10)
             c_konjurheart("owlitzer")
-            d_owlforestmaterials()
+            d_owlforestmaterials(10)
+
+            TryCompleteWorldQuest("wrld_intro_meeting_blacksmith")
+            TryCompleteWorldQuest("lgc_npc_spawn_conditions", "spawn_npc_blacksmith_in_dungeon")
 
             TheDungeon.progression.components.ascensionmanager:DEBUG_UnlockAscension("owlitzer_forest", 1)
 
             playerutil.DoForAllLocalPlayers(function(player)
-            player.components.unlocktracker:UnlockEnemy("owltizer")
+                player.components.progresstracker:IncrementKillValue("owltizer")
+                player.components.huntunlocker:EvaluateHuntUnlocks()
+                player.components.unlocktracker:UnlockEnemy("owltizer")
+                player.components.unlocktracker:UnlockFlag("pf_bandi_swamp_reveal")
             end)
         end,
 
@@ -1672,50 +1755,61 @@ function d_quickstart(checkpoint)
         function() -- 5
             d_bandiswampmaterials()
             d_advanceruns(10)
-            TryComplete("main_defeat_bandicoot", "quest_intro")
-            TryComplete("main_defeat_bandicoot", "find_target_miniboss")
-            TryComplete("main_defeat_bandicoot", "defeat_target_miniboss")
-            TryComplete("intro_meeting_blacksmith")
 
             playerutil.DoForAllLocalPlayers(function(player)
-            player.components.unlocktracker:UnlockEnemy("mothball")
-            player.components.unlocktracker:UnlockRecipe("mothball")
+                player.components.unlocktracker:UnlockEnemy("mothball")
+                player.components.unlocktracker:UnlockRecipe("mothball")
 
-            player.components.unlocktracker:UnlockEnemy("mothball_teen")
-            player.components.unlocktracker:UnlockRecipe("mothball_teen")
+                player.components.unlocktracker:UnlockEnemy("mothball_teen")
+                player.components.unlocktracker:UnlockRecipe("mothball_teen")
 
-            player.components.unlocktracker:UnlockEnemy("mothball_spawner")
-            player.components.unlocktracker:UnlockRecipe("mothball_spawner")
+                player.components.unlocktracker:UnlockEnemy("mothball_spawner")
+                player.components.unlocktracker:UnlockRecipe("mothball_spawner")
 
-            player.components.unlocktracker:UnlockEnemy("bulbug")
-            player.components.unlocktracker:UnlockRecipe("bulbug")
+                player.components.unlocktracker:UnlockEnemy("bulbug")
+                player.components.unlocktracker:UnlockRecipe("bulbug")
 
-            player.components.unlocktracker:UnlockEnemy("mossquito")
-            player.components.unlocktracker:UnlockRecipe("mossquito")
+                player.components.unlocktracker:UnlockEnemy("mossquito")
+                player.components.unlocktracker:UnlockRecipe("mossquito")
 
-            player.components.unlocktracker:UnlockEnemy("eyev")
-            player.components.unlocktracker:UnlockRecipe("eyev")
+                player.components.unlocktracker:UnlockEnemy("eyev")
+                player.components.unlocktracker:UnlockRecipe("eyev")
 
-            player.components.unlocktracker:UnlockEnemy("sporemon")
-            player.components.unlocktracker:UnlockRecipe("sporemon")
+                player.components.unlocktracker:UnlockEnemy("sporemon")
+                player.components.unlocktracker:UnlockRecipe("sporemon")
 
-            player.components.unlocktracker:UnlockEnemy("groak")
-            player.components.unlocktracker:UnlockRecipe("groak")
-
+                player.components.unlocktracker:UnlockEnemy("groak")
+                player.components.unlocktracker:UnlockRecipe("groak")
             end)
         end,
 
         -- Beat Bandi Swamp Boss
         function() -- 6
-            TryComplete("main_defeat_bandicoot")
             d_advanceruns(10)
             c_konjurheart("bandicoot")
-            d_bandiswampmaterials()
+            d_bandiswampmaterials(10)
 
-            TheDungeon.progression.components.ascensionmanager:DEBUG_UnlockAscension("kanft_swamp", 1)
+            TheDungeon.progression.components.ascensionmanager:DEBUG_UnlockAscension("bandi_swamp", 1)
 
             playerutil.DoForAllLocalPlayers(function(player)
-            player.components.unlocktracker:UnlockEnemy("bandicoot")
+                player.components.progresstracker:IncrementKillValue("bandicoot")
+                player.components.huntunlocker:EvaluateHuntUnlocks()
+                player.components.unlocktracker:UnlockEnemy("bandicoot")
+                player.components.unlocktracker:UnlockFlag("pf_thatcher_swamp_reveal")
+            end)
+        end,
+
+        function() -- 7
+            d_advanceruns(10)
+            c_konjurheart("thatcher")
+            d_thatcherswampmaterials(10)
+
+            TheDungeon.progression.components.ascensionmanager:DEBUG_UnlockAscension("thatcher_swamp", 1)
+
+            playerutil.DoForAllLocalPlayers(function(player)
+                player.components.progresstracker:IncrementKillValue("thatcher")
+                player.components.huntunlocker:EvaluateHuntUnlocks()
+                player.components.unlocktracker:UnlockEnemy("thatcher")
             end)
         end,
 
@@ -1750,8 +1844,8 @@ function d_quickstart(checkpoint)
 
     for i=1,checkpoint do
         checkpoints[i]()
-        RefreshNPCs()
     end
+    RefreshNPCs()
 end
 
 function d_export_all_editors()
@@ -1923,33 +2017,8 @@ function d_unlock_all_cosmetics()
     end
 end
 
-function d_purchase_all_cosmetics()
-    d_unlock_all_cosmetics()
-
-    local Cosmetics = require "defs.cosmetics.cosmetics"
-    for group, items in pairs(Cosmetics.Items) do
-        for name, item in pairs(items) do
-            ThePlayer.components.unlocktracker:PurchaseCosmetic(name, group)
-        end
-    end
-end
-
--- Slightly misleading name, we're only unpurchasing the ones that are not purchased by default
-function d_unpurchase_all_cosmetics()
-    local Cosmetics = require "defs.cosmetics.cosmetics"
-    for group, items in pairs(Cosmetics.Items) do
-        for name, item in pairs(items) do
-            if not item.purchased then
-                ThePlayer.components.unlocktracker:UnpurchaseCosmetic(name, group)
-            end
-        end
-    end
-end
-
 -- Same as the function above, we're only locking the cosmetics not unlocked by default
 function d_lock_all_cosmetics()
-    d_unpurchase_all_cosmetics()
-
     local Cosmetics = require "defs.cosmetics.cosmetics"
     for group, items in pairs(Cosmetics.Items) do
         for name, item in pairs(items) do
@@ -2162,16 +2231,291 @@ function d_zombietest(stagger_ticks)
     end
 end
 
-function d_unlock_all_dyes(purchase)
+function d_unlock_all_playercraftables(player)
+    player = player or ThePlayer
+    local ItemCatalog = require "defs.itemcatalog"
+    for _, group in pairs(ItemCatalog.All.Items) do
+        for k, v in pairs(group) do
+            if v.tags.playercraftable then
+                ThePlayer.components.unlocktracker:UnlockRecipe(k)
+            end
+        end
+    end    
+end
+
+function d_give_all_playercraftables(player, amount)
+    player = player or ThePlayer
+    amount = amount or 1
+    local ItemCatalog = require "defs.itemcatalog"
+    for _, group in pairs(ItemCatalog.All.Items) do
+        for k, v in pairs(group) do
+            if v.tags.playercraftable then
+                player.components.unlocktracker:UnlockRecipe(k)
+                player.components.inventoryhoard:AddStackable(v, amount)
+            end
+        end
+    end    
+end
+
+function d_lock_all_playercraftables(player, unlock_default_craftables)
+    local default_unlocked = {}
+    if unlock_default_craftables then
+        local MetaProgress = require "defs.metaprogression.metaprogress" 
+        local rewards = MetaProgress.FindProgressByName("default").rewards
+        for _, reward in ipairs(rewards) do
+            if reward.name == "basic_decor" then
+                for _, default_craftable in ipairs(reward.rewards) do
+                    table.insert(default_unlocked, default_craftable.def.name)
+                end
+            end
+        end
+    end
+
+    player = player or ThePlayer
+    local ItemCatalog = require "defs.itemcatalog"
+    for _, group in pairs(ItemCatalog.All.Items) do
+        for k, v in pairs(group) do
+            if v.tags.playercraftable then
+                if unlock_default_craftables then
+                    if not table.contains(default_unlocked, k) then
+                        ThePlayer.components.unlocktracker:LockRecipe(k)
+                    end
+                else
+                    ThePlayer.components.unlocktracker:LockRecipe(k)
+                end
+            end
+        end
+    end    
+end
+
+function d_unlock_all_dyes()
     local Cosmetics = require "defs.cosmetics.cosmetics"
     for slot, sets in pairs(Cosmetics.EquipmentDyes) do
         for set, defs in pairs(sets) do
             for name, def in pairs(defs) do
                 ThePlayer.components.unlocktracker:UnlockCosmetic(def.armour_slot, def.short_name)
-                if purchase then
-                    ThePlayer.components.unlocktracker:PurchaseCosmetic(def.armour_slot, def.short_name)
-                end
             end
         end
     end 
+end
+
+local function _sort_and_spawn_power_items(powers)
+    local lume = require "util.lume"
+    local sorted_powers = lume.sort(powers, function(a,b)
+        return a.pretty.name < b.pretty.name
+    end)
+    local start_x = -18
+    local start_z = 9
+    local current_x = start_x
+    local current_z = start_z
+
+    local spawned = 1
+    for _,def in pairs(sorted_powers) do
+        local poweritem = SpawnPrefab("power_pickup_single", ThePlayer)
+        poweritem:PushEvent("initialized_ware", {
+            ware_name = def.name,
+            power = def.name,
+            power_type = def.power_type,
+        })
+        if spawned > 12 then
+            current_z = current_z - 5
+            current_x = start_x
+            spawned = 0
+        end
+        poweritem.Transform:SetPosition(current_x, 0, current_z)
+        current_x = current_x + 3
+        spawned = spawned + 1
+    end
+
+    -- Get rid of other stuff and make it easy to look around
+    d_clearroom()
+    ThePlayer:AddComponent("roomlock")
+    ThePlayer.Physics:StartPassingThroughObjects()
+end
+
+function d_spawn_relics()
+    local Power = require "defs.powers"
+    local powers = Power.GetAllPowers()
+    powers = TheWorld.components.powerdropmanager:FilterByType(powers, Power.Types.RELIC)
+    powers = TheWorld.components.powerdropmanager:FilterByDroppable(powers)
+    _sort_and_spawn_power_items(powers)
+end
+
+function d_spawn_fabled_relics()
+    local Power = require "defs.powers"
+    local powers = Power.GetAllPowers()
+    powers = TheWorld.components.powerdropmanager:FilterByType(powers, Power.Types.FABLED_RELIC)
+    powers = TheWorld.components.powerdropmanager:FilterByDroppable(powers)
+    _sort_and_spawn_power_items(powers)
+end
+
+function d_spawn_skills()
+    local Power = require "defs.powers"
+    local powers = Power.GetAllPowers()
+    powers = TheWorld.components.powerdropmanager:FilterByType(powers, Power.Types.SKILL)
+    powers = TheWorld.components.powerdropmanager:FilterByDroppable(powers)
+    _sort_and_spawn_power_items(powers)
+end
+
+local function _show_relics(type)
+    local PowerWidget = require"widgets.ftf.powerwidget"
+    local SkillWidget = require"widgets.ftf.skillwidget"
+    local FoodWidget = require"widgets.ftf.foodwidget"
+    local Text = require"widgets.text"
+    local lume = require"util.lume"
+    local templates = require"widgets.ftf.templates"
+    local Screen = require("widgets/screen")
+    local Widget = require("widgets/widget")
+    local itemforge = require"defs/itemforge"
+
+    local Power = require "defs.powers"
+    local powers = Power.GetAllPowers()
+    powers = TheWorld.components.powerdropmanager:FilterByType(powers, type)
+    powers = lume.filter(powers, function(a) return a.show_in_ui end)
+
+    local sorted_powers = lume.sort(powers, function(a,b)
+        return a.pretty.name < b.pretty.name
+    end)
+
+    local power_widget = Class(Widget, function(self, def, width)
+        Widget._ctor(self)
+
+        local root = self:AddChild(Widget())
+
+        local pwr = itemforge.CreatePower(def)
+
+        local widget_type = PowerWidget
+
+        if def.power_type == Power.Types.SKILL then
+            widget_type = SkillWidget
+        elseif def.power_type == Power.Types.FOOD then
+            widget_type = FoodWidget
+        end
+
+        local pwr_wgt = root:AddChild(widget_type(width, ThePlayer, pwr))
+
+        local name_str = def.pretty.name 
+        local desc_str = Power.GetDescForPower(pwr)
+        local text_str = string.format("%s\n%s", name_str, desc_str)
+        root:AddChild(Text(FONTFACE.DEFAULT, 35, name_str))
+            :SetRegionSize(width, 40)
+            :ShrinkToFitRegion(true)
+            :LayoutBounds("center", "below")
+
+        root:AddChild(Text(FONTFACE.DEFAULT, 35, def.name))
+            :SetRegionSize(width, 40)
+            :ShrinkToFitRegion(true)
+            :EnableWordWrap(true)
+            :LayoutBounds("center", "below")
+    end)
+
+    local dummy_screen = Class(Screen, function(self)
+        Screen._ctor(self, "dummy_screen")
+        self:AddChild(templates.BackgroundTint())
+
+        local columns = 13
+        local padding = 10
+        local width = RES_X/columns
+
+        local root = self:AddChild(Widget())
+        for _, def in ipairs(sorted_powers) do
+            root:AddChild(power_widget(def, width-padding))
+        end
+
+        root:LayoutChildrenInGrid(columns, padding)
+        root:LayoutBounds("left", "top", self)
+
+        self.default_focus = root.children[1]
+    end)
+
+    TheFrontEnd:PushScreen(dummy_screen())
+end
+
+function d_show_relics()
+    local Power = require "defs.powers"
+    _show_relics(Power.Types.RELIC)
+end
+
+function d_show_fabled_relics()
+    local Power = require "defs.powers"
+    _show_relics(Power.Types.FABLED_RELIC)
+end
+
+function d_show_skills()
+    local Power = require "defs.powers"
+    _show_relics(Power.Types.SKILL)
+end
+
+function d_show_food()
+    local Power = require "defs.powers"
+    _show_relics(Power.Types.FOOD)
+end
+
+function d_unlock_all_masteries()
+    local Mastery = require "defs.masteries"
+    local manager = GetDebugPlayer().components.masterymanager
+    for slot, masteries in pairs(Mastery.Items) do
+        for name, def in pairs(masteries) do
+            local mastery = manager:GetMastery(def)
+            if mastery == nil then
+                manager:AddMasteryByDef(def)
+            end
+        end
+    end
+end
+
+function d_complete_all_masteries()
+    local Mastery = require "defs.masteries"
+    local manager = GetDebugPlayer().components.masterymanager
+    for slot, masteries in pairs(Mastery.Items) do
+        for name, def in pairs(masteries) do
+            local mastery = manager:GetMastery(def)
+            if mastery == nil then
+                manager:AddMasteryByDef(def)
+                mastery = manager:GetMastery(def)
+            end
+            mastery:DeltaProgress( mastery:GetMaxProgress() )
+        end
+    end
+end
+
+function d_unlock_all_dungeons_and_frenzies()
+    local biomes = require"defs.biomes"
+
+    playerutil.DoForAllLocalPlayers(function(player)
+        for id, def in pairs(biomes.locations) do
+            if def.type == biomes.location_type.DUNGEON and not def.hide then
+                local boss = def.monsters.bosses[1]
+                player.components.progresstracker:IncrementKillValue(boss)
+                for _, type in pairs(WEAPON_TYPES) do
+                    player.components.unlocktracker:SetAscensionLevelCompleted(def.id, type, 0)
+                end
+                player:UnlockFlag(("pf_%s_reveal"):format(def.id))
+            end
+        end
+
+        player.components.huntunlocker:EvaluateHuntUnlocks()
+    end)
+end
+
+--- Immediately grant exactly enough experience to advance one level of biome exploration, for all players.
+function d_grant_exp_for_level()
+	local MetaProgress = require "defs.metaprogression.metaprogress"
+	if not TheDungeon then
+		return
+	end
+	local map = TheDungeon:GetDungeonMap()
+	if not map then
+		return
+	end
+	local progress_defs = MetaProgress.Items[MetaProgress.Slots.BIOME_EXPLORATION];
+	local progress_def = progress_defs[map.data.location_id]
+	if not progress_def then
+		return
+	end
+    playerutil.DoForAllLocalPlayers(function(player)
+		local progress_instance = player.components.metaprogressmanager:ManifestProgress(progress_def)
+		local exp = progress_instance:GetEXPUntilNextLevel()
+		progress_instance:GrantExperienceIfPossible(exp)
+	end)
 end

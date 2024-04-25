@@ -1,4 +1,4 @@
-local Panel = require "widgets/panel"
+local Image = require("widgets/image")
 local Text = require "widgets/text"
 local Widget = require "widgets/widget"
 local DisplayValueHorizontal = require "widgets.ftf.displayvaluehorizontal"
@@ -22,10 +22,8 @@ local ItemTooltip = Class(Widget, function(self, width, ischild)
 	width = width or DEFAULT_TT_WIDTH
 	width = width - self.padding_h * 2
 
-	self.bg = self:AddChild(Panel("images/ui_ftf_shop/tooltip_bg.tex"))
-		:SetNineSliceCoords(124, 71, 130, 78)
-		:SetNineSliceBorderScale(0.5)
-		:SetMultColor(HexToRGB(0X4f3b33FF))
+	self.bg = self:AddChild(Image("images/ui_ftf_relic_selection/relic_bg_blank.tex"))
+		:ApplyMultColor(0, 0, 0, TOOLTIP_BG_ALPHA)
 
 	self.container = self:AddChild(Widget("Container"))
 
@@ -73,9 +71,9 @@ end)
 
 ItemTooltip.LAYOUT_SCALE =
 {
-    [SCREEN_MODE.MONITOR] = 2.5,
-    [SCREEN_MODE.TV] = 3,
-    [SCREEN_MODE.SMALL] = 3,
+    [ScreenMode.s.MONITOR] = 2.5,
+    [ScreenMode.s.TV] = 3,
+    [ScreenMode.s.SMALL] = 3,
 }
 
 function ItemTooltip:OnExamine(down)
@@ -176,13 +174,9 @@ function ItemTooltip:LayoutWithContent( data, do_diff )
 		self.usage_data_text:Hide()
 	end
 
-	if self.item.ilvl then
-		self.ilvl_text:SetText(string.format("%s: %s", STRINGS.UI.EQUIPMENT_STATS.ILVL.name, self.item.ilvl))
-		self.ilvl_text:Show()
-	else
-		self.ilvl_text:SetText("")
-		self.ilvl_text:Hide()
-	end
+	local item_ilvl = self.item:GetEffectiveItemLevel()
+	self.ilvl_text:SetText(string.format("%s: %s", STRINGS.UI.EQUIPMENT_STATS.ILVL.name, item_ilvl))
+	self.ilvl_text:Show()
 
 	-- Update contents
 	self.title_text:SetText(tt or "")
@@ -207,12 +201,14 @@ function ItemTooltip:LayoutWithContent( data, do_diff )
 	self.ilvl_text:LayoutBounds("left", "below", self.usage_data_text)
 		:Offset(0, -15)
 
-	self.bg:SizeToWidgets(40, self.container)
+	local w, h = self.container:GetSize()
+	self.bg:SetSize(w+50, h+50)
 
 	self.ilvl_text:LayoutBounds("right", "bottom", self.bg)
 		:Offset(0, 20)
 
-	self.bg:SizeToWidgets(40, self.container)
+	local w, h = self.container:GetSize()
+	self.bg:SetSize(w+50, h+50)
 
 	self.container:LayoutBounds("center", "center", self.bg)
 

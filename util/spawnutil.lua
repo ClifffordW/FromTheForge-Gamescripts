@@ -135,7 +135,7 @@ function spawnutil.SpawnPreviewPhantom(inst, prefab, alpha, optional_components_
 	ent:PushEvent("debug_spawned_as_preview")
 
 	ent.entity:SetParent(inst.entity)
-	-- HACK(dbriscoe): Must wait 2 ticks after creating child. Any less and
+	-- HACK(prop): Must wait 2 ticks after creating child. Any less and
 	-- *sometimes* child is double offset.
 	inst:DoTaskInTicks(2, function(inst_)
 		ent.Transform:SetPosition(0,0,0)
@@ -270,7 +270,7 @@ function spawnutil.DrawPatternLocation(inst, patterns, index_to_display)
 				-- Draw each prefab with a unique colour.
 				local c = color_map[place.prefab] or circular_index(colors, lume.count(color_map))
 				color_map[place.prefab] = c
-				DebugDraw.GroundCircle(x + place.v.x, z + place.v.z, 2, c)
+				DebugDraw.GroundCircle(x + place.v.x, z + place.v.z, 1, c)
 			end
 		end
 	end
@@ -459,6 +459,15 @@ function spawnutil.GetStartPointFromWorld(percent_x, percent_z)
 	return pt
 end
 
+
+local PROJECTILE_POWERMANAGER_EXEMPTIONS <const> =
+{
+	["combat"] = true,
+	["health"] = true,
+	["hitstopper"] = true,
+	["timer"] = true,
+}
+
 ---------------------------------------------------------------------
 -- Common initialization function for projectiles
 ---------------------------------------------------------------------
@@ -482,12 +491,14 @@ function spawnutil.SetupProjectileCommon(data, setPhysics)
 
 	inst:AddTag("projectile")
 
+	local powermanager_exemptions = shallowcopy(PROJECTILE_POWERMANAGER_EXEMPTIONS)
+
+	if data.name then
+		inst:SetPrefabName(data.name)
+	end
+
 	-- The below has already been defined in fx_prefab.fn (see MakeAutogenFx() function)
 	if not fx_prefab then
-		if data.name then
-			inst:SetPrefabName(data.name)
-		end
-
 		inst.entity:AddTransform()
 
 		if data.bank and data.build then
@@ -511,6 +522,7 @@ function spawnutil.SetupProjectileCommon(data, setPhysics)
 
 		if data.does_hitstop then
 			inst:AddComponent("hitstopper")
+			powermanager_exemptions["hitstopper"] = nil
 		end
 
 		if data.twofaced then
@@ -543,13 +555,19 @@ function spawnutil.SetupProjectileCommon(data, setPhysics)
 		if data.hit_flags then
 			inst.components.hitbox:SetHitFlags(data.hit_flags)
 		end
+
+		powermanager_exemptions["combat"] = nil
 	end
 
 	if not data.no_healthcomponent then
 		-- Some projectiles do not want a health component
 		inst:AddComponent("health")
 		inst.components.health:SetMax(data.health or 1, true)
+		powermanager_exemptions["health"] = nil
 	end
+
+	inst:AddComponent("powermanager") -- for teleporting and other emergent interactions
+	inst.components.powermanager:ExemptRequiredComponents(powermanager_exemptions)
 
 	assert(data.stategraph == nil or (data.stategraph and data.name), "SetupProjectileCommon has a stategraph parameter defined, but needs a name parameter defined as well!")
 	if data.stategraph then
@@ -921,6 +939,41 @@ function spawnutil.SetupAoECommon(data)
 	inst.Setup = function(inst, data, owner, ...) _setup_aoe(inst, data, owner, ...) end
 
 	return inst
+end
+
+---------------------------------------------------------------------
+-- Common spawn entity functions
+---------------------------------------------------------------------
+function spawnutil.SpawnAcidTrap(inst, trap_size, lifetime, xoffset, disable_splash)
+	local EffectEvents = require "effectevents"
+	local SGCommon = require "stategraphs.sg_common"
+
+	local trap = SGCommon.Fns.SpawnAtDist(inst, "trap_acid", xoffset or 0) -- This trap sits in the "init" state until we have told it to proceed. We need to tell it what its transform size + hitbox sizes should be first.
+	if not trap then return end
+
+	local trapdata =
+	{
+		size = trap_size, -- small, medium, large, etc. See sg_trap_acid for the list of acid types
+		traplifetime = lifetime,
+		disablesplash = disable_splash,
+	}
+
+	EffectEvents.MakeNetEventPushEventOnMinimalEntity(trap, "acid_start", trapdata)
+end
+
+-- Function that chooses a random point within a specifed radius around a target.
+function spawnutil.GetRandomPointAroundTarget(target, max_radius)
+	local target_pos = target:GetPosition()
+	local angle = math.random() * 360
+	local range = math.random() * (max_radius or 0)
+	local selected_pos = Vector3(target_pos.x + math.cos(math.rad(angle)) * range, 0, target_pos.z + math.sin(math.rad(angle)) * range)
+
+	-- Set inside map if selected point is out of bounds.
+	if not TheWorld.Map:IsWalkableAtXZ(selected_pos.x, selected_pos.z) then
+		selected_pos.x, selected_pos.z = TheWorld.Map:FindClosestXZOnWalkableBoundaryToXZ(selected_pos.x, selected_pos.z)
+	end
+
+	return selected_pos
 end
 
 return spawnutil

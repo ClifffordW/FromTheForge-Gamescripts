@@ -5,6 +5,7 @@ return {
   bank="fx_bandicoot_groundring",
   bloom=100.0,
   build="fx_bandicoot_groundring",
+  group="fx_bandicoot",
   onground=true,
   scalex=1.0,
   scaley=1.0,

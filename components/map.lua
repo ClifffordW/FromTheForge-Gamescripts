@@ -32,6 +32,7 @@ function Map:FindClosestPointOnWalkableBoundary(pt, padding_from_edge)
 	local x, z, distsq = self:FindClosestXZOnWalkableBoundaryToXZ(pt:GetXZ())
 
 	if padding_from_edge then
+		-- TODO @chrisp #physics - this is incorrect. It assumes that moving towards the origin is "in" from the edge.
 		local v = Vector3(x, 0, z)
 		if distsq < padding_from_edge * padding_from_edge then
 			-- Pull back from outside edges.

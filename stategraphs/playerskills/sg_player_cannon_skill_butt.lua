@@ -24,21 +24,8 @@ local ON_HIT_DODGE_WINDOW_FRAMES = 5 -- When the shove connects, how many frames
 local ON_HIT_LIGHTATTACK_WINDOW_FRAMES = 8 -- When the shove connects, how many frames can we cancel into a dodge?
 local ON_HIT_HEAVYATTACK_WINDOW_FRAMES = 5 -- When the shove connects, how many frames can we cancel into a dodge?
 
-local function ReloadOne(inst)
-	if inst.sg.mem.ammo < inst.sg.mem.ammo_max then
-		inst:PushEvent("cannon_reload", 1)
-		--sound
-		local params = {}
-		params.fmodevent = fmodtable.Event.Skill_CannonButt_MoreAmmo
-		local handle = soundutil.PlaySoundData(inst, params)
-		soundutil.SetInstanceParameter(inst, handle, "cannonAmmo", inst.sg.mem.ammo)
-
-		powerutil.SpawnParticlesAtPosition(inst:GetPosition(), "cannon_skill_recharge", 1, inst)
-	end
-end
-
 local function OnShoveHitBoxTriggered(inst, data)
-	--TODO(jambell): commonize?
+	--TODO: commonize?
 	local ATTACK_DATA = ATTACKS.SHOVE
 
 	local hit = false
@@ -57,33 +44,36 @@ local function OnShoveHitBoxTriggered(inst, data)
 		attack:SetPushback(pushback)
 		attack:SetHitstunAnimFrames(hitstun)
 		attack:SetID(inst.sg.mem.attack_type)
+		attack:SetNameID("CANNON_BUTT")
+		attack:SetHitFlags(Attack.HitFlags.LOW_ATTACK)
 
-		inst.components.combat:DoBasicAttack(attack)
+		local hit_v = inst.components.combat:DoBasicAttack(attack)
+		if hit_v then
+			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-		hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+			local hitfx_x_offset = 1.25
+			local hitfx_y_offset = 1.5
 
-		local hitfx_x_offset = 1.25
-		local hitfx_y_offset = 1.5
+			local distance = inst:GetDistanceSqTo(v)
+			if distance >= 30 then
+				hitfx_x_offset = hitfx_x_offset + 1.5
+			elseif distance >= 25 then
+				hitfx_x_offset = hitfx_x_offset + 1
+			end
 
-		local distance = inst:GetDistanceSqTo(v)
-		if distance >= 30 then
-			hitfx_x_offset = hitfx_x_offset + 1.5
-		elseif distance >= 25 then
-			hitfx_x_offset = hitfx_x_offset + 1
+			if v.sg ~= nil and v.sg:HasStateTag("block") then
+				SpawnHitFx("hits_player_block", inst, v, 0, 0, dir, hitstoplevel)
+			else
+				SpawnHitFx("hits_player_unarmed", inst, v, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel) -- replace with .statemem.attackfx, set it per state
+			end
+
+			SpawnHurtFx(inst, v, 0, dir, hitstoplevel)
+			hit = true
 		end
-
-		if v.sg ~= nil and v.sg:HasStateTag("block") then
-			SpawnHitFx("hits_player_block", inst, v, 0, 0, dir, hitstoplevel)
-		else
-			SpawnHitFx("hits_player_unarmed", inst, v, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel) -- replace with .statemem.attackfx, set it per state
-		end
-
-		SpawnHurtFx(inst, v, 0, dir, hitstoplevel)
-		hit = true
 	end
 
 	if hit then
-		ReloadOne(inst)
+		inst:PushEvent("skill_hit")
 
 		--sound
 		local params = {}
@@ -148,16 +138,16 @@ local states =
 				combatutil.StartMeleeAttack(inst)
 
 				inst.components.hitbox:StartRepeatTargetDelay()
-			 	inst.components.hitbox:PushBeam(0, 1.5, 2, HitPriority.PLAYER_DEFAULT)
-			 	inst.components.hitbox:PushBeam(0, 2.25, 1, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, 1.5, 2, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(0, 2.25, 1, HitPriority.PLAYER_DEFAULT)
 			 end),
 			 FrameEvent(3, function(inst) inst.components.hitbox:PushBeam(0, 3, 1, HitPriority.PLAYER_DEFAULT) end),
-			 
+
 			 FrameEvent(4, function(inst) combatutil.EndMeleeAttack(inst) end),
 
 			 FrameEvent(9, function(inst)
-			 	inst.sg.statemem.lightcombostate = "default_light_attack"
-			 	inst.sg.statemem.heavycombostate = "default_heavy_attack"
+				inst.sg.statemem.lightcombostate = "default_light_attack"
+				inst.sg.statemem.heavycombostate = "default_heavy_attack"
 				SGPlayerCommon.Fns.TryQueuedAction(inst, "lightattack", "heavyattack")
 			 end),
 		},

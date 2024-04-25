@@ -32,6 +32,7 @@ local attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local function OnCombatTargetChanged(inst, data)
 	if data ~= nil then
@@ -78,6 +79,7 @@ local function fn(prefabname)
 	inst:AddComponent("colormultiplier")
 	inst:AddComponent("coloradder")
 	inst:AddComponent("hitstopper")
+	inst:AddComponent("tilehazard")
 
 	inst:AddComponent("knownlocations")
 

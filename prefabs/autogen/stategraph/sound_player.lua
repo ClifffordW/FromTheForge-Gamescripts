@@ -84,16 +84,6 @@ return {
         },
         {
           eventtype="playsound",
-          name="sfx-cannon_sheathe",
-          param={ autostop=true, soundevent="Cannon_sheathe",},
-        },
-        {
-          eventtype="playsound",
-          name="sfx-cannon_unsheathe",
-          param={ autostop=true, soundevent="Cannon_unsheathe",},
-        },
-        {
-          eventtype="playsound",
           name="sfx-cannon_whoosh",
           param={ autostop=true, soundevent="Cannon_whoosh",},
         },
@@ -161,6 +151,16 @@ return {
           eventtype="playsound",
           name="sfx-hand_shake",
           param={ soundevent="Player_cannon_hand_shake",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-cannon_unsheathe",
+          param={ autostop=true, soundevent="Cannon_Unsheathe",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-cannon_sheathe",
+          param={ autostop=true, soundevent="Cannon_Sheathe",},
         },
       },
     },
@@ -252,16 +252,41 @@ return {
         idle={  },
         light_attack1={ { eventtype="playsound", frame=1, param={ soundevent="Polearm_poke_1",},},},
         light_attack2={ { eventtype="playsound", frame=3, param={ soundevent="Polearm_poke_2",},},},
-        light_attack3={ { eventtype="playsound", frame=6, param={ soundevent="Polearm_poke_3",},},},
+        light_attack3={
+          { eventtype="playsound", frame=6, param={ soundevent="Polearm_poke_3",},},
+          { eventtype="playsound", frame=1, param={ soundevent="Polearm_poke_3_pre",},},
+        },
         multithrust_attack={
-          { eventtype="playsound", frame=1, param={ soundevent="Polearm_poke_4_spin",},},
-          { eventtype="playsound", frame=16, param={ soundevent="Polearm_poke_4_flurry",},},
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ name="spin", sound_max_count=1.0, soundevent="Polearm_poke_4_spin",},
+          },
+          {
+            eventtype="playsound",
+            frame=14,
+            param={ sound_max_count=1.0, soundevent="Polearm_poke_4_flurry",},
+          },
+          {
+            eventtype="playsound",
+            frame=9,
+            param={ name="thrust", sound_max_count=1.0, soundevent="Polearm_poke_4_thrust",},
+          },
+        },
+        multithrust_attack_loop={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ autostop=true, soundevent="Polearm_multithrust_LP", stopatexitstate=true,},
+          },
         },
         rolling_drill_attack={
           { eventtype="playsound", frame=1, param={ soundevent="Polearm_spin_atk",},},
           { eventtype="playfoleysound", frame=12, param={ soundtag="Footstep",},},
           { eventtype="playfoleysound", frame=16, param={ soundtag="Footstep",},},
         },
+        rolling_drill_attack_loop={  },
+        rolling_drill_attack_pst={  },
         run_loop={  },
         run_pst={  },
         sheathe_fast={ { eventtype="playsound", frame=1, param={ soundevent="Polearm_Sheathe",},},},
@@ -317,6 +342,16 @@ return {
       },
       sg_events={
         { eventtype="playsound", name="sfx-dash", param={ soundevent="Shotput_dash",},},
+        {
+          eventtype="playsound",
+          name="sfx-sheath",
+          param={ soundevent="Shotput_Sheathe",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-unsheath",
+          param={ soundevent="Shotput_Unsheathe",},
+        },
       },
     },
   },

@@ -8,9 +8,10 @@ return {
   build="fx_dodge",
   finaloffset=7,
   glowcolor="0071FFFF",
-  group="dodge",
+  group="player_skills",
   multcolor="C7C7FFFF",
   noflip=true,
   sortorder=1,
   soundevent="Player_safe_dodge",
+  target_prefab="player_side",
 }

@@ -234,7 +234,7 @@ local function InnerCorner(x,y,tilequad, rotation)
 
 		local p1v = Vector3(p1.x,0,p1.y)
 		local p2v = Vector3(p2.x,0,p2.y)
-		TheDebugRenderer:WorldLine({p1v:Get()}, {p2v:Get()}, BGCOLORS.BLUE)
+		--TheDebugRenderer:WorldLine({p1v:Get()}, {p2v:Get()}, BGCOLORS.BLUE)
 
 		return {points = {p1, p2, p3, p4}}
 	else

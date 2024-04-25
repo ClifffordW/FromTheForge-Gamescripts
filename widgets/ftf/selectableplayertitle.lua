@@ -50,32 +50,6 @@ local SelectablePlayerTitle = Class(Clickable, function(self, width, height)
 		:LayoutBounds("right", "bottom", self.image)
 		:Offset(-20, 20)
 
-	self.price_bg = self:AddChild(Image("images/ui_ftf_character/ItemPriceBg.tex"))
-		:SetName("Price BG")
-		:SetScale(0.9)
-		:LayoutBounds("left", "bottom", self.image)
-
-	self.price_badge = self.price_bg:AddChild(Image("images/hud_images/hud_glitz_drops_currency.tex"))
-		:SetName("Price badge")
-		:SetHiddenBoundingBox(true)
-		:SetSize(70,70)
-		:LayoutBounds("left", "bottom", self.price_bg)
-		:Offset(20, 10)
-
-	self.price_label = self.price_bg:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.CHARACTER_CREATOR_TAB, "500"))
-		:LayoutBounds("after", "center", self.price_badge)
-		:SetHiddenBoundingBox(true)
-		:SetGlyphColor(UICOLORS.BLACK)
-		:Offset(10, 0)
-
-	self.hidden_label = self:AddChild(Text(FONTFACE.DEFAULT, 60, "HIDDEN\nHIDDEN\nHIDDEN\nHIDDEN"))
-		:LayoutBounds("center", "center", self.image)
-		:SetHiddenBoundingBox(true)
-		:SetGlyphColor(UICOLORS.RED)
-		:EnableOutline()
-		:SetOutlineColor(UICOLORS.BLACK)
-		:SetShown(false)
-
 	-- Focus brackets
 	self.focus_brackets = self:AddChild(Panel("images/ui_ftf_crafting/RecipeFocus.tex"))
 		:SetName("Focus brackets")
@@ -106,7 +80,6 @@ end
 
 function SelectablePlayerTitle:SetCost(cost)
 	self.cost = cost
-	self.price_label:SetText(tostring(cost))
 	return self
 end
 
@@ -116,11 +89,6 @@ end
 
 function SelectablePlayerTitle:SetLocked(is_locked)
 	self.is_locked = is_locked
-
-	if self.is_hidden then
-		self.lock_badge:SetShown(false)
-		return self
-	end
 
 	self.lock_badge:SetShown(self.is_locked)
 	if self.is_locked then
@@ -139,38 +107,6 @@ function SelectablePlayerTitle:SetLocked(is_locked)
 		self.title_label:SetText(locked_str)
 
 	end
-	return self
-end
-
-function SelectablePlayerTitle:SetPurchased(is_purchased)
-	self.is_purchased = is_purchased
-
-	if self.is_hidden then
-		self.price_bg:SetShown(false)
-		return self
-	end
-
-	if self.is_locked then
-		self.price_bg:SetShown(false)
-	else
-		self.price_bg:SetShown(not self.is_purchased)
-		self.title_label:SetText(STRINGS.COSMETICS.TITLES[self.title_key])
-		self.title_label:SetGlyphColor(self.is_purchased and UICOLORS.BLACK or UICOLORS.LIGHT_TEXT_DARK)
-	end
-
-	return self
-end
-
-function SelectablePlayerTitle:SetHidden(is_hidden)
-	self.is_hidden = is_hidden
-	self.hidden_label:SetShown(is_hidden)
-	
-	if is_hidden then
-		self.price_bg:SetShown(false)
-		self.lock_badge:SetShown(false)
-		self.title_label:SetGlyphColor(UICOLORS.LIGHT_TEXT_DARK)
-	end
-
 	return self
 end
 

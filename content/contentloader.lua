@@ -14,20 +14,22 @@ function contentloader.LoadAllTextContent(db)
 	--~ local _perf1 <close> = PROFILE_SECTION( "loader.LoadAll" )
 
 	-- List all the content to load.
-	db:LoadAllScript("scripts/content/quests")
-	db:LoadAllScript("scripts/content/localizations")
+	db:LoadAllScript("scripts/quests")
+	db:LoadAllScript("scripts/localizations")
 
-	-- Replace name strings on load so writers can easily rename enemies but
-	-- translators still have full control over how names are
-	-- used/gendered/counted.
-	-- Do all string processing *before* adding to db so we don't need to do
-	-- the same replacement twice and STRINGS.NAMES is special.
-	contentloader._ProcessStrings(STRINGS, db:GetAllStrings())
+	contentloader._ProcessNameStrings()
 	db:AddStringTable(STRINGS, "STRINGS")
 end
 
-function contentloader._ProcessStrings(...)
+-- Replace name strings on load so writers can easily rename enemies. Do after
+-- loading a language so changing a name doesn't require retranslating tons of
+-- strings (unless the translator omitted the name to correct gender).
+-- Unfortunately, we do the same replacement twice (STRINGS and ContentDb).
+function contentloader._ProcessNameStrings()
 	local plural = STRING_METADATA.NAMES_PLURAL
+	-- We're done applying these strings, so strip them from the runtime. They
+	-- should not get used from code.
+	STRING_METADATA = nil
 
 	-- Allow names to contain a single level of indirection (boss_heart = "{name.konjur} Hearts")
 	loc.ReplaceNames(STRINGS.NAMES, STRINGS.NAMES, {}, {})
@@ -44,21 +46,28 @@ function contentloader._ProcessStrings(...)
 	loc.ReplaceNames(plural, STRINGS.NAMES, {}, {})
 
 	local plurality = loc.BuildPlurality(STRINGS.NAMES, plural)
+
+	STRINGS.NAMES_PLURAL = plural
+	STRINGS.NAMES_PLURALITY = plurality
+end
+
+function contentloader.PostLoadStrings(...)
+	assert(STRINGS.NAMES_PLURALITY and next(STRINGS.NAMES_PLURALITY), "Haven't run _ProcessNameStrings yet!")
 	local n = select('#', ...)
 	assert(n > 0, "Must pass string tables to process.")
 	for i=1,n do
 		local val = select(i, ...)
-		loc.ReplaceNames(val, STRINGS.NAMES, plural, plurality)
+		loc.ReplaceNames(val, STRINGS.NAMES, STRINGS.NAMES_PLURAL, STRINGS.NAMES_PLURALITY)
 	end
-	-- We're done applying these strings, so strip them from the runtime. They
-	-- should not get used from code.
-	STRING_METADATA = nil
-	return STRINGS, STRINGS.NAMES, plural, plurality
 end
 
-function contentloader.GetNewGameQuest()
+function contentloader.GetNewPlayerQuest()
 	-- A single start quest that can spawn all the other necessary quests.
-	return "main_start_rotwood"
+	return "main_start_rotwood_player"
+end
+
+function contentloader.GetNewWorldQuest()
+	return "main_start_rotwood_world"
 end
 
 return contentloader

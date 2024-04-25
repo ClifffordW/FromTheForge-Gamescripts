@@ -42,13 +42,6 @@ function BuildingUpgrader:StartUpgrading(player, cb)
 
 	player.Transform:SetPosition(player_x, 0, player_z)
 
-	for name, npc in pairs(self.inst.components.npchome:GetNpcs()) do
-		building.components.npchome:AddNpc(npc)
-		npc.components.npc:SetDesiredHomeData(self.upgrade_home_key, self.upgrade_placer_id)
-		npc:Face(player)
-		player:Face(npc)
-	end
-
 	player.components.unlocktracker:UnlockRecipe(self.upgrade_home_key)
 
 	self.inst:Remove()

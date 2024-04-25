@@ -128,28 +128,26 @@ function CabbageTower:OnUpdate(dt)
 	end
 end
 
+function CabbageTower:GetMode()
+	return self.num
+end
+
 -- TODO: hack, softlock temp fix
 function CabbageTower:_ValidateSingle()
 	assert(self.num == 1)
-
-	local bank <const> = "cabbageroll_single_bank"
-	if self.inst.AnimState:GetBank() ~= bank then
-		TheLog.ch.CabbageTowerSpam:printf("ValidateSingle: Setting correct bank to %s", bank)
-		self.inst.AnimState:SetBank(bank)
-	end
 
 	if self.inst:IsLocal() then
 		if self.num == 1 and self.inst:HasTag("nokill") then
 			TheLog.ch.CabbageTowerSpam:printf("ValidateSingle: Removing nokill tag")
 			self.inst:RemoveTag("nokill")
 		end
-		if not self.inst.AnimState:GetCurrentAnimationName() and self.inst.sg then
-			-- i.e. due to missing animation, go back to idle, since we don't know how the sg state is structured
-			-- most reports show it's the bite anim
-			TheLog.ch.CabbageTowerSpam:printf("ValidateSingle: No anim playing for sg state %s: Going to idle",
-				self.inst.sg:GetCurrentState())
-			self.inst.sg:GoToState("idle")
-		end
+		-- if not self.inst.AnimState:GetCurrentAnimationName() and self.inst.sg then
+		-- 	-- i.e. due to missing animation, go back to idle, since we don't know how the sg state is structured
+		-- 	-- most reports show it's the bite anim
+		-- 	TheLog.ch.CabbageTowerSpam:printf("ValidateSingle: %s No anim playing for sg state %s: Going to idle",
+		-- 		self.inst, self.inst.sg:GetCurrentState())
+		-- 	self.inst.sg:GoToState("idle")
+		-- end
 	end
 end
 
@@ -157,11 +155,13 @@ end
 function CabbageTower:_ValidateMulti()
 	assert(self.num == 2 or self.num == 3)
 
-	if self.inst:IsLocal() and self.inst.components.health:GetCurrent() <= 1 and
+	if self.inst:IsLocal() and self.inst.components.health and self.inst.components.health:GetCurrent() <= 1 and
 		(self.inst.sg and self.inst.sg:GetCurrentState() ~= "knockdown") then
-		TheLog.ch.CabbageTowerSpam:printf("ValidateMulti: Health at 1, knocking down")
-		self.inst.components.timer:StartTimer("knockdown", self.inst.components.combat:GetKnockdownDuration(), true)
-		self.inst:PushEvent("knockdown")
+		if not self.inst.components.timer:HasTimer("knockdown") then
+			TheLog.ch.CabbageTowerSpam:printf("ValidateMulti: Health at 1, knocking down")
+			self.inst.components.timer:StartTimer("knockdown", self.inst.components.combat:GetKnockdownDuration(), true)
+			self.inst.sg:ForceGoToState("knockdown")
+		end
 	end
 end
 
@@ -303,21 +303,14 @@ function CabbageTower:SetSingle(prevent_combine)
 
 	self.inst:RemoveTag("nokill")
 
-	-- art
-	self.inst.AnimState:SetBank("cabbageroll_single_bank")
-	self.inst.AnimState:PlayAnimation("idle", true)
-	self.inst.AnimState:SetFrame(math.random(self.inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
 	if self.inst:IsNetworked() then
 		self.inst.Network:FlushAllHistory()
 	end
-
-	-- stategraph
 	self.inst.Physics:Stop()
 	self.inst.Physics:SetSize(.9)
-	self.inst:SetStateGraph(nil)
 	self.inst:SetEmbellisherPrefab(self.inst:HasTag("elite") and "cabbageroll_elite" or "cabbageroll")
 	self.inst:SetStateGraph("sg_cabbageroll")
-	
+
 	local modifiers = TUNING:GetEnemyModifiers(self.inst.prefab)
 
 	-- health
@@ -347,17 +340,14 @@ function CabbageTower:SetDouble(roll)
 
 	self.inst:AddTag("nokill")
 
-	-- art
-	self.inst.AnimState:SetBank("cabbagerolls_double_bank")
-	self.inst.AnimState:PlayAnimation("idle", true)
-	self.inst.AnimState:SetFrame(math.random(self.inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
-
-	-- stategraph
+	if self.inst:IsNetworked() then
+		self.inst.Network:FlushAllHistory()
+	end
 	self.inst.Physics:Stop()
 	self.inst.Physics:SetSize(.9)
-	self.inst:SetStateGraph(nil)
+	-- this needs to occur every time to reset the embellishments
 	self.inst:SetEmbellisherPrefab(self.inst:HasTag("elite") and "cabbagerolls2_elite" or "cabbagerolls2")
-	self.inst:SetStateGraph("sg_cabbagerolls2")
+	self.inst:SetStateGraph("sg_cabbageroll")
 
 	local modifiers = TUNING:GetEnemyModifiers(self.inst.prefab)
 
@@ -386,17 +376,13 @@ function CabbageTower:SetTriple(roll)
 
 	self.inst:AddTag("nokill")
 
-	-- art
-	self.inst.AnimState:SetBank("cabbagerolls_bank")
-	self.inst.AnimState:PlayAnimation("idle", true)
-	self.inst.AnimState:SetFrame(math.random(self.inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
-
-	-- stategraph
+	if self.inst:IsNetworked() then
+		self.inst.Network:FlushAllHistory()
+	end
 	self.inst.Physics:Stop()
 	self.inst.Physics:SetSize(.9)
-	self.inst:SetStateGraph(nil)
 	self.inst:SetEmbellisherPrefab(self.inst:HasTag("elite") and "cabbagerolls_elite" or "cabbagerolls")
-	self.inst:SetStateGraph("sg_cabbagerolls")
+	self.inst:SetStateGraph("sg_cabbageroll")
 
 	local modifiers = TUNING:GetEnemyModifiers(self.inst.prefab)
 

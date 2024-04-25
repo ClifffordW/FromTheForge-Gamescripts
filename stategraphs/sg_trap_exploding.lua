@@ -105,8 +105,19 @@ local function OnExplodeHitBoxTriggered(inst, data)
 	})
 end
 
+-- TODO: someone- review gameplay consequences of enabling this
+-- also note that the local bomb spawned can also be affected by this and "die" as well
+local EnableDyingEventHandler = false
+
 local events =
 {
+	-- simple handler to force trap into dead state and give attacker a 'kill' event
+	EventHandler("dying", function(inst, data)
+		if EnableDyingEventHandler and inst:IsDying() then
+			inst:PushEvent("done_dying")
+		end
+	end),
+
 	EventHandler("attacked", function(inst, data)
 		if inst.sg:GetCurrentState() == "idle"
 		-- Explosive traps don't go dormant since player has to hit them to trigger.
@@ -260,7 +271,7 @@ local states =
 				soundutil.SetLocalInstanceParameter(inst, inst.sg.statemem.warning_sound, "isInTrap", is_player_in_trap and 1 or 0)
 				soundutil.SetLocalInstanceParameter(inst, inst.sg.statemem.warning_sound, "isLocalPlayerInTrap", is_local_player_in_trap and 1 or 0)
 
-				-- jambell: an idea, make a reverse version of this function to fade INTO white right before the bomb explodes
+				-- NOTE: an idea, make a reverse version of this function to fade INTO white right before the bomb explodes
 				if inst.sg.statemem.currentwarningloop == WARNING_LOOPS then
 					SGCommon.Fns.FlickerColor(inst, TUNING.FLICKERS.BOMB_WARNING.COLOR,
 						TUNING.FLICKERS.BOMB_WARNING.FLICKERS, TUNING.FLICKERS.BOMB_WARNING.FADE,

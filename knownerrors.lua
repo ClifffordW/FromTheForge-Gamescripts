@@ -24,13 +24,25 @@ local ERRORS = {
 if DEV_MODE then
     -- These are developer-specific and should only be used inside DEV_MODE.
     ERRORS.DEV_FAILED_TO_SPAWN_WORLD = {
-        message = "Failed to load world from save slot.\n\n Delete the save you loaded.\n If you used Host Game, delete your first saveslot.",
+        message = [[
+Failed to load world from save slot.
+
+Delete the save you loaded.
+If you used Host Game, delete your first saveslot.]],
     }
     ERRORS.DEV_FAILED_TO_LOAD_PREFAB = {
-        message = "Failed to load prefab from file '%s'.\n\n Run updateprefabs.bat to fix.",
+        message = [[
+Failed to load prefab from file '%s'.
+
+Run updateprefabs.bat to fix.]],
     }
     ERRORS.DEV_FAILED_TO_SPAWN_PREFAB = {
-        message = "Failed to spawn prefab '%s'.\n\n Ensure it's set as a dependency somewhere (prop, level) and run updateprefabs.bat.",
+        message = [[
+Failed to spawn prefab '%s'.
+
+Ensure it's set as a dependency somewhere (prop, level) and run updateprefabs.bat.
+If the prefab has been renamed recently, that is a save-breaking change; refer to
+version.lua for guidance.]],
     }
 end
 

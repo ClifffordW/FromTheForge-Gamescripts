@@ -7,15 +7,35 @@
 --
 -- An entity with components that save between rooms.
 --
-local function WriteProgression(inst)
+
+local function _GetProgressionData()
+	if TheNet:IsHost() then
+		return TheSaveSystem:GetActiveTownSave():GetValue("progression")
+	else
+		return {} -- for now just return nothing. Eventually, load the host's world state into your own.
+	end
+end
+
+local function WriteProgression(inst, cb)
 	local motherseed = TheDungeon:IsInTown() and 0 or TheDungeon:GetDungeonMap():GetMotherSeed()
 	TheSaveSystem.progress:SetValue("progressionmotherseed", motherseed)
 
-	TheSaveSystem.progress:SetValue("progression", inst:GetPersistData())
+	if TheNet:IsHost() then	-- ONLY save on the host!
+		TheSaveSystem:GetActiveTownSave():SetValue("progression", inst:GetPersistData())
+		TheSaveSystem:GetActiveTownSave():SetValue("townprop", TheNet:GetTownPropSaveData())
+		local mcb = MultiCallback()
+		TheSaveSystem:SaveActiveTownSlot(mcb)
+		mcb:WhenAllComplete(cb)
+	end
 end
+
 local function LoadProgression(inst)
 	-- Usually occurs before the world's created.
-	inst:SetPersistData(TheSaveSystem.progress:GetValue("progression"))
+	inst:SetPersistData(_GetProgressionData())
+
+	if TheNet:IsHost() then
+		TheNet:SetTownPropLoadData(TheSaveSystem:GetActiveTownSave():GetValue("townprop"))	-- ONLY load on the host!
+	end
 end
 
 local function OnRegisterRoomCreated_Progression(inst, room)
@@ -65,6 +85,8 @@ local function CreateProgression(dungeon, world)
 	inst:AddComponent("metaprogressmanager")
 	inst:AddComponent("runmanager")
 	inst:AddComponent("powerroller")
+
+	inst:AddComponent("questcentral")
 
 	inst.WriteProgression = WriteProgression
 	inst.LoadProgression = LoadProgression
@@ -128,7 +150,10 @@ local function OnLoad(inst)
 end
 
 local function OnPostLoadWorld(inst)
-	inst.progression:PostLoadWorld(TheSaveSystem.progress:GetValue("progression"))
+	inst.progression:PostLoadWorld(_GetProgressionData())
+	-- If not the host, this should be called after getting quest data from the host.
+	-- For now just call it as it will give clients a fresh set of world quests which will mostly function as intended.
+	inst.progression.components.questcentral:OnPostSetOwner()
 end
 
 local function StartRoomForEntity(inst)
@@ -224,11 +249,28 @@ local function GetCurrentMiniboss(inst)
 	return inst:GetDungeonMap().nav:GetDungeonMiniboss()
 end
 
+local function GetCurrentLocationID(inst)
+	if inst:IsInTown() then
+		return nil
+	end
+	return inst:GetDungeonMap().data.location_id
+end
+
 local function GetDungeonProgress(inst)
 	if inst:IsInTown() then
 		return 0
 	end
 	return inst:GetDungeonMap().nav:GetProgressThroughDungeon()
+end
+
+local function GetCurrentDifficulty(inst)
+	--get frenzy
+	local level = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+	
+	--get location difficulty
+	local location_difficulty = TheSceneGen.components.scenegen:GetTier()
+
+	return level + location_difficulty
 end
 
 local function IsCurrentRoomType(inst, ...)
@@ -286,6 +328,19 @@ local function GetMetaProgress(inst)
 	return inst.progression.components.metaprogressmanager
 end
 
+-- Store as local because we don't want this player exposed.
+local first_local = nil
+local function OnPlayerSet(inst, player)
+	if first_local and first_local:IsValid() then
+		return
+	end
+	if not player:IsLocal() then
+		return
+	end
+	first_local = player
+	inst:PushEvent("first_local_player_constructed_and_owned", player)
+end
+
 local function fn(prefabname)
 	local inst = CreateEntity("TheDungeon")
 		:MakeSurviveRoomTravel()
@@ -320,6 +375,8 @@ local function fn(prefabname)
 	inst.GetCurrentRoomType = GetCurrentRoomType
 	inst.GetCurrentBoss = GetCurrentBoss
 	inst.GetCurrentMiniboss = GetCurrentMiniboss
+	inst.GetCurrentLocationID = GetCurrentLocationID
+	inst.GetCurrentDifficulty = GetCurrentDifficulty
 
 	-- World Flags
 	-- These are progression state flags, not room flags.
@@ -346,6 +403,7 @@ local function fn(prefabname)
 	inst.GetDungeonMap = GetDungeonMap
 	inst:AddComponent("playerspawner")
 	inst:AddComponent("chathistory")
+	inst:AddComponent("lootweights")
 
 	inst.progression = CreateProgression(inst)
 
@@ -353,6 +411,8 @@ local function fn(prefabname)
 		panel:AppendTable(ui, self.progression, "Progression")
 		panel:AppendTable(ui, TheFocalPoint, "focalpoint")
 	end
+
+	inst:ListenForEvent("on_player_set", OnPlayerSet)
 
 	return inst
 end

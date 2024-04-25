@@ -100,7 +100,6 @@ Some examples of combinations given 4 types:
 ]]
 EquipmentGem.GemSlotConfigs =
 {
-	-- jambell:
 	-- General idea for first pass: start generic, allowing players to place anything anywhere.
 	-- Later weapons get more specific but better.
 	-- See how it feels and modify it later!

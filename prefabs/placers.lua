@@ -1,7 +1,3 @@
-local PendingBuilds = require "prefabs.pending_builds"
-
-
-
 local function MakePlacerPrefab(name, params)
 	local assets =
 	{
@@ -21,6 +17,7 @@ local function MakePlacerPrefab(name, params)
 		inst:SetPrefabName(prefabname)
 
 		inst.entity:AddTransform()
+		inst.entity:AddSoundEmitter()
 
 		--See if we need AnimState first
 		if params.parallax ~= nil then
@@ -31,14 +28,15 @@ local function MakePlacerPrefab(name, params)
 					break
 				end
 			end
+
+			-- Legacy anim setup. baseanim should be the anim
+			-- suffix, but we have legacy data that used the suffix
+			-- as the idle name.
+			--ent.use_baseanim_for_idle = inst_params.parallax_use_baseanim_for_idle
 		end
 
 		inst:AddTag("NOCLICK")
 		inst.persists = false
-
-		inst:AddComponent("placer")
-		inst.components.placer:SetPlacedPrefab(name)
-		inst.components.placer:SetParams(params)
 
 		if params.gridsize ~= nil and #params.gridsize > 0 then
 			inst:AddComponent("snaptogrid")
@@ -50,14 +48,16 @@ local function MakePlacerPrefab(name, params)
 			end
 		end
 
+		inst:AddComponent("colormultiplier")
+		inst:AddComponent("placer")
+		inst.components.placer:SetPlacedPrefab(name)
+		inst.components.placer:SetParams(params)
+
 		return inst
 	end
 
-	local pending_prefab = PendingBuilds.MakePendingBuildPrefab(name, params)
-	table.insert(prefabs, pending_prefab.name)
-
 	local placer_prefab = Prefab(name.."_placer", fn, assets, prefabs)
-	return { placer_prefab, pending_prefab }
+	return { placer_prefab }
 end
 
 return

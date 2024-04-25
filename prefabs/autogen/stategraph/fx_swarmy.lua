@@ -2,7 +2,7 @@
 return {
   __displayName="fx_swarmy",
   isfinal=true,
-  prefab={ "swarmy",},
+  prefab={ "swarmy", "swarmy_elite",},
   stategraphs={
     sg_swarmy={
       sg_events={
@@ -25,6 +25,28 @@ return {
             render_in_front=true,
             stopatexitstate=true,
             use_entity_facing=true,
+          },
+        },
+        {
+          eventtype="spawneffect",
+          name="vfx-swarmy_uppercut",
+          param={
+            fxname="fx_swarmy_uppercut",
+            inheritrotation=true,
+            ischild=true,
+            stopatexitstate=true,
+          },
+        },
+        {
+          eventtype="spawneffect",
+          name="vfx-uppercut_land",
+          param={
+            fxname="fx_swarmy_uppercut_land",
+            offx=0.0,
+            offy=0.0,
+            offz=0.0,
+            scalex=1.3999999761581,
+            scalez=0.80000001192093,
           },
         },
       },

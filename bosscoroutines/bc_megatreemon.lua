@@ -56,6 +56,19 @@ function BossCoroMegaTreemon:OnNetDeserialize()
 	local has_music_phase = e:DeserializeBoolean()
 	if has_music_phase then
 		local new_music_phase = e:DeserializeUInt(3)
+		if not self.music_started then
+			TheLog.ch.Audio:print("***///***bc_megatreemon.lua: Fight in progress, starting boss music.")
+			if new_music_phase then
+				if new_music_phase == 0 then
+					new_music_phase = 5 -- hack, override because MT has a defense phase that is '0' which is also the default value of the parameter
+				end
+				TheLog.ch.Audio:print("***///***bc_megatreemon.lua: Skipping to phase" .. new_music_phase .. ".")
+				TheWorld.components.ambientaudio:StartBossMusic(new_music_phase)	
+			else
+				TheWorld.components.ambientaudio:StartBossMusic()
+			end
+			self.music_started = true
+		end
 		if new_music_phase ~= self.music_phase then
 			self:SetMusicPhase(new_music_phase)
 		end
@@ -78,20 +91,20 @@ end
 
 function BossCoroMegaTreemon:PhaseOne()
 	-- print("BossCoroMegaTreemon:PhaseOne()")
-	self:DoRandomRootAttack({ "H_LINES", "LINES" })
-	self:WaitForSeconds(self:GetRootCooldown(), true)
+	self:DoConditionalFunction(self.DoRandomRootAttack, { "H_LINES", "LINES" })
+	self:DoConditionalFunction(self.WaitForSeconds, self:GetRootCooldown(), true)
 end
 
 function BossCoroMegaTreemon:PhaseTwo()
 	-- print("BossCoroMegaTreemon:PhaseTwo()")
-	self:DoRandomRootAttack({ "V_LINES", "LINES" })
-	self:WaitForSeconds(self:GetRootCooldown(), true)
+	self:DoConditionalFunction(self.DoRandomRootAttack, { "V_LINES", "LINES" })
+	self:DoConditionalFunction(self.WaitForSeconds, self:GetRootCooldown(), true)
 end
 
 function BossCoroMegaTreemon:PhaseThree()
 	-- print("BossCoroMegaTreemon:PhaseThree()")
-	self:DoRandomRootAttack({ "CIRCLES", "CIRCLE" })
-	self:WaitForSeconds(self:GetRootCooldown(), true)
+	self:DoConditionalFunction(self.DoRandomRootAttack, { "CIRCLES", "CIRCLE" })
+	self:DoConditionalFunction(self.WaitForSeconds, self:GetRootCooldown(), true)
 end
 
 local elapsed_ticks_attack = 0
@@ -184,11 +197,12 @@ function BossCoroMegaTreemon:SetUpFight()
 		end
 	end
 end
-
+	
 function BossCoroMegaTreemon:Main()
 	-- Will start after cine completes.
 	self:SetUpFight()
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(PHASE_TWO_THRESHOLD) end)
+	self.music_started = true
 	-- NEW PHASE STARTS ---
 
 	self:DoConditionalFunction(function()
@@ -203,7 +217,7 @@ function BossCoroMegaTreemon:Main()
 
 	-- PHASE TRANSITION ---
 	self:EnterDefensiveState()
-	self:SetMusicPhase(0)
+	self:SetMusicPhase(5)
 	self:SummonWave(fight_waves[1])
 	self:WaitForDefeatedPercentage(0.65)
 
@@ -222,7 +236,7 @@ function BossCoroMegaTreemon:Main()
 
 	-- PHASE TRANSITION ---
 	self:EnterDefensiveState()
-	self:SetMusicPhase(0)
+	self:SetMusicPhase(5)
 	self:SummonWave(fight_waves[2])
 	self:WaitForDefeatedPercentage(0.6)
 
@@ -240,7 +254,7 @@ function BossCoroMegaTreemon:Main()
 
 	-- PHASE TRANSITION ---
 	self:EnterDefensiveState()
-	self:SetMusicPhase(0)
+	self:SetMusicPhase(5)
 	self:SummonWave(fight_waves[3])
 	self:WaitForDefeatedPercentage(0.3)
 	self:ExitDefensiveState()

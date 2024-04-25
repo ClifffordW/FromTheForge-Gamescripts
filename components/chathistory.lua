@@ -42,12 +42,12 @@ function ChatHistory:Clear()
 end
 
 function ChatHistory:Save()
-	TheSaveSystem.about_players:SetValue("chat_history", self.history)
+	TheSaveSystem:GetActiveAboutSlot():SetValue("chat_history", self.history)
 	return nil
 end
 
 function ChatHistory:Load()
-	local val = TheSaveSystem.about_players:GetValue("chat_history")
+	local val = TheSaveSystem:GetActiveAboutSlot():GetValue("chat_history")
 	self.history = val and deepcopy(val) or {}
 end
 

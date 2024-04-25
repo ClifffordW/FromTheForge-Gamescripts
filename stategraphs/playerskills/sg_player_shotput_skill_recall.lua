@@ -5,18 +5,7 @@ local PlayerSkillState = require "playerskillstate"
 
 
 local function RecallOneBall(inst, horizontal)
-	for projectile,_ in pairs(inst.sg.mem.active_projectiles) do
-		if projectile:IsValid() and projectile.sg:HasStateTag("recallable") then
-			projectile:TakeControl()
-			if projectile:IsLocal() then 
-				projectile.sg:GoToState("recalled_pre", { recaller = inst, horizontal = horizontal })
-				inst.SoundEmitter:PlaySound(fmodtable.Event.Skill_Shotput_Recall)
-				SGCommon.Fns.BlinkAndFadeColor(projectile, { 200/255, 200/255, 200/255 }, 4)
-				SGCommon.Fns.BlinkAndFadeColor(inst, { 200/255, 200/255, 200/255 }, 4)
-				break
-			end
-		end
-	end
+	SGPlayerCommon.Fns.RecallOneShotput(inst, horizontal)
 end
 
 local events = {}

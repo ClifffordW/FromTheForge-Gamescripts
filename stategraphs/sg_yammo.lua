@@ -141,14 +141,14 @@ local states =
 			end),
 
 			FrameEvent(7, function(inst)
-				inst.components.hitbox:PushOffsetBeam(-1.50, 0.00, 1.60, -0.80, HitPriority.MOB_DEFAULT)
-				inst.components.hitbox:PushOffsetBeam(0.00, 3.20, 2.20, -1.20, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(-1.50, 0.00, 1.60, -2.60, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(0.00, 3.20, 2.4, -3, HitPriority.MOB_DEFAULT)
 			end),
 
 			FrameEvent(8, function(inst)
-				inst.components.hitbox:PushOffsetBeam(0, 4.5, 1.75, -2.0, HitPriority.MOB_DEFAULT)
-				inst.components.hitbox:PushOffsetBeam(3.80, 6.00, 1.50, -1.00, HitPriority.MOB_DEFAULT)
-				inst.components.hitbox:PushOffsetBeam(5.80, 7.30, 1.50, 0.50, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(0, 4.5, 1.95, -3.2, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(3.80, 6.00, 2, -2.5, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(5.80, 7.30, 2, 0.5, HitPriority.MOB_DEFAULT)
 			end),
 
 			FrameEvent(9, function(inst)
@@ -208,7 +208,7 @@ local states =
 
 			--knockdownable states
 			FrameEvent(10, function(inst)
-				-- inst.sg:AddStateTag("caninterrupt") 	-- jambell: I think the OnKnockdown and OnKnockback states in sg_common could be modified to let this tag override nointerrupt
+				-- inst.sg:AddStateTag("caninterrupt") 	-- NOTE: I think the OnKnockdown and OnKnockback states in sg_common could be modified to let this tag override nointerrupt
 				inst.sg:AddStateTag("vulnerable")   	-- but it sounds a bit like a hairy mess of tags... not that this isn't! to be more explicit I'm going to just remove nointerrupt
 				inst.sg:RemoveStateTag("nointerrupt") 	-- as well for now, but I think caninterrupt is used in some other places I don't want to break. To revisit after discussion
 			end),
@@ -597,6 +597,7 @@ local states =
 			end),
 
 			FrameEvent(8, function(inst)
+				inst.sg.statemem.is_high_attack = true
 				inst.components.hitbox:PushOffsetBeam(0, 4.5, 1.75, -2.0, HitPriority.MOB_DEFAULT)
 				inst.components.hitbox:PushOffsetBeam(3.80, 6.00, 1.50, -1.00, HitPriority.MOB_DEFAULT)
 				inst.components.hitbox:PushOffsetBeam(5.80, 7.30, 1.50, 0.50, HitPriority.MOB_DEFAULT)

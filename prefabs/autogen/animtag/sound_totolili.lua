@@ -4,22 +4,74 @@ return {
   anim_events={
     totolili_bank={
       flinch_pst={ events={ { frame=2, name="sfx-footstep",}, { frame=5, name="sfx-footstep",},},},
-      knockdown_getup={ events={ { frame=9, name="sfx-footstep",}, { frame=11, name="sfx-footstep",},},},
+      hop_back={
+        events={
+          { frame=2, name="sfx-foley",},
+          { frame=3, name="sfx-whoosh",},
+          { frame=11, name="sfx-footstep",},
+          { frame=13, name="sfx-footstep",},
+          { frame=15, name="sfx-vo",},
+        },
+      },
+      knockdown_getup={
+        events={
+          { frame=9, name="sfx-footstep",},
+          { frame=11, name="sfx-footstep",},
+          { frame=4, name="sfx-foley",},
+          { frame=19, name="sfx-vo",},
+          { frame=27, name="sfx-foley",},
+          { frame=18, name="sfx-foley",},
+        },
+      },
       knockdown_pre={
         events={
           { frame=21, name="sfx-footstep",},
           { frame=23, name="sfx-footstep",},
           { frame=25, name="sfx-footstep",},
+          { frame=16, name="sfx-bodyfall",},
+          { frame=18, name="sfx-knockdown",},
         },
       },
-      lily_toss_pre={ events={ { frame=26, name="sfx-footstep",},},},
+      lily_toss={ events={ { frame=7, name="sfx-whoosh",},},},
+      lily_toss_pre={
+        events={
+          { frame=26, name="sfx-footstep",},
+          { frame=26, name="sfx-tell",},
+          { frame=5, name="sfx-foley",},
+          { frame=20, name="sfx-foley",},
+        },
+      },
       lily_toss_pst={ events={ { frame=15, name="sfx-footstep",},},},
-      lily_toss_spin={ events={ { frame=28, name="sfx-footstep",},},},
+      lily_toss_spin={
+        events={
+          { frame=28, name="sfx-footstep",},
+          { frame=1, name="sfx-toss",},
+          { frame=29, name="sfx-whoosh",},
+        },
+      },
+      lily_toss_spin_hold={ events={ { frame=1, name="sfx-foley",}, { frame=1, name="sfx-vo",},},},
+      lily_toss_spin_idle_loop={
+        events={
+          { frame=1, name="sfx-foley",},
+          { frame=4, name="sfx-foley",},
+          { frame=7, name="sfx-foley",},
+          { frame=10, name="sfx-foley",},
+          { frame=13, name="sfx-foley",},
+          { frame=16, name="sfx-foley",},
+        },
+      },
+      lily_toss_spin_pre={ events={ { frame=1, name="sfx-foley",},},},
+      lily_toss_spin_pst={ events={ { frame=1, name="sfx-spin_pst",},},},
       spawn={
-        events={ { frame=17, name="sfx-footstep",}, { frame=19, name="sfx-footstep",},},
+        events={
+          { frame=17, name="sfx-footstep",},
+          { frame=19, name="sfx-footstep",},
+          { frame=2, name="sfx-foley",},
+          { frame=2, name="sfx-whoosh",},
+        },
       },
       walk_loop={
-        events={ { frame=16, name="sfx-footstep",}, { frame=35, name="sfx-footstep",},},
+        events={ { frame=14, name="sfx-footstep",}, { frame=29, name="sfx-footstep",},},
       },
     },
   },

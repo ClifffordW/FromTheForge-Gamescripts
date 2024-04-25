@@ -29,9 +29,13 @@ end
 
 -------
 -- Quest Menu API
-function DebugQuest:_GetPlayer()
+function DebugQuest:_GetQuestOwner()
 	if not self.quest:is_class() then
-		return self.quest:GetQuestManager():GetQC():GetPlayer()
+		local qm = self.quest:GetQuestManager()
+		if qm then
+			return qm:GetQC():GetQuestOwner()
+		end
+		-- else: quest not spawned/attached, so no player.
 	end
 end
 -- /end API
@@ -65,12 +69,12 @@ function DebugQuest:RenderPanel( ui, panel )
 end
 
 function DebugQuest:_RenderQuestInstance(ui, panel)
-	ui:Value("Owning Player", self:_GetPlayer())
+	ui:Value("Owning Player", self:_GetQuestOwner())
 
 	ui:Text( string.format( "%s (Rank %d)", self.quest:GetContentID(), self.quest:GetRank()) )
 
 	if self.quest:GetTimeLeft() then
-		ui:Text( string.format( "Time Left: %d cycles", self.quest:GetTimeLeft() ))
+		ui:Text( string.format( "Time Left: %d runs", self.quest:GetTimeLeft() ))
 	end
 
 	ui:TextColored( Quest.GetStatusColour(self.quest:GetStatus()), self.quest:GetStatus() )
@@ -158,7 +162,7 @@ function DebugQuest:_RenderQuestInstance(ui, panel)
 	end
 
 	local triggers = self.quest._class.def.scenario_triggers
-	if #triggers > 0 and ui:CollapsingHeader("Scenario Triggers") then
+	if triggers and #triggers > 0 and ui:CollapsingHeader("Scenario Triggers") then
 		ui:Columns( 2 )
 
 		for k,v in ipairs(triggers) do

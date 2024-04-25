@@ -10,6 +10,14 @@ local assets =
 	Asset("ANIM", "anim/fx_warmy_dash_trail.zip"),
 }
 
+local elite_assets =
+{
+	Asset("ANIM", "anim/swarmy_bank.zip"),
+	Asset("ANIM", "anim/swarmy_elite_build.zip"),
+	Asset("ANIM", "anim/fx_swarmy_hair.zip"),
+	Asset("ANIM", "anim/fx_warmy_dash_trail.zip"),
+}
+
 local prefabs =
 {
 	"fx_hurt_sweat",
@@ -22,35 +30,56 @@ local prefabs =
 	GroupPrefab("drops_swarmy")
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "swarmy")
+prefabutil.SetupDeathFxPrefabs(prefabs, "swarmy_elite")
 
 local attacks =
 {
-	dash =
+	acid_dash =
 	{
 		priority = 1,
-		damage_mod = 1,
 		cooldown = 5,
+		damage_mod = 0.6,
 		initialCooldown = 0,
+		startup_frames = 9,
 		max_attacks_per_target = 1,
+		pre_anim = "acid_dash_pre",
+		hold_anim = "acid_dash_hold",
 		start_conditions_fn = function(inst, data, trange)
 			local result = false
-			if trange:IsBetweenRange(0, 18) then
+			if trange:IsBetweenRange(0, 9) then
 				result = monsterutil.MaxAttacksPerTarget(inst, data)
 			end
 			return result
 		end
 	},
-	--[[burst =
+	acid_burst =
 	{
 		priority = 1,
 		damage_mod = 1,
 		cooldown = 2,
 		initialCooldown = 0,
 		start_conditions_fn = function(inst, data, trange)
-			local is_in_range = trange:IsBetweenRange(0, 5)
-			return is_in_range
+			return false -- entered through stategraph
 		end
-	},]]
+	},
+}
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+local elite_attacks =
+{
+	uppercut =
+	{
+		priority = 2,
+		cooldown = 5,
+		damage_mod = 0.7, -- 2x hits possible
+		initialCooldown = 0,
+		startup_frames = 23, --pre plus hold
+		loop_hold_anim = true,
+		pre_anim = "uppercut_pre",
+		hold_anim = "uppercut_loop",
+		start_conditions_fn = function(inst, data, trange)
+			return trange:TestBeam(0, 4, 1)
+		end
+	},
 }
 
 local BLOOM_COLOR = nil-- 0xFF00FF00
@@ -134,16 +163,16 @@ local function fn(prefabname)
 
 	inst.AnimState:SetBank("swarmy_bank")
 	inst.AnimState:SetBuild("swarmy_build")
-	--inst.components.attacktracker:SetMinimumCooldown(0.5)
 
 	inst.hair = CreateHair()
 	inst.hair.entity:SetParent(inst.entity)
 	inst.hair.Follower:FollowSymbol(inst.GUID, "fire1")
 
-	inst.AnimState:PlayAnimation("idle")
+	inst:SetStateGraph("sg_swarmy")
+	inst:SetBrain("brain_swarmy")
+
 	local frame = math.random(inst.AnimState:GetCurrentAnimationNumFrames()) - 1
 	inst.AnimState:SetFrame(frame)
-	inst.hair.AnimState:SetFrame(frame & 1)
 
 	if BLOOM_COLOR ~= nil then
 		local r, g, b = HexToRGBFloats(BLOOM_COLOR)
@@ -160,9 +189,6 @@ local function fn(prefabname)
 
 	inst.SpawnDashTrail = SpawnDashTrail
 
-	inst:SetStateGraph("sg_swarmy")
-	inst:SetBrain("brain_swarmy")
-
 	inst.components.foleysounder:SetFootstepSound(fmodtable.Event.swarmy_footstep)
 	inst.components.foleysounder:SetBodyfallSound(fmodtable.Event.swarmy_bodfall)
 
@@ -177,4 +203,16 @@ function normal_fn(prefabname)
 	return inst
 end
 
-return Prefab("swarmy", normal_fn, assets, prefabs, nil, NetworkType_SharedHostSpawn)
+function elite_fn(prefabname)
+	local inst = fn(prefabname)
+
+	inst.AnimState:SetBuild("swarmy_elite_build")
+	inst.components.attacktracker:AddAttacks(attacks)
+	inst.components.attacktracker:AddAttacks(elite_attacks)
+	monsterutil.ExtendToEliteMonster(inst)
+
+	return inst
+end
+
+return Prefab("swarmy", normal_fn, assets, prefabs, nil, NetworkType_SharedHostSpawn),
+		Prefab("swarmy_elite", elite_fn, elite_assets, prefabs, nil, NetworkType_SharedHostSpawn)

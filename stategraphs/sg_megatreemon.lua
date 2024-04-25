@@ -1,11 +1,8 @@
-local SGCommon = require("stategraphs/sg_common")
+local SGCommon = require "stategraphs.sg_common"
 local SGBossCommon = require "stategraphs.sg_boss_common"
-local TargetRange = require "targetrange"
-local audioid = require "defs.sound.audioid"
 local krandom = require "util.krandom"
 local monsterutil = require "util.monsterutil"
-local fmodtable = require "defs.sound.fmodtable"
-local soundutil = require "util.soundutil"
+local MegaTreemonShared = require "prefabs.monsters.bosses.megatreemonshared"
 
 local function IsRightDir(dir)
 	if dir ~= nil then
@@ -16,68 +13,6 @@ local function IsRightDir(dir)
 		end
 	end
 	return math.random() < .5
-end
-
--- TODO: networking2022, make these visible via require so no duplication is needed
--- see rootattacker.lua
-
-local function OnFlailHitBoxTriggered(inst, data)
-	local damage_mod = 0
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		hitstoplevel = HitStopLevel.HEAVY,
-		set_dir_angle_to_target = true,
-		damage_mod = damage_mod,
-		pushback = 1.5,
-		combat_attack_fn = "DoKnockbackAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		hit_fx_offset_x = 0.5,
-		keep_it_local = true,
-	})
-
-	--sound for reduced damage
-	local params = {}
-	params.fmodevent = fmodtable.Event.Hit_reduced
-	params.sound_max_count = 1
-	local handle = soundutil.PlaySoundData(inst, params)
-	soundutil.SetInstanceParameter(inst, handle, "damage_received_mult", damage_mod)
-end
-
-local function OnSwipeHitBoxTriggered(inst, data)
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		attackdata_id = "swipe",
-		hitstoplevel = HitStopLevel.HEAVY,
-		set_dir_angle_to_target = true,
-		combat_attack_fn = "DoKnockdownAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		hit_fx_offset_x = 0.5,
-	})
-end
-
-local function OnPokeRootHitBoxTriggered(inst, data)
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		hitstoplevel = HitStopLevel.LIGHT,
-		set_dir_angle_to_target = true,
-		damage_mod = 0.5,
-		pushback = 0.1,
-		hitflags = Attack.HitFlags.LOW_ATTACK,
-		combat_attack_fn = "DoKnockbackAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		keep_it_local = true,
-	})
-end
-
-local function OnAttackRootHitBoxTriggered(inst, data)
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		attackdata_id = "root",
-		hitstoplevel = HitStopLevel.HEAVY,
-		set_dir_angle_to_target = true,
-		damage_mod = 0.75,
-		pushback = 0.5,
-		hitflags = Attack.HitFlags.LOW_ATTACK,
-		combat_attack_fn = "DoKnockdownAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		keep_it_local = true,
-	})
 end
 
 local function OnDeath(inst)
@@ -187,7 +122,7 @@ local states =
 				inst.sg:AddStateTag("block")
 				inst.sg:AddStateTag("notarget")
 				inst.components.powermanager:ResetData() -- Clear all powers, to remove any stacks of status effects
-				inst.components.powermanager:SetCanReceivePowers(false)
+				monsterutil.RemoveStatusEffects(inst)
 				inst.sg.statemem.hitting = true
 			end)
 		},
@@ -195,12 +130,12 @@ local states =
 		onexit = function(inst)
 			inst.components.rootattacker:DespawnGuardRoots()
 			inst.components.hitbox:StopRepeatTargetDelay()
-			inst.components.powermanager:SetCanReceivePowers(true)
+			monsterutil.ReinitializeStatusEffects(inst)
 		end,
 
 		events =
 		{
-			EventHandler("hitboxtriggered", OnFlailHitBoxTriggered),
+			EventHandler("hitboxtriggered", MegaTreemonShared.OnFlailHitBoxTriggered),
 		},
 	}),
 
@@ -255,7 +190,7 @@ local states =
 
 		events =
 		{
-			EventHandler("hitboxtriggered", OnPokeRootHitBoxTriggered),
+			EventHandler("hitboxtriggered", MegaTreemonShared.OnPokeRootHitBoxTriggered),
 			EventHandler("advance_root_attack", function(inst)
 				inst.sg.mem.attack_num = inst.sg.mem.attack_num + 1
 				inst.sg.mem.attack_num = math.min(#inst.sg.mem.attack_fns, inst.sg.mem.attack_num)
@@ -443,7 +378,7 @@ local states =
 
 		events =
 		{
-			EventHandler("hitboxtriggered", OnSwipeHitBoxTriggered),
+			EventHandler("hitboxtriggered", MegaTreemonShared.OnSwipeHitBoxTriggered),
 			EventHandler("animover", function(inst)
 				inst.sg:GoToState("idle")
 			end),
@@ -516,7 +451,7 @@ local states =
 
 		events =
 		{
-			EventHandler("hitboxtriggered", OnAttackRootHitBoxTriggered),
+			EventHandler("hitboxtriggered", MegaTreemonShared.OnAttackRootHitBoxTriggered),
 			EventHandler("animover", function(inst)
 				inst.sg:GoToState("idle")
 			end),

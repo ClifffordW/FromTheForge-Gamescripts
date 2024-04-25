@@ -215,7 +215,9 @@ end
 
 function Text:SetFontSize(sz)
 	if LOC then
-		sz = sz * LOC.GetTextScale()
+		local loc = LOC.GetActiveLocalization()
+		local font_scale, line_height_scale, empty_line_height_scale, image_scale = loc.GetFontScaling(self.font)
+		sz = sz * font_scale
 	end
 	self.inst.TextWidget:SetFontSize(sz)
 	self.size = sz
@@ -285,7 +287,6 @@ function Text:SetText(text)
 
 		if self.shrink_to_fit_region then
 			local txt_h = self:GetRenderHeight()
-			--print("Text:SetText", txt_h, self.h, self:GetFontSize())	-- NW: removed this as it is generating spam in the log. 
 			if txt_h > self.h then
 				self:SetFontSize(self:GetFontSize()-1)
 				self:RefreshText()
@@ -325,6 +326,10 @@ function Text:GetText()
 	--	return self.text
 end
 
+function Text:HasText()
+	return #self:GetText() > 0
+end
+
 -- Rarely need to call this because we automatically call when a OwningPlayer's
 -- input device changes.
 function Text:RefreshText()
@@ -359,25 +364,31 @@ end
 --  3) Use that number as an estimate for maxchars, or round up
 --     a little just in case dots aren't the smallest character
 function Text:SetTruncatedString(str, maxwidth, maxchars, ellipses)
+	return self:_SetTruncatedString_WithFunction(self.SetText, str, maxwidth, maxchars, ellipses)
+end
+function Text:SetTruncatedStringRaw(str, maxwidth, maxchars, ellipses)
+	return self:_SetTruncatedString_WithFunction(self.SetTextRaw, str, maxwidth, maxchars, ellipses)
+end
+function Text:_SetTruncatedString_WithFunction(set_fn, str, maxwidth, maxchars, ellipses)
 	str = str ~= nil and str:match("^[^\n\v\f\r]*") or ""
 	if #str > 0 then
 		if type(ellipses) ~= "string" then
-			ellipses = ellipses and "..." or ""
+			ellipses = "..."
 		end
 		if maxchars ~= nil and str:utf8len() > maxchars then
 			str = str:utf8sub(1, maxchars)
-			self.inst.TextWidget:SetString(str..ellipses)
+			set_fn(self, str..ellipses)
 		else
-			self.inst.TextWidget:SetString(str)
+			set_fn(self, str)
 		end
 		if maxwidth ~= nil then
 			while self.inst.TextWidget:GetRegionSize() > maxwidth do
 				str = str:utf8sub(1, -2)
-				self.inst.TextWidget:SetString(str..ellipses)
+				set_fn(self, str..ellipses)
 			end
 		end
 	else
-		self.inst.TextWidget:SetString("")
+		set_fn(self, "")
 	end
 	return self
 end
@@ -615,8 +626,14 @@ local default_personality = {
 			sound_event = fmodtable.Event.test_speech_question,
 		},
 		[","] = {
+			delay = 0.3,
+		},
+		["-"] = {
+			delay = 0.3,
+		},
+		["—"] = {
 			delay = 0.2,
-			sound_event = fmodtable.Event.test_speech_comma,
+			sound_event = fmodtable.Event.test_speech_period,
 		},
 		["."] = {
 			delay = 0.3,
@@ -691,7 +708,6 @@ function Text:SetPersonalityText(text, complete_cb, personality)
 						local progress = cumulative_len / full_len
 						self.inst.TextWidget:SetSpool(progress)
 						--sound
-						--print("TODO:luca", "Taste the Feeling", personality.feeling)
 						if default_personality.separator[seg] then
 							if default_personality.separator[seg].sound_event then
 								sound_event = default_personality.separator[seg].sound_event
@@ -755,6 +771,7 @@ end
 -- TODO: should we remove this and only use SetPersonalityText?
 function Text:Spool(speed)
 	local characters = self.inst.TextWidget:GetStringLength()
+	-- print("Spooling", characters, "characters")
 	if characters > 0 then
 		self:StartUpdating()
 		speed = speed or 200
@@ -771,6 +788,11 @@ function Text:Spool(speed)
 	else
 		self.inst.TextWidget:SetSpool(1)
 	end
+	return self
+end
+
+function Text:SetPersonality(personality)
+	self.personality = personality
 	return self
 end
 

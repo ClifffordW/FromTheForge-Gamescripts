@@ -1,8 +1,9 @@
 local DebugDraw = require "util.debugdraw"
+local Pool = require "util.pool"
 require "util.pool"
 
 
-local offsets_tbl_pool = SimpleTablePool()
+local offsets_tbl_pool = Pool.SimpleTablePool()
 local SEARCH_DIST = 8
 
 local SnapToGrid = Class(function(self, inst)
@@ -12,9 +13,10 @@ local SnapToGrid = Class(function(self, inst)
 	self.oddw = nil
 	self.oddh = nil
 	self.place_anywhere = nil
+	self.enabled = true
 
-	self._onstartplacing = function() self:SetDrawGridEnabled(true)  end
-	self._onstopplacing  = function() self:SetDrawGridEnabled(false) end
+	self._onstartplacing = function() --[[self:SetDrawGridEnabled(true)]]  end
+	self._onstopplacing  = function() --[[self:SetDrawGridEnabled(false)]] end
 
 	if self.inst.components.placer == nil then -- The placer is handled by playercontroller.lua
 		self.inst:ListenForEvent("startplacing", self._onstartplacing, TheWorld)
@@ -58,6 +60,10 @@ function SnapToGrid:SetPlaceAnywhere(place_anywhere)
 	self.place_anywhere = place_anywhere
 end
 
+function SnapToGrid:SetEnabled(enabled)
+	self.enabled = enabled
+end
+
 function SnapToGrid:ClearCells()
 	if not TheWorld then -- can happen with dev reload and nosimreset
 		return
@@ -95,29 +101,29 @@ end
 
 function SnapToGrid:ResolveRowColSpan(row, col, width, height, expand)
 	local snapgrid = TheWorld.components.snapgrid
-	local row1, col1, row2, col2 = snapgrid:GetRowColSpan(row, col, width, height)
-	if expand ~= nil then
-		row1 = row1 - (expand.bottom or 0)
-		col1 = col1 - (expand.left or 0)
-		row2 = row2 + (expand.top or 0)
-		col2 = col2 + (expand.right or 0)
+	local from_row, from_col, to_row, to_col = snapgrid:GetRowColSpan(row, col, width, height)
+	if expand then
+		from_row = from_row - (expand.bottom or 0)
+		from_col = from_col - (expand.left or 0)
+		to_row = to_row + (expand.top or 0)
+		to_col = to_col + (expand.right or 0)
 	end
-	return row1, col1, row2, col2
+	return from_row, from_col, to_row, to_col
 end
 
-function SnapToGrid:IsGridClearAt(row, col)
+function SnapToGrid:IsGridClearAt(origin_row, origin_col)
 	local snapgrid = TheWorld.components.snapgrid
 	local cellsize = snapgrid:GetCellSize()
 	for level, t in pairs(self.levels) do
-		local row1, col1, row2, col2 = self:ResolveRowColSpan(row, col, t.w, t.h, t.expand)
-		for row3 = row1, row2 do
-			for col3 = col1, col2 do
-				local cellid = snapgrid:GetCellId(row3, col3, level)
+		local from_row, from_col, to_row, to_col = self:ResolveRowColSpan(origin_row, origin_col, t.w, t.h, t.expand)
+		for row = from_row, to_row do
+			for col = from_col, to_col do
+				local cellid = snapgrid:GetCellId(row, col, level)
 				if not snapgrid:IsClear(cellid, self.inst) then
 					return false
 				end
-				local x = (col3 + .5) * cellsize
-				local z = (row3 + .5) * cellsize
+				local x = (col + .5) * cellsize
+				local z = (row + .5) * cellsize
 				if not TheWorld.Map:IsGroundAtXZ(x, z) and not self.place_anywhere then
 					return false
 				end
@@ -177,7 +183,14 @@ function SnapToGrid:FindNearestValidGridPos(x, y, z, force)
 	elseif self:IsGridClearAt(position.grid.x, position.grid.z) then
 		return UnpackPosition(position)
 	else
-		return UnpackPosition(self:_FindNearestValidGridPos(position))
+		local clear_position = self:_FindNearestValidGridPos(position)
+		if not clear_position then
+			-- HACK: Why does _FindNearestValidGridPos fail and can we give a better fallback instead?
+			clear_position = position
+			TheLog.ch.Prop:printf("Failed to find clear position for [%s]. Using blocked and invalid position:", self.inst)
+			TheLog.ch.Prop:dumptable(position)
+		end
+		return UnpackPosition(clear_position)
 	end
 end
 
@@ -248,13 +261,13 @@ function SnapToGrid:FindValidGridPosFromOffsets(offsets, offset_count, position)
 end
 
 function SnapToGrid:SetNearestGridPos(x, y, z, force)
-	local x1, z1, row1, col1 = self:FindNearestValidGridPos(x, y, z, force)
+	local snapped_x, snapped_z, row, col = self:FindNearestValidGridPos(x, y, z, force)
 
 	self:ClearCells()
-	self:SetCellsInternal(row1, col1)
+	self:SetCellsInternal(row, col)
 
-	self.inst.Transform:SetPosition(x1, 0, z1)
-	return x1, 0, z1
+	self.inst.Transform:SetPosition(snapped_x, 0, snapped_z)
+	return snapped_x, 0, snapped_z
 end
 
 -- Search for closest spot toward destination, starting from our current position.
@@ -353,12 +366,18 @@ function SnapToGrid:_MoveToNearestGridPos(to_grid_position)
 	return PackPosition(snapgrid:SnapToGrid(position.world.x, position.world.z, self.oddw, self.oddh))
 end
 
-function SnapToGrid:SetCellsInternal(row1, col1)
+function SnapToGrid:SetCellsInternal(origin_row, origin_col)
 	local snapgrid = TheWorld.components.snapgrid
-	for level, t in pairs(self.levels) do
-		local row1a, col1a, row1b, col1b = self:ResolveRowColSpan(row1, col1, t.w, t.h, t.expand)
-		for row = row1a, row1b do
-			for col = col1a, col1b do
+	for level, level_size in pairs(self.levels) do
+		local from_row, from_col, to_row, to_col = self:ResolveRowColSpan(
+			origin_row,
+			origin_col,
+			level_size.w,
+			level_size.h,
+			level_size.expand
+		)
+		for row = from_row, to_row do
+			for col = from_col, to_col do
 				local cellid = snapgrid:GetCellId(row, col, level)
 				self.cells[#self.cells + 1] = cellid
 				snapgrid:Set(cellid, self.inst)
@@ -430,37 +449,43 @@ function SnapToGrid:_DrawOccupiedGridBounds(pred)
 	local snapgrid = TheWorld.components.snapgrid
 	for i = 1, #self.cells do
 		local row, col, level = snapgrid:GetRowColFromCellId(self.cells[i])
-		local t = bounds[level]
-		if pred(t, row, col, level) then
-			if t == nil then
-				bounds[level] = { row = { min = row, max = row }, col = { min = col, max = col } }
+		local level_bounds = bounds[level]
+		if pred(level_bounds, row, col, level) then
+			if level_bounds == nil then
+				bounds[level] = { 
+					row = { min = row, max = row },
+					col = { min = col, max = col }
+				}
 			else
-				t.row.min = math.min(row, t.row.min)
-				t.row.max = math.max(row, t.row.max)
-				t.col.min = math.min(col, t.col.min)
-				t.col.max = math.max(col, t.col.max)
+				level_bounds.row.min = math.min(row, level_bounds.row.min)
+				level_bounds.row.max = math.max(row, level_bounds.row.max)
+				level_bounds.col.min = math.min(col, level_bounds.col.min)
+				level_bounds.col.max = math.max(col, level_bounds.col.max)
 			end
 		end
 	end
 
 	local cellsize = snapgrid:GetCellSize()
-	for level, t in pairs(bounds) do
-		local x1 = t.col.min * cellsize
-		local z1 = t.row.min * cellsize
-		local x2 = (t.col.max + 1) * cellsize
-		local z2 = (t.row.max + 1) * cellsize
+	for level, level_bounds in pairs(bounds) do
+		local x1 = level_bounds.col.min * cellsize
+		local z1 = level_bounds.row.min * cellsize
+		local x2 = (level_bounds.col.max + 1) * cellsize
+		local z2 = (level_bounds.row.max + 1) * cellsize
 		DebugDraw.GroundRect(x1, z1, x2, z2)
 	end
 end
 
 function SnapToGrid:OnWallUpdate()
-	if self.debugdraw then
-		self:_DrawOccupiedGridBounds()
-	end
-
-	if self.drawgrid then
-		self:_DrawOccupiedGridBounds(FloorOnly)
-	end
+--
+-- This is turned this off because it's churning through a lot of memory in production (where you don't see DebugDraw commands at all anyway)
+--
+--	if self.debugdraw then
+--		self:_DrawOccupiedGridBounds()
+--	end
+--
+--	if self.drawgrid then
+--		self:_DrawOccupiedGridBounds(FloorOnly)
+--	end
 end
 
 --------------------------------------------------------------------------

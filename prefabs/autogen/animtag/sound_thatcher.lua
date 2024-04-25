@@ -13,6 +13,7 @@ return {
         },
       },
       acid_hold={ events={ { frame=1, name="sfx-puke",},},},
+      acid_pre={ events={ { frame=1, name="sfx-puke",},},},
       acid_spit={
         events={
           { frame=4, name="sfx-footstep",},
@@ -25,8 +26,23 @@ return {
       acid_splash={
         events={ { frame=17, name="sfx-footstep_slide",}, { frame=3, name="sfx-spit",},},
       },
+      acid_splash_hold={ events={ { frame=1, name="sfx-puke",},},},
       backhop={ events={ { frame=1, name="sfx-wings",}, { frame=11, name="sfx-footstep",},},},
       behavior1={ events={ { frame=7, name="sfx-be1",},},},
+      death={
+        events={
+          { frame=28, name="sfx-footstep",},
+          { frame=121, name="sfx-bodyfall",},
+          { frame=11, name="sfx-wings",},
+          { frame=20, name="sfx-wings",},
+          { frame=27, name="sfx-wings",},
+          { frame=40, name="sfx-grunt",},
+          { frame=57, name="sfx-grunt",},
+          { frame=118, name="sfx-death",},
+          { frame=9, name="sfx-vo1",},
+          { frame=5, name="sfx-taunt",},
+        },
+      },
       double_short_slash={
         events={
           { frame=4, name="sfx-footstep",},
@@ -66,8 +82,58 @@ return {
         },
       },
       full_swing_hold={ events={ { frame=1, name="sfx-full_hold",},},},
+      full_swing_mobile_attack={ events={ { frame=6, name="sfx-vo1",}, { frame=13, name="sfx-wings",},},},
+      full_swing_mobile_attack_loop={
+        events={
+          { frame=1, name="sfx-swipe",},
+          { frame=1, name="sfx-whoosh",},
+          { frame=1, name="sfx-whip",},
+        },
+      },
+      full_swing_mobile_attack_pre={ events={ { frame=12, name="sfx-whoosh2",},},},
+      full_swing_mobile_loop={
+        events={
+          { frame=1, name="sfx-vo1",},
+          { frame=11, name="sfx-full_hold",},
+          { frame=20, name="sfx-vo1",},
+        },
+      },
       hook={ events={ { frame=8, name="sfx-whip",},},},
       hook_pre={ events={ { frame=7, name="sfx-whip",},},},
+      idle={ events={ { frame=15, name="sfx-foley",}, { frame=16, name="sfx-grunt",},},},
+      intro={
+        done=true,
+        events={
+          { frame=42, name="sfx-wings",},
+          { frame=65, name="sfx-wings",},
+          { frame=64, name="sfx-footstep",},
+          { frame=66, name="sfx-footstep",},
+          { frame=57, name="sfx-catch",},
+          { frame=45, name="sfx-wings",},
+          { frame=116, name="sfx-foley",},
+          { frame=147, name="sfx-foley",},
+          { frame=73, name="sfx-foley",},
+          { frame=89, name="sfx-foley",},
+          { frame=108, name="sfx-foley",},
+          { frame=150, name="sfx-whip",},
+          { frame=22, name="sfx-grunt",},
+          { frame=16, name="sfx-foley",},
+          { frame=39, name="sfx-foley",},
+          { frame=123, name="sfx-yell",},
+        },
+      },
+      intro_part2={
+        events={
+          { frame=5, name="sfx-wings",},
+          { frame=8, name="sfx-wings",},
+          { frame=19, name="sfx-wings",},
+          { frame=20, name="sfx-footstep",},
+          { frame=22, name="sfx-footstep",},
+          { frame=28, name="sfx-be1",},
+          { frame=41, name="sfx-wings",},
+          { frame=63, name="sfx-wings",},
+        },
+      },
       knockdown={ events={ { frame=12, name="sfx-bodyfall",},},},
       knockdown_getup={
         events={
@@ -85,6 +151,7 @@ return {
           { frame=70, name="sfx-wings",},
         },
       },
+      phase_transition_part2={ events={ { frame=46, name="mus-guitar_jam",},},},
       run_loop={
         events={
           { frame=6, name="sfx-footstep",},
@@ -93,6 +160,25 @@ return {
         },
       },
       run_pst={ events={ { frame=2, name="sfx-footstep",}, { frame=4, name="sfx-footstep",},},},
+      shoryuken={
+        events={
+          { frame=9, name="sfx-whoosh2",},
+          { frame=11, name="sfx-swipe",},
+          { frame=31, name="sfx-bodyfall",},
+          { frame=31, name="sfx-foley",},
+          { frame=11, name="sfx-ground_hit",},
+          { frame=30, name="sfx-ground_hit",},
+        },
+      },
+      shoryuken_dash_pre={
+        events={
+          { frame=7, name="sfx-whip",},
+          { frame=16, name="sfx-dash",},
+          { frame=10, name="sfx-yell",},
+        },
+      },
+      shoryuken_loop={ events={ { frame=3, name="sfx-wings",}, { frame=13, name="sfx-wings",},},},
+      shoryuken_pre={ events={ { frame=7, name="sfx-whip",}, { frame=9, name="sfx-vo1",},},},
       swing_long={
         events={
           { frame=1, name="sfx-vo2",},
@@ -101,7 +187,7 @@ return {
         },
       },
       swing_pst={ events={ { frame=9, name="sfx-footstep",},},},
-      swing_short={ events={ { frame=1, name="sfx-whoosh",}, { frame=3, name="sfx-swipe",},},},
+      swing_short={ events={ { frame=1, name="sfx-whoosh",}, { frame=4, name="sfx-swipe",},},},
       swing_short_pre={ events={ { frame=3, name="sfx-vo2",},},},
       swing_smash={
         events={
@@ -143,6 +229,13 @@ return {
           { frame=36, name="sfx-wings",},
           { frame=21, name="sfx-vo2",},
           { frame=27, name="sfx-swipe2",},
+        },
+      },
+      turn_backhop_pst={
+        events={
+          { frame=1, name="sfx-wings",},
+          { frame=6, name="sfx-footstep",},
+          { frame=8, name="sfx-footstep",},
         },
       },
     },

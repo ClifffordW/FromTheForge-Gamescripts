@@ -2,6 +2,7 @@ local ConfirmDialog = require "screens.dialogs.confirmdialog"
 local Stats = require "stats"
 local URLS = require "urls"
 local DebugNodes = require "dbui.debug_nodes"
+local monsterutil = require "util.monsterutil"
 require "knownerrors"
 require "scheduler"
 --require "skinsutils"
@@ -33,8 +34,14 @@ function ShouldIgnoreResolve(filename, assettype)
 	if assettype == "MINIMAP_IMAGE" then
 		return true
 	end
-	if filename:find(".dyn") and assettype == "PKGREF" then
-		return true
+	if assettype == "PKGREF" then
+		-- Not sure there are any package references we care about, but for now
+		-- just ignore knowns.
+		if filename:find(".dyn")
+			or filename:find(".lua")
+		then
+			return true
+		end
 	end
 
 	return false
@@ -114,8 +121,9 @@ end
 
 
 -- forcelocal allows you to override the network_type of a prefab to NetworkType_None, which makes the prefab completely local.
-function SpawnPrefabFromSim(name, instantiatedByHost, forcelocal)
+function SpawnPrefabFromSim(name, instantiatedByHost, forcelocal)	
 	local prefab = Prefabs[name]
+
 	if prefab == nil then
 		local error_msg = "Failed to spawn. Can't find prefab: " .. name
 		if DEV_MODE then
@@ -425,13 +433,19 @@ function HandlePermanentFlagChange(inst, permanentFlags)
 		return
 	end
 
-	if (permanentFlags & PFLAG_JOURNALED_REMOVAL) == PFLAG_JOURNALED_REMOVAL
+	if inst:IsLocal()
+		and (permanentFlags & PFLAG_JOURNALED_REMOVAL) == PFLAG_JOURNALED_REMOVAL
 		and not IsLocalGame
 		and not ((inst:GetIgnorePermanentFlagChanges() & PFLAG_JOURNALED_REMOVAL) == PFLAG_JOURNALED_REMOVAL) then
 		TheLog.ch.Networking:printf("Entity GUID %d EntityID %d (%s) flagged for journaled removal. Removing...",
 			inst.GUID, inst.Network:GetEntityID(), inst.prefab)
 		inst:Remove()
 		return true
+	end
+
+	if (permanentFlags & PFLAG_CHARMED) == PFLAG_CHARMED then
+		monsterutil.CharmMonster(inst)
+		-- Do NOT return true here. The return value of this function is seemingly only used inside OnEntityBecameLocal, and assumes returning true means the entity was removed.
 	end
 end
 
@@ -470,11 +484,12 @@ function OnEntityBecameLocal(guid, permanentFlags)
 	end
 end
 
-function OnEntityBecameRemote(guid)
+function OnEntityBecameRemote(guid, permanentFlags)
 	local inst = Ents[guid]
 	if inst ~= nil then
 		-- For minimal entities, we want to ignore all of this. We want to keep them running 'as if they are local'
 		if not inst:IsMinimal() then
+			HandlePermanentFlagChange(inst, permanentFlags);
 
 			inst:ResolveInLimboTag()
 
@@ -555,6 +570,7 @@ function SetGameplayPause(should_pause, reason)
 		-- Do nothing for no change.
 		return
 	end
+	-- TODO: Allow host to pause in net games and show STRINGS.UI.PAUSEMENU.HOST_PAUSE_FMT to clients
 	if not TheNet:IsGameTypeLocal() then
 		-- Cannot pause in a non-local network game
 		return
@@ -802,12 +818,12 @@ end
 function HostLoadRoom(settings)
 	if TheNet:IsHost()
 		and not WantsLoadFrontEnd(settings)
-		-- HACK(dbriscoe): Not sure how network should handle debug loading
+		-- HACK(network): Not sure how network should handle debug loading
 		-- rooms. They don't set a room id, but there's probably a better way
 		-- to detect?
 		and settings.room_id
 	then
-		TheNet:HostLoadRoom(settings.reset_action, settings.world_prefab, settings.scenegen_prefab or "", settings.room_id)
+		TheNet:HostLoadRoom(settings.reset_action, settings.world_prefab, settings.scenegen_prefab or "", settings.room_id, settings.force_reset)
 	end
 end
 
@@ -878,7 +894,7 @@ function DisplayError(error_msg)
 		return nil
 	end
 
-	print(error_msg) -- Failsafe since sometimes the error screen is no shown
+	print(error_msg) -- Failsafe since sometimes the error screen fails to display.
 
 	local modnames = ModManager:GetEnabledModNames()
 
@@ -913,30 +929,6 @@ function DisplayError(error_msg)
 		cb = function()
 			local ui = require "dbui.imgui"
 			ui:SetClipboardText(error_msg)
-		end,
-	}
-	local wipe_btn = {
-		submenu = have_submenu,
-		text = STRINGS.UI.MAINSCREEN.SCRIPTERROR_WIPE,
-		cb = function()
-			if DEV_MODE then
-				c_erasesavedata(function(success)
-					StartNextInstance()
-				end)
-			else
-				TheFrontEnd.error_widget:ConfirmDialog(
-						STRINGS.UI.MAINSCREEN.SCRIPTERROR_WIPESAVE.TITLE,
-						STRINGS.UI.MAINSCREEN.SCRIPTERROR_WIPESAVE.BODY,
-						STRINGS.UI.MAINSCREEN.SCRIPTERROR_WIPESAVE.CONFIRM,
-						STRINGS.UI.MAINSCREEN.SCRIPTERROR_WIPESAVE.CANCEL,
-						function()
-							c_erasesavedata(function(success)
-								StartNextInstance()
-							end)
-						end,
-						function() end
-					)
-			end
 		end,
 	}
 	local back_btn = {
@@ -976,7 +968,6 @@ function DisplayError(error_msg)
 		if Platform.IsNotConsole() then
 			buttons = {
 				restart_btn,
-				wipe_btn,
 				quit_btn,
 				{
 					text = STRINGS.UI.MAINSCREEN.MODQUIT,
@@ -1028,9 +1019,9 @@ function DisplayError(error_msg)
 				clipboard_btn,
 				restart_btn,
 				-- save_replay_btn,
-				wipe_btn,
 				quit_btn,
 			}
+			-- TODO: Get error status from backend, add SCRIPTERROR_BUGTRACKER, and display STRINGS.UI.CRASH_STATUS.
 			if DEV_MODE then
 				table.insert(buttons, 1, debug_btn)
 				-- table.insert(buttons, save_replay_btn)
@@ -1399,6 +1390,7 @@ function ExecuteConsoleCommand(fnstr)
 	return success
 end
 
+-- TODO: unused? remove.
 function BuildTagsStringCommon(tagsTable)
 	-- Vote command tags (controlled by master server only)
 
@@ -1407,14 +1399,8 @@ function BuildTagsStringCommon(tagsTable)
 		table.insert(tagsTable, mod_tag)
 	end
 
-	-- Beta tag (forced to front of list)
-	if RELEASE_CHANNEL == "preview" and CURRENT_BETA > 0 then
-		table.insert(tagsTable, 1, BETA_INFO[CURRENT_BETA].SERVERTAG)
-		table.insert(tagsTable, 1, BETA_INFO[PUBLIC_BETA].SERVERTAG)
-	end
-
 	-- Language tag (forced to front of list, don't put anything else at slot 1, or language detection will fail!)
-	table.insert(tagsTable, 1, STRINGS.PRETRANSLATED.LANGUAGES[LOC.GetLanguage()] or "")
+	table.insert(tagsTable, 1, STRINGS.PRETRANSLATED.LANGUAGES[LOC.GetCurrentLanguageId()] or "")
 
 	-- Concat unique tags
 	local tagged = {}

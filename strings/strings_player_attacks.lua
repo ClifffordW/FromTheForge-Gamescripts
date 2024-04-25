@@ -14,6 +14,10 @@ STRINGS.PLAYER_ATTACKS =
 		GOLF_SWING_MID = "Golf Swing",
 		GOLF_SWING_LIGHT = "Golf Swing",
 		LARIAT = "Spinning Heavy Lariat",
+
+		THUMP_TIER0 = "Order in the Court",
+		THUMP_TIER1 = "Order in the Court",
+		THUMP_TIER2 = "Order in the Court",
 	},
 
 	POLEARM =
@@ -38,6 +42,13 @@ STRINGS.PLAYER_ATTACKS =
 		MORTAR_WEAK = "Weak Mortar",
 		MORTAR_MEDIUM = "Medium Mortar",
 		MORTAR_STRONG = "Strong Mortar",
+		SHOCKWAVE_WEAK = "Weak Shockwave",
+		SHOCKWAVE_MEDIUM = "Medium Shockwave",
+		SHOCKWAVE_STRONG = "Strong Shockwave",
+		BACKFIRE_WEAK = "Weak Backfire",
+		BACKFIRE_MEDIUM = "Medium Backfire",
+		BACKFIRE_STRONG = "Strong Backfire",
+
 		QUICK_RISE = "Quick Rise",
 	},
 

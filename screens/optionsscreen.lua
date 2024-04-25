@@ -18,6 +18,7 @@ local fmodtable = require "defs.sound.fmodtable"
 local iterator = require "util.iterator"
 local kassert = require "util.kassert"
 local lume = require "util.lume"
+local playerutil = require "util.playerutil"
 local templates = require "widgets.ftf.templates"
 
 
@@ -181,7 +182,7 @@ local function IsMappableKey(raw_key)
 	return lume.find(bad_keys, raw_key) == nil
 end
 
-function OptionsKeybindingScreen:OnRawKey(raw_key, down)
+function OptionsKeybindingScreen:OnRawKey(raw_key, down, input_device)
 	if TheInput:IsControlDownOnAnyDevice(Controls.Digital.MENU_CANCEL_INPUT_BINDING)
 		-- Abort on wrong input device, but only on up to prevent leaking input to next screen.
 		or (not down and self.is_binding_gamepad)
@@ -421,8 +422,8 @@ function OptionsRowProgress:SetOnChange(fn)
 	return self
 end
 
-function OptionsRowProgress:OnControl(control, down)
-	if OptionsRowProgress._base.OnControl(self, control, down) then
+function OptionsRowProgress:OnControl(control, down, ...)
+	if OptionsRowProgress._base.OnControl(self, control, down, ...) then
 		return true
 	end
 
@@ -556,6 +557,11 @@ function OptionsScreenBaseRow:_TrySetValueToValue(option_key, desired)
 end
 
 function OptionsScreenBaseRow:HookupSetting(option_key, screen)
+	-- Set before hookup so we don't trigger all the applies on entering options screen.
+	local current = TheGameSettings:Get(option_key)
+	kassert.assert_fmt(current ~= nil, "gamesettings doesn't have a default for %s", option_key)
+	self:_TrySetValueToValue(option_key, current)
+
 	-- If we wanted to lookup widgets by option name, we could track them like this:
 	--   screen.options[option_key] = self
 	self:SetOnValueChangeFn(function(data, valueIndex, value)
@@ -563,9 +569,6 @@ function OptionsScreenBaseRow:HookupSetting(option_key, screen)
 		TheGameSettings:Set(option_key, data)
 		screen:MakeDirty()
 	end)
-	local current = TheGameSettings:Get(option_key)
-	kassert.assert_fmt(current ~= nil, "gamesettings doesn't have a default for %s", option_key)
-	self:_TrySetValueToValue(option_key, current)
 	return self
 end
 
@@ -633,6 +636,7 @@ end
 ----
 local OptionsScreenSpinnerRow = Class(OptionsScreenBaseRow, function(self, width, rightColumnWidth)
 	OptionsScreenBaseRow._ctor(self, width, rightColumnWidth)
+	self:SetName("OptionsScreenSpinnerRow")
 
 
 	-- Set up sizings
@@ -662,6 +666,10 @@ local OptionsScreenSpinnerRow = Class(OptionsScreenBaseRow, function(self, width
 
 	-- Default values
 	self.currentIndex = 0
+
+	-- Swallow sideways focus moves since that's how you change us.
+	self:SetFocusDir("right", self, true)
+	self:SetFocusDir("left", self, true)
 
 	self:OnFocusChange(false)
 end)
@@ -706,6 +714,16 @@ function OptionsScreenSpinnerRow:Layout()
 	return self
 end
 
+function OptionsScreenSpinnerRow:OnFocusNudge(direction)
+	if direction == "down"
+		or direction == "up"
+	then
+		return OptionsScreenSpinnerRow._base.OnFocusNudge(self, direction)
+	end
+	-- else: Skip nudge when adjusting value.
+	return self
+end
+
 function OptionsScreenSpinnerRow:OnFocusChange(hasFocus)
 	OptionsScreenSpinnerRow._base.OnFocusChange(self, hasFocus)
 
@@ -741,7 +759,7 @@ function OptionsScreenSpinnerRow:SetValues(values)
 
 	OptionsScreenSpinnerRow._base.SetValues(self, values)
 	if #self.values > 0 then
-		-- TODO(dbriscoe): Does changing this to be after _SetValue break things?
+		-- TODO(ui): Does changing this to be after _SetValue break things?
 		self.pagination:SetCount(#self.values)
 	end
 
@@ -767,6 +785,9 @@ function OptionsScreenSpinnerRow:_SetValue(index)
 	if self.onValueChangeFn then
 		self.onValueChangeFn(valueData.data, self.currentIndex, valueData)
 	end
+
+	-- Need to relayout to align pagination.
+	self:Layout()
 	return self
 end
 
@@ -803,6 +824,7 @@ end
 ----
 local OptionsScreenDropdownRow = Class(OptionsScreenBaseRow, function(self, width, rightColumnWidth)
 	OptionsScreenBaseRow._ctor(self, width, rightColumnWidth)
+	self:SetName("OptionsScreenDropdownRow")
 
 	-- Set up sizings
 	self.rightPadding = 20 -- How much spacing to leave on the right, so right-most elements look aligned
@@ -896,6 +918,7 @@ end
 ----
 local OptionsScreenControlRow = Class(OptionsScreenBaseRow, function(self, width, rightColumnWidth)
 	OptionsScreenBaseRow._ctor(self, width, rightColumnWidth)
+	self:SetName("OptionsScreenControlRow")
 
 	-- Set up sizings
 	self.rightPadding = 20 -- How much spacing to leave on the right, so right-most elements look aligned
@@ -926,7 +949,7 @@ function OptionsScreenControlRow:ShowReadonlyBinding(control)
 	self.missing_warn:SetMultColorAlpha(0)
 	local fn = function()
 		local popup = ConfirmDialog(
-			nil,
+			self:GetOwningPlayer(),
 			self.keyWidget.valueText,
 			true
 		)
@@ -1019,6 +1042,7 @@ end
 ----
 local OptionsScreenToggleRow = Class(OptionsScreenBaseRow, function(self, width, rightColumnWidth)
 	OptionsScreenBaseRow._ctor(self, width, rightColumnWidth)
+	self:SetName("OptionsScreenToggleRow")
 
 	-- Set up sizings
 	self.rightPadding = 40 -- How much spacing to leave on the right, so right-most elements look aligned
@@ -1038,7 +1062,7 @@ local OptionsScreenToggleRow = Class(OptionsScreenBaseRow, function(self, width,
 		primary_inactive = self.titleUnselectedColor,
 	}
 	self.toggleButton = self.rightContainer:AddChild(CheckBox(palette))
-		:SetIsSlider(true)
+		:IgnoreInput(true)
 
 	-- Default values
 	self.currentIndex = 0
@@ -1069,6 +1093,12 @@ function OptionsScreenToggleRow:OnFocusChange(hasFocus)
 
 	if not self.toggleButton then
 		return self
+	end
+
+	if hasFocus then
+		self.toggleButton:TintTo(nil, self.titleSelectedColor, 0.2, easing.outQuad)
+	else
+		self.toggleButton:TintTo(nil, self.titleUnselectedColor, 0.4, easing.outQuad)
 	end
 
 	self.toggleButton:OnFocusChange(hasFocus)
@@ -1127,6 +1157,7 @@ end
 ----
 local OptionsScreenVolumeRow = Class(OptionsScreenBaseRow, function(self, width, rightColumnWidth, is_sad_when_muted)
 	OptionsScreenBaseRow._ctor(self, width, rightColumnWidth)
+	self:SetName("OptionsScreenVolumeRow")
 
 	-- Set up sizings
 	self.rightPadding = 40 -- How much spacing to leave on the right, so right-most elements look aligned
@@ -1143,7 +1174,7 @@ local OptionsScreenVolumeRow = Class(OptionsScreenBaseRow, function(self, width,
 
 	-- Default values
 	self.minValue = 0
-	self.maxValue = 800
+	self.maxValue = 100
 	self.currentIndex = 0
 	self.isPercent = false
 	self.displayFormat = "%.0f"
@@ -1159,6 +1190,10 @@ local OptionsScreenVolumeRow = Class(OptionsScreenBaseRow, function(self, width,
 			:SetScale(0.5)
 			:AlphaTo(0, 0)
 	end
+
+	-- Swallow sideways focus moves since that's how you change us.
+	self:SetFocusDir("right", self, true)
+	self:SetFocusDir("left", self, true)
 
 	self:OnFocusChange(false)
 
@@ -1210,6 +1245,16 @@ function OptionsScreenVolumeRow:Layout()
 
 	self.rightContainer:Offset(-self.rightPadding, 0)
 
+	return self
+end
+
+function OptionsScreenVolumeRow:OnFocusNudge(direction)
+	if direction == "down"
+		or direction == "up"
+	then
+		return OptionsScreenVolumeRow._base.OnFocusNudge(self, direction)
+	end
+	-- else: Skip nudge when adjusting volume.
 	return self
 end
 
@@ -1298,7 +1343,7 @@ function OptionsScreenVolumeRow:_SetValue(value, silent)
 		local sound = TheFrontEnd:GetSound()
 		-- Only play if not playing to avoid interrupting the sound which is
 		-- terrible to hear.
-		-- TODO(dbriscoe): Maybe handle this in fmod instead?
+		-- TODO(audio): Maybe handle this in fmod instead?
 		if not sound:IsPlayingSound("options_volume_sound") then
 			sound:PlaySound(self.sound_on_change, "options_volume_sound")
 		end
@@ -1313,11 +1358,17 @@ function OptionsScreenVolumeRow:_SetValue(value, silent)
 	return self
 end
 
+function OptionsScreenVolumeRow:PlayHitLimitAnim(direction)
+	local distance = 15
+	local duration = 0.1
+	return self:Nudge(direction, distance, duration, easing.outQuad, easing.inOutQuad)
+end
 
 function OptionsScreenVolumeRow:OnArrowRight()
 	self.currentIndex = self.currentIndex + self.stepSize
 	if self.currentIndex > self.maxValue then
 		self.currentIndex = self.maxValue
+		self:PlayHitLimitAnim("right")
 	end
 	self:_SetValue(self.currentIndex)
 	return self
@@ -1327,6 +1378,7 @@ function OptionsScreenVolumeRow:OnArrowLeft()
 	self.currentIndex = self.currentIndex - self.stepSize
 	if self.currentIndex < self.minValue then
 		self.currentIndex = self.minValue
+		self:PlayHitLimitAnim("left")
 	end
 	self:_SetValue(self.currentIndex)
 	return self
@@ -1335,7 +1387,7 @@ end
 ------------------------------------------------------------------------------------------
 --- The options screen
 ----
-local OptionsScreen = Class(Screen, function(self)
+local OptionsScreen = Class(Screen, function(self, player)
 	Screen._ctor(self, "OptionsScreen")
 	--sound
 	self:SetAudioCategory(Screen.AudioCategory.s.Fullscreen)
@@ -1363,8 +1415,8 @@ local OptionsScreen = Class(Screen, function(self)
 		:SetMultColor(HexToRGB(0x0F0C0AFF))
 	self.navbar.tabs = self.navbar:AddChild(TabGroup())
 		:SetTheme_LightTransparentOnDark()
+		:SetTabSpacing(120)
 		:SetFontSize(FONTSIZE.OPTIONS_SCREEN_TAB)
-
 
 	-- Add navbar options
 	self.tabs = {}
@@ -1407,7 +1459,6 @@ local OptionsScreen = Class(Screen, function(self)
 		:LayoutBounds("center", "center", self.navbar.bg)
 		:AddCycleIcons()
 
-
 	-- Add navbar back button
 	self.backButton = self.navbar:AddChild(templates.BackButton())
 		:SetNormalScale(0.8)
@@ -1417,12 +1468,10 @@ local OptionsScreen = Class(Screen, function(self)
 		:Offset(40, 0)
 		:SetOnClick(function() self:OnClickClose() end)
 
-
 	self.unbound_control = self.backButton:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.OPTIONS_ROW_TITLE, STRINGS.UI.OPTIONSSCREEN.KEYBINDING_MISSING, UICOLORS.LIGHT_TEXT_WARN))
 		:LayoutBounds("center", "below", self.backButton)
 		:Offset(0, -20)
 		:Hide()
-
 
 	-- Add navbar save button
 	self.saveButton = self.navbar:AddChild(templates.AcceptButton(STRINGS.UI.OPTIONSSCREEN.SAVE_BUTTON))
@@ -1452,6 +1501,9 @@ local OptionsScreen = Class(Screen, function(self)
 		:SetVirtualMargin(200)
 		:SetVirtualBottomMargin(1000)
 		:LayoutBounds("center", "bottom", self.bg)
+		:SetFocusableChildrenFn(function()
+			return self.currentPage:GetChildren()
+		end)
 	self.scrollContents = self.scroll:AddScrollChild(Widget())
 
 	-- Add tab-specific views
@@ -1498,6 +1550,7 @@ local OptionsScreen = Class(Screen, function(self)
 
 	-- Position navbar in front of the scroll panel
 	self.navbar:SendToFront()
+	self:SetOwningPlayer(player)
 end)
 
 OptionsScreen.CONTROL_MAP =
@@ -1509,6 +1562,7 @@ OptionsScreen.CONTROL_MAP =
 		end,
 		fn = function(self)
 			self:OnClickClose()
+			TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_simulate_click)
 			return true
 		end,
 	},
@@ -1519,6 +1573,7 @@ OptionsScreen.CONTROL_MAP =
 		end,
 		fn = function(self)
 			self:OnClickClose()
+			TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_simulate_click)
 			return true
 		end,
 	},
@@ -1604,14 +1659,6 @@ function OptionsScreen:_BuildGameplayPage()
 	--~ 	:SetStepSize(0.1)
 	--~ 	:HookupSetting("gameplay.dialog_speed", self)
 
-	--~ self.pages.gameplay:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
-	--~ 	:SetText("Animation speed", "The speed of presentation animations in the game.")
-	--~ 	:SetDisplayFormat("%.1fx")
-	--~ 	:SetRange(0.5, 4)
-	--~ 	:SetStepSize(0.1)
-	--~ 	:HookupSetting("gameplay.animation_speed", self)
-
-
 	self.pages.gameplay:AddChild(OptionsScreenToggleRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.GAMEPLAY_VIBRATION)
 		:SetValues({
@@ -1635,6 +1682,15 @@ function OptionsScreen:_BuildGameplayPage()
 		:HookupSetting("gameplay.mouseaiming", self)
 
 
+	self.pages.gameplay:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
+		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.MOUSE_CONSTRAIN_MODE.TITLE)
+		:SetValues({
+			StandardValue(STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.MOUSE_CONSTRAIN_MODE.OFF, MOUSE_CONSTRAIN_MODE.OFF),
+			StandardValue(STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.MOUSE_CONSTRAIN_MODE.FULLSCREEN, MOUSE_CONSTRAIN_MODE.FULLSCREEN),
+			StandardValue(STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.MOUSE_CONSTRAIN_MODE.ALWAYS, MOUSE_CONSTRAIN_MODE.ALWAYS),
+		})
+		:HookupSetting("gameplay.mouse_constrain_mode", self)
+
 	self.pages.gameplay:LayoutChildrenInGrid(1, self.rowSpacing)
 
 	return self
@@ -1653,22 +1709,20 @@ function OptionsScreen:_BuildGraphicsPage()
 	end
 
 
-	-- self.pages.graphics:AddChild(OptionsScreenDropdownRow(self.rowWidth, self.rowRightColumnWidth))
-	-- 	:SetText("Resolution", "The size of the window in pixels.")
-	-- 	:SetValues({
-	-- 		{ name = "1280x720", data = { w = 1280, h = 720 } },
-	-- 		{ name = "1440x810", data = { w = 1440, h = 810 } },
-	-- 		{ name = "1600x900", data = { w = 1600, h = 900 } },
-	-- 		{ name = "1760x990", data = { w = 1760, h = 990 } },
-	-- 		{ name = "1920x1080", data = { w = 1920, h = 1080 } },
-	-- 		{ name = "2240x1260", data = { w = 2240, h = 1260 } },
-	-- 		{ name = "2560x1440", data = { w = 2560, h = 1440 } },
-	-- 		{ name = "2880x1620", data = { w = 2880, h = 1620 } },
-	-- 		{ name = "3200x1800", data = { w = 3200, h = 1800 } },
-	-- 		{ name = "3840x2160", data = { w = 3840, h = 2160 } },
-	-- 	})
-	-- 	:HookupSetting("graphics.resolution", self)
-
+	if TheSim:ShouldShowMaxYOption() then
+		local MAX_RESOLUTION = STRINGS.UI.OPTIONSSCREEN.SETTINGS.VIDEO.MAX_RESOLUTION
+		self.pages.graphics:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
+			:SetText(MAX_RESOLUTION.TITLE, MAX_RESOLUTION.DESC)
+			:SetValues({
+				{ name = MAX_RESOLUTION.VALUES.RES_720,  data = 720},
+				{ name = MAX_RESOLUTION.VALUES.RES_1080, data = 1080},
+				{ name = MAX_RESOLUTION.VALUES.RES_1440, data = 1440},
+				{ name = MAX_RESOLUTION.VALUES.RES_2160, data = 2160},
+				-- No point in higher values since textures won't look sharper
+				-- and we'll increase render load with no visual gain.
+			})
+			:HookupSetting("graphics.max_y_resolution", self)
+	end
 
 	self.pages.graphics:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.VIDEO.CURSOR_SIZE.TITLE)
@@ -1705,26 +1759,26 @@ function OptionsScreen:_BuildGraphicsPage()
 		})
 		:HookupSetting("graphics.shadows", self)
 
-	 self.pages.graphics:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
-	 	:SetText("Level of detail")
-	 	:SetValues({
-	 		{
-	 			name = "HIGH",
-	 			desc = "High quality textures, fog and distance blur. More graphically demanding. Requires restarting the game to fully apply.",
-	 			data = 1,
-	 		},
-	 		{
-	 			name = "MEDIUM",
-	 			desc = "Balance between graphical quality and performance cost.",
-	 			data = 2,
-	 		},
-	 		{
-	 			name = "LOW",
-	 			desc = "Increased performance by lowering the fog, texture resolution, and distance blur quality. Requires restarting the game to fully apply.",
-	 			data = 0,
-	 		},
-	 	})
-	 	:HookupSetting("graphics.lod", self)
+	--~ self.pages.graphics:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
+	--~ 	:SetText("Level of detail")
+	--~ 	:SetValues({
+	--~ 		{
+	--~ 			name = "HIGH",
+	--~ 			desc = "High quality textures, fog and distance blur. More graphically demanding. Requires restarting the game to fully apply.",
+	--~ 			data = 1,
+	--~ 		},
+	--~ 		{
+	--~ 			name = "MEDIUM",
+	--~ 			desc = "Balance between graphical quality and performance cost.",
+	--~ 			data = 2,
+	--~ 		},
+	--~ 		{
+	--~ 			name = "LOW",
+	--~ 			desc = "Increased performance by lowering the fog, texture resolution, and distance blur quality. Requires restarting the game to fully apply.",
+	--~ 			data = 0,
+	--~ 		},
+	--~ 	})
+	--~ 	:HookupSetting("graphics.lod", self)
 
 
 	self.pages.graphics:AddChild(OptionsScreenToggleRow(self.rowWidth, self.rowRightColumnWidth))
@@ -1765,13 +1819,11 @@ function OptionsScreen:_BuildAudioPage()
 			})
 	end
 
-	local audio_spinner = self.pages.audio:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
-	audio_spinner
+	self.pages.audio:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.OUTPUT_DEVICE.NAME, STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.OUTPUT_DEVICE.DESC)
 		:SetValues(self.audio_device_options)
 		:HidePagination()
 		:HookupSetting("audio.devicename", self)
-		:SetFocusDir("right", audio_spinner, true)
 
 
 	local ListenEnv = TheGameSettings:EnumForSetting("audio.listening_environment")
@@ -1784,12 +1836,10 @@ function OptionsScreen:_BuildAudioPage()
 			})
 	end
 
-	local environment_spinner = self.pages.audio:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
-	environment_spinner
+	self.pages.audio:AddChild(OptionsScreenSpinnerRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.ENVIRONMENT_TITLE)
 		:SetValues(self.listening_envs)
 		:HookupSetting("audio.listening_environment", self)
-		:SetFocusDir("right", environment_spinner, true)
 
 
 	self.pages.audio:AddChild(OptionsScreenToggleRow(self.rowWidth, self.rowRightColumnWidth))
@@ -1814,56 +1864,45 @@ function OptionsScreen:_BuildAudioPage()
 		:HookupSetting("audio.mute_on_lost_focus", self)
 
 
-	local master_volume = self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth, true))
-	master_volume
+	self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth, true))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.MASTER.NAME, STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.MASTER.DESC)
 		:SetPercent(true)
 		:SetRange(0, 100)
 		:SetStepSize(5)
 		:HookupSetting("audio.master_volume", self)
 		:SetSoundOnChange(fmodtable.Event.blarmadillo_trumpet)
-		:SetFocusDir("right", master_volume, true)
 
 
-	local music_volume = self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
-	music_volume
+	self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.MUSIC.NAME, STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.MUSIC.DESC)
 		:SetPercent(true)
-		:SetRange(0, 100)
+		:SetRange(0, 125)
 		:SetStepSize(5)
 		:HookupSetting("audio.music_volume", self)
-		:SetFocusDir("right", music_volume, true)
 
-	local sfx_volume = self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
-	sfx_volume
+	self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.SFX.NAME, STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.SFX.DESC)
 		:SetPercent(true)
-		:SetRange(0, 100)
+		:SetRange(0, 125)
 		:SetStepSize(5)
 		:HookupSetting("audio.sfx_volume", self)
 		:SetSoundOnChange(fmodtable.Event.OptionsMenu_SFXVol_Test)
-		:SetFocusDir("right", sfx_volume, true)
 
-
-	local voice_volume = self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
-	voice_volume
+	self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.VOICE.NAME, STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.VOICE.DESC)
 		:SetPercent(true)
-		:SetRange(0, 100)
+		:SetRange(0, 125)
 		:SetStepSize(5)
 		:HookupSetting("audio.voice_volume", self)
 		:SetSoundOnChange(fmodtable.Event.OptionsMenu_Voice_Test)
-		:SetFocusDir("right", voice_volume, true)
 
-	local ambience_volume = self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
-	ambience_volume
+	self.pages.audio:AddChild(OptionsScreenVolumeRow(self.rowWidth, self.rowRightColumnWidth))
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.AMBIENCE.NAME, STRINGS.UI.OPTIONSSCREEN.SETTINGS.AUDIO.VOLUME.AMBIENCE.DESC)
 		:SetPercent(true)
-		:SetRange(0, 100)
+		:SetRange(0, 125)
 		:SetStepSize(5)
 		:HookupSetting("audio.ambience_volume", self)
 		:SetSoundOnChange(fmodtable.Event.OptionsMenu_Amb_Test_LP)
-		:SetFocusDir("right", ambience_volume, true)
 
 
 	self.pages.audio:LayoutChildrenInGrid(1, self.rowSpacing)
@@ -1892,13 +1931,14 @@ function OptionsScreen:_BuildControlsPage()
 			STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.RESET_BINDINGS.DESC
 		)
 		:SetOnClick(function()
-			local confirm = ConfirmDialog(nil, nil, true,
+			local confirm = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 				STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.RESET_BINDINGS.CONFIRM,
 				nil,
 				STRINGS.UI.OPTIONSSCREEN.SETTINGS.CONTROLS.RESET_BINDINGS.DESC,
 				function(should_reset)
 					TheFrontEnd:PopScreen() -- popup
 					if should_reset then
+						self.are_input_bindings_dirty = true
 						TheGameSettings:ResetBindingsToDefaults()
 						self:_SaveChanges(function()
 							-- exit screen because settings are out of date
@@ -1935,6 +1975,7 @@ function OptionsScreen:_BuildControlsPage()
 				TheGameSettings:Set(settings_key, bind_set)
 				self:_HighlightInvalidBindings(bind_widgets)
 				self:MakeDirty()
+				self.are_input_bindings_dirty = true
 			end)
 			bind_widgets[bind_target][settings_key] = bind_row
 			return bind_row
@@ -2016,7 +2057,6 @@ function OptionsScreen:_BuildOtherPage()
 	language_spinner
 		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.LANGUAGE_TITLE)
 		:SetValues(lang_values)
-		:SetFocusDir("right", language_spinner, true)
 
 	-- Instead of HookupSetting, manually cache the desired language and change
 	-- setting on screen exit so we never change the language until right
@@ -2066,14 +2106,14 @@ function OptionsScreen:_BuildOtherPage()
 									-- I don't want the toggle to visually change before we confirm
 									data_collection_row:_TrySetValueToValue("other.metrics", TheSim:GetOnlineEnabled())
 								end
-						local dialog = ConfirmDialog(nil, nil, true, STRINGS.UI.DATACOLLECTION.EXPLAIN_POPUP.TITLE, nil, fullbody, nil, onopenfn )
+						local dialog = ConfirmDialog(self:GetOwningPlayer(), nil, true, STRINGS.UI.DATACOLLECTION.EXPLAIN_POPUP.TITLE, nil, fullbody, nil, onopenfn )
 						dialog
 							:SetYesButton(label, 
 								function()
 									TheSim:SetOnlineEnabled(enabled)
 									-- NOW change the visual to be changed
 									data_collection_row:_TrySetValueToValue("other.metrics", enabled)
-									local quit_dialog = ConfirmDialog(nil, nil, true, STRINGS.UI.DATACOLLECTION.QUIT_POPUP.TITLE, nil, nil, nil, nil )
+									local quit_dialog = ConfirmDialog(self:GetOwningPlayer(), nil, true, STRINGS.UI.DATACOLLECTION.QUIT_POPUP.TITLE, nil, nil, nil, nil )
 									quit_dialog
 										:HideArrow()
 										:HideNoButton()
@@ -2105,6 +2145,20 @@ function OptionsScreen:_BuildOtherPage()
 	 	self.pages.other:AddChild(data_collection_row)
 	end
 
+
+	self.pages.other:AddChild(OptionsScreenToggleRow(self.rowWidth, self.rowRightColumnWidth))
+		:SetText(STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.STREAMER_MODE.TITLE)
+		:SetValues({
+			{ name = STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.STREAMER_MODE.ON.NAME,
+			desc = STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.STREAMER_MODE.ON.DESC, data = true
+			},
+			{ name = STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.STREAMER_MODE.OFF.NAME,
+			desc = STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.STREAMER_MODE.OFF.DESC, data = false
+			},
+		})
+		:HookupSetting("network.streamer_mode", self)
+
+
 	if not Platform.IsBigPictureMode() then
 		self.pages.other:AddChild(OptionsScreenBaseRow(self.rowWidth, self.rowRightColumnWidth))
 			:SetText(
@@ -2134,7 +2188,7 @@ function OptionsScreen:_BuildOtherPage()
 			STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.RESET_SETTINGS_DESC
 		)
 		:SetOnClick(function()
-			local confirm = ConfirmDialog(nil, nil, true,
+			local confirm = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 				STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.RESET_SETTINGS_CONFIRM,
 				nil,
 				STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.RESET_SETTINGS_DESC,
@@ -2142,6 +2196,7 @@ function OptionsScreen:_BuildOtherPage()
 					TheFrontEnd:PopScreen() -- popup
 					if should_reset then
 						TheGameSettings:ResetToDefaults()
+						TheNet:ResetBlackList()	-- Reset the banned player list when erasing all settings
 						self:_SaveChanges(function()
 							-- exit screen because settings are out of date
 							self:_AnimateOut()
@@ -2160,7 +2215,7 @@ function OptionsScreen:_BuildOtherPage()
 			STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.RESET_PROGRESS_DESC
 		)
 		:SetOnClick(function()
-			local confirm = ConfirmDialog(nil, nil, true,
+			local confirm = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 				STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.RESET_PROGRESS_CONFIRM,
 				nil,
 				STRINGS.UI.OPTIONSSCREEN.SETTINGS.OTHER.RESET_PROGRESS_DESC,
@@ -2215,6 +2270,14 @@ function OptionsScreen:_SaveChanges(cb)
 	-- Don't update self.language_on_enter here since it's for detecting if the
 	-- language changed while in this screen and we don't want the save button
 	-- to skip the restart.
+
+	if self.are_input_bindings_dirty then
+		self.are_input_bindings_dirty = false
+		for h_id,player in playerutil.LocalPlayers() do
+			-- Not quite device change, but the button mapping change which requires text to refresh.
+			player:PushEvent("input_device_changed")
+		end
+	end
 	return false
 end
 
@@ -2225,7 +2288,7 @@ function OptionsScreen:OnClickClose()
 
 	local function CreateConfirm(title, subtitle, text, confirm_yes, confirm_no)
 		return ConfirmDialog(
-			nil,
+			self:GetOwningPlayer(),
 			self.backButton,
 			true,
 			title,

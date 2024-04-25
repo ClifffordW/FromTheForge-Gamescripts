@@ -30,6 +30,7 @@ local prefabs =
 	GroupPrefab("drops_mossquito"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "mossquito")
+prefabutil.SetupDeathFxPrefabs(prefabs, "mossquito_elite")
 
 local attacks =
 {
@@ -37,15 +38,15 @@ local attacks =
 	{
 		priority = 1,
 		damage_mod = 1,
-		startup_frames = 16,
-		cooldown = 3.8,
+		startup_frames = 20,
+		cooldown = 3.5,
 		initialCooldown = 0,
-		max_attacks_per_target = 2,
+		max_attacks_per_target = 1,
 		pre_anim = "pierce_pre",
 		hold_anim = "pierce_hold",
 		start_conditions_fn = function(inst, data, trange)
 			local result = false
-			if trange:IsInRange(8) then
+			if trange:IsInRange(5) then
 				result = monsterutil.MaxAttacksPerTarget(inst, data)
 			end
 			return result
@@ -71,6 +72,7 @@ local attacks =
 		end
 	},]]
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -106,6 +108,7 @@ local elite_attacks =
 		end
 	},]]
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 0.50
 
@@ -176,6 +179,12 @@ local function heal_drop_fn(prefabname)
 
 	inst.components.hitbox:SetHitFlags(HitGroup.CREATURES)
 	inst:SetStateGraph("sg_mossquito_heal")
+
+	inst.OnSetSpawnInstigator = function(_, instigator)
+		if instigator then
+			inst.owner = instigator
+		end
+	end
 	return inst
 end
 

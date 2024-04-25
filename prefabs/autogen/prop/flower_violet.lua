@@ -3,8 +3,7 @@ return {
   __displayName="flower_violet",
   brightness=-12.0,
   gridsize={ { h=2, w=2,},},
-  group="forest_props",
-  looping=true,
+  group="construct_decor",
   parallax={
     { anim="front", dist=-0.5,},
     { anim="2", dist=-0.25,},
@@ -13,7 +12,6 @@ return {
   },
   parallax_use_baseanim_for_idle=true,
   placer=true,
-  randomstartframe=true,
   saturation=-9.0,
   script="flowers",
 }

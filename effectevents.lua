@@ -46,13 +46,19 @@ function EffectEvents.HandleEventSpawnEffect(inst, param)
 	-- params:
 		-- ischild
 		-- followsymbol
-		-- offx
+		-- orientation (see ANIM_ORIENTATION)
+		-- offset_is_absolute (only applies if ischild, followsymbol are both false/nil)
+		-- offx (each value: limited to +/- 10 units in offset mode, unlimited for absolute mode)
 		-- offy
 		-- offz
+		-- rotatezoffset
 		-- inheritrotation
+		-- rotation (about y-axis, in degrees, no effect if inheritrotation is true)
 		-- detachatexitstate
 		-- stopatexitstate
+		-- scale_applies_to_transform (instead of animstate)
 		-- scalex
+		-- scaley (only valid when scale_applies_to_transform is true)
 		-- scalez
 		-- flipfacingandrotation
 	local testfx = SpawnPrefab(param.fxname, inst)
@@ -79,10 +85,13 @@ function EffectEvents.HandleEventSpawnEffect(inst, param)
 					testfx.AnimState:SetUseOwnRotation()
 				end
 			else
-				testfx.Transform:SetPosition(param.offx or 0, param.offy or 0, param.offz or 0)
+				local offz_mirrored = not param.rotatezoffset and inst.Transform:GetFacing() == FACING_LEFT and -1 or 1
+				testfx.Transform:SetPosition(param.offx or 0, param.offy or 0, param.offz and param.offz * offz_mirrored or 0)
 				if param.inheritrotation then
 					local dir = inst.Transform:GetFacingRotation()
 					testfx.Transform:SetRotation(dir)
+				elseif param.rotation then
+					testfx.Transform:SetRotation(param.rotation)
 				end
 			end
 
@@ -108,16 +117,37 @@ function EffectEvents.HandleEventSpawnEffect(inst, param)
 					testfx.AnimState:SetUseOwnRotation()
 				end
 			else
-				local x, y, z = inst.Transform:GetWorldPosition()
-				local offdir = inst.Transform:GetFacing() == FACING_LEFT and -1 or 1
-				testfx.Transform:SetPosition(x + offdir * offx, y + offy, z + offdir * offz)
+				if param.offset_is_absolute then
+					testfx.Transform:SetPosition(offx, offy, offz)
+				else
+					local x, y, z = inst.Transform:GetWorldPosition()
+					local offdir = inst.Transform:GetFacing() == FACING_LEFT and -1 or 1
+					if not param.rotatezoffset then
+						offz = offdir == -1 and offz * -1 or offz
+					end
+					testfx.Transform:SetPosition(x + offdir * offx, y + offy, z + offdir * offz)
+				end
+
 				if param.inheritrotation then
 					local dir = inst.Transform:GetFacingRotation()
 					testfx.Transform:SetRotation(dir)
+				elseif param.rotation then
+					testfx.Transform:SetRotation(param.rotation)
 				end
 			end
 		end
-		testfx.AnimState:SetScale(param.scalex or 1, param.scalez or 1)
+
+		-- Override only: fx prefabs can set this themselves
+		if param.orientation then
+			testfx.AnimState:SetOrientation(param.orientation)
+		end
+
+		if param.scale_applies_to_transform then
+			testfx.Transform:SetScale(param.scalex or 1, param.scaley or 1, param.scalez or 1)
+		else
+			-- spawneffect in eventfuncs stores only x and z scale, no param.scaley.
+			testfx.AnimState:SetScale(param.scalex or 1, param.scalez or 1)
+		end
 
 		if param.flipfacingandrotation then
 			testfx:FlipFacingAndRotation()
@@ -254,30 +284,35 @@ function EffectEvents.HandleNetEventPushEventOnMinimalEntity(inst, eventname, pa
 	end
 end
 
-
-
-
-function EffectEvents.MakeNetEventPushHitBoxInvincibleEventOnEntity(inst, target)
-	if inst:IsLocal() then
-		if target:IsLocal() then
-			EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(inst, target)
+-- TODO: networking2022, move this code out
+-- target must be local, attacker can be any, because target confirms invincibility
+function EffectEvents.MakeNetEventPushHitBoxInvincibleEventOnEntity(attacker, target)
+	-- TheLog.ch.Networking:printf("EffectEvents.MakeNetEventPushHitBoxInvincibleEventOnEntity attacker=%s target=%s\n%s", attacker, target, debugstack())
+	if target:ShouldSendNetEvents() then
+		if attacker:IsMinimal() then
+			EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(attacker, target)
+			return
+		elseif attacker:IsNetworked() then
+			TheNetEvent:PushHitBoxInvincibleEventOnEntity(attacker.GUID, target.GUID)
+			return
 		else
-			TheNetEvent:PushHitBoxInvincibleEventOnEntity(inst.GUID, target.GUID)
+			-- TODO: what's to do in this scenario?
 		end
-
-		inst:PushEvent("hitboxcollided_invincible_target", target)
 	end
-	return 0
+	EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(attacker, target)
 end
 
-function EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(inst, target)
+function EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(attacker, target)
+	-- TheLog.ch.Networking:printf("EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity attacker=%s target=%s\n%s", attacker, target, debugstack())
 	if target:IsLocal() then
-		target:PushEvent("hitboxcollided_invincible", inst.components.hitbox) -- let it know that it would have been hit
-		inst:PushEvent("hitboxcollided_invincible_target", target)
+		target:PushEvent("hitboxcollided_invincible", attacker.components.hitbox) -- let it know that it would have been hit
+	end
+	if attacker:IsLocalOrMinimal() then
+		attacker:PushEvent("hitboxcollided_invincible_target", target)
 	end
 end
 
-
+-- TODO: networking2022, move this code out
 -- Converts a table containing entity scripts to a table that contains EntityID's
 function ConvertToEntityIDs(actors_table)
 	-- Format:

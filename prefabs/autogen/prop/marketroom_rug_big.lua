@@ -4,7 +4,7 @@ return {
   bank="marketroom_rug",
   brightness=0,
   build="marketroom_rug",
-  gridsize={ { h=3, level=-1, w=3,},},
+  gridsize={ { h=2, level=-1, w=2,},},
   group="shop_props",
   hue=0,
   layer="bg",

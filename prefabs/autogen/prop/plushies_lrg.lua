@@ -5,7 +5,7 @@ return {
   build="plushies",
   clickable=true,
   gridsize={ { h=2, w=2,},},
-  group="town_decor",
+  group="_unused",
   parallax={
     { anim="lrg_front", dist=-0.3, shadow=true,},
     { anim="lrg_mid", dist=-0.1, shadow=true,},

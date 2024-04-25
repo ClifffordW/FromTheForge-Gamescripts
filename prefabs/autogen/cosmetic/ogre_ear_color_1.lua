@@ -2,16 +2,11 @@
 return {
   __displayName="ogre_ear_color_1",
   cosmetic_data={
-    color={ 0.91388888888889, 0.39, 0.95,},
-    colorgroup="EAR_COLOR",
+    color={ 0.91372549533844, 0.419607847929, 0.9450980424881,},
     color_species="ogre",
+    colorgroup="EAR_COLOR",
     multi_species=true,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

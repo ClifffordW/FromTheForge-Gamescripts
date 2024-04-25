@@ -1,8 +1,9 @@
-local ParticleSystemHelper = require "util.particlesystemhelper"
+local Pool = require "util.pool"
 local SGCommon = require "stategraphs.sg_common"
 local embellishments = require "prefabs/stategraph_autogen_data"
 local kassert = require "util.kassert"
 local lume = require "util.lume"
+local reload = require "reload"
 local soundutil = require "util.soundutil"
 
 
@@ -12,7 +13,7 @@ local StateGraphWrangler = Class(function(self)
 	self.updaters = {}
 	self.swapupdaters = {}
 	self.tickwaiters = {}
-	self.waiterspool = SimpleTablePool()
+	self.waiterspool = Pool.SimpleTablePool()
 end)
 
 SGManager = StateGraphWrangler()
@@ -146,7 +147,7 @@ EventHandler = Class(function(self, name, fn)
 	self.fn = fn
 end)
 
--- victorc: 60Hz, add multiplier that defaults to scaling up 30Hz data
+-- 60Hz, add multiplier that defaults to scaling up 30Hz data
 FrameEvent = Class(function(self, frame, fn, optname, multiplier)
 	multiplier = multiplier or ANIM_FRAMES
 
@@ -161,7 +162,7 @@ FrameEvent = Class(function(self, frame, fn, optname, multiplier)
 	self.eventname = optname
 end)
 
--- victorc: 60Hz, convenience class for "full resolution" 60Hz frame events
+-- 60Hz, convenience class for "full resolution" 60Hz frame events
 FrameEvent60 = Class(FrameEvent, function(self, frame, fn, optname, fallback)
 	fallback = fallback or FrameEvent60.LEGACY_TIMING_FLOOR
 	FrameEvent._ctor(self, frame, fn, optname, 1)
@@ -358,6 +359,13 @@ StateGraphRegistry = Class(function(self)
 
 	self.statetags_nrbits = _CalculateNrBitsForCount(#self.statetags)
 	TheLog.ch.StateGraphRegistry:printf("%d bits required to represent %d state tags", self.statetags_nrbits, #self.statetags)
+
+	self.is_reloading = false
+
+	-- never unregisters :/
+	self.reloadcallback = RegisterHotReloadCallback(function(is_reloading)
+		self.is_reloading = is_reloading
+	end)
 end)
 
 StateGraphRegistry.Hints =
@@ -428,9 +436,18 @@ function StateGraphRegistry:AddData(sg_name, states, hints)
 	hints = hints or StateGraphRegistry.Hints.Default
 
 	if self.data[sg_name] then
-		assert(#self.data[sg_name].lookup == #states)
-		TheLog.ch.StateGraphRegistry:printf("Already added data for %s with %d states", sg_name, #states)
-		return
+		if self.is_reloading then
+			if not TheNet:IsGameTypeLocal() and #TheNet:GetRemoteClientsList() > 0 then
+				TheLog.ch.StateGraphRegistry:printf("Error: Unable to reload data for %s during an active network game", sg_name)
+				return
+			end
+			TheLog.ch.StateGraphRegistry:printf("Data for %s with %d states already exists.  Clearing for reload.", sg_name, #states)
+			self.data[sg_name] = nil
+		else
+			assert(#self.data[sg_name].default == #states)
+			TheLog.ch.StateGraphRegistry:printf("Already added data for %s with %d states", sg_name, #states)
+			return
+		end
 	end
 
 	-- k: state id, v: name (or a table with more data)
@@ -501,7 +518,7 @@ SGRegistry = StateGraphRegistry()
 
 -- fns: custom handlers for sg tests
 --    CanTakeControl() : returns whether or not a client can take control of this entity
---    OnResumeFromRemote(sg_instance) : called when an entity becomes local (resumes from remote ownership); returns new sg state for GotoState
+--    OnResumeFromRemote(sg_instance) : called when an entity becomes local (resumes from remote ownership); returns new sg state for GoToState
 StateGraph = Class(function(self, name, states, events, defaultstate, fns)
 	local info = debug.getinfo(3, "Sl")
 	self.defline = string.format("%s:%d", info.short_src, info.currentline)
@@ -575,6 +592,7 @@ function StateGraph:Embellish(names, force, editor)
 		self:DisEmbellish()
 		for i,v in pairs(names) do
 			local def = embellishments[v]
+			dbassert(kassert.assert_fmt(def, "Embellishment [%s] doesn't exist in stategraph_autogen_data. Names: [%s].", v, name))
 
 --			local sgdef = def.stategraphs and def.stategraphs[self.name] or {}
 			local sgdef = def.stategraphs and (def.stategraphs["*"] or def.stategraphs[self.name]) or {}
@@ -650,8 +668,6 @@ local function _HandleSGRunStopAutogen(inst)
 			SGCommon.Fns.DetachChild(k)
 		end
 		inst.sg.mem.autogen_detachentities = nil
-		-- TODO: networking2022 -- see if this is needed
-		-- stopped_something = stopped_something or true
 	end
 
 	if inst.sg.mem.autogen_onexitfns then
@@ -659,8 +675,6 @@ local function _HandleSGRunStopAutogen(inst)
 			func(inst)
 		end
 		inst.sg.mem.autogen_onexitfns = nil
-		-- TODO: networking2022 -- see if this is needed
-		-- stopped_something = stopped_something or true
 	end
 	return stopped_something
 end
@@ -1103,6 +1117,12 @@ function StateGraphInstance:GoToState(statename, params)
 			SGManager:OnPostEnterNewState(self)
 		end
 	end
+
+	-- Check for hitstun pressure attacks. If it is one, add nointerrupt tags to the state.
+	if self.inst.components.combat and self.inst.components.combat:HitStunPressureFramesExceeded() then
+		self:RemoveStateTag("caninterrupt")
+		self:AddStateTag("nointerrupt")
+	end
 end
 
 function StateGraphInstance:AddStateTag(tag)
@@ -1159,6 +1179,15 @@ function StateGraphInstance:UpdateState(ticks)
 	end
 
 	while self.timelineindex ~= nil do
+		if not self.currentstate.timeline then
+			TheLog.ch.StateGraph:printf("Warning: %s timelineindex %d exists but no timeline in current state: %s",
+				self.inst, self.timelineindex, self.currentstate.name)
+			-- TODO: stategraph - figure out why this happens with cabbageroll
+			-- dbassert(false, "timelineindex exists but no timeline in current state: " .. self.currentstate.name)
+			self.timelineindex = nil
+			break
+		end
+
 		local frameevent = self.currentstate.timeline[self.timelineindex]
 		if frameevent.frame > self.ticksinstate then
 			break
@@ -1563,7 +1592,7 @@ function StateGraphInstance:PredictResumeFromRemoteState()
 		if self:HasState(hold_state) then
 			return hold_state
 		else
-			-- TODO: jambell - how did we get here lolol. Just let it fail out to the default state.
+			-- TODO: how did we get here lolol. Just let it fail out to the default state.
 		end
 	end
 

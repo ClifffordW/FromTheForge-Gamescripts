@@ -21,6 +21,11 @@ return {
               stopatexitstate=true,
             },
           },
+          {
+            eventtype="spawnparticles",
+            frame=1,
+            param={ offx=0.0, offy=0.0, offz=-5.0, particlefxname="forest_gate_fog_s_back",},
+          },
         },
       },
       sg_events={  },

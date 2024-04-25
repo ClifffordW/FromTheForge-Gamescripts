@@ -70,7 +70,7 @@ function PlayerPuppet:PlayAnim(anim, loop)
 end
 
 function PlayerPuppet:CloneCharacterAppearance(character)
-	self.components.charactercreator:OnLoad(character.components.charactercreator:OnSave())
+	self.components.charactercreator:CloneComponent(character.components.charactercreator)
 	return self
 end
 

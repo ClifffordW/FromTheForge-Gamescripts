@@ -250,7 +250,7 @@ function HitBox:IgnorePass(ents)
 			end
 		end
 
-		if v == self.temp_allow_entity then	-- Horrible hack to be able to check if this hitbox would hit an entity that is in the ignore list. Needed for networked projectiles. 
+		if v == self.temp_allow_entity then	-- Horrible hack to be able to check if this hitbox would hit an entity that is in the ignore list. Needed for networked projectiles.
 			keep = true
 		end
 
@@ -306,7 +306,7 @@ function HitBox:TriggerBeam(startdist, enddist, thickness, zoffset, origin_ent)
 		local startdist_new = -thickness
 		local enddist_new = thickness
 		local thickness_new = enddist
-		local zoffset_new = startdist + enddist * (facing == FACING_DOWN and -1 or 1)
+		local zoffset_new = (startdist + enddist) * (facing == FACING_DOWN and -1 or 1)
 
 		startdist = startdist_new
 		enddist = enddist_new

@@ -53,7 +53,7 @@ return {
     { script_args={ creature_spawner_type="perimeter",}, x=-17.97, z=-8.15,},
     { script_args={ creature_spawner_type="perimeter",}, x=7.06, z=15.83,},
     { script_args={ creature_spawner_type="perimeter",}, x=1.11, z=15.9,},
-    { script_args={ creature_spawner_type="perimeter",}, x=-22.87, z=-8.1,},
+    { script_args={ creature_spawner_type="perimeter",}, x=-13.72, z=-2.76,},
     { script_args={ creature_spawner_type="battlefield",}, x=7.08, z=8.69,},
     { script_args={ creature_spawner_type="battlefield",}, x=-16.58, z=-13.06,},
     { script_args={ creature_spawner_type="battlefield",}, x=13.24, z=7.13,},

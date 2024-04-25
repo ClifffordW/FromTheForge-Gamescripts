@@ -28,7 +28,7 @@ return {
           param={
             sound_max_count=1.0,
             soundevent="powerCrystal_spawn_energy",
-            stopatstateexit=true,
+            stopatexitstate=true,
           },
         },
         {

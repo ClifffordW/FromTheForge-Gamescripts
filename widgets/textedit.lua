@@ -24,6 +24,7 @@ local TextEdit = Class(Text, function(self, font, size, text, colour)
 	self.force_edit = false
 	self.pasting = false
 	self.uppercase = false
+	self.password_mode = false
 	self.pass_controls_to_screen = {}
 
 	self.idle_text_color = {0,0,0,1}
@@ -98,6 +99,13 @@ function TextEdit:SetUppercase(all_uppercase)
 	return self
 end
 
+function TextEdit:SetPasswordMode(password_mode)
+	self.password_mode = password_mode
+	return self
+end
+
+-- If true, when we start editing, force any other text edits to stop and make
+-- us the single text processor.
 function TextEdit:SetForceEdit(force)
 	self.force_edit = force
 	return self
@@ -179,7 +187,7 @@ function TextEdit:SetEditing(editing)
 		self.editing = false
 		self.editing_enter_down = false
 
-		if self.focus then
+		if self:HasFocus() then
 			self:DoHoverImage()
 		else
 			self:DoIdleImage()
@@ -214,9 +222,9 @@ function TextEdit:SetEditing(editing)
 	return self
 end
 
-function TextEdit:OnMouseButton(button, down, x, y)
+function TextEdit:OnMouseButton(hunter_id, button, down, x, y)
 	if down and button == InputConstants.MouseButtons.LEFT then
-		self:SetFocus()
+		self:SetFocus(hunter_id)
 		-- For some reason x,y are often quite different from GetMousePos, so ignore them.
 		x,y = TheFrontEnd:GetUIMousePos()
 		local cursor = self:GetCursorAtPoint(x, y, false) or 1 -- 1 is beginning
@@ -358,13 +366,16 @@ function TextEdit:OnStopForceProcessTextInput()
 	end
 end
 
-function TextEdit:OnRawKey(key, down)
-	if self.editing and self.prediction_widget ~= nil and self.prediction_widget:OnRawKey(key, down) then
+function TextEdit:OnRawKey(key, down, input_device)
+	if self.editing
+		and self.prediction_widget ~= nil
+		and self.prediction_widget:OnRawKey(key, down, input_device)
+	then
 		self.editing_enter_down = false
 		return true
 	end
 
-	if TextEdit._base.OnRawKey(self, key, down) then
+	if TextEdit._base.OnRawKey(self, key, down, input_device) then
 		self.editing_enter_down = false
 		return true
 	end
@@ -381,7 +392,7 @@ function TextEdit:OnRawKey(key, down)
 					end
 				end
 				self.pasting = false
-			elseif self.allow_newline and not self.at_line_max and key == InputConstants.Keys.ENTER and down then
+			elseif self.allow_newline and not self.at_line_max and key == InputConstants.Keys.ENTER then
 				self:OnTextInput("\n")
 			elseif key == InputConstants.Keys.BACKSPACE then
 				if self.cursor > 1 then
@@ -458,7 +469,7 @@ function TextEdit:OnRawKey(key, down)
 				else
 					-- Home - start of line
 					local x,y = self.inst.TextWidget:GetCursorPoint()
-	        			local cursor = self.inst.TextWidget:GetCursorAtLocalPoint(x - 8192,y, false) or 1
+					local cursor = self.inst.TextWidget:GetCursorAtLocalPoint(x - 8192,y, false) or 1
 					if cursor >= 1 then
 						self.cursor = self:_ClampToString(cursor)
 						self:UpdateDisplayString()
@@ -474,7 +485,7 @@ function TextEdit:OnRawKey(key, down)
 				else
 					-- End - end of line
 					local x,y = self.inst.TextWidget:GetCursorPoint()
-	        			local cursor = self.inst.TextWidget:GetCursorAtLocalPoint(x + 8192,y, false) or 1
+					local cursor = self.inst.TextWidget:GetCursorAtLocalPoint(x + 8192,y, false) or 1
 					if cursor >= 1 then
 						self.cursor = self:_ClampToString(cursor)
 						self:UpdateDisplayString()
@@ -488,8 +499,11 @@ function TextEdit:OnRawKey(key, down)
 			self.editing_enter_down = key == InputConstants.Keys.ENTER
 			self:UpdateDisplayString()
 
-		elseif key == InputConstants.Keys.ENTER and not self.focus then
-			-- this is a fail safe incase the mouse changes the focus widget while editing the text field. We could look into FrontEnd:LockFocus but some screens require focus to be soft (eg: lobbyscreen's chat)
+		elseif key == InputConstants.Keys.ENTER and not self:HasFocus(input_device:GetOwnerId()) then
+			-- This is a fail safe incase the mouse changes the focus widget
+			-- while editing the text field. We could look into
+			-- FrontEnd:LockFocus but some screens require focus to be soft
+			-- (eg: lobbyscreen's chat)
 			if self.editing_enter_down then
 				self.editing_enter_down = false
 				if not self.allow_newline then
@@ -539,12 +553,12 @@ function TextEdit:ShouldPassControlToScreen(controls)
 	return false
 end
 
-function TextEdit:OnControl(controls, down)
+function TextEdit:OnControl(controls, down, ...)
 	if self.editing and self.prediction_widget ~= nil and self.prediction_widget:OnControl(controls, down) then
 		return true
 	end
 
-	if TextEdit._base.OnControl(self, controls, down) then return true end
+	if TextEdit._base.OnControl(self, controls, down, ...) then return true end
 
 	-- gobble up extra controls
 	if self.editing and (not controls:Has(Controls.Digital.CANCEL, Controls.Digital.OPEN_DEBUG_CONSOLE, Controls.Digital.ACCEPT)) then
@@ -580,7 +594,7 @@ function TextEdit:OnRemoved()
 	TheInput:EnableDebugToggle(true)
 end
 
-function TextEdit:OnFocusMove(dir, down)
+function TextEdit:OnFocusMove(dir, input_device)
 
 	-- Note: It would be nice to call OnProcces() here, but this gets called
 	-- when pressing WASD so it won't work.
@@ -589,7 +603,7 @@ function TextEdit:OnFocusMove(dir, down)
 	if self.editing then return true end
 
 	-- otherwise, allow focus to move as normal
-	return TextEdit._base.OnFocusMove(self, dir, down)
+	return TextEdit._base.OnFocusMove(self, dir, input_device)
 end
 
 function TextEdit:OnGainHover()
@@ -782,10 +796,10 @@ function TextEdit:SetFocusedImage(unfocused, hovered, active)
 	self.activetex = active
 
 	if self.focusedtex and self.unfocusedtex and self.activetex then
-		self.focusimage:SetTexture(self.focus and self.focusedtex or self.unfocusedtex)
+		self.focusimage:SetTexture(self:HasFocus() and self.focusedtex or self.unfocusedtex)
 		if self.editing then
 			self:DoSelectedImage()
-		elseif self.focus then
+		elseif self:HasFocus() then
 			self:DoHoverImage()
 		else
 			self:DoIdleImage()
@@ -845,22 +859,6 @@ function TextEdit:SetInvalidCharacterFilter(invalidchars)
 	return self
 end
 
--- Unlike GetString() which returns the string stored in the displayed text widget
--- GetLineEditString will return the 'intended' string, even if the display is nulled out (for passwords)
-function TextEdit:GetLineEditString()
-	return self.inst.TextEdit:GetText()
-end
-
-function TextEdit:SetPassword(to)
-	self.inst.TextEdit:SetPassword(to)
-	return self
-end
-
-function TextEdit:SetForceUpperCase(to)
-	self.inst.TextEdit:SetForceUpperCase(to)
-	return self
-end
-
 function TextEdit:EnableScrollEditWindow(enable)
 	self.inst.TextWidget:EnableScrollEditWindow(enable)
 	return self
@@ -913,6 +911,7 @@ function TextEdit:AddWordPredictionDictionary(dictionary)
 	end
 end
 
+-- Called from WordPredictionWidget. See EnableWordPrediction.
 function TextEdit:ApplyWordPrediction(prediction_index)
 	if self.prediction_widget ~= nil then
 		local new_str, cursor_pos = self.prediction_widget:ResolvePrediction(prediction_index)
@@ -959,24 +958,31 @@ function TextEdit:SetFn(fn)
 	return self
 end
 
-function TextEdit:UpdateDisplayString()
+function Obfuscate(str)
+	return string.rep("*", str:len())
+end
 
+function TextEdit:UpdateDisplayString()
 	local str = self.current_str
 	if self.uppercase then str = str:upper() end
+	if self.password_mode then 
+		-- replace all text with asterisks:
+		str = Obfuscate(str)
+	end
 	self.inst.TextWidget:SetString(str)
-	if self.editing or self.focus then
+	if self.editing or self:HasFocus() then
 		self.inst.TextWidget:SetCursor(self.cursor)
 	else
 		self.inst.TextWidget:SetCursor()
 	end
 	--[[
 	-- if we switch to hover vs focus then we can get rid of self.editing and not make external things maintain that
-	if self.focus then
-	   self.inst.TextWidget:SetCursor(self.cursor)
+	if self:HasFocus() then
+		self.inst.TextWidget:SetCursor(self.cursor)
 	else
-	   self.inst.TextWidget:SetCursor()
+		self.inst.TextWidget:SetCursor()
 	end
-]]
+	]]
 end
 
 function TextEdit:InsertCharacters(str)
@@ -997,6 +1003,13 @@ function TextEdit:HandleTextInput(text)
 	self:UpdateDisplayString()
 	self:_TryUpdateTextPrompt()
 	return true
+end
+
+
+function TextEdit:GetText()
+	local str = self.current_str or ""
+	if self.uppercase then str = str:upper() end
+	return str
 end
 
 return TextEdit

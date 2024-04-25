@@ -184,8 +184,6 @@ local RoomBonusScreen = Class(Screen, function(self, power_type)
 		kassert.assert_fmt(false, "Power_type unrecognized: %s", power_type)
 	end
 
-	TheWorld:UnlockFlag("wf_seen_room_bonus")
-
 	print("roombonusscreen power type: " .. self.power_type)
 
 	self.num_powers = 2 -- num_choices
@@ -535,7 +533,7 @@ function RoomBonusScreen:OnBonusClicked(bonusId, power, islucky, bonusButton)
 		:SetToolTip(nil)
 
 	-- If this is a controller, triggering a bonus shouldn't require confirming
-	if TheFrontEnd:IsRelativeNavigation() then
+	if self:IsRelativeNavigation() then
 		self:OnClickContinue()
 	end
 end
@@ -582,7 +580,7 @@ function RoomBonusScreen:OnClickContinue()
 	local power = self.selected_button:GetBonus()
 
 	if self.power_type == Power.Types.SKILL then
-		self:GetOwningPlayer().components.powermanager:AddEquipmentPowerOverride(Equipment.Slots.WEAPON, { name = power.id, stacks = 1 })
+		self:GetOwningPlayer().components.powermanager:AddEquipmentSkillOverride(Equipment.Slots.WEAPON, { name = power.id, stacks = 1 })
 	else
 		self:GetOwningPlayer().components.powermanager:AddPower(power) -- TODO: Add skip power Konjur here.
 	end
@@ -1144,7 +1142,7 @@ function RoomBonusScreen:AnimateIn()
 	-- Start animating
 	self:RunUpdater(Updater.Parallel({
 
-		-- HACK(dbriscoe): Let hud show behind for now. Eventually, we
+		-- HACK(ui): Let hud show behind for now. Eventually, we
 		-- might redo this screen to include the hud data. I think that's
 		-- necessary to make the tooltips show up.
 		--~ Updater.Do(function()

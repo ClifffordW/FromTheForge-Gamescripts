@@ -1,13 +1,51 @@
 local EffectEvents = require "effectevents"
 local SGCommon = require "stategraphs.sg_common"
 local SGMinibossCommon = require "stategraphs.sg_miniboss_common"
-local playerutil = require "util.playerutil"
 local TargetRange = require "targetrange"
 local monsterutil = require "util.monsterutil"
+local spawnutil = require "util.spawnutil"
 
 local function DisableOffsetHitboxes(inst)
 	inst.components.offsethitboxes:SetEnabled("head_hitbox", false)
 	inst.components.offsethitboxes:SetEnabled("leg_hitbox", false)
+end
+
+local kickAcidPatterns =
+{
+	-- Regular pattern
+	default =
+	{
+		{ x = 5, z = 0 },
+		{ x = 9, z = 0 },
+		{ x = 13, z = 0 },
+	},
+
+	-- Pattern to spawn if it hit a player, so that the follow-up dive attack can hit the player instead of the acid ball that gets spawned
+	hit =
+	{
+		{ x = 5, z = 0 },
+		{ x = 9, z = -3 },
+		{ x = 9, z = 3 },
+	},
+}
+
+local function SpawnKickAcid(inst)
+	local spawn_offset_x = 2
+	local spawn_offset_y = 2
+
+	local pos = inst:GetPosition()
+	local facing = inst.Transform:GetFacing() == FACING_LEFT and -1 or 1
+	local pattern = inst.sg.statemem.do_dive and "hit" or "default"
+
+	for _, target_offset in ipairs(kickAcidPatterns[pattern]) do
+		local target_pos = pos + Vector3(target_offset.x * facing, 0, target_offset.z)
+
+		-- Adapted from sg_slowpoke SpawnSpitBall; consider making this a common function?
+		local projectile = SpawnPrefab("slowpoke_spit", inst)
+		projectile:Setup(inst)
+		projectile.Transform:SetPosition(pos.x + spawn_offset_x * facing, pos.y + spawn_offset_y, pos.z)
+		projectile:PushEvent("spit", target_pos)
+	end
 end
 
 local function OnFlurryHitboxTriggered(inst, data)
@@ -84,7 +122,7 @@ local function OnDiveHitboxTriggered(inst, data)
 	SGCommon.Events.OnHitboxTriggered(inst, data, {
 		attackdata_id = "dive",
 		hitstoplevel = HitStopLevel.MAJOR,
-		hitflags = Attack.HitFlags.AIR_HIGH,
+		hitflags = Attack.HitFlags.DEFAULT,
 		pushback = 2,
 		combat_attack_fn = "DoKnockdownAttack",
 		hit_fx = monsterutil.defaultAttackHitFX,
@@ -453,6 +491,8 @@ local states =
 			FrameEvent(22, function(inst)
 				inst.components.offsethitboxes:Move("head_hitbox", -850/150)
 				inst.components.hitbox:PushBeam(0, 4, 1.5, HitPriority.MOB_DEFAULT)
+
+				SpawnKickAcid(inst)
 			end),
 
 			FrameEvent(23, function(inst)
@@ -528,19 +568,10 @@ local states =
 		events =
 		{
 			EventHandler("animover", function(inst)
-				if not inst.sg.statemem.target
-					or not inst.sg.statemem.target:IsValid()
-				then
+				if (not inst.sg.statemem.target or not inst.sg.statemem.target:IsValid()) then
 					inst.sg:GoToState("idle")
-					return
-				end
-				local attacktracker = inst.components.attacktracker
-				local trange = TargetRange(inst, inst.sg.statemem.target)
-				local next_attack = attacktracker:PickNextAttack(nil, trange)
-				if next_attack == "dive_fast" then
-					SGCommon.Fns.TurnAndActOnTarget(inst, inst.sg.statemem.target, false, "dive_fast_pre", inst.sg.statemem.target)
 				else
-					inst.sg:GoToState("idle")
+					SGCommon.Fns.TurnAndActOnTarget(inst, inst.sg.statemem.target, false, "dive_fast_pre", inst.sg.statemem.target)
 				end
 			end),
 		},
@@ -619,17 +650,20 @@ local states =
 
 			FrameEvent(30, function(inst)
 				inst.components.hitbox:PushBeam(-1, 3.5, 1.5, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushCircle(2.25, 0.00, 1.50, HitPriority.MOB_DEFAULT)
 			end),
 
 			FrameEvent(31, function(inst)
 				inst.components.offsethitboxes:SetEnabled("head_hitbox", true)
 				inst.components.offsethitboxes:Move("head_hitbox", 300/150)
 				inst.components.hitbox:PushBeam(-2, 3.5, 1.5, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushCircle(2.25, 0.00, 2.00, HitPriority.MOB_DEFAULT)
 				inst.sg:RemoveStateTag("flying")
 			end),
 
 			FrameEvent(32, function(inst)
 				inst.components.hitbox:PushBeam(-3, 3.5, 1.5, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushCircle(2.25, 0.00, 2.50, HitPriority.MOB_DEFAULT)
 				inst.sg:RemoveStateTag("nointerrupt")
 				inst.sg:AddStateTag("vulnerable")
 			end),
@@ -662,6 +696,9 @@ local states =
 			FrameEvent(30, function(inst)
 				inst.Physics:StopPassingThroughObjects()
 				inst.Physics:Stop()
+
+				-- Spawn an acid puddle upon landing
+				spawnutil.SpawnAcidTrap(inst, "medium", 150, 2.8)
 			end),
 			FrameEvent(94, function(inst) inst.Physics:SetMotorVel(-3) end),
 			FrameEvent(98, function(inst) inst.Physics:SetMotorVel(-1.5) end),
@@ -862,9 +899,13 @@ local states =
 		},
 
 		onupdate = function(inst)
-			local current_frame = inst.AnimState:GetCurrentAnimationFrame()
+			local current_frame = inst.sg:GetAnimFramesInState()
 			if ((current_frame % 4) == 0) then -- fire hitbox every 4 frames
-				inst.components.hitbox:PushOffsetCircle(0.00, 0.00, 4.50, 2.0, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushCircle(0.00, 0.00, 4.50, HitPriority.MOB_DEFAULT)
+			end
+
+			if ((current_frame % 8) == 0) then -- spawn acid on the ground every 8 frames
+				spawnutil.SpawnAcidTrap(inst, "small", 150)
 			end
 		end,
 
@@ -1014,21 +1055,10 @@ SGCommon.States.AddSpawnWalkableStates(states,
 
 	onenter_fn = function(inst)
 		inst.Physics:StartPassingThroughObjects()
-
-		local mod = inst.Transform:GetFacing() == FACING_LEFT and -1 or 1
-		local pos = inst:GetPosition()
-		inst.Transform:SetPosition(pos.x - (14 * mod), 0, pos.z)
-
-		-- total movement during spawn anim is 2100 pixels or 14 units
-		-- get facing direction and then offset 14 units backwards so the spawn location is where intended
 	end,
 
 	timeline =
 	{
-		FrameEvent(2, function(inst) inst.Physics:SetMotorVel(18) end),
-		FrameEvent(14, function(inst) inst.Physics:SetMotorVel(8) end),
-		FrameEvent(25, function(inst) inst.Physics:Stop() end),
-
 		FrameEvent(27, function(inst)
 			-- landed
 			inst.Physics:StopPassingThroughObjects()
@@ -1041,7 +1071,6 @@ SGCommon.States.AddSpawnWalkableStates(states,
 
 	onexit_fn = function(inst)
 		inst.Physics:StopPassingThroughObjects()
-		inst.Physics:Stop()
 	end,
 })
 

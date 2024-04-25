@@ -10,7 +10,6 @@ return {
   networked=1,
   onground=true,
   parallax={ { anim="acid",},},
-  parallax_use_baseanim_for_idle=true,
   script="trap",
   script_args={ tier=1, trap_type="trap_acid",},
   sortorder=2,

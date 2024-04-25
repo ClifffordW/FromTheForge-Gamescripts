@@ -47,6 +47,49 @@ local TIMEOUT_LENGTH = 7
 local states =
 {
 	State({
+		name = "hop_back",
+		tags = { "busy" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("hop_back")
+			SGCommon.Fns.FaceTargetClampedAngle(inst, inst.sg.statemem.target, 15)
+
+			--Jump the other way if back is against world bounds
+			local x, y, z = inst.Transform:GetWorldPosition()
+			local reverse_facing = inst.Transform:GetFacing() == FACING_LEFT and 1 or -1
+			local x_offset = x + (8 * reverse_facing)
+			if (not TheWorld.Map:IsWalkableAtXZ(x_offset, z)) then
+				inst.Transform:FlipFacingAndRotation()
+			end
+		end,
+
+		timeline =
+		{
+			FrameEvent(3, function(inst)
+				inst.Physics:SetMotorVel(-26)
+				inst.Physics:StartPassingThroughObjects()
+			end),
+			FrameEvent(12, function(inst)
+				inst.Physics:Stop()
+				inst.Physics:StopPassingThroughObjects()
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("lily_toss_pre")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:StopPassingThroughObjects()
+			inst.components.attacktracker:CompleteActiveAttack()
+			inst.Physics:Stop()
+		end,
+	}),
+
+	State({
 		name = "lily_toss",
 		tags = { "attack", "busy", "nointerrupt" },
 
@@ -161,8 +204,12 @@ local states =
 		},
 
 		onexit = function(inst)
-			if (not inst.sg.statemem.animover and ProjectileAlive(inst.sg.mem.projectile)) then
+			if (not inst.sg.statemem.animover) then
+				inst.components.attacktracker:CompleteActiveAttack()
+
+				if (ProjectileAlive(inst.sg.mem.projectile)) then
 				inst.sg.mem.projectile.sg:GoToState("death")
+				end
 			end
 		end
 	}),
@@ -218,6 +265,11 @@ SGCommon.States.AddAttackHold(states, "lily_toss")
 
 SGCommon.States.AddAttackPre(states, "lily_toss_spin")
 SGCommon.States.AddAttackHold(states, "lily_toss_spin")
+
+SGCommon.States.AddAttackPre(states, "hop_back",
+{
+	onenter_fn = function(inst) inst.sg:GoToState("hop_back") end
+})
 
 SGCommon.States.AddSpawnBattlefieldStates(states,
 {

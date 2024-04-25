@@ -4,6 +4,7 @@ return {
   anim="idle",
   bank="fx_totem_groundring",
   build="fx_totem_groundring",
+  group="player_skills",
   layer="bg",
   looping=true,
   onground=true,

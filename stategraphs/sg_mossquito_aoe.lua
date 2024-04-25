@@ -4,7 +4,7 @@ local states =
 		name = "spawn",
 
 		onenter = function(inst)
-			inst.sg.statemem.fx = SpawnPrefab("fx_battoad_acid_ground_land", inst)
+			inst.sg.statemem.fx = SpawnPrefab("fx_acid_ground_land", inst)
 			inst.sg.statemem.fx.entity:SetParent(inst.entity)
 			inst.sg:SetTimeoutTicks(24)
 		end,
@@ -22,7 +22,7 @@ local states =
 		name = "aoe",
 
 		onenter = function(inst, pos)
-			inst.sg.statemem.fx = SpawnPrefab("fx_battoad_acid_ground_loop", inst)
+			inst.sg.statemem.fx = SpawnPrefab("fx_acid_ground_loop", inst)
 			inst.sg.statemem.fx.entity:SetParent(inst.entity)
 			inst.sg:SetTimeout(4)
 		end,
@@ -44,7 +44,7 @@ local states =
 		name = "despawn",
 
 		onenter = function(inst, pos)
-			-- inst.sg.statemem.fx = SpawnPrefab("fx_battoad_acid_ground_pst", inst)
+			-- inst.sg.statemem.fx = SpawnPrefab("fx_acid_ground_pst", inst)
 			-- inst.sg.statemem.fx.entity:SetParent(inst.entity)
 			inst.sg:SetTimeoutTicks(52)
 		end,

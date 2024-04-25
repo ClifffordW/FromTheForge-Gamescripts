@@ -2,7 +2,10 @@
 return {
   __displayName="bench_forest_1",
   gridsize={ { h=2, w=3,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
+  networked=1,
   parallax={
     { anim="bench1_front", dist=-0.2, shadow=true,},
     { anim="bench1_mid", shadow=true,},

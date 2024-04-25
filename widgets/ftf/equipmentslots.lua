@@ -3,7 +3,7 @@ local Widget = require("widgets/widget")
 local Image = require("widgets/image")
 local EquipmentDescriptionWidget = require("widgets/ftf/equipmentdescriptionwidget")
 local TotalWeightWidget = require("widgets/ftf/totalweightwidget")
-local EquipmentTooltip = require "widgets/equipmenttooltip"
+local EquipmentTooltip = require "widgets/ftf/equipmenttooltip"
 
 local Equipment = require("defs.equipment")
 local ItemCatalog = require("defs.itemcatalog")
@@ -176,9 +176,12 @@ function EquipmentSlots:EquipItem(slot, itemData)
 				self.equippedItemSlots[slot].desc_widget:Hide()
 			end
 		end
-
 	end
 
+	return self
+end
+
+function EquipmentSlots:UpdateByListOfWeights(slot)
 	if self.weightWidget then
 		local weights = {}
 		local relevant_slots = { Equipment.Slots.WEAPON, Equipment.Slots.HEAD, Equipment.Slots.BODY, Equipment.Slots.WAIST }

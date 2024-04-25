@@ -4,7 +4,7 @@ return {
   group="sound_creature",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "yammo", "yammo_elite",},
+  prefab={ "yammo", "yammo_elite", "yammo_miniboss",},
   stategraphs={
     sg_yammo={
       events={

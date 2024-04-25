@@ -14,29 +14,29 @@ end
 -- StartRun generates a dungeon map and saves to disk.
 -- For hosts, it also triggers LoadDungeonLevel to kick off the next Lua sim instance
 -- For clients, wait until the host sends HostLoadRoom
-local function StartRunInternal(regionID, locationID, callback, seed, altMapGenID, questParams)
-	dbassert(questParams, "Should have already built a default value. Don't pass empty table!")
+local function StartRunInternal(dungeon_run_params, quest_params, callback)
+	dbassert(quest_params, "Should have already built a default value. Don't pass empty table!")
 	local worldmap = get_worldmap_safe()
 	-- TheAudio:StopAllSounds() -- Not normal flow, so clean up sounds.
-	worldmap:StartRun(biomes.regions[regionID].locations[locationID], callback, seed, altMapGenID, questParams)
-	RoomLoader._ResetNextLoad()
+	worldmap:StartRun(dungeon_run_params, quest_params, callback)
+	RoomLoader.ResetNextLoad()
 end
 
-function RoomLoader._ResetNextLoad()
-	TheLog.ch.RoomLoader:printf("Resetting sim on next room load...")
-	RoomLoader._reset_next_load = true
+function RoomLoader.ResetNextLoad()
+	if not RoomLoader._reset_next_load then
+		TheLog.ch.RoomLoader:printf("Resetting sim on next room load...")
+		RoomLoader._reset_next_load = true
+	end
 end
 
--- TODO: I don't think WithLocationData functions should accept questParams? Instead, always build in the lower layer so it's accurate.
-
-function RoomLoader.StartRunWithLocationData(locationData, seed, altMapGenID, ascension, questParams)
+function RoomLoader.RequestRunWithLocationData(playerID, locationData)
 	assert(type(locationData) == "table")
-	RoomLoader.StartRun(locationData.region_id, locationData.id, seed, altMapGenID, ascension, questParams)
-end
-
-function RoomLoader.RequestRunWithLocationData(playerID, locationData, seed, altMapGenID, ascension, questParams)
-	assert(type(locationData) == "table")
-	RoomLoader.RequestRun(playerID, locationData.region_id, locationData.id, seed, altMapGenID, ascension, questParams)
+	local locationData_dungeon_run_params =
+	{
+		region_id = locationData.region_id,
+		location_id = locationData.id,
+	}
+	RoomLoader.RequestRun(playerID, locationData_dungeon_run_params)
 end
 
 RoomLoader.logMapGenDetails = true
@@ -46,13 +46,12 @@ function RoomLoader.LogMapGen(...)
 	end
 end
 
--- TODO: networking2022, victorc - move this to a more sensible location
-function RoomLoader.GetAltMapGenID(regionID, locationID)
+function RoomLoader.GetAltMapGenID(region_id, location_id)
 	if not InGamePlay() then
 		return nil
 	end
 
-	local biome_location = biomes.regions[regionID].locations[locationID]
+	local biome_location = biomes.regions[region_id].locations[location_id]
 
 	if biome_location.alternate_mapgens ~= nil then
 		local mapgen = require "defs.mapgen"
@@ -66,31 +65,62 @@ function RoomLoader.GetAltMapGenID(regionID, locationID)
 
 			RoomLoader.LogMapGen("Evaluating MapGen ID %d (%s)", mg_idx, mg)
 
-			-- If any of the FORBIDDEN keys are PRESENT, disqualify this biome
-			if possible_mapgen.forbidden_keys ~= nil then
-				for i,key in pairs(possible_mapgen.forbidden_keys) do
-					if TheWorld:IsFlagUnlocked(key) then -- FLAG
-						RoomLoader.LogMapGen("Rejecting MapGen ID %d, forbidden key: %s", mg_idx, key)
+			-- If any of the FORBIDDEN flags are PRESENT, disqualify this biome
+			if possible_mapgen.forbidden_world_flags ~= nil then
+				for i,flag in pairs(possible_mapgen.forbidden_world_flags) do
+					if TheWorld:IsFlagUnlocked(flag) then -- FLAG
+						RoomLoader.LogMapGen("Rejecting MapGen ID %d, forbidden world flag: %s", mg_idx, flag)
 						eligible = false
 						break
 					end
 				end
 			end
 
-			-- If any of the REQUIRED keys are MISSING, disqualify this biome
-			if possible_mapgen.required_keys ~= nil then
-				for i,key in ipairs(possible_mapgen.required_keys) do
-					if not TheWorld:IsFlagUnlocked(key) then -- FLAG
-						RoomLoader.LogMapGen("Rejecting MapGen ID %d, required key: %s", mg_idx, key)
+			-- If any of the REQUIRED flags are MISSING, disqualify this biome
+			if possible_mapgen.required_world_flags ~= nil then
+				for i,flag in ipairs(possible_mapgen.required_world_flags) do
+					if not TheWorld:IsFlagUnlocked(flag) then -- FLAG
+						RoomLoader.LogMapGen("Rejecting MapGen ID %d, required world flag: %s", mg_idx, flag)
 						eligible = false
 						break
+					end
+				end
+			end
+
+			-- if ALL players have ANY of the FORBIDDEN flags, disqualify this biome
+			if possible_mapgen.forbidden_player_flags ~= nil then
+				for i, flag in pairs(possible_mapgen.forbidden_player_flags) do
+					local all_players_have = true
+
+					for _, player in ipairs(AllPlayers) do
+						if not player:IsFlagUnlocked(flag) then
+							all_players_have = false
+						end
+					end
+
+					if all_players_have then
+						eligible = false
+						RoomLoader.LogMapGen("Rejecting MapGen ID %d, forbidden player flag: %s", mg_idx, flag)
+					end
+				end
+			end
+
+			-- if ANY player is MISSING ANY of the REQUIRED flags, disqualify this biome
+			if possible_mapgen.required_player_flags ~= nil then
+				for i, flag in pairs(possible_mapgen.forbidden_player_flags) do
+					for _, player in ipairs(AllPlayers) do
+						if not player:IsFlagUnlocked(flag) then
+							RoomLoader.LogMapGen("Rejecting MapGen ID %d, required player flag: %s", mg_idx, flag)
+							eligible = false
+							break
+						end
 					end
 				end
 			end
 
 			-- If the required ascension level is not active, disqualify this biome
 			if possible_mapgen.required_ascension ~= nil then
-				local current_ascension = TheDungeon.progression.components.ascensionmanager:GetSelectedAscension(locationID)
+				local current_ascension = TheDungeon.progression.components.ascensionmanager:GetSelectedAscension(location_id)
 				if current_ascension < possible_mapgen.required_ascension then
 					RoomLoader.LogMapGen("Rejecting MapGen ID %d, required ascension: %d", mg_idx, possible_mapgen.required_ascension)
 					eligible = false
@@ -112,57 +142,63 @@ function RoomLoader.GetAltMapGenID(regionID, locationID)
 end
 
 -- It is technically okay to call this without the network available
-function RoomLoader.RequestRun(playerID, regionID, locationID, seed, altMapGenID, ascension, questParams)
-	seed = seed or os.time(os.date("!*t"))
-	altMapGenID = altMapGenID or RoomLoader.GetAltMapGenID(regionID, locationID)
-    questParams = questParams or get_worldmap_safe():BuildQuestParams(locationID)
+function RoomLoader.RequestRun(playerID, dungeon_run_params)
+	assert(dungeon_run_params.region_id)
+	assert(dungeon_run_params.location_id)
+
+	dungeon_run_params.seed = dungeon_run_params.seed or os.time(os.date("!*t"))
+	dungeon_run_params.alt_mapgen_id = dungeon_run_params.alt_mapgen_id or RoomLoader.GetAltMapGenID(dungeon_run_params.region_id, dungeon_run_params.location_id)
+	local quest_params = get_worldmap_safe():BuildQuestParams(dungeon_run_params.location_id)
 
 	if not TheWorld then
 		TheLog.ch.Networking:printf("Warning: Run data ascension level is unsynced. Ascension manager is not available outside of the game.")
-		ascension = 0
+		dungeon_run_params.ascension = 0
 	else
-		if ascension and TheNet:IsHost() then
+		if dungeon_run_params.ascension and TheNet:IsHost() then
 			-- Host stores new ascension level since we'll load it to apply in future rooms.
-			TheDungeon.progression.components.ascensionmanager:StoreSelectedAscension(locationID, ascension)
+			TheDungeon.progression.components.ascensionmanager:StoreSelectedAscension(dungeon_run_params.location_id, dungeon_run_params.ascension)
 		else
-			ascension = TheDungeon.progression.components.ascensionmanager:GetSelectedAscension(locationID)
+			dungeon_run_params.ascension = TheDungeon.progression.components.ascensionmanager:GetSelectedAscension(dungeon_run_params.location_id)
 		end
 	end
 
-	TheNet:RequestRun(playerID, regionID, locationID, seed, altMapGenID, ascension, questParams)
+	TheNet:RequestRun(playerID, dungeon_run_params, quest_params)
 end
 
 -- It is technically okay to call this without the network available
-function RoomLoader.StartRun(regionID, locationID, seed, altMapGenID, ascension, questParams)
-	seed = seed or os.time(os.date("!*t"))
-	altMapGenID = altMapGenID or RoomLoader.GetAltMapGenID(regionID, locationID)
-    questParams = questParams or get_worldmap_safe():BuildQuestParams(locationID)
+function RoomLoader.StartRun(dungeon_run_params, quest_params)
+	assert(dungeon_run_params.region_id)
+	assert(dungeon_run_params.location_id)
+
+	dungeon_run_params.seed = dungeon_run_params.seed or os.time(os.date("!*t"))
+	dungeon_run_params.alt_mapgen_id = dungeon_run_params.alt_mapgen_id or RoomLoader.GetAltMapGenID(dungeon_run_params.region_id, dungeon_run_params.location_id)
+	quest_params = quest_params or get_worldmap_safe():BuildQuestParams(dungeon_run_params.location_id)
 
 	if not TheWorld then
 		TheLog.ch.Networking:printf("Warning: Run data ascension level is unsynced. Ascension manager is not available outside of the game.")
-		ascension = 0
+		dungeon_run_params.ascension = 0
 	else
-		if ascension and TheNet:IsHost() then
+		if dungeon_run_params.ascension and TheNet:IsHost() then
 			-- Host stores new ascension level since we'll load it to apply in future rooms.
-			TheDungeon.progression.components.ascensionmanager:StoreSelectedAscension(locationID, ascension)
+			TheDungeon.progression.components.ascensionmanager:StoreSelectedAscension(dungeon_run_params.location_id, dungeon_run_params.ascension)
 		else
-			ascension = TheDungeon.progression.components.ascensionmanager:GetSelectedAscension(locationID)
+			dungeon_run_params.ascension = TheDungeon.progression.components.ascensionmanager:GetSelectedAscension(dungeon_run_params.location_id)
 		end
 	end
 
 	if TheNet:IsHost() then
-		local callback = function()
-			TheNet:HostStartRun(regionID, locationID, seed, altMapGenID, ascension, questParams)
+		local callback = function(cb_dungeon_run_params)
+			TheNet:HostStartRun(cb_dungeon_run_params, quest_params)
 		end
-		StartRunInternal(regionID, locationID, callback, seed, altMapGenID, questParams)
+		StartRunInternal(dungeon_run_params, quest_params, callback)
 	end
 end
 
-function RoomLoader.ClientStartRun(regionID, locationID, seed, altMapGenID, questParams)
+function RoomLoader.ClientStartRun(dungeon_run_params, quest_params)
 	if not TheNet:IsHost() then
 		-- TODO: add something like TheNet:ClientStartRunComplete as a flow control callback
-		questParams = questParams or get_worldmap_safe():BuildQuestParams(locationID)
-		StartRunInternal(regionID, locationID, nil, seed, altMapGenID, questParams)
+		quest_params = quest_params or get_worldmap_safe():BuildQuestParams(dungeon_run_params.location_id)
+		StartRunInternal(dungeon_run_params, quest_params)
 	end
 end
 
@@ -200,7 +236,7 @@ local function TransitionLevel(params)
 			and ent:IsAncestorsLocal()
 			and not ent:HasTag("survives_room_travel")
 		then
-			TheLog.ch.Boot:print("Destroying entity", tostring(ent))
+			--TheLog.ch.Boot:print("Destroying entity", tostring(ent)) -- commented out because of logspam
 			ent:Remove(true)
 		else
 			local LogWidgetResets = false
@@ -236,23 +272,24 @@ local function TransitionLevel(params)
 	end)
 end
 
-local function LoadDungeonLevelInternal(worldprefab, scenegenprefab, roomid)
+local function LoadDungeonLevelInternal(worldprefab, scenegenprefab, roomid, is_debug_room)
 	TransitionLevel({
 		reset_action = RESET_ACTION.LOAD_DUNGEON_ROOM,
 		world_prefab = worldprefab,
 		scenegen_prefab = scenegenprefab,
 		room_id = roomid,
 		need_reset = RoomLoader._reset_next_load or (not IsCurrentlyInDungeon()),
+		is_debug_room = is_debug_room,
 	})
 end
 
-function RoomLoader.LoadDungeonLevel(worldprefab, scenegenprefab, roomid)
+function RoomLoader.LoadDungeonLevel(worldprefab, scenegenprefab, roomid, is_debug_room)
 	-- Load may stall/hang if game is paused.
 	SetGameplayPause(false)
 
 	if TheNet:IsHost() then
 		TryStartNetwork(function()
-			LoadDungeonLevelInternal(worldprefab, scenegenprefab, roomid)
+			LoadDungeonLevelInternal(worldprefab, scenegenprefab, roomid, is_debug_room)
 		end)
 	end
 end
@@ -288,7 +325,7 @@ end
 
 function RoomLoader.ClientLoadTownLevel(worldprefab, roomid)
 	roomid = roomid or 1
-	-- victorc: hacky fix to stop music when transitioning since the UI is actually controlling presentation
+	-- hack: fix to stop music when transitioning since the UI is actually controlling presentation
 	TheAudio:StopPersistentSound(audioid.persistent.ui_music)
 	if not TheNet:IsHost() then
 		TryStartNetwork(function()
@@ -303,6 +340,7 @@ local function DevLoadLevelInternal(worldprefab, scenegenprefab)
 		world_prefab = worldprefab,
 		scenegen_prefab = scenegenprefab or (TheSceneGen and TheSceneGen.prefab),
 		need_reset = true,
+		is_debug_room = true,
 	})
 end
 

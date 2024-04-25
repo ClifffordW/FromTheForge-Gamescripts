@@ -71,51 +71,6 @@ local kRoot2 = math.sqrt(2)
 local function CircleCollision(p1, v1, r1, p2, v2, r2)
 	local doesIntersect, cx, cy, t = TheSim:CircleCollision(p1.x, p1.y, v1.x, v1.y, r1, p2.x, p2.y, v2.x, v2.y, r2)
 	return doesIntersect, Vector2(cx,cy), t
-
-	-- TODO: victorc - to eventually be removed
-	-- Lua implementation of CircleCollision
-	--[[
-	-- put (1) into (2)'s frame of reference to simplify things
-	local v1r2 = v1 - v2
-
-	local dist = Vector2.len(p2 - p1)
-	local sumRadii = r1 + r2
-	dist = dist - sumRadii
-	local v1r2mag = Vector2.len(v1r2)
-	if v1r2mag < dist then
-		return false, Vector2(math.huge, math.huge), math.huge
-	end
-
-	local v1r2n = Vector2.normalized(v1r2)
-	local c = p2 - p1
-	local d = Vector2.dot(v1r2n, c)
-	if d <= 0 then
-		return false, Vector2(math.huge, math.huge), math.huge
-	end
-
-	local cMag = Vector2.len(c)
-	local f = cMag * cMag - d * d
-	local sumRadiiSquared = sumRadii * sumRadii
-	if f >= sumRadiiSquared then
-		return false, Vector2(math.huge, math.huge), math.huge
-	end
-
-	local t = sumRadiiSquared - f
-	if t < 0 then
-		return false, Vector2(math.huge, math.huge), math.huge
-	end
-
-	local distance = d - math.sqrt(t)
-	if v1r2mag < distance then
-		return false, Vector2(math.huge, math.huge), math.huge
-	end
-
-	local ttc = distance / v1r2mag
-	local p1c = p1 + v1r2n * ttc
-	local p2p1c = p2 - p1c
-	local collisionPoint = p1c + p2p1c * (r1 / sumRadii)
-	return true, collisionPoint + v2, ttc
-	]]
 end
 
 -- returns table of candidate velocities with additional support data
@@ -128,7 +83,7 @@ local function GenerateCandidateVelocities(p1, p1Rot, p1Speed, vPref, angleIncre
 			local candVel = Vector2.rotate(vPref, -math.rad(sign * i * angleIncrement) ) --lhcs
 
 			-- this is a coarse way to handle stage extents
-			-- TODO: victorc - the candidate velocity should still be considered but truncated or considered an obstacle
+			-- TODO: collisionavoidance - the candidate velocity should still be considered but truncated or considered an obstacle
 			if TheWorld.Map:IsWalkableAtXZ(p1.x + candVel.x, p1.y + candVel.y) then
 				local candDir = math.deg(-math.atan(candVel.y, candVel.x)) -- lhcs
 				if not candVels[candDir] then
@@ -285,7 +240,7 @@ function CollisionAvoidance.ApplyCollisionAvoidance(inst, prefDir, dt, lookAhead
 		target = GetDebugEntity()
 	end
 
-	-- TODO: victorc - adjust generated spread based on other circumstances
+	-- TODO: collisionavoidance - adjust generated spread based on other circumstances
 	local angleIncrement = 20
 	local normalSpeedCount = 5
 	local slowSpeedCount = 10
@@ -339,7 +294,7 @@ function CollisionAvoidance.ApplyCollisionAvoidance(inst, prefDir, dt, lookAhead
 						end
 					end
 
-					-- TODO: victorc - do more tests with this
+					-- TODO: collisionavoidance - do more tests with this
 					-- local testVel = (entSpeedSq >= EPSILON) and ((candVel * 2) - myVel - entVel) or candVel;
 					local testWeight = 0.5
 					local testVel = (entSpeedSq >= EPSILON) and (candVel * 1 / (EPSILON + testWeight) - myVel + entVel) * testWeight or candVel;

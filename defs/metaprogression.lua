@@ -49,7 +49,8 @@ require "defs.metaprogression.progressinstance"
 require "defs.metaprogression.defaultunlocks"
 
 require "defs.metaprogression.biomeexploration"
-require "defs.metaprogression.monsterresearch"
+require "defs.metaprogression.konjurconversion"
+require "defs.metaprogression.weaponunlocks"
 
 require "defs.equipmentgems.damagegems"
 require "defs.equipmentgems.supportgems"

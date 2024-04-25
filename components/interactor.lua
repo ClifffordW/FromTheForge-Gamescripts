@@ -75,11 +75,12 @@ function Interactor:ManifestUi()
 		:SetTarget(self.inst)
 		:SetRegistration("right", "center")
 		:SetOffsetFromTarget(Vector3(-0.6, 2, 0))
+		:SetClickable(false)
 
 	self.bg = self.ui_root:AddChild(Panel("images/ui_ftf_ingame/interact_bg.tex"))
 		:SetName("Background")
 		:SetNineSliceCoords(25, 0, 175, 95)
-		:SetMultColorAlpha(0.6)
+		:SetMultColorAlpha(TOOLTIP_BG_ALPHA)
 		:SetSize(WIDTH, HEIGHT)
 
 	self.status_text = self.ui_root:AddChild(Text(
@@ -100,6 +101,27 @@ function Interactor:ManifestUi()
 		self.status_text:ForceSetText(self:MakeFullText())
 		self:StretchBgToFitText()
 	end
+
+	self.left_aligned = true
+end
+
+function Interactor:ChangeStatusAlignment(align_left)
+	if align_left == self.left_aligned then
+		return
+	end
+
+	if align_left then
+		self.ui_root:SetRegistration("right", "center")
+			:SetOffsetFromTarget(Vector3(-0.6, 2, 0))
+			
+		self.bg:SetScale(1, 1)
+	else
+		self.ui_root:SetRegistration("left", "center")
+			:SetOffsetFromTarget(Vector3(0.6, 2, 0))
+		self.bg:SetScale(-1, 1)
+	end
+
+	self.left_aligned = align_left
 end
 
 function Interactor:SetStatusText(key, status_text)
@@ -120,6 +142,7 @@ function Interactor:SetStatusText(key, status_text)
 
 	if Lume(self.status_texts):count():result() == 0 then
 		self.ui_root:Hide()
+		self:ChangeStatusAlignment(true)
 	else
 		self.ui_root:Show()
 		self.status_text:SetText(self:MakeFullText())
@@ -127,6 +150,10 @@ function Interactor:SetStatusText(key, status_text)
 	end
 end
 
+
+function Interactor:HasStatusText(key)
+	return self.status_texts[key] ~= nil
+end
 
 
 

@@ -230,9 +230,32 @@ function CollectPropPlacements(scene_files)
 	return prop_placements
 end
 
+function InitializeWorldViaSceneList(inst)
+	--Newly generated world
+	--Use propmanager to load static layout one time
+	--See gamelogic.lua
+	inst:AddComponent("propmanager")
+	local scene_files = SceneFilesFromScenes(inst.scenelist)
+	local function FilterAuthoredDecorFiles(files)
+		return lume(files):filter(function(prop_file)
+			local decor_tags = { "_early_", "_midway_", "_nearboss_", "_grid_decor_" }
+			return not lume(decor_tags):any(function(decor_tag) return string.match(prop_file, decor_tag) end):result()
+		end):result()
+	end
+	if Profile:GetValue("suppress_decor_props", false) then
+		scene_files = FilterAuthoredDecorFiles(scene_files)
+	elseif inst:ProcGenEnabled() then
+		scene_files = FilterAuthoredDecorFiles(scene_files)
+	end
+	inst.components.propmanager:SetDataFiles(scene_files)
+end
 local function MakeAutogenWorld(name, params)
 	local assets =
 	{
+		Asset("PKGREF", "scripts/prefabs/autogen/world/".. name ..".lua"),
+		Asset("PKGREF", "scripts/prefabs/world_autogen.lua"),
+		Asset("PKGREF", "scripts/prefabs/world_autogen_data.lua"),
+
 		Asset("ATLAS", "levels/tiles/snowmtn_falloff.xml"),
 		Asset("IMAGE", "levels/tiles/snowmtn_falloff.tex"),
 
@@ -285,33 +308,15 @@ local function MakeAutogenWorld(name, params)
 	end
 
 	if params.town then
-		Constructable.CollectPrefabs(prefabs)
 		table.insert(prefabs, GroupPrefab("deps_town"))
+		table.insert(prefabs, GroupPrefab("deps_town_unlockables"))
 	end
 
 	local function OnPreLoad(inst, data)
 		-- Don't create props from scenes and scene_gens if we are loading them from a save file.
-		if data then
-			return
+		if not data then
+			InitializeWorldViaSceneList(inst)
 		end
-
-		--Newly generated world
-		--Use propmanager to load static layout one time
-		--See gamelogic.lua
-		inst:AddComponent("propmanager")
-		local scene_files = SceneFilesFromScenes(inst.scenelist)
-		local function FilterAuthoredDecorFiles(files)
-			return lume(files):filter(function(prop_file)
-				local decor_tags = {"_early_", "_midway_", "_nearboss_", "_grid_decor_"}
-				return not lume(decor_tags):any(function(decor_tag) return string.match(prop_file, decor_tag) end):result()
-			end):result()
-		end
-		if Profile:GetValue("suppress_decor_props", false) then
-			scene_files = FilterAuthoredDecorFiles(scene_files)
-		elseif inst:ProcGenEnabled() then
-			scene_files = FilterAuthoredDecorFiles(scene_files)
-		end
-		inst.components.propmanager:SetDataFiles(scene_files)
 	end
 
 	-- TODO(roomtravel): Shims until migration is complete.
@@ -591,7 +596,7 @@ local function MakeAutogenWorld(name, params)
 		inst:AddComponent("powerdropmanager")
 		inst:AddComponent("craftingdropmanager")
 		inst:AddComponent("konjurrewardmanager")
-		inst:AddComponent("questmarkmanager")
+		inst:AddComponent("npcmarkmanager")
 
 		inst:AddComponent("snapgrid")
 
@@ -629,8 +634,8 @@ local function MakeAutogenWorld(name, params)
 		end
 
 		if params.town then
-			inst:AddComponent("npctracker")
 			inst:AddComponent("plotmanager")
+			inst:AddComponent("decormanager")
 		else
 			inst:AddComponent("roomclear")
 			inst:AddComponent("dungeontravel")
@@ -713,24 +718,12 @@ local function MakeAutogenWorld(name, params)
 end
 
 local ret = {}
-local groups = {}
 
 for name, params in pairs(WorldAutogenData) do
-	if params.group ~= nil and string.len(params.group) > 0 then
-		local worldlist = groups[params.group]
-		if worldlist ~= nil then
-			worldlist[#worldlist + 1] = name
-		else
-			groups[params.group] = { name }
-		end
-	end
 	ret[#ret + 1] = MakeAutogenWorld(name, params)
 end
 
 --Don't need group prefabs for worlds
---[[for groupname, worldlist in pairs(groups) do
-	--Dummy prefab (no fn) for loading dependencies
-	ret[#ret + 1] = Prefab(GroupPrefab(groupname), nil, nil, worldlist)
-end]]
+--prefabutil.CreateGroupPrefabs(WorldAutogenData, ret)
 
 return table.unpack(ret)

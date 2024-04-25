@@ -2,15 +2,11 @@
 return {
   __displayName="ogre_midnight_hair_color_1",
   cosmetic_data={
-    color={ 0.67777777777778, 0.56, 0.24,},
+    color={ 0.74903476238251, 0.56000000238419, 0.23999999463558,},
     color_species="ogre",
     colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
 }

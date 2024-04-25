@@ -10,7 +10,6 @@ local Cosmetic = {
 	SlotDescriptor = {},
 }
 
-Cosmetic.Rarities = {"COMMON", "EPIC", "LEGENDARY"}
 Cosmetic.Species = {"mer", "ogre", "canine"}
 
 function Cosmetic.MakeTagsDict(taglist)
@@ -28,8 +27,8 @@ function Cosmetic.AddTagsToDict(dict, taglist)
 		for i = 1, #taglist do
 			dict[taglist[i]] = true
 		end
-		return dict
 	end
+	return dict
 end
 
 function Cosmetic.SortByItemName(a, b)
@@ -65,6 +64,19 @@ function Cosmetic.GetOrderedSlots()
 	return ordered_slots
 end
 
+function Cosmetic.CollectAssets(asset_pack, allowed_cosmetics)
+	table.insert(asset_pack.prod, Asset("PKGREF", "scripts/prefabs/cosmetic_autogen_data.lua"))
+	for _, slot in pairs(Cosmetic.Items) do
+		for name, def in pairs(slot) do
+			local dest = allowed_cosmetics[name] and asset_pack.prod or asset_pack.dev
+			table.insert(dest, Asset("PKGREF", "scripts/prefabs/autogen/cosmetic/".. name ..".lua"))
+		end
+	end
+	Cosmetic.CollectBodyPartAssets(asset_pack, allowed_cosmetics)
+	Cosmetic.CollectEquipmentDyeAssets(asset_pack, allowed_cosmetics)
+	return asset_pack
+end
+
 -- TODO: figure out how we are handling the UNLOCKED stuff
 function Cosmetic.AddCosmetic(name, data)
 	local items = Cosmetic.Items[data.group]
@@ -75,9 +87,6 @@ function Cosmetic.AddCosmetic(name, data)
 		slot = data.group,
 		group = data.group,
 		locked = data.locked,
-		purchased = data.purchased,
-		rarity = data.rarity or "COMMON",
-		hidden = data.hidden
 	}
 
 	if data.mastery ~= nil and string.lower(data.mastery) ~= "none" then
@@ -89,12 +98,20 @@ function Cosmetic.AddCosmetic(name, data)
 		def.filtertags["default_unlocked"] = true
 	end
 
-	if data.purchased then
-		def.filtertags["default_purchased"] = true
-	end
-
 	items[name] = def
 	return def
+end
+
+function Cosmetic.GetAllDefaultUnlocks()
+	local all = {}
+	for _, slot in pairs(Cosmetic.Items) do
+		for name, def in pairs(slot) do
+			if def.filtertags.default_unlocked then
+				all[name] = def
+			end
+		end
+	end
+	return all
 end
 
 function Cosmetic.FindDyeByNameAndSlot(cosmetic_name, equipment_slot)
@@ -104,6 +121,16 @@ function Cosmetic.FindDyeByNameAndSlot(cosmetic_name, equipment_slot)
 		end
 	end
 	error("Invalid cosmetic name: ".. cosmetic_name)
+end
+
+function Cosmetic.IsSlot(slot)
+	for _, v in pairs(Cosmetic.Slots) do
+		if v == slot then
+			return true
+		end
+	end
+
+	return false
 end
 
 AddSlot("PLAYER_TITLE")

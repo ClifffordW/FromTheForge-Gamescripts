@@ -54,23 +54,27 @@ function PopPrompt:Start(data)
 			self.start_x, self.start_y, self.start_z = data.target.Transform:GetWorldPosition()
 		end
 	end
-	local x,y = self:CalcLocalPositionFromWorldPoint(self.start_x, self.start_y, self.start_z)
-	x = x + self.x_offset_base
-	y = y + self.y_offset_base
-	self:SetPosition(x, y)
 
-	self:AlphaTo(0, self.fade_time, easing.inExpo, function() self:Remove() end)
+	if self.start_x and self.start_y and self.start_z then
+		local x,y = self:CalcLocalPositionFromWorldPoint(self.start_x, self.start_y, self.start_z)
+		x = x + self.x_offset_base
+		y = y + self.y_offset_base
+		self:SetPosition(x, y)
 
-	self:RunUpdater(Updater.Parallel{
-			Updater.Ease(function(x3) 
-				local x2, y2 = self:GetPosition()
-				self:SetPosition(x3, y2) 
-			end, x, x + (self.x_offset_target * self.x_offset_mod), self.x_offset_target_time, easing.outExpo),
-			Updater.Ease(function(y3) 
-				local x2, y2 = self:GetPosition()
-				self:SetPosition(x2, y3) 
-			end, y, y + self.y_offset_target, self.y_offset_target_time, easing.outElastic),
-	})
+		self:AlphaTo(0, self.fade_time, easing.inExpo, function() self:Remove() end)
+
+		self:RunUpdater(Updater.Parallel{
+				Updater.Ease(function(x3) 
+					local x2, y2 = self:GetPosition()
+					self:SetPosition(x3, y2) 
+				end, x, x + (self.x_offset_target * self.x_offset_mod), self.x_offset_target_time, easing.outExpo),
+				Updater.Ease(function(y3) 
+					local x2, y2 = self:GetPosition()
+					self:SetPosition(x2, y3) 
+				end, y, y + self.y_offset_target, self.y_offset_target_time, easing.outElastic),
+		})
+		return self
+	end
 end
 
 function PopPrompt:Extend(data)

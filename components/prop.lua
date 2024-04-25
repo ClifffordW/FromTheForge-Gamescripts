@@ -142,6 +142,16 @@ local function OnPlaceAnywhereProp(inst, place_anywhere)
 	end
 end
 
+local function OnSnapToGridProp(inst, snap_to_grid)
+	local self = inst.components.prop
+	self.snap_to_grid = snap_to_grid
+
+	local snaptogrid = inst.components.snaptogrid
+	if snaptogrid then
+		snaptogrid:SetEnabled(snap_to_grid)
+	end
+end
+
 local Prop = Class(function(self, inst)
 	self.inst = inst
 	self.drag = nil
@@ -155,6 +165,8 @@ local Prop = Class(function(self, inst)
 
 	self.basefade = deepcopy(fade_defaults)
 	self.fade = nil
+
+	self.snap_to_grid = true
 
 	inst:AddTag("prop")
 
@@ -348,7 +360,7 @@ function Prop:SetVariationInternal(variation, rng)
 			-- When we play an invalid anim, GetCurrentAnimationNumFrames will
 			-- assert in native. dbassert earlier to identify the prop, but
 			-- only in debug builds.
-			dbassert(kassert.assert_fmt(self.inst.AnimState:HasAnimation(), "Prop '%s' has invalid animation.", self.inst.prefab))
+			dbassert(kassert.assert_fmt(self.inst.AnimState:HasAnimation(), "Prop '%s' has invalid animation [%s].", self.inst.prefab, anim))
 			frame = rng:Integer(self.inst.AnimState:GetCurrentAnimationNumFrames()) - 1
 			self.inst.AnimState:SetFrame(frame)
 		end
@@ -430,7 +442,7 @@ function Prop:OnPropChanged(force_dirty)
 	end
 
 	local x, y, z = self.inst.Transform:GetWorldPosition()
-	if self.inst.components.snaptogrid ~= nil then
+	if self.inst.components.snaptogrid ~= nil and self.inst.components.snaptogrid.enabled then
 		local snapped_x, snapped_y, snapped_z = self.inst.components.snaptogrid:MoveToNearestGridPos(x, y, z, false)
 		if snapped_x ~= nil then
 			x, y, z = snapped_x, snapped_y, snapped_z
@@ -467,8 +479,16 @@ function Prop:OnPropChanged(force_dirty)
 		self.data.flip = self.flip or nil
 		dirty = true
 	end
+	if (not self.data.sole_occupant) ~= (not self.sole_occupant) then
+		self.data.sole_occupant = self.sole_occupant or false
+		dirty = true
+	end
 	if (not self.data.place_anywhere) ~= (not self.place_anywhere) then
 		self.data.place_anywhere = self.place_anywhere or nil
+		dirty = true
+	end
+	if (not self.data.no_snap) ~= (self.snap_to_grid) then
+		self.data.no_snap = not self.snap_to_grid or nil
 		dirty = true
 	end
 	if self.data.variation ~= self.variation then
@@ -556,8 +576,18 @@ function Prop:OnLoadInternal()
 	if (not self.data.flip) ~= (not self.flip) then
 		self:DoFlipProp()
 	end
+	if (not self.data.sole_occupant) ~= (not self.sole_occupant) then
+		self.sole_occupant = self.data.sole_occupant
+		if TheWorld then
+			TheWorld.components.spawncoordinator:ClaimSoleOccupancy(self.inst, self.inst.Physics and self.inst.Physics:GetSize())
+		end
+	end
 	if (not self.data.place_anywhere) ~= (not self.place_anywhere) then
 		OnPlaceAnywhereProp(self.inst, self.data.place_anywhere)
+	end
+
+	if (not self.data.no_snap) ~= (self.snap_to_grid) then
+		OnSnapToGridProp(self.inst, not self.data.no_snap)
 	end
 
 	if self.data.variation ~= nil then
@@ -632,7 +662,7 @@ function Prop:OnWallUpdate(dt)
 	-- Ideal prop location.
 	DebugDrawPoint(x,y, z, POINT_SIZE, WEBCOLORS.PURPLE)
 
-	if self.inst.components.snaptogrid ~= nil then
+	if self.inst.components.snaptogrid ~= nil and self.inst.components.snaptogrid.enabled then
 		x, y, z = self.inst.components.snaptogrid:MoveToNearestGridPos(x, y, z, false)
 	end
 	self.inst.Transform:SetWorldPosition(x, y, z)
@@ -689,6 +719,18 @@ function Prop:EditEditable(ui)
 		ui:SetTooltip("Allows you to place this prop on non-ground areas.")
 	end
 
+	ui:SameLineWithSpace()
+
+	local snap_to_grid_changed, snap_to_grid = ui:Checkbox("Snap to Grid", self.snap_to_grid or nil)
+	if snap_to_grid_changed then
+		OnSnapToGridProp(self.inst, snap_to_grid)
+		self:OnPropChanged()
+	end
+	if ui:IsItemHovered() then
+		ui:SetTooltip("Uncheck to place anywhere without snapping to grid.")
+	end
+
+	self.sole_occupant = ui:_Checkbox("Sole Occupant", self.sole_occupant or false)
 	if self.numvariations ~= nil then
 		local resize = ui:GetColumnWidth() > 210
 		if resize then

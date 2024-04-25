@@ -263,6 +263,29 @@ return {
           { frame=3, name="sfx-wing",},
         },
       },
+      phase_transition={
+        events={
+          { frame=1, name="sfx-teleport",},
+          { frame=25, name="sfx-footstep",},
+          { frame=27, name="sfx-swipe_impact",},
+          { frame=57, name="sfx-swipe_impact",},
+          { frame=93, name="sfx-footstep",},
+          { frame=95, name="sfx-footstep",},
+          { frame=94, name="sfx-rage_short",},
+          { frame=28, name="sfx-snarl1",},
+          { frame=15, name="sfx-swipe_pre",},
+          { frame=45, name="sfx-swipe_pre",},
+          { frame=11, name="sfx-tell",},
+          { frame=44, name="sfx-tell",},
+        },
+      },
+      phase_transition_pre={
+        events={
+          { frame=23, name="sfx-teleport",},
+          { frame=1, name="sfx-hit",},
+          { frame=9, name="sfx-snarl1",},
+        },
+      },
       rage={
         events={
           { frame=62, name="sfx-footstep",},
@@ -277,6 +300,18 @@ return {
       rage_bite_pre={ events={ { frame=1, name="sfx-teleport",}, { frame=4, name="sfx-bite_pre",},},},
       rage_bite_tired_loop={ events={ { frame=7, name="sfx-breaths2",}, { frame=22, name="sfx-breaths2",},},},
       rage_bite_tired_pre={ events={ { frame=9, name="sfx-footstep",},},},
+      rage_mode={
+        events={
+          { frame=20, name="sfx-snarl2",},
+          { frame=19, name="sfx-whoosh",},
+          { frame=22, name="sfx-wing",},
+          { frame=32, name="sfx-wing",},
+          { frame=41, name="sfx-wing",},
+          { frame=49, name="sfx-wing",},
+          { frame=6, name="sfx-breaths2",},
+          { frame=2, name="sfx-bite_pre",},
+        },
+      },
       rage_transition={
         events={
           { frame=33, name="sfx-bite_pre",},

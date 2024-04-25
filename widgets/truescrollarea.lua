@@ -234,10 +234,10 @@ function TrueScrollArea:RefreshView()
 	end
 end
 
-function TrueScrollArea:OnControl(controls, down)
-	if TrueScrollArea._base.OnControl(self, controls, down) then return true end
+function TrueScrollArea:OnControl(controls, down, ...)
+	if TrueScrollArea._base.OnControl(self, controls, down, ...) then return true end
 
-    if down and (self.focus and self.scroll_bar:IsVisible()) then
+    if down and (self:HasFocus() and self.scroll_bar:IsVisible()) then
         if controls:Has(Controls.Digital.MENU_SCROLL_BACK) then
             local scroll_amt = -self.scroll_per_click
             if TheInput:ControllerAttached() then

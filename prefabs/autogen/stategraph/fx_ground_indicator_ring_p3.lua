@@ -46,6 +46,11 @@ return {
             frame=13,
             param={ fxname="ground_indicator_beam_p3", ischild=true, stopatexitstate=true,},
           },
+          {
+            eventtype="spawnparticles",
+            frame=13,
+            param={ followsymbol="ring_untex", ischild=true, particlefxname="ground_glow_p3",},
+          },
         },
       },
     },

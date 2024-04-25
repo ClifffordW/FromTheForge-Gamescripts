@@ -1,3 +1,4 @@
+
 local DebugInputHistory = Class( function(self, max_history)
 	self.history = {}
 	self.history_ticks = {}
@@ -105,6 +106,8 @@ end
 function DebugInputHistory:Reset()
 	print("inputhistory: Resetting input history")
 
+	self:ShutdownTracker()
+
 	if #self.history_ticks == 0 then
 		return
 	end
@@ -134,5 +137,8 @@ function DebugInputHistory:GetMaxTick()
 	return self.history_ticks[#self.history_ticks] or 0
 end
 
+function DebugInputHistory:ShutdownTracker()
+	-- Unlike other history, this doesn't track entities, so implement a stub.
+end
 
 return DebugInputHistory

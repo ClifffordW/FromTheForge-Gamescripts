@@ -9,6 +9,7 @@ return {
   subactors={
     {
       assigned_at_runtime=true,
+      end_pos={  },
       face_left=true,
       kill_on_end=false,
       label="Gourdo2",
@@ -18,7 +19,6 @@ return {
     },
   },
   timelines={
-    attachswipefx={  },
     blurscreen={
       {
         72,
@@ -53,11 +53,6 @@ return {
         },
       },
     },
-    cameradist={  },
-    cameraoffset={  },
-    camerapitch={  },
-    cameratargetbegin={  },
-    cameratargetend={  },
     cameratargetoverride={
       {
         0,
@@ -68,7 +63,6 @@ return {
         },
       },
     },
-    detachswipefx={  },
     disableplayinput={ { 0, 154, { eventtype="disableplayinput", param={ duration=154,},},},},
     facing={
       {
@@ -81,8 +75,6 @@ return {
         },
       },
     },
-    fade={  },
-    gameevent={  },
     gotostate={
       {
         31,
@@ -115,16 +107,6 @@ return {
       },
     },
     letterbox={ { 0, 154, { eventtype="letterbox", param={ duration=154,},},},},
-    levelmusicstop={
-      {
-        0,
-        175,
-        { eventtype="levelmusicstop", is_unedited=true, param={  }, target_role="lead",},
-      },
-    },
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
     musicbossstart={
       {
         170,
@@ -135,10 +117,6 @@ return {
         },
       },
     },
-    musicbossstop={  },
-    pausesg={  },
-    playcountedsound={  },
-    playfoleysound={  },
     playsound={
       {
         0,
@@ -171,12 +149,6 @@ return {
         },
       },
     },
-    playsound_window={  },
-    pushanim={  },
-    runintoscene={  },
-    setsheathed={  },
-    setsoundparameter={  },
-    setvisible={  },
     shakecamera={
       {
         72,
@@ -187,25 +159,17 @@ return {
         },
       },
     },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
-    stopsound={  },
-    teleport={  },
     titlecard={
       {
         30,
         141,
         {
           eventtype="titlecard",
-          param={ duration=111, titlekey="gourdo_elite",},
+          param={ duration=111, titlekey="gourdo_miniboss",},
           target_role="lead",
         },
       },
     },
-    uibosshealthbar={  },
     uihidehud={ { 0, 155, { eventtype="uihidehud", param={ duration=155,},},},},
   },
   use_lead_actor_pos=true,

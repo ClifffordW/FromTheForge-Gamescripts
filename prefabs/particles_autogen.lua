@@ -20,15 +20,21 @@ local function StopSound(inst)
 	soundutil.KillSound(inst, inst.sound_handle)
 end
 
-function MakeAutogenParticles(name, params, debug)
+function MakeAutogenParticles(name, params, is_debug)
 	local assets =
 	{
+		Asset("PKGREF", "scripts/prefabs/particles_autogen.lua"),
 		Asset("PKGREF", "scripts/prefabs/particles_autogen_data.lua"),
 	}
+	if not is_debug then
+		table.insert(assets, Asset("PKGREF", "scripts/prefabs/autogen/particles/".. name ..".lua"))
+	end
+	-- else: doesn't correspond to a real file.
+
 	local prefabs = {}
 
 	if params then
-		prefabutil.CollectAssetsForParticleSystem(assets, params, debug)
+		prefabutil.CollectAssetsForParticleSystem(assets, params, is_debug)
 	end
 
 	local function fn(prefabname)

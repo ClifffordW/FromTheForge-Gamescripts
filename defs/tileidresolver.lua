@@ -2,134 +2,140 @@ local GroundTiles = require "defs.groundtiles"
 
 local TILE_NAME_REMAPPERS = {
 	-- How to map to startingforest...
-	startingforest = {	
+	startingforest = {
 		-- ...from owlitzer_forest
-		owlitzer_forest = {		
+		owlitzer_forest = {
 			DIRTROCKY = "DIRT",
 			GRASSHAY = "GRASS",
 			OWLTREE = "DIRTROT",
 			OWLSTONE = "GRASSROT",
 			STONEFLOOR = "STONEFLOOR",
-
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "STARTINGFOREST_CLIFF"
 		},
 		-- ...from bandiforest
-		bandiforest = {		
+		bandiforest = {
 			MOLD = "DIRT",
 			FUZZ = "GRASS",
 			MOLDCOOT = "DIRTROT",
 			FUZZCOOT = "GRASSROT",
 			STONEFLOOR = "STONEFLOOR",
-			
+			ACIDPOOL = "ACIDPOOL",
 			BANDIFOREST_CLIFF = "STARTINGFOREST_CLIFF",
 		},
 	},
 	-- How to map to owlitzer_forest...
-	owlitzer_forest = {	
+	owlitzer_forest = {
 		-- ...from startingforest
-		startingforest = {		
+		startingforest = {
 			DIRT = "DIRTROCKY",
 			GRASS = "GRASSHAY",
 			DIRTROT = "OWLSTONE",
 			GRASSROT = "OWLTREE",
 			STONEFLOOR = "STONEFLOOR",
-			
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "STARTINGFOREST_CLIFF"
 		},
 		-- ...from bandiforest
-		bandiforest = {		
+		bandiforest = {
 			MOLD = "DIRTROCKY",
 			FUZZ = "GRASSHAY",
 			MOLDCOOT = "OWLSTONE",
 			FUZZCOOT = "OWLTREE",
 			STONEFLOOR = "STONEFLOOR",
+			ACIDPOOL = "ACIDPOOL",
 			BANDIFOREST_CLIFF = "STARTINGFOREST_CLIFF",
 		},
 	},
 	-- How to map to bandiforest...
-	bandiforest = {	
+	bandiforest = {
 		-- ...from startingforest
-		startingforest = {		
+		startingforest = {
 			DIRT = "MOLD",
 			GRASS = "FUZZ",
 			DIRTROT = "MOLDCOOT",
 			GRASSROT = "FUZZCOOT",
 			STONEFLOOR = "STONEFLOOR",
-			
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "BANDIFOREST_CLIFF"
 		},
 		-- ...from owlitzer_forest
-		owlitzer_forest = {		
+		owlitzer_forest = {
 			DIRTROCKY = "MOLD",
 			GRASSHAY = "FUZZ",
 			OWLTREE = "MOLDCOOT",
 			OWLSTONE = "FUZZCOOT",
 			STONEFLOOR = "STONEFLOOR",
-
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "BANDIFOREST_CLIFF"
 		},
 	},
 	-- How to map to thatcher_swamp...
-	thatcher_swamp = {	
+	thatcher_swamp = {
 		-- ...from bandiforest
-		bandiforest = {		
+		bandiforest = {
 			MOLD = "MOLDDIRT",
 			FUZZ = "FUZZGRASS",
 			MOLDCOOT = "MOLDSLIMY",
 			FUZZCOOT = "FUZZSLIMY",
 			STONEFLOOR = "STONEFLOOR",
+			ACIDPOOL = "ACIDPOOL",
 			BANDIFOREST_CLIFF = "BANDIFOREST_CLIFFACID",
 		},
 		-- ...from startingforest
-		startingforest = {		
+		startingforest = {
 			DIRT = "MOLDDIRT",
 			GRASS = "FUZZGRASS",
 			DIRTROT = "MOLDSLIMY",
 			GRASSROT = "FUZZSLIMY",
 			STONEFLOOR = "STONEFLOOR",
-			
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "BANDIFOREST_CLIFFACID"
 		},
 	},
 	-- How to map to sedament_tundra...
-	sedament_tundra = {	
+	sedament_tundra = {
 		-- ...from bandiforest
-		bandiforest = {		
+		bandiforest = {
 			MOLD = "ROCK",
 			FUZZ = "SNOW",
 			MOLDCOOT = "ROCKSNOW",
 			FUZZCOOT = "SNOWHEAVY",
 			STONEFLOOR = "STONEFLOOR",
+			ACIDPOOL = "ACIDPOOL",
 			BANDIFOREST_CLIFF = "TUNDRASNOW_CLIFF",
 		},
 		-- ...from startingforest
-		startingforest = {		
+		startingforest = {
 			DIRT = "ROCK",
 			GRASS = "SNOW",
 			DIRTROT = "ROCKSNOW",
 			GRASSROT = "SNOWHEAVY",
-			STONEFLOOR = "STONEFLOOR",			
+			STONEFLOOR = "STONEFLOOR",
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "TUNDRASNOW_CLIFF"
 		},
 	},
 	-- How to map to snowmtn_mtntop...
-	snowmtn_mtntop = {	
+	snowmtn_mtntop = {
 		-- ...from bandiforest
-		bandiforest = {		
+		bandiforest = {
 			MOLD = "SNOWMTN_FLOOR",
 			FUZZ = "SNOWMTN_SNOW",
 			MOLDCOOT = "SNOWMTN_FLOOR",
 			FUZZCOOT = "SNOWMTN_SNOW",
 			STONEFLOOR = "SNOWMTN_FLOOR",
+			ACIDPOOL = "ACIDPOOL",
 			BANDIFOREST_CLIFF = "SNOWMTN_CLIFF",
 		},
 		-- ...from startingforest
-		startingforest = {		
+		startingforest = {
 			DIRT = "SNOWMTN_FLOOR",
 			GRASS = "SNOWMTN_SNOW",
 			DIRTROT = "SNOWMTN_FLOOR",
 			GRASSROT = "SNOWMTN_SNOW",
-			STONEFLOOR = "SNOWMTN_FLOOR",			
+			STONEFLOOR = "SNOWMTN_FLOOR",
+			ACIDPOOL = "ACIDPOOL",
 			STARTINGFOREST_CLIFF = "SNOWMTN_CLIFF"
 		},
 	},

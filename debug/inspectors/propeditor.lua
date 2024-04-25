@@ -31,7 +31,8 @@ local script_options =
 	screenopener = "Screen Opener",
 	specialeventroom_prefab = "Special Event Room",
 	konjursouls = "Konjur Soul",
-	townpillar = "Town Pillar",
+	energywell = "Energy Well",
+	energywellpillar = "Energy Well Pillar",
 	dungeonstarter = "Dungeon Starter",
 	plots = "Plots",
 	totem = "Totem",
@@ -39,8 +40,8 @@ local script_options =
 	moving_cloud = "Moving Cloud",
 	shopitem_config = "Shop Item",
 	vendingmachine_config = "Vending Machine",
-	storagechest_script = "Storage Chest",
 	encounterpractice = "Encounter Practice",
+	metaprogressstore = "Meta Progress Store",
 }
 
 local function run_script_fn(params, fn)
@@ -127,6 +128,7 @@ end
 
 function PropEditor:RemoveTestProp()
 	if self.testprop then
+		self.last_spawn_pos = self.testprop:GetPosition()
 		self.testprop:Remove()
 		self.testprop = nil
 		return true
@@ -478,45 +480,7 @@ function PropEditor:AddEditableOptions(ui, params)
 	if ui:CollapsingHeader("Animation", ui.TreeNodeFlags.DefaultOpen) then
 		self:AddSectionStarter(ui)
 
-		if ui:TreeNode("Build/Bank (optional if same as Prefab)") then
-			--Build name
-			local _, newbuild = ui:InputText("Build", params.build, imgui.InputTextFlags.CharsNoBlank)
-			if newbuild ~= nil then
-				if string.len(newbuild) == 0 then
-					newbuild = nil
-				end
-				if params.build ~= newbuild then
-					params.build = newbuild
-					self:SetDirty()
-				end
-			end
-
-			--Bank name
-			local _, newbank = ui:InputText("Bank", params.bank, imgui.InputTextFlags.CharsNoBlank)
-			if newbank ~= nil then
-				if string.len(newbank) == 0 then
-					newbank = nil
-				end
-				if params.bank ~= newbank then
-					params.bank = newbank
-					self:SetDirty()
-				end
-			end
-
-			--Bank file
-			local _, newbankfile = ui:InputText("Bank File", params.bankfile, imgui.InputTextFlags.CharsNoBlank)
-			if newbankfile ~= nil then
-				if string.len(newbankfile) == 0 then
-					newbankfile = nil
-				end
-				if params.bankfile ~= newbankfile then
-					params.bankfile = newbankfile
-					self:SetDirty()
-				end
-			end
-
-			self:AddTreeNodeEnder(ui)
-		end
+		prefabutil.EditAnim(ui, self, params)
 
 		if ui:TreeNode("Parallax", ui.TreeNodeFlags.DefaultOpen) then
 			if ui:Checkbox("Has idle_ anim", not params.parallax_use_baseanim_for_idle) then
@@ -1604,6 +1568,11 @@ function PropEditor:AddEditableOptions(ui, params)
 
 		if ui:Checkbox("Make Placer", params.placer) then
 			params.placer = not params.placer or nil
+			self:SetDirty()
+		end
+
+		if ui:Checkbox("Ignore Placers", params.ignore_placer) then
+			params.ignore_placer = not params.ignore_placer or nil
 			self:SetDirty()
 		end
 

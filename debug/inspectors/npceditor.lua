@@ -5,6 +5,7 @@ local SGCommon = require "stategraphs.sg_common"
 local emotion = require "defs.emotion"
 local lume = require "util.lume"
 local prefabutil = require "prefabs.prefabutil"
+local speciesutil = require "util.speciesutil"
 require "prefabs.npc_autogen" -- Load util functions
 
 
@@ -122,56 +123,17 @@ function NpcEditor:AddEditableOptions(ui, params)
 	if ui:CollapsingHeader("Animation") then
 		self:AddSectionStarter(ui)
 
-		if ui:TreeNode("Build/Bank (optional if same as Prefab)") then
-			--Build name
-			local _, newbuild = ui:InputText("Build", params.build, imgui.InputTextFlags.CharsNoBlank)
-			if newbuild ~= nil then
-				if string.len(newbuild) == 0 then
-					newbuild = nil
-				end
-				if params.build ~= newbuild then
-					params.build = newbuild
-					self:SetDirty()
-				end
+		prefabutil.EditAnim(ui, self, params)
+
+		local _, newhead = ui:InputText("Head File", params.head, imgui.InputTextFlags.CharsNoBlank)
+		if newhead ~= nil then
+			if string.len(newhead) == 0 then
+				newhead = nil
 			end
-
-			--Bank name
-			local _, newbank = ui:InputText("Bank", params.bank, imgui.InputTextFlags.CharsNoBlank)
-			if newbank ~= nil then
-				if string.len(newbank) == 0 then
-					newbank = nil
-				end
-				if params.bank ~= newbank then
-					params.bank = newbank
-					self:SetDirty()
-				end
+			if params.head ~= newhead then
+				params.head = newhead
+				self:SetDirty()
 			end
-
-			--Bank file
-			local _, newbankfile = ui:InputText("Bank File", params.bankfile, imgui.InputTextFlags.CharsNoBlank)
-			if newbankfile ~= nil then
-				if string.len(newbankfile) == 0 then
-					newbankfile = nil
-				end
-				if params.bankfile ~= newbankfile then
-					params.bankfile = newbankfile
-					self:SetDirty()
-				end
-			end
-
-			local _, newhead = ui:InputText("Head File", params.head, imgui.InputTextFlags.CharsNoBlank)
-			if newhead ~= nil then
-				if string.len(newhead) == 0 then
-					newhead = nil
-				end
-				if params.head ~= newhead then
-					params.head = newhead
-					self:SetDirty()
-				end
-			end
-
-
-			self:AddTreeNodeEnder(ui)
 		end
 
 		if ui:TreeNode("Preview Animation##anim", ui.TreeNodeFlags.DefaultOpen) then
@@ -198,6 +160,7 @@ function NpcEditor:AddEditableOptions(ui, params)
 
 	if ui:CollapsingHeader("Villager", ui.TreeNodeFlags.DefaultOpen) then
 		params.role = ui:_Enum("Role", params.role, Npc.Role, true)
+		params.species = ui:_Enum("Species", params.species, speciesutil.Species, true)
 
 		local hint = "Default: VISITOR"
 		params.initial_state = ui:_InputTextWithHint("Initial State", hint, params.initial_state, imgui.InputTextFlags.CharsNoBlank)

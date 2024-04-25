@@ -8,9 +8,9 @@ return {
     name_key="emote_nod_short_stern",
   },
   group="PLAYER_EMOTE",
-  hidden=false,
+  
   locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  
+  
+  
 }

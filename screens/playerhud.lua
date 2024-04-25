@@ -50,10 +50,12 @@ local PlayerHud = Class(Screen, function(self)
 	-- Since these are screens, they have fullscreen bounds.
 	-- under_root holds full-screen effects that are not to include the PlayerHud itself.
 	self.under_root = self:AddChild(Screen("under_root"))
+		:SetNonInteractive()
 
 	-- game_world holds UI elements that are located in game world space, often attached to game entities to indicate
 	-- status. E.g. damage numbers, ware prices, etc..
 	self.game_world = self:AddChild(Screen("game_world"))
+		:SetNonInteractive()
 	self.game_world.OnUpdate = function(game_world)
 		game_world:SortChildren(function(a, b)
 			if a.z == b.z then
@@ -131,10 +133,18 @@ local PlayerHud = Class(Screen, function(self)
 		end)
 	end
 
+	local is_public = CONFIGURATION == "PRODUCTION"
+
+	-- build/version_label are *intentionally* not localized. They're for us to
+	-- see and not for players to read.
 	local version_label = APP_VERSION == "-1" and "" or "REV. " .. APP_VERSION
 	local build_label = ""
 	if PLAYTEST_MODE then
-		build_label = "[Demo]"
+		build_label = "[Playtest]"
+	end
+	if is_public then
+		-- TODO(1.0): Don't forget to remove EA for Early Access!
+		version_label = "EA ".. version_label
 	end
 
 	-- Show town or dungeon HUD
@@ -147,21 +157,21 @@ local PlayerHud = Class(Screen, function(self)
 		self.location_hud = self.townHud
 		table.insert(self.animated, self.townHud)
 
-		self.TEMP_NO_CONTROLLER_SUPPORT_WIDGET = self.root:AddChild(Text(FONTFACE.DEFAULT, 50 * HACK_FOR_4K, "Use your mouse to place buildings for now! :)", UICOLORS.LIGHT_TEXT_TITLE))
-			:LayoutBounds("center", "bottom", self.root)
-			:Offset(0, 100 * HACK_FOR_4K)
-			:Hide()
+		-- self.TEMP_NO_CONTROLLER_SUPPORT_WIDGET = self.root:AddChild(Text(FONTFACE.DEFAULT, 50 * HACK_FOR_4K, "Use your mouse to place buildings for now! :)", UICOLORS.LIGHT_TEXT_TITLE))
+		-- 	:LayoutBounds("center", "bottom", self.root)
+		-- 	:Offset(0, 100 * HACK_FOR_4K)
+		-- 	:Hide()
 
-		self.inst:ListenForEvent("startplacing", function()
-			self.TEMP_NO_CONTROLLER_SUPPORT_WIDGET:Show()
-			if self.prompt then self.prompt:Hide() end
-		end, TheWorld)
-		self.inst:ListenForEvent("stopplacing", function()
-			self.TEMP_NO_CONTROLLER_SUPPORT_WIDGET:Hide()
-			if self.prompt then self.prompt:Show() end
-		end, TheWorld)
+		-- self.inst:ListenForEvent("startplacing", function()
+		-- 	self.TEMP_NO_CONTROLLER_SUPPORT_WIDGET:Show()
+		-- 	if self.prompt then self.prompt:Hide() end
+		-- end, TheWorld)
+		-- self.inst:ListenForEvent("stopplacing", function()
+		-- 	self.TEMP_NO_CONTROLLER_SUPPORT_WIDGET:Hide()
+		-- 	if self.prompt then self.prompt:Show() end
+		-- end, TheWorld)
 
-		if PLAYTEST_MODE then
+		if is_public then
 			self.feedback_text = self.root:AddChild(Text(FONTFACE.DEFAULT, 25 * HACK_FOR_4K, nil, UICOLORS.LIGHT_TEXT_TITLE))
 				:SetMultColorAlpha(0.8)
 				:RightAlign()
@@ -184,9 +194,14 @@ local PlayerHud = Class(Screen, function(self)
 		self.player_unit_frames = self.root:AddChild(PlayerUnitFrames())
 		table.insert(self.animated, self.player_unit_frames)
 
-		self.bosshealthbar = self.root:AddChild(BossHealthBar())
+		self.bosshealthbar = self.root:AddChild(BossHealthBar(1))
 			:LayoutBounds("center", "top", self.root)
 		table.insert(self.animated, self.bosshealthbar)
+
+		self.bosshealthbar_secondary = self.root:AddChild(BossHealthBar(2))
+			:LayoutBounds("center", "below", self.bosshealthbar)
+		table.insert(self.animated, self.bosshealthbar_secondary)
+
 		self.prompt = nil
 
 		local mapgen = require "defs.mapgen"
@@ -207,7 +222,7 @@ local PlayerHud = Class(Screen, function(self)
 			-- easy room" sadness.
 			difficulty = difficulty:sub(1,2)
 			roomtype = roomtype:sub(1,4)
-			-- Encounters might be "e01" or "e05_kanft_swamp" for normal or any
+			-- Encounters might be "e01" or "e05_bandi_swamp" for normal or any
 			-- string ("tutorial") for forced. Leave them alone to retain usefulness.
 			-- encounter = encounter:sub(1,7)
 		end
@@ -226,7 +241,7 @@ local PlayerHud = Class(Screen, function(self)
 				encounter,
 				build_label)))
 
-		if PLAYTEST_MODE then
+		if is_public then
 			self.feedback_text = self.root:AddChild(Text(FONTFACE.DEFAULT, 25 * HACK_FOR_4K, nil, UICOLORS.LIGHT_TEXT_TITLE))
 				:SetMultColorAlpha(0.66)
 				:RightAlign()
@@ -268,6 +283,7 @@ local PlayerHud = Class(Screen, function(self)
 		:SetHAlign(ANCHOR_LEFT)
 		:SetTextLengthLimit(99) -- See MaxChatLineLength in NetworkChatManager.cpp
 		:SetForceEdit(true)
+		:SetInvalidCharacterFilter("<>")  -- don't allow markup. see kstring.sanitize_user_text.
 		:SetAnchors("center", "bottom")
 		:Offset(0, 50)
 		:SetString("")
@@ -278,6 +294,10 @@ local PlayerHud = Class(Screen, function(self)
 		TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_chat_messageSent)
 		self.chat_text_edit:Hide()
 	end
+
+	self.chat_text_edit:SetOnGainFocus(function()
+		self.chat_instruction:SetText() -- clear instruction after user demonstrates they can chat
+	end)
 
 	self.chat_text_edit.onlosefocus = function()
 		self:RefreshChat()
@@ -294,6 +314,16 @@ local PlayerHud = Class(Screen, function(self)
 		:SetRegistration("left","bottom")
 		:SetAnchors("left", "bottom")
 		:SetClickable(false)
+	self.chat_instruction = self.root:AddChild(Text(FONTFACE.DEFAULT, 40))
+		:SetText(STRINGS.UI.HUD.EXPLAIN_CHAT)
+		:SetShadowColor(WEBCOLORS.BLACK)  -- same settings as chat_history_label
+		:SetShadowOffset(1.5, -1.5)
+		:EnableShadow()
+		:EnableOutline()
+		:SetRegistration("left", "bottom")
+		:SetAnchors("left", "bottom")
+		:SetClickable(false)
+		:Hide()
 	self:_LayoutChat()
 
 	self.debug_text
@@ -336,6 +366,17 @@ function PlayerHud:ShowChatHistory()
 
 	self.chat_history_label:Show()
 	self.chat_history_label:AlphaTo(1,0)
+	self.chat_instruction:AlphaTo(1,0)
+
+	local keyboardist = TheInput:GetKeyboard():GetPlayer()
+	if keyboardist then
+		-- Ensure it shows keyboard glyphs. Text can refresh itself, so clear and force owner.
+		self.chat_instruction:SetOwningPlayer(nil)
+		self.chat_instruction:SetOwningPlayer(keyboardist)
+	else
+		-- Don't show unusable prompt (Y key) if only gamepad players.
+		self.chat_instruction:SetText()
+	end
 end
 
 function PlayerHud:RefreshChat()
@@ -353,6 +394,7 @@ function PlayerHud:RefreshChat()
 	end
 	self.chat_fade_timer = self.inst:DoTaskInTime(CHAT_SHOW_TIME, function()
 		self.chat_history_label:AlphaTo(0, 0.25)
+		self.chat_instruction:AlphaTo(0, 0.25)
 	end)
 end
 
@@ -451,13 +493,14 @@ function PlayerHud:_LayoutChat()
 	local has_p3_hud = not TheDungeon:IsInTown() and lume.match(AllPlayers, function(p)
 		return p:GetHunterId() == 3
 	end)
+	local y = 205
 	if has_p3_hud then
-		self.chat_history_label
-			:SetPosition(405, 430) -- above p3's hud
-	else
-		self.chat_history_label
-			:SetPosition(405, 205)
+		y = 430 -- above p3's hud
 	end
+	self.chat_history_label
+		:SetPosition(405, y)
+	-- HACK(ui): Can't LayoutBounds relative to chat_history_label or its registration fails to function.
+	self.chat_instruction:SetPosition(405, y - (has_p3_hud and 50 or 80))
 	-- Must set again to ensure future text changes have correct registration.
 	self.chat_history_label:SetRegistration("left", "bottom")
 end
@@ -638,14 +681,8 @@ function PlayerHud:DoDefeatedFlow(run_data)
 
 	self.is_showing_defeat = true
 
-	local accolades_screen = HuntAccoladesScreen()
-
-	accolades_screen:SetCloseCallback(function()
-		local you_died_screen = RunSummaryScreen(run_data)
-		TheFrontEnd:PushScreen(you_died_screen)
-	end)
-
-	TheFrontEnd:PushScreen(accolades_screen)
+	local you_died_screen = RunSummaryScreen(run_data)
+	TheFrontEnd:PushScreen(you_died_screen)
 end
 
 function PlayerHud:DoVictoryFlow()
@@ -712,10 +749,11 @@ function PlayerHud:IsHudSinkingInput()
 	return false
 end
 
-function PlayerHud:MakeControllerSwitchPopup(playerID, device, device_id)
+function PlayerHud:_MakeControllerSwitchPopup(playerID, input_device)
+	local device, device_id = input_device:unpack()
 
 	local title = STRINGS.UI.PRESSED_START_IN_SINGLE_PLAYER.TITLE:subfmt({
-			device_icon = TheInput:GetLabelForDevice(device, device_id),
+			device_icon = TheInput:GetLabelForDevice(input_device),
 		})
 	local subtitle = STRINGS.UI.PRESSED_START_IN_SINGLE_PLAYER.SUBTITLE
 
@@ -723,7 +761,7 @@ function PlayerHud:MakeControllerSwitchPopup(playerID, device, device_id)
 	local dialog = ChangeInputDialog(title, subtitle)
 
 	-- so only this device (and, currently, mouse) can control this popup
-	dialog:SetOwningDevice(device, device_id)
+	dialog:SetOwningDevice(input_device)
 
 	dialog:SetOnAddPlayerClickFn(function()
 		net_addplayer(TheInput:ConvertToInputID(device, device_id))
@@ -757,18 +795,94 @@ function PlayerHud:ShowGamepadDisconnectedPopup(player)
 	return screen
 end
 
-function PlayerHud:OnControl(controls, down, device, trace, device_id)
+
+function PlayerHud:AddLocalPlayer(device, device_id, input_device)
+	local players = TheNet:GetLocalPlayerList()
+	if #players == 1 then
+		local playerID = players[1]
+
+		-- See what P1 wants to do: start multiplayer or switch to that device?
+		if TheInput:IsDeviceValid(input_device) then	-- Make sure the input device is still valid
+			self:_MakeControllerSwitchPopup(playerID, input_device)
+		end
+	else
+		-- If there are already multiple players, just add a new player:
+		if TheInput:GetInputDevice(device, device_id) then
+			net_addplayer(TheInput:ConvertToInputID(device, device_id))
+		end
+	end
+	return true
+end
+
+function PlayerHud:HandleAddPlayer(controls, device, device_id)
+
+	-- Unfortunately, some players have multiple drivers installed for their gamepad, and SDL detects them as separate controllers. So the same gamepad may show up twice.
+	-- To deal with this, we need to make sure that when an ACTIVATE_INPUT_DEVICE is pressed on one controller, it wasn't also pressed on an already assigned controller.
+	--
+	-- Since we can't tell which one will be pressed first, the logic is as follows:
+	--
+	-- Activate Pressed. Known player ? 
+	--		- YES:	- Cancel activation timer if it is active
+	--				- Start ignore timer	(to ignore subsequent presses from the unknown controller)
+	--		- NO: Is ignore timer active?
+	--				- YES: Ignore this input entirely
+	--				- NO: Start activation timer
+	-- 
+	-- Separately we need to check if the activation timer has expired, and if so, do the add player logic. 
+
+	if controls:Has(Controls.Digital.ACTIVATE_INPUT_DEVICE) then
+		local inputID = TheInput:ConvertToInputID(device, device_id);
+		local playerID = TheNet:FindPlayerIDForLocalInputID(inputID);
+		local input_device = controls:GetDevice()
+
+		if not playerID then -- there isn't a player assigned to this inputID
+			-- Is ignore timer active?
+
+			if self.ignoretimer then	
+				-- YES: Do nothing, just ignore the input
+				-- The self.ignoretimer is active because we've already processed this input for a known player.
+			else
+				-- NO: Start activation timer
+				if self.activationtimer then
+					self.activationtimer:Cancel()
+				end
+				self.activationtimer = self.inst:DoTaskInTime(0.2, function(inst) self:AddLocalPlayer(device, device_id, input_device) self.activationtimer = nil end)
+			end
+			return true -- sink the input if it was from an unknown player
+		else
+			-- Cancel activation timer if it is active
+			if self.activationtimer then
+				self.activationtimer:Cancel()
+				self.activationtimer = nil
+			end
+			-- Start ignore timer
+			if self.ignoretimer then
+				self.ignoretimer:Cancel()
+			end
+			self.ignoretimer = self.inst:DoTaskInTime(0.2, function(inst) self.ignoretimer = nil end)
+		end
+	end
+end
+
+
+function PlayerHud:OnControl(controls, down, trace)
 	if self.travel
 		or not TheWorld -- Ignore inputs during load.
 	then
 		return
 	end
 
-	if PlayerHud._base.OnControl(self, controls, down, device, trace, device_id) then
+	if PlayerHud._base.OnControl(self, controls, down, trace) then
 		return true
 	elseif not self.shown then
 		return false
-	elseif not down then
+	end
+
+	local input_device = controls:GetDevice()
+	local device, device_id = input_device:unpack()
+	local player = TheInput:GetDeviceOwner(input_device)
+
+	if not down then
 		if controls:Has(Controls.Digital.NON_MODAL_CLICK) then
 			if self.victory_button and self.victory_button:IsVisible() then
 				self.victory_button:Click()
@@ -776,26 +890,9 @@ function PlayerHud:OnControl(controls, down, device, trace, device_id)
 			end
 		end
 
-		if controls:Has(Controls.Digital.ACTIVATE_INPUT_DEVICE) then
-			local inputID = TheInput:ConvertToInputID(device, device_id);
-			local playerID = TheNet:FindPlayerIDForLocalInputID(inputID);
-
-			if not playerID then -- there isn't a player assigned to this inputID
-				local players = TheNet:GetLocalPlayerList() or table.empty
-				if #players == 1 then
-					playerID = players[1]
-
-					-- See what P1 wants to do: start multiplayer or switch to that device?
-					self:MakeControllerSwitchPopup(playerID, device, device_id)
-				else
-					-- If there are already multiple players, just add a new player
-					net_addplayer(TheInput:ConvertToInputID(device, device_id))
-				end
-				return true
-			end
+		if self:HandleAddPlayer(controls, device, device_id) then
+			return true
 		end
-
-		local player = TheInput:GetDeviceOwner(device, device_id)
 
 		if playerutil.IsAnyPlayerAlive() and controls:Has(Controls.Digital.PAUSE) then
 			if player then
@@ -820,37 +917,46 @@ function PlayerHud:OnControl(controls, down, device, trace, device_id)
 		end
 
 		if TheDungeon:IsInTown() then
-			if player and controls:Has(Controls.Digital.OPEN_INVENTORY) then
-				self.townHud:OnInventoryButtonClicked(player)
-				return true
-			end
 			if controls:Has(Controls.Digital.OPEN_CRAFTING) then
 				if self.townHud then
-					self.townHud:OnCraftButtonClicked()
-					return true
+					if player then
+						self.townHud:OnCraftButtonClicked(player)
+						return true
+					end
 				end
 			end
 		end
 	end
+
+	-- if down and TheDungeon:IsInTown() then
+	-- 	if player and controls:Has(Controls.Digital.OPEN_INVENTORY) then
+	-- 		self.townHud:OnInventoryButtonClicked(player)
+	-- 		return true
+	-- 	end
+	-- end
 	return false
 end
 
-function PlayerHud:IsCraftMenuOpen()
-	return self.townHud and self.townHud:IsCraftMenuOpen()
-end
-
-function PlayerHud:OnFocusMove(dir, down)
+function PlayerHud:ApplyFocusMove(dir, input_device)
 	-- Ignore focus movement unless we have active widgets.
-	if self.prompt and self.prompt.enabled and self.prompt.shown then
+	if self.prompt and self.prompt.enabled and self.prompt.shown
+		-- Only allow one user to interact with focus at a time.
+		and self.prompt:CanDeviceInteract(input_device)
+	then
 
 		-- The modal check makes it so this focusmove call only happens after the player
 		-- entered the conversation. Not while walking around, so the speech balloon doesn't nudge
-		if self.prompt.IsModal and self.prompt:IsModal() == false then
-			return
+		if not self.prompt.IsModal or self.prompt:IsModal() then
+			local focus = self.prompt:OnFocusMove(dir, input_device)
+			if focus then
+				focus:SetFocus()
+			end
+			return true
 		end
-
-		self.prompt:OnFocusMove(dir, down)
 	end
+	-- Don't call PlayerHud._base.ApplyFocusMove because we don't allow any
+	-- other interaction.
+	return false
 end
 
 function PlayerHud:GetControlMap()
@@ -1048,8 +1154,11 @@ end
 
 function PlayerHud:MakePopText(data)
 	local txt = self:OverlayElement(PopText())
-
+	-- Be sure to assign the owning player before initializing the PopText so that any player-specific string
+	-- substitutions are correctly executed.
+	txt:SetOwningPlayer(data.player)
 	txt:Init(data)
+	return txt
 end
 
 function PlayerHud:MakePopPower(data)
@@ -1116,9 +1225,9 @@ end
 
 -- --
 
-function PlayerHud:MakeReviveTimerText(reviver, dead_player)
+function PlayerHud:MakeReviveTimerText(reviver)
 	local txt = self:AddWorldWidget(FollowRevive(reviver))
-	return txt:SetTarget(dead_player)
+	return txt:SetTarget(reviver)
 end
 
 function PlayerHud:MakePowerPopup(data)
@@ -1134,9 +1243,17 @@ function PlayerHud:MakeFollowGem(data)
 	return gempopup
 end
 
-function PlayerHud:TutorialPopup(string, target)
-	local popup = self:MakePopText({ target = target, button = string, color = UICOLORS.WHITE, size = FONTSIZE.BUTTON, fade_time = 5, y_offset = 150 * HACK_FOR_4K })
-
+function PlayerHud:TutorialPopup(string, player)
+	local popup = self:MakePopText({
+		player = player,
+		target = player,
+		button = string,
+		color = UICOLORS.WHITE,
+		size = FONTSIZE.BUTTON,
+		fade_time = 5,
+		y_offset = 150 * HACK_FOR_4K,
+		enable_tooltip = false
+	})
 	return popup
 end
 

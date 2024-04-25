@@ -4,6 +4,7 @@ return {
   anim="damage_spin",
   bank="trap_bomb_spore",
   build="trap_bomb_spore",
+  group="bombs_traps",
   looping=true,
   randomstartframe=true,
 }

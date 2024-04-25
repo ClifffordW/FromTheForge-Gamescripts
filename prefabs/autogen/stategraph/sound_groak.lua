@@ -4,7 +4,7 @@ return {
   group="sound_creature",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "groak", "groak_elite",},
+  prefab={ "groak", "groak_elite", "groak_miniboss",},
   stategraphs={
     sg_groak={
       events={

@@ -1,8 +1,7 @@
 local FollowLabel = require "widgets.ftf.followlabel"
 
 
--- TODO(dbriscoe): Should use Label native component instead? See also
--- spawnutil.AddWorldLabel.
+-- !! Try Label native component instead? See also spawnutil.AddWorldLabel.
 local WorldText = Class(function(self, inst)
 	self.inst = inst
 end)

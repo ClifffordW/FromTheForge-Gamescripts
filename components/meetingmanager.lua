@@ -22,6 +22,11 @@ function MeetingManager:OnStartRoom()
 		-- start_new_run. Players (and their quest managers) haven't spawned,
 		-- but that should be okay.
 		self:_TrySpawnNPC_Dungeon(self.spawner)
+	else
+		local room_type = TheWorld:GetCurrentRoomType()
+		if self.dungeon_spawn_requests[room_type] then
+			TheLog.ch.Quest:printf("MeetingManager:OnStartRoom: wanted to spawn an NPC in room type [%s] but could not find a spawner.", room_type)
+		end
 	end
 end
 
@@ -41,6 +46,7 @@ function MeetingManager:EvaluateForNewRun(biome_location)
 end
 
 function MeetingManager:EvaluateSpawnNPC_Dungeon(biome_location)
+	assert(biome_location ~= nil, "You must pass a biome location in when calling EvaluateSpawnNPC_Dungeon()")
 	-- loop through all local players and evaluate their quests.
 	-- we do this on every room exit just in case quest state has changed and there is a new best option.
 	self.dungeon_spawn_requests = {}
@@ -85,6 +91,8 @@ function MeetingManager:_TrySpawnNPC_Dungeon(spawner)
 		local x, z = spawner.Transform:GetWorldXZ()
 		ent.Transform:SetPosition(x, 0, z)
 		ent:FaceXZ(0, 0)
+
+		TheDungeon:PushEvent("meetingmanager_spawn_npc_in_dungeon", ent)
 	end
 
     TheLog.ch.Quest:printf("MeetingManager:_TrySpawnNPC_Dungeon: [%s] in %s", ent, room_type)

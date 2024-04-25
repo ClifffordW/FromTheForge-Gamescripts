@@ -2,7 +2,7 @@
 return {
   __displayName="fx_gourdo_elite",
   isfinal=true,
-  prefab={ "gourdo_elite",},
+  prefab={ "gourdo_elite", "gourdo_miniboss",},
   stategraphs={
     sg_gourdo={
       sg_events={

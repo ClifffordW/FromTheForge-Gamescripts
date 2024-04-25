@@ -5,6 +5,7 @@ return {
   bank="fx_megatreemon",
   build="fx_megatreemon",
   finaloffset=-1,
+  group="creatures",
   scalex=2.2000000476837,
   scaley=2.2000000476837,
 }

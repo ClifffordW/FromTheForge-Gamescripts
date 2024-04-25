@@ -220,7 +220,10 @@ SGCommon.States.AddSpawnBattlefieldStates(states,
 	end,
 	timeline =
 	{
-		FrameEvent(0, function(inst) inst:PushEvent("leave_spawner") end),
+		FrameEvent(0, function(inst)
+			inst:PushEvent("leave_spawner")
+			inst.Physics:StartPassingThroughObjects()
+		end),
 		FrameEvent(18, function(inst)
 			inst.Physics:Stop()
 			inst.Physics:StopPassingThroughObjects()

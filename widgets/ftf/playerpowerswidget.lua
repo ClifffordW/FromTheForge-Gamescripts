@@ -16,7 +16,7 @@ local PlayerPowersWidget = Class(Widget, function(self, owner)
 
 	self.owner = owner
 
-	self.power_size = 65 * HACK_FOR_4K
+	self.power_size = 130
 	self.static_slots = self:AddChild(Widget("Static Slots"))
 
 	self.skill_root = self.static_slots:AddChild(Widget("Skill Root"))
@@ -136,7 +136,7 @@ function PlayerPowersWidget:SetSkill(skill, fresh)
 	self:_LayoutPowers()
 	if fresh then
 		self.skill_root:SendToFront()
-		w:AnimateFocusGrab(2.3)
+		w:AnimateFocusGrab(1)
 	end
 end
 
@@ -155,7 +155,7 @@ function PlayerPowersWidget:SetFood(food, fresh)
 	self:_LayoutPowers()
 	if fresh then
 		self.food_root:SendToFront()
-		w:AnimateFocusGrab(2.3)
+		w:AnimateFocusGrab(1)
 	end
 end
 
@@ -177,7 +177,7 @@ function PlayerPowersWidget:AddPower(power, fresh)
 		table.insert(self.power_idxs, def.name)
 		self:_LayoutPowers()
 		if fresh then
-			w:AnimateFocusGrab(2.3)
+			w:AnimateFocusGrab(1)
 		end
 	end
 end

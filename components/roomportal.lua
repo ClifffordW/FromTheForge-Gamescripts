@@ -147,17 +147,8 @@ function RoomPortal:OnUpdate(dt)
 				self.traveling = true
 			end
 
-		else
-			-- The roomportal is busy traveling to the next room. If there are players that are no longer ready, abort the travel:
-
-			-- Only allow backing out in LOCAL games. If we allow this on 
-			if TheNet:IsGameTypeLocal() then	
-				if nrReadyPlayers < #AllPlayers then	-- TODO: Fix this once spectating goes in
-					TheWorld.components.dungeontravel:AbandonTravel()						
-					self.traveling = false
-				end
-			end
 		end
+		-- else: already travelling and don't support AbandonTravel.
 
 
 		-- Update the Waiting For All Players prompt:

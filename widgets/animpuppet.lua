@@ -68,7 +68,7 @@ function AnimPuppet:_InitTargetPart(partName, parent)
 			and self.puppet_extra[parent]:AddChild(UIAnim())
 			or self:AddChild(UIAnim())
 
-		-- TODO: victorc -- figure out if follower component can be used in UI space
+		-- TODO: AnimPuppet - figure out if follower component can be used in UI space
 		-- NPC heads are floaty with the present setup
 		-- self.puppet_extra.mouth.inst.entity:AddFollower()
 		-- self.puppet_extra.mouth.inst.entity:SetParent(self.puppet.inst.entity)
@@ -190,7 +190,7 @@ end
 function AnimPuppet:OnUpdate(_dt)
 	if self.target and self.target:IsValid() and not self.target:IsInLimbo() and not self.target:IsDead() then
 		UpdatePuppet(self.puppet, self.target)
-		-- TODO: victorc - does this need to be updated every frame?
+		-- TODO: AnimPuppet - does this need to be updated every frame?
 		PopulateTargetSymbols(self.puppet:GetAnimState(), self.targetsymbols)
 
 		for _i,part in ipairs(SubParts) do

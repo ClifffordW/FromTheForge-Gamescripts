@@ -5,8 +5,11 @@ local itemforge = require "defs.itemforge"
 local Equipment = require "defs.equipment"
 local Cosmetic = require "defs.cosmetics.cosmetics"
 local Strict = require "util.strict"
-local VendingMachineWares = require"defs/vendingmachine_wares"
+local VendingMachineWares = require"defs.vendingmachine_wares"
 local VendingMachine = require "components.vendingmachine"
+local Consumable = require "defs.consumable"
+local CurrencyType = require "currency.currency_type"
+local playerutil = require"util/playerutil"
 
 require "prefabs.customscript.waredispenser"
 
@@ -21,7 +24,7 @@ SHOP_TUNING =
 			CHANCES = -- starting drop chances
 			{
 				legendary = 50,
-				-- fabled = 50, --bank -- TODO @jambell #market - avoid untested wares for NextFest
+				-- fabled = 50, --bank -- TODO #market - avoid untested wares for NextFest
 			},
 
 			CHANCE_INCREASE = -- when these types are NOT rolled, how much more likely should seeing one of them become next roll? measured in %
@@ -29,7 +32,7 @@ SHOP_TUNING =
 				legendary = 30,
 				fabled = 0, --bank
 			},
-			-- BANK_CHOICE = "fabled",-- TODO @jambell #market - avoid untested wares for NextFest
+			-- BANK_CHOICE = "fabled",-- TODO #market - avoid untested wares for NextFest
 			BANK_CHOICE = "legendary"
 		},
 
@@ -49,14 +52,14 @@ SHOP_TUNING =
 				shield = 5,
 				epic = 40, --bank
 				]]
-				skill = 8,
-				common = 16,
-				legendary = 3,
-				-- fabled = 2,-- TODO @jambell #market - avoid untested wares for NextFest
-				upgrade = 14,
-				potion = 11,
-				-- shield = 5,-- TODO @jambell #market - avoid untested wares for NextFest
-				epic = 41, --bank
+				skill = 10,
+				common = 15,
+				legendary = 20,
+				-- fabled = 2,-- TODO #market - avoid untested wares for NextFest
+				upgrade = 15,
+				potion = 10,
+				-- shield = 5,-- TODO #market - avoid untested wares for NextFest
+				epic = 30, --bank
 			},
 
 			CHANCE_INCREASE = -- when these types are NOT rolled, how much more likely should seeing one of them become next roll? measured in %
@@ -92,12 +95,27 @@ SHOP_TUNING =
 			BANK_CHOICE = "potion",
 		},
 
+		-- Items purchaseable with creature drop loot.
+		LOOT_SINK = {
+			CHANCES = -- starting drop chances
+			{
+				legendary = 50,
+				-- fabled = 50, --bank -- TODO #market - avoid untested wares for NextFest
+			},
+
+			CHANCE_INCREASE = -- when these types are NOT rolled, how much more likely should seeing one of them become next roll? measured in %
+			{
+				legendary = 30,
+				fabled = 0, --bank
+			},
+			-- BANK_CHOICE = "fabled",-- TODO #market - avoid untested wares for NextFest
+			BANK_CHOICE = "legendary"
+		},
+
 		-- Guaranteed meta item of some kind.
 		META = {
 			CHANCES = -- starting drop chances
 			{
-				-- TODO @chrisp #vending - need glitz ware defintion
-				-- glitz = 25,
 				-- TODO @chrisp #vending - need loot ware defintion
 				-- loot = 25,
 				corestone = 50, --bank
@@ -105,8 +123,6 @@ SHOP_TUNING =
 
 			CHANCE_INCREASE = -- when these types are NOT rolled, how much more likely should seeing one of them become next roll? measured in %
 			{
-				-- TODO @chrisp #vending - need glitz ware defintion
-				-- glitz = 10,
 				-- TODO @chrisp #vending - need loot ware defintion
 				-- loot = 10,
 				corestone = 0, --bank
@@ -116,12 +132,18 @@ SHOP_TUNING =
 	},
 }
 
+local RARITY_MINIMUM_ASCENSION =
+{
+	[ITEM_RARITY.s.COMMON] = 0,
+	[ITEM_RARITY.s.EPIC] = 1,
+}
+
 
 local WARES_LIST =
 {
 	DUNGEON_MARKET =
 	{
-		"HIGH_TIER_POWER",
+		"LOOT_SINK",
 		"GRAB_BAG",
 		"GRAB_BAG",
 		"RUN_ITEMS",
@@ -136,7 +158,7 @@ local WARES_LIST =
 			Equipment.Slots.BODY,
 			Equipment.Slots.WAIST,
 		},
-		WEAPON = 1,
+		WEAPON = 2,
 	},
 
 	DYE_MARKET =
@@ -239,7 +261,7 @@ function ShopManager:GenerateDungeonWares(market, rng)
 			table.insert(wares, {
 				name = ware_name,
 				power_type = vending_machine_proxy.power_type,
-				power = vending_machine_proxy.power		
+				power = vending_machine_proxy.power
 			})
 		end
 	end
@@ -250,7 +272,7 @@ end
 local z_offset = -8
 local debug_machines = {}
 
-function ShopManager:_SpawnVendingMachine(prop, ware, flipped, x, y, z)
+function ShopManager:_SpawnVendingMachine(prop, emit_once, currency, ware, flipped, x, y, z)
 	local vending_machine = SpawnPrefab(prop)
 
 	local prop = vending_machine.components.prop
@@ -261,7 +283,8 @@ function ShopManager:_SpawnVendingMachine(prop, ware, flipped, x, y, z)
 	-- TODO @chrisp #vending - I think we should be able to get rid of this
 	vending_machine.power = ware.power
 
-	vending_machine.components.vendingmachine:Initialize(ware.name, ware.power, ware.power_type)
+	vending_machine.components.vendingmachine:Initialize(emit_once, currency)
+	vending_machine.components.vendingmachine:HostInitializeWare(ware.name, ware.power, ware.power_type)
 	vending_machine.Transform:SetPosition(x, y, z)
 	return vending_machine
 end
@@ -273,7 +296,8 @@ function ShopManager:DebugTestWares(rng)
 		local ware_data = VendingMachineWares[ware.name]
 		if ware_data then
 			-- TODO @chrisp #vending - this debug code has rotted as the code around it has developed
-			local vending_machine = self:_SpawnVendingMachine(prop, ware, false, 0 + x_offset, 0, 0 + z_offset)
+			local vending_machine = self:_SpawnVendingMachine(prop, CurrencyType.id.Run, ware, false, 0 + x_offset, 0,
+				0 + z_offset)
 			x_offset = x_offset + 5
 			table.insert(debug_machines, vending_machine)
 		end
@@ -286,8 +310,80 @@ function ShopManager:SpawnVendingMachine(prop, index, flipped, x, y, z)
 	local ware_data = VendingMachineWares[ware.name]
 	if not ware_data then
 		TheLog.ch.ShopManager:printf("Suppressing VendingMachine #%d...no ware of name (%s) to sell", index, ware.name)
+		return
 	end
-	return ware_data and self:_SpawnVendingMachine(prop, ware, flipped, x, y, z)
+
+	-- Hard-coding index 1 to be the loot sink
+	local currency
+	if index == 1 then
+		-- We don't expect to have valid ware_data at this point if there is no loot, but check anyway.
+		if not self.loot then
+			return
+		end
+
+		-- Pop a loot.
+		local loot = self.loot[#self.loot]
+		table.remove(self.loot)
+		if not next(self.loot) then
+			self.loot = nil
+		end
+
+		currency = {
+			currency_type = CurrencyType.id.Loot,
+			material = loot,
+		}
+	else
+		currency = {
+			currency_type = CurrencyType.id.Run
+		}
+	end
+	return self:_SpawnVendingMachine(prop, true, currency, ware, flipped, x, y, z)
+end
+
+local function IsExcessLoot(player, drop_def)
+	local usable_items = playerutil.GetUsableUpgradeItemsForPlayer(player)
+	if usable_items[drop_def.name] then return false end -- don't cost items players can use
+
+	local loot_count = player.components.inventoryhoard:GetStackableCount(drop_def)
+	return loot_count > 10
+end
+
+function ShopManager:FetchLoot(rng)
+	if self.loot then
+		return
+	end
+
+	local monsterutil = require"util/monsterutil"
+	local biomes = require"defs/biomes"
+	local location = biomes.locations[TheDungeon:GetCurrentLocationID()]
+	local items = monsterutil.GetItemsInLocation(location)
+
+	-- local drop_prefabs = require "prefabs.drops_autogen"
+	local drop_defs = require "prefabs.drops_autogen_data"
+	drop_defs = lume(drop_defs)
+		:map(function(drop_def) return Consumable.FindItem(drop_def.loot_id) end)
+		:filter(function(drop_def) return drop_def ~= nil end)
+		:filter(function(drop_def) return not drop_def.tags.currency end)
+		:filter(function(drop_def) return lume.find(items, drop_def) ~= nil end)
+		:result()
+
+	local excess_defs = {}
+	for _, player in ipairs(TheNet:GetPlayersOnRoomChange()) do
+		for _, drop_def in ipairs(drop_defs) do
+			if IsExcessLoot(player, drop_def) then
+				excess_defs[drop_def] = true
+			end
+		end
+	end
+	if not next(excess_defs) then
+		return
+	end
+
+	self.loot = lume(excess_defs)
+		:keys()
+		:map(function(drop_def) return drop_def.name end)
+		:result()
+	rng:Shuffle(self.loot)
 end
 
 function ShopManager:GetDungeonWareForCategory(market, category, rng)
@@ -295,6 +391,13 @@ function ShopManager:GetDungeonWareForCategory(market, category, rng)
 		self:Log("Resetting shop data")
 		self:ResetAllDungeonWareChances()
 		self.initialized = true
+	end
+
+	if category == "LOOT_SINK" then
+		self:FetchLoot(rng)
+		if not self.loot then
+			return nil
+		end
 	end
 	
 	local choices = self.shop_data[market][category].CHANCES
@@ -419,6 +522,7 @@ end
 
 function ShopManager:GenerateMetaWares(location, rng)
 	local mapgen = TheDungeon:GetDungeonMap().nav:_GetActiveMapgen()
+	local ascensionlevel = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
 
 	local armours
 	if mapgen.forced_market and mapgen.forced_market.META_MARKET and mapgen.forced_market.META_MARKET.ARMOUR then
@@ -438,6 +542,13 @@ function ShopManager:GenerateMetaWares(location, rng)
 			end)
 			:result()
 		armours = lume.concat(table.unpack(armor_slot_lists))
+
+		-- Remove all weapons inappropriate for this frenzy.
+		armours = lume.removeall(armours, function(armor_def)
+				local rarity = armor_def.rarity
+				local minimumascension = RARITY_MINIMUM_ASCENSION[rarity] or 0
+				return not (ascensionlevel >= minimumascension)
+			end)
 		rng:Shuffle(armours)
 	end
 	
@@ -450,6 +561,16 @@ function ShopManager:GenerateMetaWares(location, rng)
 				unlock_count = CountUnlockedPlayers(weapon_def.weapon_type),
 				unlocked_but_unowned_count = CountUnlockedButUnownedPlayers(weapon_def),
 			}
+		end)
+		-- Remove all locked weapons.
+		:removeall(function(weapon)
+			return weapon.unlock_count == 0
+		end)
+		-- Remove all weapons inappropriate for this frenzy.
+		:removeall(function(weapon)
+			local rarity = weapon.def.rarity
+			local minimumascension = RARITY_MINIMUM_ASCENSION[rarity] or 0
+			return not (ascensionlevel >= minimumascension)
 		end)
 		:result()
 	rng:Shuffle(weapons)
@@ -523,11 +644,11 @@ function ShopManager:_SpawnMannequin(prop, slot, ware_name, flipped, x, y, z)
 		-- If there is an item on the mannequin, set it up to be interactable.
 		mannequin.components.inventory:Equip(slot, ware_name)
 		mannequin.components.vendingmachine:Initialize(
-			"equipment", 
-			slot, 
-			ware_name, 
+			false,
+			{currency_type = CurrencyType.id.Meta},
 			VendingMachine.DEFAULT_UI_Y_OFFSET + mannequin_config.ui_y_offset_delta
 		)
+		mannequin.components.vendingmachine:HostInitializeWare("equipment", slot, ware_name)
 		anim = anim.."_on"
 	else
 		anim = anim.."_off"
@@ -632,9 +753,9 @@ function ShopManager:GenerateDyeWares(location, rng)
 			end
 		end
 
-		-- TODO @jambell: filter that list of cosmetics by "ones everyone owns"
-		-- TODO(jambell): sort by most un-owned, and weight towards that?
-		-- TODO(jambell): care about rarity?
+		-- TODO: filter that list of cosmetics by "ones everyone owns"
+		-- TODO: sort by most un-owned, and weight towards that?
+		-- TODO: care about rarity?
 
 		wares[category] = rng:Shuffle(wares[category])
 	end
@@ -657,7 +778,7 @@ function ShopManager:_SpawnDyeDispenser(prop, slot, dye_id, flipped, x, y, z)
 
 	local dye_def = Cosmetic.FindDyeByNameAndSlot(dye_id, slot)
 
-	-- TODO @jambell lots of concatenation here which I don't love. Simplify dye system to be number based instead of string based
+	-- TODO lots of concatenation here which I don't love. Simplify dye system to be number based instead of string based
 
 	local armor_family = dye_def.armour_set
 	local dye_number = dye_def.dye_number
@@ -684,7 +805,8 @@ function ShopManager:_SpawnDyeDispenser(prop, slot, dye_id, flipped, x, y, z)
 		symbol_slot = "WAIST"
 	end
 
-	dyebottle.components.vendingmachine:Initialize("dye", slot, dye_id)
+	dyebottle.components.vendingmachine:Initialize(false, {currency_type = CurrencyType.id.Meta})
+	dyebottle.components.vendingmachine:HostInitializeWare("dye", slot, dye_id)
 
 	dyebottle.components.networkedsymbolswapper:OverrideSymbolSlot(symbol_slot, build)
 	-- dyebottle.AnimState:OverrideSymbol(symbol, build, symbol)
@@ -734,7 +856,8 @@ function ShopManager:SaveData()
 	return {
 		shop_data = deepcopy(self.shop_data),
 		initialized = self.initialized,
-		markets = deepcopyskipmeta(self.markets)
+		markets = deepcopyskipmeta(self.markets),
+		loot = deepcopyskipmeta(self.loot),
 	}
 end
 
@@ -744,6 +867,7 @@ function ShopManager:LoadData(data)
 	self.initialized = data.initalized
 	self.markets = data.markets
 	Strict.strictify(self.markets)
+	self.loot = data.loot
 end
 
 return ShopManager
@@ -788,7 +912,6 @@ Shopkeeper 2 (Dungeon Shop)
 
 
 
-From Caley/Marcus:
 Top-of-pyramid answers:
 	one-time use dungeon-only weapons/armor that you can use for the dungeon
 	armor oils
@@ -799,7 +922,6 @@ Bottom of pyramid answers:
 	shop-only skills
 	(unique?) monster loot
 
-From Sloth:
 magpie is a thief and keeps stealing from the town, the villagers ask if you've seen it and starts a quest. the magpie sells it back to you, but asks for random things that you have aquired in your run. like corestones/ teffra/ or mob drops
 the magpie is a weapons courrier and can bring you a differnt weapons mid run in exchange for teffra
 the magpie is a scout that can let you select the rooms after the next room

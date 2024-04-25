@@ -4,7 +4,7 @@ return {
   group="sound_creature",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "gourdo", "gourdo_elite",},
+  prefab={ "gourdo", "gourdo_elite", "gourdo_miniboss",},
   stategraphs={
     sg_gourdo={
       events={

@@ -1,6 +1,7 @@
 local Consumable = require"defs.consumable"
 local MetaProgress = require"defs.metaprogression"
 local krandom = require "util.krandom"
+local playerutil = require "util.playerutil"
 
 local STATE_TO_SPAWNER_ID =
 {
@@ -13,13 +14,20 @@ local STATE_TO_SPAWNER_ID =
 local function CalculateBiomeExplorationReward(progress, victory)
 	local base_exp = math.floor(progress * TUNING.BIOME_EXPLORATION.BASE)
 
-	if progress > 0.5 then
+	local miniboss_progress = TheDungeon:GetDungeonMap().nav:GetProgressForFirstMinibossEncounter()
+
+	if progress > miniboss_progress then
 		base_exp = base_exp + TUNING.BIOME_EXPLORATION.MINIBOSS
 	end
 
 	if victory then
 		base_exp = base_exp + TUNING.BIOME_EXPLORATION.BOSS
 	end
+
+	local frenzy = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+
+	local frenzy_modifier = 1 + (frenzy * TUNING.BIOME_EXPLORATION.FRENZY_LEVEL_MODIFIER)
+	base_exp = math.ceil(base_exp * frenzy_modifier)
 
 	return base_exp
 end
@@ -40,25 +48,6 @@ local function CalculateKonjurShardReward(progress)
 	end
 
 	return shards_to_drop
-end
-
-local function CalculateglitzReward(progress, victory, ascension)
-	local glitz = 0
-	
-	if progress < 0.5 then
-		glitz = 500 * progress
-	else
-		glitz = 1000 * progress
-		if victory then
-			glitz = glitz + 500
-		end
-
-		if ascension > 0 then
-			glitz = glitz + 500
-		end
-	end
-	
-	return math.floor(glitz)
 end
 
 ------------------------------------------------
@@ -94,6 +83,7 @@ function RunManager:OnExitRoom()
 	-- Get current time, add to run_time
 	self.run_time = self.run_time + GetTime()
 	self.rooms_discovered = self.rooms_discovered + 1
+	self.can_abandon = true -- reset this variable, it is only supposed to last for a single room.
 end
 
 
@@ -145,7 +135,7 @@ function RunManager:GetBestCommonBossProgress()
 	-- For now, just use the host
 	if not TheNet:IsHost() then return 1 end
 	local boss_prefab = TheDungeon:GetCurrentBoss()
-	local main_player = TheNet:GetLocalPlayerList()[1]
+	local main_player = playerutil.GetFirstLocalPlayer()
 	return main_player.components.progresstracker:GetBestBossAttempt(boss_prefab)
 end
 
@@ -162,7 +152,7 @@ end
 ----
 
 function RunManager:CanAbandonRun()
-	return self.can_abandon
+	return self.can_abandon or DEV_MODE
 end
 
 function RunManager:SetCanAbandon(bool)
@@ -171,13 +161,13 @@ end
 
 ----
 
-function RunManager:Debug_PushProgress(region, progress, victory)
+function RunManager:Debug_PushProgress(dungeon, progress, victory)
 	local experience = CalculateBiomeExplorationReward(progress, victory)
 
 	for _, player in ipairs(AllPlayers) do
 		local player_log = {}
 		local mrm = player.components.metaprogressmanager
-		local def = MetaProgress.FindProgressByName(region)
+		local def = MetaProgress.FindProgressByName(dungeon)
 		if not mrm:GetProgress(def) and def ~= nil then
 			mrm:StartTrackingProgress(mrm:CreateProgress(def))
 		end
@@ -185,21 +175,19 @@ function RunManager:Debug_PushProgress(region, progress, victory)
 	end
 end
 
-function RunManager:GetRunData(progress_override)
+function RunManager:ApplyRunData(progress_override)
 	local progress = progress_override or TheDungeon:GetDungeonMap().nav:GetProgressThroughDungeon()
 	local ascension_level = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
 
 	local killed_boss = self:IsRunVictory()
 	local experience = CalculateBiomeExplorationReward(progress, killed_boss)
-	local bonus_shards = 0 -- Shards should only come from room rewards --CalculateKonjurShardReward(progress)
-	--local bonus_glitz = CalculateglitzReward(progress, killed_boss, ascension_level)
 
 	local run_data = {}
 
 	for _, player in ipairs(AllPlayers) do
 		local player_log = {}
 		local mrm = player.components.metaprogressmanager
-		local def = MetaProgress.FindProgressByName(TheDungeon:GetDungeonMap().data.region_id)
+		local def = MetaProgress.FindProgressByName(TheDungeon:GetDungeonMap().data.location_id)
 		if not mrm:GetProgress(def) and def ~= nil then
 			mrm:StartTrackingProgress(mrm:CreateProgress(def))
 		end
@@ -207,31 +195,10 @@ function RunManager:GetRunData(progress_override)
 
 		player_log.biome_exploration = { meta_reward = mrm:GetProgress(def), meta_reward_log = log }
 
-		if bonus_shards > 0 and TheWorld:IsFlagUnlocked("wf_town_has_armorsmith") then -- flag
-
-			if not TheWorld:IsFlagUnlocked("wf_first_miniboss_defeated") then -- flag
-				-- you can only get 1 bonus shard if you haven't defeated the first miniboss yet.
-				bonus_shards = 1
-			end
-
-			player.components.inventoryhoard:AddStackable(Consumable.FindItem("konjur_soul_lesser"), bonus_shards)
-			player_log.bonus_loot = { ['konjur_soul_lesser'] = bonus_shards }
-		end
-
-		-- if bonus_glitz > 0 then
-		-- 	player.components.inventoryhoard:AddStackable(Consumable.FindItem("glitz"), bonus_glitz)
-		-- 	if player_log.bonus_loot == nil then
-		-- 		player_log.bonus_loot = {}
-		-- 	end
-
-		-- 	player_log.bonus_loot = { ['glitz'] = bonus_glitz }
-		-- end
-
 		player_log.run_time = self.run_time
 		player_log.rooms_discovered = self.rooms_discovered
 
 		run_data[player] = player_log
-
 	end
 
 	run_data.run_time = self.run_time
@@ -275,7 +242,7 @@ function RunManager:Abandon()
 		self:OnExitRoom()
 		self:SetRunState(RunStates.s.ABANDON)
 		print("RunManager: Switching to " .. self:GetRunState());
-		local run_data = self:GetRunData()
+		local run_data = self:ApplyRunData()
 		run_data.defeat = true
 		TheDungeon.HUD:DoDefeatedFlow(run_data)
 
@@ -302,7 +269,7 @@ function RunManager:Defeated()
 		self:OnExitRoom()
 		self:SetRunState(RunStates.s.DEFEAT)
 		print("RunManager: Switching to " .. self:GetRunState());
-		local run_data = self:GetRunData()
+		local run_data = self:ApplyRunData()
 		run_data.defeat = true
 		TheDungeon.HUD:DoDefeatedFlow(run_data)
 
@@ -322,7 +289,7 @@ function RunManager:Victory()
 		self:OnExitRoom()
 		self:SetRunState(RunStates.s.VICTORY)
 		print("RunManager: Switching to " .. self:GetRunState());
-		local run_data = self:GetRunData()
+		local run_data = self:ApplyRunData()
 		TheDungeon.HUD:ShowVictoryButton(run_data)
 
 		if TheNet:IsHost() then

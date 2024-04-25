@@ -4,6 +4,7 @@ return {
   anim="idle",
   bank="fx_stunned_headstars",
   build="fx_stunned_headstars",
+  group="UI",
   looping=true,
   randomstartframe=true,
 }

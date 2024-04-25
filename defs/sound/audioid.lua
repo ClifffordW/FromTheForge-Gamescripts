@@ -8,6 +8,7 @@ local audioid = {
 		world_music = "world_music",
 		room_music = "room_music",
 		boss_music = "boss_music",
+		death_music = "death_music",
 		slideshow_music = "slideshow",
 		interactable_snapshot = "interactable_snapshot",
 		wanderer_snapshot = "wanderer_snapshot",

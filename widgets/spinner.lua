@@ -174,14 +174,17 @@ function Spinner:EnablePendingModificationBackground()
     end
 end
 
-function Spinner:OnFocusMove(dir, down)
-	if Spinner._base.OnFocusMove(self,dir,down) then return true end
+function Spinner:OnFocusMove(dir, input_device)
+    local parent_pick = Spinner._base.OnFocusMove(self, dir, input_device)
+	if parent_pick then
+		return parent_pick
+	end
 
-	if self.changing and down then
-		if dir == MOVE_LEFT then
+	if self.changing then
+		if dir == FocusMove.s.left then
 			self:Prev()
 			return true
-		elseif dir == MOVE_RIGHT then
+		elseif dir == FocusMove.s.right then
 			self:Next()
 			return true
 		else
@@ -189,7 +192,6 @@ function Spinner:OnFocusMove(dir, down)
 			self:UpdateBG()
 		end
 	end
-	
 end
 
 function Spinner:OnGainFocus()
@@ -222,8 +224,8 @@ function Spinner:OnLoseFocus()
 	self:UpdateBG()
 end
 
-function Spinner:OnControl(controls, down)
-	if Spinner._base.OnControl(self, controls, down) then return true end
+function Spinner:OnControl(controls, down, ...)
+	if Spinner._base.OnControl(self, controls, down, ...) then return true end
 
 	if down then
 		if controls:Has(Controls.Digital.PREVVALUE) then
@@ -269,7 +271,7 @@ function Spinner:UpdateBG()
 		else
 			self.background:SetImages(self.atlas, self.textures.bg_end_changing, self.textures.bg_middle_changing)
 		end
-	elseif self.focus then
+	elseif self:HasFocus() then
 		if self.lean then
 			self.background:SetMultColor(1,1,1,1)
 		else

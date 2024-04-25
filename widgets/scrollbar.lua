@@ -236,7 +236,7 @@ function ScrollBar:HandleControlDown(controls)
 end
 ]]
 
-function ScrollBar:OnControl(controls,down)
+function ScrollBar:OnControl(controls,down, ...)
 	if down then
 		if controls:Has(Controls.Digital.MENU_ACCEPT) then
 			local mx,my = TheFrontEnd:GetUIMousePos()

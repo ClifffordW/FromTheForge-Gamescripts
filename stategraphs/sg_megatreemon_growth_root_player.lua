@@ -142,7 +142,7 @@ local states =
 
 			EventHandler("animover", function(inst)
 				if inst:IsLocal() then
-					inst:Remove()
+					inst:DelayedRemove() -- explicit delayed remove because local games will generate log spam
 				end
 			end),
 		},

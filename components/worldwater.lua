@@ -61,7 +61,7 @@ end
 
 function WorldWater:SetRefractionSpeed(v)
 	self.refractionSpeed = v
-print("self.refractionSpeed:",self.refractionSpeed)
+	TheLog.ch.WorldWaterSpam:printf("self.refractionSpeed: %1.3f", self.refractionSpeed)
 	self:UpdateAuxParams()
 end
 

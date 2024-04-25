@@ -118,8 +118,13 @@ function Image:SetTexture(tex, default_tex)
 
 	assert(atlas ~= nil)
 	assert(tex ~= nil)
-
-	self.atlas = (checkatlas and type(atlas) == "string" and resolvefilepath(atlas)) or atlas
+    -- don't try to resolve generated images
+	local index = string.find(atlas, "generated/", 1, true)
+	if index == 1 then
+		self.atlas = atlas
+	else
+		self.atlas = (checkatlas and type(atlas) == "string" and resolvefilepath(atlas)) or atlas
+	end
 	self.texture = tex
 	--print(atlas, tex)
 	self.inst.ImageWidget:SetTexture(0, self.atlas, self.texture, default_tex)

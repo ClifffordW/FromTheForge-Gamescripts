@@ -422,12 +422,6 @@ local function InsertPostInitFunctions(env, isworldgen)
 
 	env.Ingredient = Ingredient
 
-	env.LoadPOFile = function(path, lang)
-		initprint("LoadPOFile", lang)
-		require("translator")
-		LanguageTranslator:LoadPOFile(path, lang)
-	end
-
 	env.RemapSoundEvent = function(name, new_name)
 		initprint("RemapSoundEvent", name, new_name)
 		TheAudio:RemapSoundEvent(name, new_name)

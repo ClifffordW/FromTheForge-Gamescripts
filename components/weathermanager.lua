@@ -45,7 +45,7 @@ function WeatherManager:PickRandomWeather()
 		end
 	end
 
-	-- TODO(jambell): PICK THIS FOR REAL, DETERMINISTICALLY
+	-- TODO: PICK THIS FOR REAL, DETERMINISTICALLY
 	for k,v in pairs(possible_weathers) do
 		pick = k
 		break

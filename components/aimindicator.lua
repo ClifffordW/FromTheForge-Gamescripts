@@ -48,8 +48,9 @@ end
 function AimIndicator:OnWallUpdate(dt)
 	self.inst.Transform:SetPosition(self.follow_target.Transform:GetWorldPosition())
 	local angle
-	if TheFrontEnd:IsRelativeNavigation() or self.follow_target ~= AllPlayers[1] then
-		angle = self.follow_target.components.playercontroller:GetAnalogDir() or self.follow_target.Transform:GetFacingRotation()
+	local playercontroller = self.follow_target.components.playercontroller
+	if playercontroller:IsRelativeNavigation() then
+		angle = playercontroller:GetAnalogDir() or self.follow_target.Transform:GetFacingRotation()
 	else
 		local x,z = TheInput:GetWorldXZWithHeight(0)
 		if x and z then

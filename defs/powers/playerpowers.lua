@@ -30,7 +30,12 @@ Power.AddPlayerPower("snowball_effect",
 	tooltips =
 	{
 		function()
-			return Power.POWER_AS_TOOLTIP_FMT:subfmt(STRINGS.ITEMS.PLAYER.damage_until_hit)
+			local tt = STRINGS.ITEMS.POWERS.PLAYER.damage_until_hit
+			-- Remap to STRINGS.UI.TOOLTIPS layout.
+			return {
+				NAME = tt.name,
+				DESC = tt.desc,
+			}
 		end,
 	},
 
@@ -217,6 +222,7 @@ Power.AddPlayerPower("berserk",
 Power.AddPlayerPower("max_health_and_heal",
 {
 	power_category = Power.Categories.SUSTAIN,
+	minimum_runs = 1,
 	tuning =
 	{
 		-- [Power.Rarity.EPIC] = { health = 100 },
@@ -273,8 +279,9 @@ Power.AddPlayerPower("bomb_on_dodge", -- should make sure the landing spot is va
 		["timerdone"] = function(pow, inst, data)
 			local timer_name = pow.def.name
 			if data.name == timer_name then
-				powerutil.SpawnFxOnEntity("acquire_pinecone_item", inst, { ischild = true, offy = 1 })
+				powerutil.SpawnFxOnEntity("acquire_pinecone_item", inst, { ischild = true, offy = -1, scalex = 1.5, scalez = 1.5 })
 			end
+			soundutil.PlayLocalSoundData(inst, { fmodevent = fmodtable.Event.Power_PartingGifts_Bomb_Ready })
 		end,
 	}
 })
@@ -360,9 +367,8 @@ Power.AddPlayerPower("running_shoes",
 	end,
 })
 
--- jambell: disabling this one for now because it encourages players to avoid every other power in the game to feed this one.
+-- disabling this one for now because it encourages players to avoid every other power in the game to feed this one.
 -- 			it could work as a powerful Epic or a Legendary, maybe? because then it would be a build-around power when appearing rarely
-
 -- Power.AddPlayerPower("coin_purse", --figure out the math on the upgrade of this one... must be worth spending the konjur
 -- {
 -- 	tuning =
@@ -421,7 +427,7 @@ Power.AddPlayerPower("extended_range",
 		[Power.Rarity.LEGENDARY] = { swings = 3, damage = 50, projectiles = 3, }, --TODO: also too much DPS
 	},
 
-	prefabs = { "generic_projectile" },
+	prefabs = { "generic_projectile", "projectile_magic", },
 	event_triggers =
 	{
 		["attack_start"] = extended_range_fn,
@@ -435,7 +441,7 @@ Power.AddPlayerPower("bloodthirsty",
 	tags = { POWER_TAGS.PROVIDES_FREQUENT_HEALING, POWER_TAGS.PROVIDES_HEALING },
 	tuning =
 	{
-		[Power.Rarity.LEGENDARY] = { time = 5, damage = 50, heal = 10, health_penalty = 50, blink_color = { 255/255, 50/255, 50/255, 1 }, blink_frames = 8 }, -- TODO(sloth): adjust blink color/frames
+		[Power.Rarity.LEGENDARY] = { time = 5, damage = 50, heal = 10, health_penalty = 50, blink_color = { 255/255, 50/255, 50/255, 1 }, blink_frames = 8 }, -- TODO: adjust blink color/frames
 	},
 
 	on_add_fn = function(pow, inst)
@@ -529,6 +535,7 @@ Power.AddPlayerPower("lucky_revive",
 Power.AddPlayerPower("mulligan",
 {
 	power_category = Power.Categories.SUSTAIN,
+	minimum_runs = 1,
 	tuning =
 	{
 		[Power.Rarity.EPIC] = { heal = 50 },
@@ -588,6 +595,7 @@ Power.AddPlayerPower("mulligan",
 Power.AddPlayerPower("iron_brew",
 {
 	power_category = Power.Categories.SUSTAIN,
+	minimum_runs = 1,
 	tuning =
 	{
 		[Power.Rarity.EPIC] = { bonus_heal = 50 },
@@ -1224,7 +1232,6 @@ Power.AddPlayerPower("heal_on_quick_rise",
 		--	Blarmadillo shoot: 135
 		--	Blarmadillo roll: 90
 
-		-- jambell:
 		-- It's likely that this needs to be turned into "gain % of the health you just lost back" but quick_rise doesn't know about the attack yet. Nerfing this for now.
 		[Power.Rarity.EPIC] = { heal = 50 },
 		[Power.Rarity.LEGENDARY] = { heal = 100 },
@@ -1353,7 +1360,7 @@ Power.AddPlayerPower("getaway",
 	end,
 })
 
--- jambell: Removing these basic "stronger X" powers for now because flat damage improvements aren't particularly interesting. Could come back later.
+-- NOTE: Removing these basic "stronger X" powers for now because flat damage improvements aren't particularly interesting. Could come back later.
 -- Power.AddPlayerPower("stronger_light_attack", --TODO: make this a power given in a Special Event
 -- {
 -- 	tuning =
@@ -1513,7 +1520,7 @@ local function _drop_battle_fame(inst, pow)
 			inst:DoTaskInAnimFrames(initial_delay_frames + (between_batches_delay_frames * (i-1)), function()
 				if i == 1 then
 					-- Only display for the first one
-					TheDungeon.HUD:MakePopText({ target = inst, button = STRINGS.ITEMS.PLAYER.battle_fame.name, color = UICOLORS.KONJUR, size = 100, fade_time = amount >= 10 and 3 or 1, y_offset = 70 })
+					TheDungeon.HUD:MakePopText({ target = inst, button = STRINGS.ITEMS.POWERS.PLAYER.battle_fame.name, color = UICOLORS.KONJUR, size = 100, fade_time = amount >= 10 and 3 or 1, y_offset = 70 })
 					TheWorld.components.konjurrewardmanager:AddToLog(amount, "battle_fame")
 				end
 				LootEvents.MakeEventSpawnCurrency(MAX_BATCH_SIZE, inst:GetPosition(), inst, false, true)
@@ -1531,7 +1538,7 @@ local function _drop_battle_fame(inst, pow)
 		-- Only one batch. Simple!
 		inst:DoTaskInAnimFrames(initial_delay_frames, function()
 			if inst ~= nil and inst:IsValid() then
-				TheDungeon.HUD:MakePopText({ target = inst, button = STRINGS.ITEMS.PLAYER.battle_fame.name, color = UICOLORS.KONJUR, size = 100, fade_time = amount >= 10 and 3 or 1, y_offset = 70 })
+				TheDungeon.HUD:MakePopText({ target = inst, button = STRINGS.ITEMS.POWERS.PLAYER.battle_fame.name, color = UICOLORS.KONJUR, size = 100, fade_time = amount >= 10 and 3 or 1, y_offset = 70 })
 				LootEvents.MakeEventSpawnCurrency(amount, inst:GetPosition(), inst, false, true)
 				TheWorld.components.konjurrewardmanager:AddToLog(amount, "battle_fame")
 			end
@@ -1586,7 +1593,7 @@ Power.AddPlayerPower("battle_fame", -- at the end of a room, gain an amount of k
 				-- TODO: Make a 'power update' widget that shows the power icon, and use it instead of these poptexts
 
 				local name = "<p img='images/ui_ftf_pausescreen/ic_plain1.tex' color=0 scale=1> "..pow.def.pretty.name
-				local update_str = string.format(STRINGS.ITEMS.PLAYER.battle_fame.new_highest_popup, pow.mem.new_high)
+				local update_str = string.format(STRINGS.ITEMS.POWERS.PLAYER.battle_fame.new_highest_popup, pow.mem.new_high)
 				TheDungeon.HUD:MakePopText({ target = inst, button = name, color = UICOLORS.GOLD_FOCUS, size = 80, fade_time = 2, y_offset = 460 })
 				TheDungeon.HUD:MakePopText({ target = inst, button = update_str, color = UICOLORS.WHITE, size = 60, fade_time = 2, y_offset = 400 })
 
@@ -1805,8 +1812,7 @@ Power.AddPlayerPower("advantage",
 	power_category = Power.Categories.DAMAGE,
 	tags = { POWER_TAGS.PROVIDES_CRITCHANCE },
 	tuning = {
-		[Power.Rarity.EPIC] = { percent = 100, desc = "full" }, --TODO: move this to localizable spot
-		[Power.Rarity.LEGENDARY] = { percent = 50, desc = "more than half" }, --TODO: move this to localizable spot
+		[Power.Rarity.LEGENDARY] = { percent = 100, desc = "full" }, --TODO: move this to localizable spot
 	},
 	tooltips =
 	{
@@ -2235,7 +2241,7 @@ Power.AddPlayerPower("pick_of_the_litter",
 	tags = { "" },
 	tuning =
 	{
-		-- [Power.Rarity.EPIC] = { count = 1, }, -- jambell: disabling this for now because this breaks our screen layout.
+		-- [Power.Rarity.EPIC] = { count = 1, }, -- disabling this for now because this breaks our screen layout.
 		[Power.Rarity.LEGENDARY] = { count = 1, },
 	},
 		tooltips =
@@ -2299,24 +2305,26 @@ Power.AddPlayerPower("shrapnel",
 				local triggers = pow.persistdata:GetVar("triggers")
 				local angle_mod = victim.Transform:GetFacing() == FACING_LEFT and -1 or 1
 				local angles = { 0, 180, 90, -90, 45, -45, 135, -135 }
+				local num_projectiles = pow.persistdata:GetVar("projectiles")
 
 				for i=1,triggers do
 					inst:DoTaskInAnimFrames((i-1) * 15, function()
 						if inst ~= nil and inst:IsValid() then
-							for y = 1, pow.persistdata:GetVar("projectiles") do
+							for y = 1, num_projectiles do
 								local angle = angles[y]
 								local x, z = victim.Transform:GetWorldXZ()
 								local bullet = spawn_shrapnel_projectile(inst, x, z, angle, angle_mod)
 								-- why does this look different from other projectile Setup functions?
 								bullet:Setup(inst, nil, pow.def.name, pow.persistdata:GetVar("damage"))
+								soundutil.PlayCodeSound(bullet, fmodtable.Event.Power_Shrapnel_Tail)
 							end
 							inst:PushEvent("used_power", pow.def)
 
-							local params = {}
-							params.fmodevent = fmodtable.Event.Power_Shrapnel
-							params.sound_max_count = 1
-							local handle = soundutil.PlaySoundData(inst, params)
-							soundutil.SetInstanceParameter(inst, handle, "upgrade_level", Power.GetRarityAsParameter(pow.persistdata))
+							local upgrade_level = Power.GetRarityAsParameter(pow.persistdata)
+							soundutil.PlayCodeSound(inst,fmodtable.Event.Power_Shrapnel_Activate, {
+								fmodparams = {
+									upgrade_level = upgrade_level,
+							}})
 						end
 					end)
 				end
@@ -2465,6 +2473,8 @@ Power.AddPlayerPower("analytical",
 -- Your Light Attack damages you when it whiffs, but deals extra damage
 Power.AddPlayerPower("dont_whiff",
 {
+	can_drop = false, -- EARLY ACCESS 2024: Disable because this is buggy for Shotput, Cannon, and some melee attacks. Bring back once those bugs are fixed.
+
 	power_category = Power.Categories.DAMAGE,
 	tuning =
 	{
@@ -2845,75 +2855,12 @@ Power.AddPlayerPower("pong",
 local function loot_increase_desc_fn(power, def)
 	-- Loot powers share strings so they can't use the normal rarity_text system.
 	local current_rarity = power:GetRarity()
-	local loot_chance = STRINGS.ITEMS.PLAYER.loot_increase_rarity_loot_chance[current_rarity]
+	local loot_chance = STRINGS.ITEMS.POWERS.PLAYER.loot_increase_rarity_loot_chance[current_rarity]
 	local desc = def.pretty.desc:subfmt({
 			loot_chance = loot_chance,
 		})
 	return desc
 end
-
--- WARNING: Don't show these as actual numerical values, unless you figure out a way to make it grokable to the player.
-Power.AddPlayerPower("loot_increase_cabbageroll",
-{
-	power_category = Power.Categories.SUPPORT,
-
-	can_drop = false, --TODO(jambell): restrict to biomes where cabbageroll spawns
-
-	prefabs = { },
-	tuning =
-	{
-		-- jambell: ugh, these values are pretty hard to make globally relevant for all mob types.
-		-- probably need to systemize these drop loot_values to make these easier to make.
-		[Power.Rarity.COMMON] = { delta = 2, },
-		[Power.Rarity.EPIC] = { delta = 4, },
-		[Power.Rarity.LEGENDARY] = { delta = 6, },
-	},
-
-	desc_fn = loot_increase_desc_fn,
-
-	tooltips =
-	{
-		"MATERIALS",
-	},
-
-	on_add_fn = function(pow, inst)
-		inst.components.lootdropmanager:AddMobDeltaModifier(pow.def.name, "cabbageroll", pow.persistdata:GetVar("delta"))
-	end,
-
-	on_remove_fn = function(pow, inst)
-		inst.components.lootdropmanager:RemoveMobDeltaModifier(pow.def.name, "cabbageroll")
-	end,
-})
-
-Power.AddPlayerPower("loot_increase_blarmadillo",
-{
-	power_category = Power.Categories.SUPPORT,
-
-	can_drop = false, --TODO(jambell): restrict to biomes where cabbageroll spawns
-
-	prefabs = { },
-	tuning =
-	{
-		[Power.Rarity.COMMON] = { delta = 2, },
-		[Power.Rarity.EPIC] = { delta = 4, },
-		[Power.Rarity.LEGENDARY] = { delta = 6, },
-	},
-
-	desc_fn = loot_increase_desc_fn,
-
-	tooltips =
-	{
-		"MATERIALS",
-	},
-
-	on_add_fn = function(pow, inst)
-		inst.components.lootdropmanager:AddMobDeltaModifier(pow.def.name, "blarmadillo", pow.persistdata:GetVar("delta"))
-	end,
-
-	on_remove_fn = function(pow, inst)
-		inst.components.lootdropmanager:RemoveMobDeltaModifier(pow.def.name, "blarmadillo")
-	end,
-})
 
 Power.AddPlayerPower("max_health_wanderer",
 {
@@ -2971,8 +2918,6 @@ Power.AddPlayerPower("max_health_wanderer",
 -- On My Fingers: hitstreak power that does something if you do consecutive hitstreaks in numerical order (1 2 3, or 4 5 6, or 7 8 9, etc)
 
 -- Hammer power: overhead spin slam causes explosion (which does hit the player)
-
--- Drop Glitz on hitstreak / etc
 
 -- Powers that last for a specific set of rooms
 		-- Challenge powers to take on -- e.g. get 20 iframe dodges in 5 rooms: fail, get a curse -- succeed, get a powerful power

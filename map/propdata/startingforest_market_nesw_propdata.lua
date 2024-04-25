@@ -19,7 +19,6 @@ return {
     { variation=3, x=-3.36, z=6.05,},
     { variation=1, x=-16.08, z=-0.67,},
     { variation=3, x=8.18, z=7.47,},
-    { variation=2, x=-7.88, z=-1.32,},
     { variation=3, x=6.08, z=-3.55,},
     { variation=1, x=17.78, z=-6.96,},
     { variation=2, x=-31.46, z=-7.22,},
@@ -202,7 +201,7 @@ return {
   },
   marketroom_flag={ { x=-5.5, z=9.5,}, { x=12.5, z=-13.5,},},
   marketroom_hangings={ { x=-17.5, z=12.5,}, { x=-21.5, z=12.5,}, { x=-1.5, z=12.5,},},
-  marketroom_jamball_cart={ { flip=true, x=-0.5, z=9.5,},},
+  marketroom_jamball_cart={ { flip=true, x=-0.5, z=10.5,},},
   marketroom_lamp={
     { x=-30.5, z=-9.5,},
     { x=-30.5, z=-2.5,},
@@ -223,7 +222,7 @@ return {
     { variation=3, x=-30.22, z=8.09,},
     { variation=2, x=-24.04, z=10.56,},
   },
-  marketroom_rug_big={ { flip=true, r=45.0, x=3.5, z=5.5,},},
+  marketroom_rug_big={ { flip=true, x=4, z=6,}, { flip=true, x=-1, z=6,},},
   marketroom_rug_magpie={
     { color_variant={ brightness=-19.0, hue=0, saturation=-17.0,}, x=-21.5, z=-8.5,},
     {
@@ -245,7 +244,7 @@ return {
     { x=0.5, z=12.5,},
     { x=-33.5, z=3.5,},
     { x=-32.5, z=-17.5,},
-    { x=6.5, z=7.5,},
+    { x=6.5, z=8.5,},
   },
   marketroom_tool_box={ { flip=true, x=-4.0, z=6.5,},},
   shrub={
@@ -264,14 +263,15 @@ return {
   spawner_npc_dungeon={ { x=-23.0, z=-9.0,},},
   spawner_waredispenser={
     { script_args={ index=1, market="Meta",}, x=-24.5, z=4.5,},
-    { script_args={ index=2.0, market="Meta",}, x=-20.5, z=4.5,},
+    { script_args={ index=2.0, market="Meta",}, x=-20, z=5,},
     { script_args={ index=3.0, market="Meta",}, x=-16.5, z=4.5,},
     { script_args={ index=1, market="Run",}, x=1.5, z=-13.5,},
     { script_args={ index=2.0, market="Run",}, x=-6.5, z=-13.5,},
     { script_args={ index=3.0, market="Run",}, x=-14.5, z=-13.5,},
     { script_args={ index=4.0, market="Run",}, x=-2.5, z=-10.5,},
     { script_args={ index=5.0, market="Run",}, x=-10.5, z=-10.5,},
-    { script_args={ index=4.0, market="Meta",}, x=3.5, z=5.5,},
+    { script_args={ index=4.0, market="Meta",}, x=4, z=6,},
+    { script_args={ index=4.0, market="Meta",}, x=-1, z=6,},
   },
   town_floor_path_lrg={
     {
@@ -426,6 +426,18 @@ return {
       variation=4,
       x=-18.5,
       z=1.5,
+    },
+    {
+      color_variant={ brightness=0, hue=172, saturation=-19,},
+      variation=2,
+      x=3.5,
+      z=4.5,
+    },
+    {
+      color_variant={ brightness=0, hue=172, saturation=-19,},
+      variation=3,
+      x=2.5,
+      z=3.5,
     },
   },
   tree={ { x=9.0, z=8.0,}, { x=-30.0, z=13.0,}, { x=29.0, z=1.0,},},

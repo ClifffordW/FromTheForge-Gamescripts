@@ -21,8 +21,6 @@ local PowerDrop = Class(function(self, inst)
 	self.prepared_id = 0 -- prepare can be called multiple times, so use a unique id to represent each call
 	self.allowinteraction = false
 	self.picked = false
-
-	TheWorld:UnlockFlag("wf_seen_room_bonus")
 end)
 
 function PowerDrop:OnEntityBecameLocal()

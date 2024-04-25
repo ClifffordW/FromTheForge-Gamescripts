@@ -35,7 +35,7 @@ local basic_room_drops = {
 	},
 }
 
--- JAMBELL: These reward_room_drops are currently tuned to be "what is the TOTAL amount of new konjur the player should leave the room with"
+-- These reward_room_drops are currently tuned to be "what is the TOTAL amount of new konjur the player should leave the room with"
 -- so, if the player made 30K from basic_room_drops and the end-of-room reward is trying to have them leave the room with 60K, that bonus will be 30K.
 local reward_room_drops = {
 --		Reward rooms drop an extra chunk of Konjur, LESS whatever basic_room_drops already delivered. (reward_room_drops)
@@ -59,6 +59,21 @@ local reward_room_drops = {
 	},
 }
 
+local material_reward_room_drops =
+{
+	easy = {
+		min = 3,
+		max = 4,
+	},
+	medium = {
+		min = 3,
+		max = 4,
+	},
+	hard = {
+		min = 5,
+		max = 6,
+	},
+}
 
 -- print("Some prints to help make sure it feels rewarding to choose CoinRoom over PowerRoom:")
 -- print("Minimum possible EASY CoinRoom reward is this much higher than just skipping a power:", reward_room_drops.easy.min - 	basic_room_drops.easy.max - TUNING.KONJUR_ON_SKIP_POWER)
@@ -95,8 +110,10 @@ end
 
 mapgen.validate.all_keys_are_difficulty(basic_room_drops)
 mapgen.validate.all_keys_are_difficulty(reward_room_drops)
+mapgen.validate.all_keys_are_difficulty(material_reward_room_drops)
 mapgen.validate.has_all_difficulty_keys(basic_room_drops)
 mapgen.validate.has_all_difficulty_keys(reward_room_drops)
+mapgen.validate.has_all_difficulty_keys(material_reward_room_drops)
 
 local KonjurRewardManager = Class(function(self, inst)
 	self.inst = inst
@@ -187,13 +204,9 @@ function KonjurRewardManager:OnRoomComplete()
 	if TheNet:IsHost() and ShouldSpawnLootInThisRoom() then
 		local reward = TheDungeon:GetDungeonMap():GetRewardForCurrentRoom()
 		if reward == mapgen.Reward.s.coin then
-			self.inst:RemoveEventCallback("room_complete", self._on_room_complete_fn)
-
-			local spawners = TheWorld.components.powerdropmanager.spawners
-			table.sort(spawners, EntityScript.OrderByXZDistanceFromOrigin)
-			self.rng:Shuffle(spawners)
-
-			self:SpawnBonusKonjurDrop(spawners[1])
+			self:SpawnRoomDrop("power_drop_konjur")
+		elseif reward == mapgen.Reward.s.material then
+			self:SpawnRoomDrop("power_drop_material")
 		end
 	end
 end
@@ -205,7 +218,14 @@ local function PickPowerDropSpawnPosition()
 	return Vector3(target_offset.x, 0, target_offset.y)
 end
 
-function KonjurRewardManager:SpawnBonusKonjurDrop(spawner)
+function KonjurRewardManager:SpawnRoomDrop(drop_prefab)
+	self.inst:RemoveEventCallback("room_complete", self._on_room_complete_fn)
+
+	local spawners = TheWorld.components.powerdropmanager.spawners
+	table.sort(spawners, EntityScript.OrderByXZDistanceFromOrigin)
+	self.rng:Shuffle(spawners)
+
+	local spawner = spawners[1]
 	local target_pos
 	if spawner then
 		target_pos = spawner:GetPosition()
@@ -216,7 +236,7 @@ function KonjurRewardManager:SpawnBonusKonjurDrop(spawner)
 		target_pos = PickPowerDropSpawnPosition()
 	end
 
-	local drop = SpawnPrefab("power_drop_konjur", self.inst)
+	local drop = SpawnPrefab(drop_prefab, self.inst)
 	drop.Transform:SetPosition(target_pos:Get())
 	return drop
 end
@@ -259,7 +279,6 @@ function KonjurRewardManager:SpawnRoomRewardKonjur(drop)
 	end
 end
 
--- TODO: networking2022, victorc - this needs to be hooked up for networking
 function KonjurRewardManager:SpawnSkipPowerKonjur(player, amount)
 	local target_pos
 	if player then
@@ -274,6 +293,30 @@ function KonjurRewardManager:SpawnSkipPowerKonjur(player, amount)
 	LootEvents.MakeEventSpawnCurrency(drop_amount, target_pos, player, false, true) -- spawn only for this player
 	self:AddToLog(drop_amount, "power_skip")
 end
+
+-- Material Drop Functions
+
+function KonjurRewardManager:SpawnRoomRewardMaterial(drop)
+
+	-- this is called on each machine. 
+
+	local worldmap = TheDungeon:GetDungeonMap()
+	local difficulty = worldmap:GetDifficultyForCurrentRoom()
+	local reward = worldmap:GetRewardForCurrentRoom()
+	if true then -- reward == mapgen.Reward.s.coin then
+		local diff_name = mapgen.Difficulty:FromId(difficulty)
+		local drop_range = material_reward_room_drops[diff_name]
+		local drop_amount = GenerateKonjurAmount(drop_range.min, drop_range.max)
+		
+		-- because this is called on each machine, only generate loot for local players.
+		local local_players = lume.filter(TheNet:GetPlayersOnRoomChange(), function(player) return player:IsLocal() end)
+
+		LootEvents.SpawnRandomLootForCurrentLocation(drop, local_players, drop_amount)
+	end
+end
+
+
+-- Log Functions
 
 function KonjurRewardManager:AddToLog(amount, source)
 	local tbl = self:GetLog()

@@ -27,20 +27,6 @@ local function ListingOrConsolePlayer(input)
     return input or ConsoleCommandPlayer()
 end
 
-
-function c_forcecrash(unique)
-    local path = "a"
-    if unique then
-        path = string.random(10, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV")
-    end
-
-    if TheWorld then
-        TheWorld:DoTaskInTime(0,function() _G[path].b = 0 end)
-    elseif TheFrontEnd then
-        TheFrontEnd.screenroot.inst:DoTaskInTime(0,function() _G[path].b = 0 end)
-    end
-end
-
 ---------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 -- Console Functions -- These are simple helpers made to be typed at the console.
@@ -198,23 +184,12 @@ function c_spawnstage(monster, num)
 	sc:StartCustomEncounter(testencounter)
 end
 
--- victorc: hack - local multiplayer, number of local players added this Lua session
-function mp_getlocalplayercount()
-	local localPlayerCount = 0
-	for _,v in ipairs(AllPlayers) do
-		if v:IsLocal() then
-			localPlayerCount = localPlayerCount + 1
-		end
-	end
-	return localPlayerCount
-end
-
 local function CanAddLocalPlayer(input_id)
 	if TheNet:IsInGame() then
 		if input_id == nil then
 			printf("No free input devices.")
 			return false
-		elseif input_id ~= 0 and not TheInput:IsDeviceFree("gamepad", input_id) then
+		elseif input_id ~= 0 and not TheInput:IsDeviceFree(TheInput:GetGamepad(input_id)) then
 			printf("Input device %s is not free.", tostring(input_id))
 			return false
 		end
@@ -246,7 +221,7 @@ end
 function mp_identifyinputs()
 	for i,player in ipairs(AllPlayers) do
 		player:DoTaskInTicks((i - 1) * 15, function()
-			player:PeekFollowStatus({showPlayerId = true, doInputIdentifier = true})
+			player:PeekFollowStatus({do_input_identifier = true}, true)
 		end)
 	end
 end
@@ -572,20 +547,6 @@ function c_setminhealth(n)
     end
 end
 
--- networking2022 -- review this API; use klei_net net_joingame in the meantime
--- Work in progress direct connect code.
--- Currently, to join an online server you must authenticate first.
--- In the future this authentication will be taken care of for you.
-function c_connect(ip, port, password)
-	return false
-    -- if not InGamePlay() and TheNet:StartClient(ip, port, 0, password) then
-    --     --DisableAllDLC()
-    --     return true
-    -- end
-    -- return false
-end
-
-
 local function add_currency(itemdef, amount)
     local player = ConsoleCommandPlayer()
 	if not player then
@@ -615,7 +576,6 @@ end
 function c_rich()
 	c_lessersoul(100)
 	c_currencydungeon(10000)
-	add_currency(Consumable.Items.MATERIALS.glitz, 10000)
 end
 
 --- Remove all known currencies from the player.
@@ -629,8 +589,7 @@ function c_bankrupt()
 		Consumable.Items.MATERIALS.konjur_soul_lesser,
 		Consumable.Items.MATERIALS.konjur_soul_greater,
 		Consumable.Items.MATERIALS.konjur_heart,
-		Consumable.Items.MATERIALS.konjur,
-		Consumable.Items.MATERIALS.glitz
+		Consumable.Items.MATERIALS.konjur
 	}
 	for _, currency in ipairs(currencies) do
 		hoard:RemoveStackable(currency, hoard:GetStackableCount(currency))
@@ -652,11 +611,6 @@ function c_konjurheart(boss, amount)
 	boss = boss or "megatreemon"
 	local heart_name = ("konjur_heart_%s"):format(boss)
 	add_currency(Consumable.Items.MATERIALS[heart_name], amount)
-end
-
-function c_currencytown(amount)
-	local Consumable = require "defs.consumable"
-	add_currency(Consumable.Items.MATERIALS.glitz, amount)
 end
 
 function c_currencydungeon(amount)
@@ -681,6 +635,23 @@ function c_give(slot, name, count, skip_equip)
 		if success then
 			SuUsed(("c_give_%s_%s"):format(slot,name))
 		end
+	end)
+end
+
+function c_give_weapons()
+	c_give("weapon", "hammer_basic")
+	c_give("weapon", "polearm_basic")
+	c_give("weapon", "shotput_basic")
+	c_give("weapon", "cannon_basic")
+	c_unlockweapontype(WEAPON_TYPES.HAMMER)
+	c_unlockweapontype(WEAPON_TYPES.POLEARM)
+	c_unlockweapontype(WEAPON_TYPES.SHOTPUT)
+	c_unlockweapontype(WEAPON_TYPES.CANNON)
+end
+
+function c_unlockweapontype(type)
+	playerutil.DoForAllLocalPlayers(function(player)
+		player:UnlockWeaponType(type)
 	end)
 end
 
@@ -1035,6 +1006,18 @@ function c_godmodeall(damage_mult, force_enable)
 	end
 end
 
+-- See also c_maintainhealth
+function c_superheal()
+	SuUsed("c_superheal", true)
+	for i,player in ipairs(AllPlayers) do
+		if player.components.health:IsRevivable() then
+			player.components.health:SetRevived(player)
+		end
+		player.components.health:SetPercent(1)
+		player.components.potiondrinker:InitializePotions()
+	end
+end
+
 function c_armor(player)
     player = ListingOrConsolePlayer(player)
     if player ~= nil then
@@ -1347,23 +1330,6 @@ function c_repeatlastcommand()
     end
 end
 
-function c_startvote(commandname, playeroruserid)
-    local userid = playeroruserid
-    if type(userid) == "table" then
-        userid = userid.userid
-    elseif type(userid) == "string" or type(userid) == "number" then
-        userid = UserToClientID(userid)
-        if userid == nil then
-            return
-        end
-    end
-    TheNet:StartVote(smallhash(commandname), userid)
-end
-
-function c_stopvote()
-    TheNet:StopVote()
-end
-
 function c_autoteleportplayers()
     TheWorld.auto_teleport_players = not TheWorld.auto_teleport_players
     print("auto_teleport_players:", TheWorld.auto_teleport_players)
@@ -1422,21 +1388,14 @@ function c_mute()
 	TheGameSettings:Save()
 end
 
--- Nuke any controller mappings, for when people get in a hairy situation with a controller mapping that is totally busted.
-function ResetControllersAndQuitGame()
-    print("ResetControllersAndQuitGame requested")
-    if not InGamePlay() then
-	-- Nuke any controller configurations from our profile
-	-- and clear the setting in the ini file
-	TheSim:SetSetting("misc", "controller_popup", tostring(nil))
-	Profile:SetValue("controller_popup",nil)
-	Profile:SetValue("controls",{})
-	Profile:Save()
-	-- And quit the game, we want a restart
-	RequestShutdown()
-    else
-	print("ResetControllersAndQuitGame can only be called from the frontend")
-    end
+function c_mutemusic()
+	local volume = TheGameSettings:Get("audio.music_volume")
+	if volume > 50 then
+		volume = 0
+	else
+		volume = 99
+	end
+	TheGameSettings:Set("audio.music_volume", volume)
 end
 
 ---------------------------------------------------------------------
@@ -1598,7 +1557,7 @@ function c_qa_build()
 				print("c_qa_build: after players activated")
 
 
-				c_printpowers() -- jambell wants to see armor info.
+				c_printpowers() -- we want to see armor info.
 			end)
 		end
 	end)
@@ -1697,12 +1656,17 @@ function c_currententityinfo()
 	print(" -------- INTERACTABLES --------")
 	local ents = TheSim:FindEntitiesXZ(0, 0, 1000, { "interactable" })
 	for _, interactable in ipairs(ents) do
-		printf("\nInteractable: %s\n  GUID: %d\n  EntityID: %s\n  Is Visible: %s\n  In Limbo: %s\n  Position: %s\n  Map Walkable: %s\n%s\n%s\n",
+		local convo = ""
+		if interactable.components.conversation then
+			convo = "\n  Conversation:\n    ".. interactable.components.conversation:GetDebugString()
+		end
+		printf("\nInteractable: %s\n  GUID: %d\n  EntityID: %s\n  Is Visible: %s\n  In Limbo: %s\n  Position: %s\n  Map Walkable: %s\n%s\n%s%s\n",
 			interactable.prefab, interactable.GUID, get_net_id(interactable),
 			interactable:IsVisible(), interactable:IsInLimbo(),
 			interactable:GetPosition() or "", TheWorld.Map:IsWalkableAtXZ(interactable:GetPosition():GetXZ()) or "",
 			get_sg_state(interactable),
-			"  Interactable:\n    ".. interactable.components.interactable:GetDebugString())
+			"  Interactable:\n    ".. interactable.components.interactable:GetDebugString(),
+			convo)
 	end
 
 	print(" -------- ROOM CLEAR --------")
@@ -1771,9 +1735,84 @@ function c_questinfo()
 	print("]]---------- QUEST DUMP ENDS ------------")
 end
 
+local function MaximallyUpgradeEquipment(equipment)
+	local Recipes = require "defs.recipes"
+	for _, item in ipairs(equipment) do
+		while Recipes.FindItemUpgradeRecipeForItem(item) do
+			item:UpgradeItemLevel()
+		end
+		while Recipes.FindUsageUpgradeRecipeForItem(item) do
+			item:UpgradeUsageLevel()
+		end
+	end
+end
+
+function c_effective_armour(proposed_minimum_dmg_mult)
+	local itemforge = require "defs.itemforge"
+	local armours = lume(itemforge.GetWeaponsAndArmour())
+		:filter(function(item) return item.slot ~= "WEAPON" end)
+		:result()
+	MaximallyUpgradeEquipment(armours)
+	proposed_minimum_dmg_mult = proposed_minimum_dmg_mult or 0.5
+	local effective_armours = {}
+	local ASCENSION_COUNT <const> = 3
+	for _, item in ipairs(armours) do
+		local armour = item.stats.ARMOUR
+		local effective_armour = effective_armours[item.id]
+		local dungeon_tier = item:GetBaseItemLevel()
+
+		-- If we've found another piece of an armour set that we've already discovered.
+		if effective_armour then
+			-- Just add in its armour value.
+			effective_armour.armour = effective_armour.armour + armour
+			dbassert(effective_armour.dungeon_tier == dungeon_tier)
+		else
+			-- Otherwise, compute ascensions and register the armour set.
+			local ascensions = {}
+			for ascension = 0, ASCENSION_COUNT do
+				local enemy_modifiers = TUNING:GetEnemyModifiersAtAscensionAndTier(nil, ascension, dungeon_tier)
+				table.insert(ascensions, {
+					ascension = ascension,
+					dmg_mult = 1 + enemy_modifiers.DungeonTierDamageMult
+				})
+			end
+			effective_armours[item.id] = {
+				armour = armour,
+				dungeon_tier = dungeon_tier,
+				ascensions = ascensions,
+			}
+		end
+	end
+	-- Compute effective_dmg_mult for every ascension for every armour set.
+	for _, effective_armour in pairs(effective_armours) do
+		for _, ascension in ipairs(effective_armour.ascensions) do
+			ascension.effective_dmg_mult = ascension.dmg_mult - effective_armour.armour
+		end
+	end
+	print("------------ EFFECTIVE ARMOURS BEGIN ------------")
+	dumptable(effective_armours)
+
+	-- Evaluate each armour set at each ascension.
+	print("Evaluating fully upgraded armour sets against a proposed minimum damage mult of "..proposed_minimum_dmg_mult)
+	for armour_name, effective_armour in pairs(effective_armours) do
+		for _, ascension in ipairs(effective_armour.ascensions) do
+			if ascension.effective_dmg_mult <= proposed_minimum_dmg_mult then
+				print("ERROR: "..armour_name.." (dungeon tier["..effective_armour.dungeon_tier.."]) at ascension["..ascension.ascension.."]")
+				print("    Armour upgrade will reduce dmg_mult below the min ("..proposed_minimum_dmg_mult..") so as to appear to have no effect!")
+				print("    dmg_mult ("..ascension.dmg_mult..") - armour ("..effective_armour.armour..") = damage mult ("..ascension.effective_dmg_mult..")")
+				print("    Example: For 100 dmg, armour tries to reduce it to "..(100 * ascension.effective_dmg_mult).." but minimum clamps it to "..(100 * proposed_minimum_dmg_mult))
+			end
+		end
+	end
+	print("------------ EFFECTIVE ARMOURS ENDS ------------")
+end
+
 local function MakeWeaponAndArmourTuningTable()
 	local itemforge = require "defs.itemforge"
 	local equipment = itemforge.GetWeaponsAndArmour()
+
+	-- This code maximally upgrades each item before recording it.
+	-- MaximallyUpgradeEquipment(equipment)
 
 	local tuning_data = {}
 	tuning_data.weapons = {}
@@ -1914,10 +1953,10 @@ function c_weapons_by_stat()
 end
 
 function c_spawnnpc(npc_prefab)
-	if TheWorld.components.plotmanager:IsPlotOccupied(npc_prefab) then
-		print ("TRYING TO SPAWN AN ALREADY EXISTING NPC")
-		return
-	end
+	-- if TheWorld.components.plotmanager:IsPlotOccupied(npc_prefab) then
+	-- 	print ("TRYING TO SPAWN AN ALREADY EXISTING NPC")
+	-- 	return
+	-- end
 
 	local NPC_TO_QUEST =
 	{
@@ -1943,10 +1982,10 @@ function c_spawnnpc(npc_prefab)
 	local plot = TheWorld.components.plotmanager.plots[npc_prefab].inst
 	plot.components.plot:OnPostLoadWorld()
 
-	playerutil.DoForAllLocalPlayers(function(player)
-		local qm = player.components.questcentral:GetQuestManager()
-		qm:SpawnQuest(NPC_TO_QUEST[npc_prefab])
-	end)
+	-- playerutil.DoForAllLocalPlayers(function(player)
+	-- 	local qm = player.components.questcentral:GetQuestManager()
+	-- 	qm:SpawnQuest(NPC_TO_QUEST[npc_prefab])
+	-- end)
 end
 
 function c_repeatquest()
@@ -2148,9 +2187,36 @@ function c_hitme(prefabname, attack_level, damage)
 	end
 end
 
+function c_spawnpower(power_id, dontselect)
+	local Power = require "defs.powers"
+
+	local poweritem = c_spawn("power_pickup_single", 1, dontselect)
+	local def = Power.FindPowerByQualifiedName(power_id)
+
+	poweritem:PushEvent("initialized_ware", {
+	    ware_name = def.name,
+	    power = def.name,
+	    power_type = def.power_type,
+	})
+end
+
+function c_spawnpowers(power_ids)
+	local player = ConsoleCommandPlayer()
+	TheWorld.components.powerdropmanager:SpawnSpecificPowerItemsForPlayer(power_ids, player, player:GetPosition())
+end
+
 -- heh
 function c_nopants()
 	playerutil.DoForAllLocalPlayers(function(player)
 		player.components.inventory:Equip("WAIST", nil)
 	end)
 end
+
+function c_decor(decor)
+	ThePlayer.components.playercontroller:StartPlacer(decor and decor.."_placer" or "bench_rotwood_placer")
+end
+
+function c_removedecor()
+	ThePlayer.components.playercontroller:StartPropRemover()
+end
+

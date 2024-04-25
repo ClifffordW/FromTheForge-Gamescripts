@@ -1,6 +1,6 @@
-local ParticleSystemHelper = require "util.particlesystemhelper"
 local EffectEvents = require "effectevents"
-local lume = require "util.lume"
+local ParticleSystemHelper = require "util.particlesystemhelper"
+local entityutil = require "util.entityutil"
 
 -- Banded data for scaling the FX based on distance, broken up into two FX to retain visual integrity
 local smalldata =
@@ -29,7 +29,8 @@ local largedata =
 	{100, 	4}, --just a guess!
 }
 
-local function OnTeleportStart(inst)
+-- TODO: duplicated in summonpowers.lua; remove this implementation once everything is settled
+local function OnTeleportStart(inst, old_target_pos)
 	inst.Physics:SetEnabled(false)
 	inst.HitBox:SetEnabled(false)
 	inst:Hide()
@@ -37,9 +38,9 @@ local function OnTeleportStart(inst)
 		inst.sg:Pause("teleporting")
 	end
 	inst.AnimState:Pause("teleporting")
-	inst:PushEvent("teleport_start")
+	inst:PushEvent("teleport_start", old_target_pos)
 
-	-- JAMBELL TODO: Would be nice to help the player execute moves they input while 'in between' -- increase the controlqueuetick count and try to execute their attack on the way out.
+	-- TODO: Would be nice to help the player execute moves they input while 'in between' -- increase the controlqueuetick count and try to execute their attack on the way out.
 	-- if inst.components.playercontroller ~= nil then
 	-- 	inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", TELEPORT_DELAY)
 	-- 	inst.components.playercontroller:OverrideControlQueueTicks("lightattack", TELEPORT_DELAY)
@@ -58,8 +59,8 @@ local function OnTeleportEnd(inst)
 	inst:Show()
 	inst:PushEvent("teleport_end")
 
-	-- JAMBELL TODO: Would be nice to help the player execute moves they input while 'in between' -- increase the controlqueuetick count and try to execute their attack on the way out.
-	-- JAMBELL: Not currently working because TryNextQueuedAction doesn't always seem to respect the state we're in... probably needs more carefully written player stategraphs.
+	-- TODO: Would be nice to help the player execute moves they input while 'in between' -- increase the controlqueuetick count and try to execute their attack on the way out.
+	-- this is Not currently working because TryNextQueuedAction doesn't always seem to respect the state we're in... probably needs more carefully written player stategraphs.
 	-- if inst.components.playercontroller ~= nil then
 	-- 	SGPlayerCommon.Fns.TryNextQueuedAction(inst)
 	-- 	inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", nil)
@@ -87,7 +88,7 @@ local function OnHitBoxTriggered(inst, data)
 	--print(inst.prefab.." can teleport")
 	local buffer_tick = TheSim:GetTick() - 30 -- How many ticks ago should the thing have teleported, before we allow a re-teleport trigger on a pair of portals? If this number is too low, they get trapped in infinite teleport hell pretty easily
 	for i = 1, #targets do
-		if not targets[i]:HasTag("no_teleport") then
+		if targets[i]:IsLocal() and not targets[i]:HasTag("no_teleport") then
 			if teleport_log[targets[i]] ~= nil then
 				local last_teleported_tick = teleport_log[targets[i]]
 				--print("last_teleported_tick ["..targets[i].prefab..":"..targets[i].GUID.."]: ["..last_teleported_tick.."]        buffer_tick: ["..buffer_tick.."]")
@@ -193,15 +194,6 @@ function Wormhole:OnNetSerialize()
 	end
 end
 
--- TODO: Copied from revive component. Consider making this a common function.
-local function TryGetEntity(entity_id)
-	local guid = TheNet:FindGUIDForEntityID(entity_id)
-	if guid and guid ~= 0 and Ents[guid] and Ents[guid]:IsValid() then
-		return Ents[guid]
-	end
-	return nil
-end
-
 function Wormhole:OnNetDeserialize()
 	local e = self.inst.entity
 
@@ -215,7 +207,7 @@ function Wormhole:OnNetDeserialize()
 	local other_wormhole_exists = e:DeserializeBoolean()
 	if other_wormhole_exists then
 		local ent_id = e:DeserializeEntityID()
-		local ent = TryGetEntity(ent_id)
+		local ent = entityutil.TryGetEntity(ent_id)
 		self.other_wormhole = ent
 	end
 end
@@ -246,10 +238,38 @@ function Wormhole:TeleportTarget(target)
 	local source = self.other_wormhole
 	if not source then return end
 
+	if not target.components.powermanager then
+		if target:IsLocal() and not target:IsTransferable() then
+			self:_TeleportTargetWithoutPower(target) -- legacy implementation
+		else
+			TheLog.ch.Wormhole:printf("Warning: Unable to teleport transferrable target %s without powermanager component", target)
+			return
+		end
+	else
+		self.inst:PushEvent("teleported_to")
+
+		target.components.powermanager:AddPowerByName("teleporting")
+
+		local x,z = self.inst.Transform:GetWorldXZ()
+		if target:HasTag("projectile") then
+			local p = target:GetPosition()
+			target.Transform:SetPosition(x, p.y, z)
+		else
+			target.Transform:SetPosition(x,0,z)
+		end
+	end
+
+	source:DoTaskInTicks(14, function()
+		FakeBeamFX(source, self.inst, "fx_portal_jump", smalldata, largedata)
+	end)
+end
+
+function Wormhole:_TeleportTargetWithoutPower(target)
 	self.inst:PushEvent("teleported_to")
+	local old_target_pos = target:GetPosition()
 	local x,z = self.inst.Transform:GetWorldXZ()
 	target.Transform:SetPosition(x,0,z)
-	OnTeleportStart(target)
+	OnTeleportStart(target, old_target_pos)
 
 	target:DoTaskInTicks(TELEPORT_DELAY, function()
 		OnTeleportEnd(target)
@@ -259,17 +279,13 @@ function Wormhole:TeleportTarget(target)
 		EffectEvents.MakeEventSpawnEffect(target, { fxname = "fx_portal_pulse_out" } )
 
 		ParticleSystemHelper.MakeOneShotAtPosition(self.inst:GetPosition(), "fx_portal_burst_out", 1, target)
-
 	end)
 
+	local source = self.other_wormhole
 	ParticleSystemHelper.MakeOneShotAtPosition(source:GetPosition(), "fx_portal_burst_in", 1, target)
 
 	EffectEvents.MakeEventSpawnEffect(target, { fxname = "fx_portal_pulse_in2" } )
 	EffectEvents.MakeEventSpawnEffect(target, { fxname = "fx_portal_pulse_in" } )
-
-	source:DoTaskInTicks(14, function()
-		FakeBeamFX(source, self.inst, "fx_portal_jump", smalldata, largedata)
-	end)
 end
 
 function Wormhole:OnUpdate()

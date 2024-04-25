@@ -6,6 +6,7 @@ local audioid = require "defs.sound.audioid"
 local fmodtable = require "defs.sound.fmodtable"
 local soundutil = require "util.soundutil"
 local powerutil = require "util.powerutil"
+local ParticleSystemHelper = require "util.particlesystemhelper"
 
 --local DebugDraw = require "util.debugdraw"
 
@@ -163,7 +164,7 @@ local function PlayJuggernautSound(inst, pow)
 	local params = {}
 	local soundevent = fmodtable.Event.status_juggernaut_apply
 	-- under the gun and not splitting these up for right now
-	
+
 	-- if inst:HasTag("player") then
 	-- 	soundevent = fmodtable.Event.status_juggernaut_apply
 	-- end
@@ -180,7 +181,7 @@ Power.AddStatusEffectPower("juggernaut",
 			scale = 1,
 			damagereceivedmult = 0.5, -- 0.5% per stack -- maximum 100 stacks = 50% damage reduction
 			speed = -0.7, -- 0.7% per stack, maximum reduction of -70%
-			nointerruptstacks = 50, -- TODO @jambell #weight set this back to 25 or 50
+			nointerruptstacks = 50, -- TODO #weight set this back to 25 or 50?
 			knockdownstacks = 50,
 		},
 	},
@@ -216,7 +217,7 @@ Power.AddStatusEffectPower("juggernaut",
 	end,
 
 	on_stacks_changed_fn = function(pow, inst, delta)
-		-- TODO @jambell #weight figure out how much of this DamageDealt, DamageReceived, and Speed mults is inherent to 'weight', if any?
+		-- TODO #weight figure out how much of this DamageDealt, DamageReceived, and Speed mults is inherent to 'weight', if any?
 
 		if pow.mem.force_remove_requested then
 			return
@@ -358,10 +359,127 @@ Power.AddStatusEffectPower("poison",
 	end
 })
 
+--------------------------------------------------------------------------
+-- Hitstun pressure attack power
+
+local HITSTUN_FRAMES_NR_BITS <const> = 8 -- Increase if there's an entity that takes in more than 256 frames of hitstun.
+local HITSTUN_PRE_COOLDOWN_DELAY <const> = 0.2 -- Number of seconds to delay before cooling down hitstun pressure frames.
+
+local function StartHitStunPressureCooldownDelay(pow, inst)
+	local timer = inst.components.timer
+	assert(timer, "Entity [" .. inst.prefab .. "] Does not have a timer component. Please add a timer component to the entity.")
+
+	if timer:HasTimer(pow.def.name) then
+		timer:SetTimeRemaining(pow.def.name, HITSTUN_PRE_COOLDOWN_DELAY)
+	else
+		inst.components.timer:StartTimer(pow.def.name, HITSTUN_PRE_COOLDOWN_DELAY)
+	end
+
+	pow.mem.is_in_cooldown = nil
+	pow.mem._ontimerdonefn = function(_, data)
+		if data and data.name == pow.def.name then
+			pow.mem.is_in_cooldown = true
+		end
+	end
+    inst:ListenForEvent("timerdone", pow.mem._ontimerdonefn)
+end
+
+local function OnHitStunPressureAttack(pow, inst, data)
+	if not TheNet:IsHost() then
+		return
+	end
+
+	assert(inst.components.combat, "Entity [" .. inst.prefab .. "] Does not have a combat component. Please add a combat component to the entity.")
+
+	-- Add hitstun frames to the pressure buffer.
+	local attack = data and data.attack
+	local hitstunframes = attack and attack:GetHitstunAnimFrames() or 0
+	pow.mem.current_hitstun_frames = pow.mem.current_hitstun_frames + hitstunframes
+	--print("attacked by: ", attack:GetAttacker(), pow.mem.current_hitstun_frames, "/", inst.components.combat:GetHitStunPressureFrames())
+	--printf_world(inst, "HITSTUN_PRESSURE: %s", pow.mem.current_hitstun_frames)
+
+	local hitstun_pressure_frames = inst.components.combat:GetHitStunPressureFrames()
+	if pow.mem.current_hitstun_frames >= hitstun_pressure_frames and
+		not inst.sg:HasStateTag("attack") and
+		not inst.sg:HasStateTag("busy") and
+		not inst.sg:HasStateTag("knockdown") then
+			pow.mem.is_in_cooldown = nil
+			SGCommon.Fns.ChooseHitStunPressureAttack(inst, data)
+	end
+
+	StartHitStunPressureCooldownDelay(pow, inst)
+end
+
+-- To setup a hitstun pressure attack on an entity, it needs two things:
+-- * Combat component needs to call SetHitStunPressureFrames() with a specified amount of hitstun pressure frames.
+-- * Attacks specified as hitstun pressure attacks need is_hitstun_pressure_attack set to true in their attack data.
+Power.AddStatusEffectPower("hitstunpressure",
+{
+	power_category = Power.Categories.SUPPORT,
+	clear_on_new_room = true,
+
+	tuning =
+	{
+		[Power.Rarity.COMMON] = { cooldownrate = 0.5 }, -- Cooldown is in ticks, vs. hitstunpressure in frames.
+	},
+
+	on_add_fn = function(pow, inst)
+		pow.mem.current_hitstun_frames = 0
+	end,
+
+	on_net_serialize_fn = function(pow, e)
+		local hitstun_frames = math.min(pow.mem.current_hitstun_frames, (2 ^ HITSTUN_FRAMES_NR_BITS)-1)
+		e:SerializeUInt(hitstun_frames, HITSTUN_FRAMES_NR_BITS)
+		e:SerializeBoolean(pow.mem.is_in_cooldown)
+	end,
+
+	on_net_deserialize_fn = function(pow, e)
+		local incoming_hitstun_frames = e:DeserializeUInt(HITSTUN_FRAMES_NR_BITS)
+
+		if not pow.mem.current_hitstun_frames then
+			pow.mem.current_hitstun_frames = 0
+		end
+
+		-- Only update the number of hitstun frames if it's greater than the current value, or zero if reset.
+		if incoming_hitstun_frames > pow.mem.current_hitstun_frames or incoming_hitstun_frames == 0 then
+			pow.mem.current_hitstun_frames = incoming_hitstun_frames
+		end
+		pow.mem.is_in_cooldown = e:DeserializeBoolean()
+	end,
+
+	event_triggers = {
+		["completeactiveattack"] = function(pow, inst)
+			-- Reset current hitstun frames on attack completion
+			pow.mem.current_hitstun_frames = 0
+		end,
+
+		["attacked"] = function (pow, inst, data)
+			OnHitStunPressureAttack(pow, inst, data)
+		end,
+		["knockback"] = function (pow, inst, data)
+			OnHitStunPressureAttack(pow, inst, data)
+		end,
+		["knockdown"] = function (pow, inst, data)
+			OnHitStunPressureAttack(pow, inst, data)
+		end,
+	},
+
+	on_update_fn = function(pow, inst, dt)
+		if pow.mem.is_in_cooldown then
+			pow.mem.current_hitstun_frames = math.max(0, pow.mem.current_hitstun_frames - pow.persistdata:GetVar("cooldownrate"))
+			--print("COOLDOWN:", pow.mem.current_hitstun_frames)
+
+			if pow.mem.current_hitstun_frames <= 0 then
+				pow.mem.is_in_cooldown = nil
+			end
+		end
+	end,
+})
+
 Power.AddStatusEffectPower("hammer_totem_buff",
 {
 	power_category = Power.Categories.SUPPORT,
-	prefabs = { "impact_dirt_totem" },
+	prefabs = { },
 	required_tags = { },
 
 	can_drop = false,
@@ -387,14 +505,12 @@ Power.AddStatusEffectPower("hammer_totem_buff",
 
 	on_add_fn = function(pow, inst)
 		if inst:HasTag("player") then
-			powerutil.AttachParticleSystemToSymbol(pow, inst, "extroverted_trail", "swap_fx")
 			if inst.sg.mem.totem_snapshot_lp then
 				soundutil.SetLocalInstanceParameter(inst, inst.sg.mem.totem_snapshot_lp, "isLocalPlayerInTotem", 1)
 				TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.isLocalPlayerInTotem, 1)
 			end
-		else
-			powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail")
 		end
+		powerutil.AttachParticleSystemToEntity(pow, inst, "player_skill_totem_affected")
 	end,
 
 	on_remove_fn = function(pow, inst)
@@ -466,24 +582,21 @@ local confused_symbol_anchors =
 	"face",
 	"body",
 }
+
+local TARGET_TAGS_BIT_COUNT = RequiredBitCount(10)
+
 Power.AddStatusEffectPower("confused",
 {
 	--TODO: does not support player minions yet
 	power_category = Power.Categories.SUPPORT,
-	clear_on_new_room = true,
-	prefabs = { "" },
-	required_tags = { },
-
 	can_drop = false,
-	reset_on_stack = true,
-
-	tooltips =
-	{
-	},
+	clear_on_new_room = true,
+	stackable = true,
+	max_stacks = 8, -- loses decay_rate stacks each second.
 
 	tuning =
 	{
-		[Power.Rarity.COMMON] = { mintime = 8, maxtime = 12 },
+		[Power.Rarity.COMMON] = { player_decay_rate = 1, mob_decay_rate = 0.4, },
 	},
 
 	on_add_fn = function(pow, inst)
@@ -500,8 +613,27 @@ Power.AddStatusEffectPower("confused",
 		end
 
 		PlayConfusedSound(inst)
-		pow.persistdata.active = true
+
+		if not pow.mem.active then
+			pow.mem.stack_timer = 1
+			pow.mem.active = true
+			if inst:HasTag("mob") then
+				CONFUSED_target_enemies(pow, inst)
+			end
+		end
+
 		inst:PushEvent("update_power", pow.def)
+	end,
+
+	on_update_fn = function(pow, inst, dt)
+		local decay_modifier = inst:HasTag("player") and pow:GetVar("player_decay_rate") or pow:GetVar("mob_decay_rate")
+
+		pow.mem.stack_timer = pow.mem.stack_timer - (dt * decay_modifier)
+
+		if pow.mem.stack_timer <= 0 then
+			pow.mem.stack_timer = 1
+			inst.components.powermanager:DeltaPowerStacks(pow:GetDef(), -1)
+		end
 	end,
 
 	on_remove_fn = function(pow, inst)
@@ -513,13 +645,54 @@ Power.AddStatusEffectPower("confused",
 		end
 	end,
 
-	event_triggers = {
-		-- TODO(jambell): on controlevent, mirror the player's data.dir if they're using a controller or keyboard-only, but not MKB
-		-- TODO(jambell): if Confused happens again, add the new time to the timer? Or reset timer?
+	on_net_serialize_fn = function(pow, e)
+		local hit_flags = pow.mem.old_hitflags or 0
+		e:SerializeUInt(hit_flags, 5)
 
+		local num_targettags = pow.mem.old_targettags and #pow.mem.old_targettags or 0
+		e:SerializeUInt(num_targettags, TARGET_TAGS_BIT_COUNT)
+		if num_targettags > 0 then
+			for _, tag in ipairs(pow.mem.old_targettags) do
+				e:SerializeString(tag)
+			end
+		end
+
+		local num_friendlytargettags = pow.mem.old_friendlytargettags and #pow.mem.old_friendlytargettags or 0
+		e:SerializeUInt(num_friendlytargettags, TARGET_TAGS_BIT_COUNT)
+		if num_friendlytargettags > 0 then
+			for _, tag in ipairs(pow.mem.old_friendlytargettags) do
+				e:SerializeString(tag)
+			end
+		end
+	end,
+
+	on_net_deserialize_fn = function(pow, e)
+		pow.mem.old_hitflags = e:DeserializeUInt(5)
+
+		local num_targettags = e:DeserializeUInt(TARGET_TAGS_BIT_COUNT)
+		if num_targettags > 0 then
+			local target_tags = {}
+			for i = 1, num_targettags do
+				table.insert(target_tags, e:DeserializeString())
+			end
+			pow.mem.old_targettags = target_tags
+		end
+
+		local num_friendlytargettags = e:DeserializeUInt(TARGET_TAGS_BIT_COUNT)
+		if num_friendlytargettags > 0 then
+			local friendly_target_tags = {}
+			for i = 1, num_friendlytargettags do
+				table.insert(friendly_target_tags, e:DeserializeString())
+			end
+			pow.mem.old_friendlytargettags = friendly_target_tags
+		end
+	end,
+
+	event_triggers = {
+		-- TODO: on controlevent, mirror the player's data.dir if they're using a controller or keyboard-only, but not MKB
 		["locomote"] = function(pow, inst, data)
 			-- Mirror the player's inputs -- if they press up, replace it with a down. If they press left, replace it with a right.
-			if pow.persistdata.active and inst:HasTag("player") then
+			if pow.mem.active and inst:HasTag("player") then
 				if data.dir ~= nil then
 					if data.dir >= 0 then
 						data.dir = data.dir - 180
@@ -531,10 +704,10 @@ Power.AddStatusEffectPower("confused",
 		end,
 
 		["dodge"] = function(pow, inst, data)
-			-- TODO(jambell): fix visible 'turn' before mirrored dodge?
+			-- TODO: fix visible 'turn' before mirrored dodge?
 
 			-- If the player tries to roll left, roll them right instead. Same for up/down.
-			if pow.persistdata.active and inst:HasTag("player") then
+			if pow.mem.active and inst:HasTag("player") then
 				local old_rot = inst.Transform:GetRotation()
 
 				local new_rot
@@ -546,54 +719,25 @@ Power.AddStatusEffectPower("confused",
 				inst.Transform:SetRotation(new_rot)
 			end
 		end,
-
-		["timerdone"] = function(pow, inst, data)
-			if data.name == pow.def.name then
-				inst.components.powermanager:RemovePower(pow.def, true)
-			end
-		end,
-
-		["update_power"] = function (pow, inst, data)
-			local time = math.random(pow.persistdata:GetVar("mintime"), pow.persistdata:GetVar("maxtime"))
-			if inst:HasTag("player") then
-				-- This is all handled in the eventlisteners, but leaving this here in case it's needed for anything.
-			elseif inst:HasTag("mob") then
-				-- More time for confusion for mobs
-				time = time * 1.5
-				if pow.persistdata.active then
-					CONFUSED_target_enemies(pow, inst)
-				else
-					CONFUSED_reset_targettags(pow, inst)
-				end
-			end
-			inst.components.timer:StartTimer(pow.def.name, time, true)
-		end,
-
-		["enter_room"] = function (pow, inst, data)
-			inst.components.powermanager:RemovePower(pow.def, true)
-		end,
 	}
 })
 
-local function DoAcidDamage(inst, pow)
-	if inst.sg ~= nil and (inst.sg:HasStateTag("flying") or inst.sg:HasStateTag("airborne") or inst.sg:HasStateTag("airborne_high") or inst.sg:HasStateTag("dodge")) then
-		return
-	elseif inst:HasTag("ACID_IMMUNE") then
-	-- This is to prevent acidic monsters in the swamp from taking damage from acid traps and abilities
-	-- Ideally this would use the stats of the entities involved and combat system for ignoring attacks marked as acid, which isnt implemented at the time
+local function DoAcidDamage(inst, pow, warning_parameter)
+	if inst:HasTag("player") and TheWorld:HasTag("town") then
+		-- Do not allow players to take acid damage in town. Other entities like training dummies/etc, can!
 		return
 	end
 
 	local damage = TUNING.TRAPS.trap_acid.BASE_DAMAGE
 	if inst:HasTag("mob") or inst:HasTag("boss") then
-		damage = damage * TUNING.TRAPS.trap_acid.DAMAGE_TO_MOBS_MULTIPLIER
+		-- Acid damage does a percentage damage of health to mobs up to a cap
+		local percent_damage = math.floor(inst.components.health:GetMax() * TUNING.TRAPS.trap_acid.MOB_PERCENT_DAMAGE)
+		damage = math.min(percent_damage, TUNING.TRAPS.trap_acid.MOB_MAX_DAMAGE)
 	end
 
 	-- self damage doesn't cause hit reactions
 	local acid_attack = Attack(inst, inst)
 	acid_attack:SetDamage(damage)
-	-- not sure what the benefit is of using the real source ... is this supposed to be like a projectile?
-	-- acid_attack:SetSource(pow.persistdata.realsource)
 	acid_attack:SetSource(pow.def.name)
 	acid_attack:SetID(pow.def.name)
 	acid_attack:SetIgnoresArmour(true)
@@ -601,22 +745,30 @@ local function DoAcidDamage(inst, pow)
 
 	SGCommon.Fns.BlinkAndFadeColor(inst, { 255/255, 50/255, 50/255, 1 }, 8)
 
-	inst.SoundEmitter:PlaySound(fmodtable.Event.Hit_player_acid)
+	print("Acid damage applied to", inst)
+	soundutil.PlayCodeSound(inst, fmodtable.Event.Hit_acid,
+		{
+			instigator = inst,
+			fmodparams = {
+				acidWarning = warning_parameter
+			},
+		}
+	 )
 end
 
 Power.AddStatusEffectPower("acid",
 {
-	-- Apply damage over time as long as this power is active.
-	-- Ideally appliyed by an aura.
+	-- Applies 'toxicity' over time, applied as an aura.
 	-- Listens for 'foley_footstep' event and plays a 'footstep step' visual FX
 
-	power_category = Power.Categories.SUPPORT,
+	power_category = Power.Categories.DAMAGE,
 	prefabs = { "" },
 	required_tags = { },
 	has_sources = true,
 
 	tuning =
 	{
+		[Power.Rarity.COMMON] = { },
 		-- TUNING in TUNING.TRAPS.trap_acid.BASE_DAMAGE
 	},
 
@@ -626,41 +778,119 @@ Power.AddStatusEffectPower("acid",
 	{
 	},
 
-	tuning =
-	{
-		[Power.Rarity.COMMON] = { },
-	},
-
 	on_add_fn = function(pow, inst)
-		pow.mem.ticksactive = 0
-		-- Wait a tick so that the sources can be established
-		inst:DoTaskInTicks(1, function(xinst)
-			-- If we have a list of possible sources, grab the first one.
-			local guid = pow.persistdata.sources and next(pow.persistdata.sources) or nil
-			if guid then
-				pow.persistdata.realsource = pow.persistdata.sources[guid]
-			else
-				-- Otherwise, just use the inst
-				pow.persistdata.realsource = xinst
-			end
-			DoAcidDamage(xinst, pow)
-		end)
+		local fx_data =
+		{
+			particlefxname = "dust_footstep_run_acidpool",
+			name = "acid_pool_fx",
+			ischild = true,
+		}
+
+		if inst:HasTag("ACID_IMMUNE") -- This is to prevent acidic monsters in the swamp from taking damage from acid traps and abilities. Ideally this would use the stats of the entities involved and combat system for ignoring attacks marked as acid, which isnt implemented at the time
+			or inst.sg:HasStateTag("flying")
+			or inst.sg:HasStateTag("airborne")
+			or inst.sg:HasStateTag("airborne_high") then
+				fx_data.particlefxname = "dust_footstep_simple_acidpool"
+		else
+			inst.components.powermanager:AddPowerByName("toxicity", TUNING.TRAPS.trap_acid.TOXICITY_STACKS_PER_TICK)
+		end
+
+		ParticleSystemHelper.MakeEventSpawnParticles(inst, fx_data)
 	end,
 
-
 	on_update_fn = function(pow, inst)
-		pow.mem.ticksactive = pow.mem.ticksactive + 1
-		if pow.mem.ticksactive >= TUNING.TRAPS.trap_acid.TICKS_BETWEEN_PROCS then
-			DoAcidDamage(inst, pow)
-			pow.mem.ticksactive = 0
+		local toxicity_def = Power.Items.STATUSEFFECT.toxicity
+		local amount = TUNING.TRAPS.trap_acid.TOXICITY_STACKS_PER_TICK
+
+		if inst.sg:HasStateTag("doubletoxicity") then -- Typically when entity is "lying down"
+			local old = amount
+			amount = amount * TUNING.TRAPS.trap_acid.KNOCKDOWN_STACKS_MULT
 		end
-		-- TODO: timeout if not reapplied by auraapplyer?
+
+		inst.components.powermanager:DeltaPowerStacks(toxicity_def, amount, false)
+	end,
+
+	on_remove_fn = function(pow, inst)
+		ParticleSystemHelper.MakeEventStopParticles(inst, { name = "acid_pool_fx" })
 	end,
 
 	event_triggers = {
 		["foley_footstep"] = function(pow, inst, data)
 			SGCommon.Fns.SpawnAtDist(inst, "fx_acid_footstep", 0)
 		end,
+	}
+})
+
+Power.AddStatusEffectPower("toxicity",
+{
+	-- Goes from 0-1000
+	-- At 1000, deals acid damage.
+	-- Constantly decays at a set rate.
+	-- Other sources may apply toxicity
+
+	power_category = Power.Categories.DAMAGE,
+	prefabs = { "" },
+	required_tags = { },
+	has_sources = true,
+
+	stackable = true,
+	max_stacks = 1000,
+	show_in_ui = true,
+
+	tuning =
+	{
+		[Power.Rarity.COMMON] = { decay_per_tick = 10 },
+	},
+
+	can_drop = false,
+
+	tooltips =
+	{
+	},
+
+	on_add_fn = function(pow, inst)
+		pow.mem.ticksactive = 0
+		if (not inst:HasTag("ACID_IMMUNE")) then
+			local scale = (pow.persistdata.stacks or 0) / pow.def.max_stacks
+			inst.components.coloradder:PushColor("acid", 0.51 * scale, 0.63 * scale, 0, 0)
+		end
+	end,
+
+	on_remove_fn = function(pow, inst)
+		if (not inst:HasTag("ACID_IMMUNE")) then
+			inst.components.coloradder:PopColor("acid")
+		end
+	end,
+
+	on_stacks_changed_fn = function (pow, inst)
+		local scale = (pow.persistdata.stacks or 0) / pow.def.max_stacks
+		inst.components.coloradder:PushColor("acid", 0.51 * scale, 0.63 * scale, 0, 0)
+		--print("stacks changed:", pow.persistdata.stacks)
+	end,
+
+	on_update_fn = function(pow, inst)
+		if pow.persistdata.stacks >= pow.def.max_stacks then
+			if inst:HasTag("player") and inst:IsLocal() then
+				if not pow.mem.acid_sound_warning_parameter then
+					pow.mem.acid_sound_warning_parameter = 0
+				else
+					pow.mem.acid_sound_warning_parameter = pow.mem.acid_sound_warning_parameter + 1
+				end
+			end
+
+			DoAcidDamage(inst, pow, pow.mem.acid_sound_warning_parameter)
+
+			inst.components.powermanager:SetPowerStacks(pow.def, 1)
+		else
+			inst.components.powermanager:DeltaPowerStacks(pow.def, -pow.persistdata:GetVar("decay_per_tick"), false)
+		end
+
+		-- if pow.persistdata.stacks == 0 then
+		-- 	inst.components.powermanager:RemovePower(pow.def, true)
+		-- end
+	end,
+
+	event_triggers = {
 	}
 })
 
@@ -680,15 +910,17 @@ Power.AddStatusEffectPower("bodydamage",
 
 	event_triggers = {
 		["hitboxtriggered"] = function(pow, inst, data)
-			SGCommon.Events.OnHitboxTriggered(inst, data, {
-				attackdata_id = "bite",
+			local owner = inst.owner -- If the owner exists, use the owner's combat component. If they don't exist for some reason, use the flying entity.
+			local source_is_mob = (inst.owner ~= nil and inst.owner:HasTag("mob"))
+			SGCommon.Events.OnHitboxTriggered(owner or inst, data, {
+				damage_mod = source_is_mob and 0.5 or 2,
 				hitstoplevel = HitStopLevel.MEDIUM,
 				pushback = 0.4,
 				hitflags = Attack.HitFlags.LOW_ATTACK,
 				combat_attack_fn = "DoKnockbackAttack",
 				hit_fx = monsterutil.defaultAttackHitFX,
 				hit_fx_offset_x = 0.5,
-				reduce_friendly_fire = true,
+				reduce_friendly_fire = source_is_mob, -- only reduce friendly fire if this is mob-on-mob. If this is player-on-mob, do not.
 			})
 		end,
 	},
@@ -716,15 +948,33 @@ Power.AddStatusEffectPower("vulnerable",
 	tuning =
 	{
 		[Power.Rarity.COMMON] = {
+			seconds = 5,
 			damage = StackingVariable(1):SetPercentage(),
 		},
 	},
+
+	on_stacks_changed_fn = function(pow, inst, delta)
+		if delta > 0 then
+			pow:StartPowerTimer(inst, pow.def.name, "seconds")
+			-- very placeholder
+			-- for a persistent effect, see ElectricPowers charged for an implementation example
+			powerutil.SpawnFxOnEntity("electric_charge_start" .. GetEntitySizeSuffix(inst), inst, { ischild = true} )
+		end
+	end,
 
 	defend_mod_fn = function(pow, attack, output_data)
 		local damage_bonus = attack:GetDamage() * pow.persistdata:GetVar("damage")
 		output_data.damage_delta = damage_bonus
 		return true
 	end,
+
+	event_triggers = {
+		["timerdone"] = function(pow, inst, data)
+			if data.name == pow.def.name then
+				inst.components.powermanager:RemovePower(pow.def, true)
+			end
+		end,
+	}
 })
 
 local slowed_stacks_to_speedmult =
@@ -894,6 +1144,21 @@ Power.AddSeedPower("armoured",
 	},
 })
 
+local cold_stacks_to_speedmult =
+{
+	{ 0 , 0 },
+	{ 60 , -30 },
+	{ 300 , -50 },
+	{ 510 , -90 },
+	{ 540 , -95 },
+	{ 550 , -96 },
+	{ 560 , -97 },
+	{ 570 , -98 },
+	{ 580 , -99 },
+	{ 590 , -100 },
+	{ 600 , -100 },
+}
+
 Power.AddStatusEffectPower("cold",
 {
 	-- 1 stack is equal to 1% frozen
@@ -910,7 +1175,7 @@ Power.AddStatusEffectPower("cold",
 	},
 
 	stackable = true,
-	max_stacks = 100,
+	max_stacks = 600,
 	show_in_ui = true,
 	can_drop = false,
 	selectable = false,
@@ -918,13 +1183,12 @@ Power.AddStatusEffectPower("cold",
 	get_counter_text = powerutil.GetCounterTextPercent,
 
 	on_add_fn = function(pow, inst)
-		pow.persistdata.counter = 0
 		pow.persistdata.stacks = 1
 		inst:PushEvent("update_power", pow.def)
 
 		if inst.components.locomotor ~= nil then
 			if pow.persistdata.stacks > 0 then
-				local speedmult = PiecewiseFn(pow.persistdata.stacks or 1, slowed_stacks_to_speedmult)
+				local speedmult = PiecewiseFn(pow.persistdata.stacks or 1, cold_stacks_to_speedmult)
 				inst.components.locomotor:AddSpeedMult(pow.def.name, speedmult * 0.01)
 			else
 				inst.components.locomotor:RemoveSpeedMult(pow.def.name)
@@ -933,17 +1197,18 @@ Power.AddStatusEffectPower("cold",
 	end,
 
 	on_stacks_changed_fn = function(pow, inst)
-		pow.persistdata.counter = pow.persistdata.stacks
 		inst:PushEvent("update_power", pow.def)
 
-		print("COLD STACKS:", pow.persistdata.stacks)
+		--print("COLD STACKS:", pow.persistdata.stacks)
+		local scale = (pow.persistdata.stacks or 0) / pow.def.max_stacks
+		inst.components.coloradder:PushColor("cold", 0, 0.75 * scale, scale, 0)
 
 		if pow.persistdata.stacks >= pow.def.max_stacks then
 			inst.components.powermanager:AddPowerByName("frozen", 100)
 			inst.components.powermanager:RemovePower(pow.def, true)
 		elseif inst.components.locomotor ~= nil then
 			if pow.persistdata.stacks > 0 then
-				local speedmult = PiecewiseFn(pow.persistdata.stacks or 1, slowed_stacks_to_speedmult)
+				local speedmult = PiecewiseFn(pow.persistdata.stacks or 1, cold_stacks_to_speedmult)
 				inst.components.locomotor:AddSpeedMult(pow.def.name, speedmult * 0.01)
 			else
 				inst.components.locomotor:RemoveSpeedMult(pow.def.name)
@@ -955,7 +1220,8 @@ Power.AddStatusEffectPower("cold",
 		if inst.components.locomotor ~= nil then
 			inst.components.locomotor:RemoveSpeedMult(pow.def.name)
 		end
-		-- inst.components.colormultiplier:PopColor("slowed")
+
+		inst.components.coloradder:PopColor("cold")
 		-- if pow.mem.pfx ~= nil and pow.mem.pfx:IsValid() then
 		-- 	pow.mem.pfx.components.particlesystem:StopThenRemoveEntity()
 		-- end
@@ -1039,12 +1305,12 @@ Power.AddStatusEffectPower("frozen",
 	end,
 
 	on_update_fn = function(pow, inst)
-		print("FROZEN STACKS:", pow.persistdata.stacks)
+		--print("FROZEN STACKS:", pow.persistdata.stacks)
 
 		inst.AnimState:Pause() -- In case anything else happens that unpauses it -- force this permanently.
 
 		-- Remove a stack every "ticks_til_thaw" stacks by default
-		pow.mem.ticks_til_thaw = pow.mem.ticks_til_thaw - 1
+		pow.mem.ticks_til_thaw = pow.mem.ticks_til_thaw and pow.mem.ticks_til_thaw - 1 or pow.persistdata:GetVar("ticks_til_thaw")
 
 		-- Automatically thaw periodically
 		if pow.mem.ticks_til_thaw <= 0 then
@@ -1059,7 +1325,7 @@ Power.AddStatusEffectPower("frozen",
 			if dir ~= nil then
 				general_dir = ConvertDirToGeneralDirection(dir)
 				if general_dir ~= pow.mem.last_general_dir then
-					inst:PushEvent("thaw", { amount = 1, shudder = true })
+					inst:PushEvent("thaw", { amount = 4, shudder = true })
 				end
 			end
 
@@ -1120,13 +1386,13 @@ Power.AddStatusEffectPower("frozen",
 
 		["controlevent"] = function(pow, inst, data)
 			if data.control == "dodge" then
-				inst:PushEvent("thaw", { amount = 1, shudder = true })
+				inst:PushEvent("thaw", { amount = 4, shudder = true })
 			elseif data.control == "lightattack" then
-				inst:PushEvent("thaw", { amount = 1, shudder = true })
+				inst:PushEvent("thaw", { amount = 4, shudder = true })
 			elseif data.control == "heavyattack" then
-				inst:PushEvent("thaw", { amount = 1, shudder = true })
+				inst:PushEvent("thaw", { amount = 4, shudder = true })
 			elseif data.control == "skill" then
-				inst:PushEvent("thaw", { amount = 1, shudder = true })
+				inst:PushEvent("thaw", { amount = 4, shudder = true })
 			end
 		end
 	},

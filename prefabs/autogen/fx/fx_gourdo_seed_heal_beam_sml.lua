@@ -4,6 +4,7 @@ return {
   anim="heal_beam_small_",
   bank="fx_gourdo_seed",
   build="fx_gourdo_seed",
+  group="creatures",
   scalex=2.0,
   scaley=2.0,
   variations=2,

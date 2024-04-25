@@ -15,7 +15,18 @@ return {
             param={
               offx=0.0,
               offy=0.0,
-              offz=5.7199997901917,
+              offz=5.0,
+              particlefxname="forest_gate_fog_n_back",
+              stopatexitstate=true,
+            },
+          },
+          {
+            eventtype="spawnparticles",
+            frame=1,
+            param={
+              offx=0.0,
+              offy=0.0,
+              offz=3.0,
               particlefxname="forest_gate_fog_n",
               render_in_front=true,
               stopatexitstate=true,

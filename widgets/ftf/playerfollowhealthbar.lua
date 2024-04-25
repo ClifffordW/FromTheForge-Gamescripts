@@ -214,11 +214,18 @@ function PlayerFollowHealthBar:MakeFadeOutTask()
 		self._fade_out_task = nil
 	end
 
-	self._fade_out_task = self.inst:DoTaskInTime(self.time_visible, function()
-		self.container:AlphaTo(0, self.fade_out_time, easing.inExpo, function()
-			self:StopUpdating()
-			self:Hide()
-		end)
+	self._fade_out_task = self.inst:DoTaskInTime(self.time_visible, function() self:FadeOut() end)
+end
+
+function PlayerFollowHealthBar:FadeOut()
+	if self._fade_out_task then
+		self._fade_out_task:Cancel()
+		self._fade_out_task = nil
+	end
+	
+	self.container:AlphaTo(0, self.fade_out_time, easing.inExpo, function()
+		self:StopUpdating()
+		self:Hide()
 	end)
 end
 

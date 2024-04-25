@@ -17,7 +17,7 @@ local ShotputEffects = Class(function(self, inst)
 end)
 
 function ShotputEffects:_HandleAttackTypeEvent(attack_type, data)
-	-- TheLog.ch.Shotput:printf("HandleAttackTypeEvent %s num targets = %d", attack_type, #data.targets_hit)
+	-- TheLog.ch.Shotput:printf("%s HandleAttackTypeEvent %s num targets = %d", self.inst, attack_type, #data.targets_hit)
 	self.last_attack_type = attack_type
 	-- not sure if it's safe to ignore whiffs for remote (i.e. when the ball is grounded)
 	if #data.targets_hit > 0 then

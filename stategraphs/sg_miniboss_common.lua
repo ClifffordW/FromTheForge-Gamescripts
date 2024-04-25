@@ -50,11 +50,9 @@ function SGMiniBossCommon.States.AddMinibossDeathStates(states, data)
 			SGCommon.Fns.PlayAnimOnAllLayers(inst, data.anim or "elite_death_hit_hold")
 			SGCommon.Fns.BlinkAndFadeColor(inst, { 255/255, 255/255, 255/255, 1 }, 15)
 
-			--death_miniboss
-			local params = {}
-			params.fmodevent = fmodtable.Event.miniboss_death
-			params.autostop = false
-			soundutil.PlaySoundData(inst, params)
+			soundutil.PlayCodeSound(inst, fmodtable.Event.miniboss_death,
+				{ is_autostop = false }
+			)
 
 			local audioid = require "defs.sound.audioid"
 			local enemies = TheWorld.components.roomclear:GetEnemies()

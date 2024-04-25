@@ -8,8 +8,8 @@ local Widget = require("widgets/widget")
 local CraftingMaterialsList = Class(Widget, function(self, icon_size, font_size)
 	Widget._ctor(self, "CraftingMaterialsList")
 
-	self.icon_size = icon_size or 50
-	self.font_size = font_size or 30
+	self.icon_size = icon_size or 80
+	self.font_size = font_size or 50
 	self.spacing_h = 20
 
 	self.normal_color = UICOLORS.LIGHT_TEXT
@@ -64,9 +64,7 @@ function CraftingMaterialsList:SetIngredients(requiredMaterials)
 				local material_count = self.player.components.inventoryhoard:GetStackableCount(mat_def)
 				local hasRequiredMaterials = material_count >= quantity
 				requiredMaterialTextColor = hasRequiredMaterials and self.normal_color or self.insufficient_color
-				if id == "glitz" then -- Don't show the player's total glitz
-					quantityText = quantity
-				elseif self.show_only_cost then
+				if self.show_only_cost then
 					quantityText = quantity
 				else
 					quantityText = material_count .. "/" .. quantity

@@ -1,5 +1,5 @@
 local Consumable = require "defs.consumable"
-local Currency = require "defs.currency"
+local CurrencyType = require "currency.currency_type"
 local FollowPrompt = require "widgets.ftf.followprompt"
 local Text = require "widgets.text"
 local Templates = require "widgets.ftf.templates"
@@ -8,21 +8,7 @@ local LootEvents = require "lootevents"
 local soundutil = require "util.soundutil"
 local fmodtable = require "defs.sound.fmodtable"
 local Lume = require "util.lume"
-
--- Given an integer that is the expected maximum of some unsigned integer field, return the minimum number of bits
--- necessary to represent that number.
--- This function's main intent is to compute the bit count for fields over the net.
-function RequiredBitCount(max)
-	for i = 1, 64 do
-		-- max is the maximum value we want to support.
-		-- 2^i is the *number* of values we can represent, including 0.
-		-- Thus the maximum representable value with i bits is 2^i - 1, so test with < rather than <=.
-		if max < 2^i then
-			return i
-		end
-	end
-	return nil
-end
+local CurrencyFactory = require "currency.currency_factory"
 
 local COST_MAXIMUM <const> = 10000
 local SERIALIZED_DEPOSITED_BIT_COUNT <const> = RequiredBitCount(COST_MAXIMUM)
@@ -38,22 +24,11 @@ local DEPOSIT_WIDGET_RATE =
 	{ deltagreaterthan = 0, rate = 1 },
 }
 
-local CURRENCY_FORMAT_STRINGS <const> = {
-	[Currency.id.Run] = STRINGS.UI.VENDING_MACHINE.CURRENCY.RUN,
-	[Currency.id.Meta] = STRINGS.UI.VENDING_MACHINE.CURRENCY.META,
-	[Currency.id.Cosmetic] = STRINGS.UI.VENDING_MACHINE.CURRENCY.COSMETIC,
-	[Currency.id.Health] = STRINGS.UI.VENDING_MACHINE.CURRENCY.HEALTH,
-}
-
-local INSUFFICIENT_FUNDS <const> = {
-	[Currency.id.Run] = STRINGS.UI.VENDING_MACHINE.INSUFFICIENT_FUNDS.RUN,
-	[Currency.id.Meta] = STRINGS.UI.VENDING_MACHINE.INSUFFICIENT_FUNDS.META,
-	[Currency.id.Cosmetic] = STRINGS.UI.VENDING_MACHINE.INSUFFICIENT_FUNDS.COSMETIC,
-	[Currency.id.Health] = STRINGS.UI.VENDING_MACHINE.INSUFFICIENT_FUNDS.HEALTH,
-}
+local INTERACTOR_KEY = "VendingMachine"
 
 local function MakeTextWidget(text)
 	return Text(FONTFACE.DEFAULT, FONTSIZE.DAMAGENUM_PLAYER, "", UICOLORS.INFO)
+		:SetClickable(false)
 		:SetShadowColor(UICOLORS.BLACK)
 		:SetShadowOffset(1, -1)
 		:SetOutlineColor(UICOLORS.BLACK)
@@ -65,10 +40,11 @@ end
 -- Accepts a certain amount of currency and then emits a ware.
 local VendingMachine = Class(function(self, inst, ware_data)
 	self.inst = inst
+	self.emit_once = true
 	
 	-- Array-like table of deposit amounts, keyed by player.Network:GetPlayerID()
 	-- Takes local data in directly to prevent excessive refunds due to network latency.
-	self.deposited = {} 
+	self.deposited = {}
 	self.display_total_deposited = 0
 	
 	-- A table of data from the host that contains the actual deposited numbers.
@@ -92,11 +68,7 @@ local VendingMachine = Class(function(self, inst, ware_data)
 	-- They are saved up for a number of frames, before being added as an actual network event
 	self.deferredDeposits = {}
 
-	if ware_data then
-		self:SetWareData(ware_data)
-	end
-
-	self.crowdsourced_item_emitted = false
+	self.item_emitted = false
 
 	self._onplayerdeactivated = function(_, player) self:OnPlayerDeactivated(player) end
 
@@ -133,37 +105,26 @@ function VendingMachine:InitializeUi()
 		:SetOffsetFromTarget(Vec3(0, VendingMachine.DEFAULT_UI_Y_OFFSET, 0))
 end
 
-function VendingMachine:Initialize(ware_name, power, power_type, ui_y_offset)
-	if not self.root then
-		self:InitializeUi()
-	end
-	
+function VendingMachine:Initialize(emit_once, currency, ui_y_offset)
+	self:InitializeUi()
+	self.emit_once = emit_once
+	self.currency = CurrencyFactory.Build(currency)
+	self.root:SetOffsetFromTarget(Vec3(0, ui_y_offset or VendingMachine.DEFAULT_UI_Y_OFFSET, 0))
+end
+
+--- Only invoke this method from the host. Ware data will subsequently be transmitted to clients via net serialization.
+function VendingMachine:HostInitializeWare(ware_name, power, power_type)
 	-- should be a table of strings
 	self.product_details = {power, power_type}
 
-	if not self.ware_id and ware_name then
-		local wares = require "defs/vendingmachine_wares"
-		self.ware_id = ware_name
-		self:SetWareData(wares[ware_name])
-	end
-
-	self.root:SetOffsetFromTarget(Vec3(0, ui_y_offset or VendingMachine.DEFAULT_UI_Y_OFFSET, 0))
-
-	self.inst:PushEvent("initialized_ware", {
-		ware_name = ware_name,
-		power = power,
-		power_type = power_type
-	})
-end
-
-function VendingMachine:GetProductDetails()
-	return self.product_details
-end
-
-function VendingMachine:SetWareData(ware_data)
+	dbassert(self.ware_id ~= ware_name)
+	self.ware_id = ware_name
+	local VendingMachineWares = require "defs.vendingmachine_wares"
+	local ware_data = VendingMachineWares[ware_name]
+	dbassert(ware_data ~= nil, string.format("could not find vending machine for %s %s %s", ware_name, tostring(power), tostring(power_type)))
 
 	-- ware_data =
-	--      name: the name to be printed on the price tag
+	--      pretty_name_fn: the name to be printed on the price tag
 	--      price: how much currency is needed to buy
 	--      currency: what type of currency is needed to buy
 
@@ -173,16 +134,14 @@ function VendingMachine:SetWareData(ware_data)
 	--      can_purchase_fn: optional function to ask if a player is permitted to purchase the ware
 	--      purchased_fn: the function to run when the price is met
 
-	local name = type(ware_data.name) == "function" 
-		and ware_data.name(self.inst)
-		or ware_data.name
+	local name = ware_data.pretty_name_fn(self.inst)
 
-	local cost = type(ware_data.cost) == "function"
-		and ware_data.cost(self.inst)
-		or ware_data.cost
+	local cost = ware_data.costs[self.currency:GetType()].cost
+	cost = type(cost) == "function"
+		and cost(self.inst)
+		or cost
 
-	self.currency = ware_data.currency
-	self.crowd_fundable = ware_data.crowd_fundable
+	self.crowd_fundable = ware_data.costs[self.currency:GetType()].crowd_fundable
 	self.initialized_interactable = false
 	self.cost = cost
 	self.can_purchase_fn = ware_data.can_purchase_fn or function() return true end
@@ -198,9 +157,12 @@ function VendingMachine:SetWareData(ware_data)
 	-- price_tag: currency and amount, always visible
 	-- purchase_button: hidden unless you are in interact range AND you can interact i.e. can contribute funds
 
+	self:InitializeUi()
+
 	self.price_tag_visibility_by_proximity = ware_data.price_tag_visibility_by_proximity
 	local initial_price_tag_visible = not self.price_tag_visibility_by_proximity
 	self.price_tag = self:AddWidget(MakeTextWidget(self:MakePriceText(self.cost)), initial_price_tag_visible)
+		:SetRegistration("center", "bottom")
 
 	local details = ware_data.details_fn
 		and ware_data.details_fn(self.inst)
@@ -208,6 +170,20 @@ function VendingMachine:SetWareData(ware_data)
 	self.details = self:AddWidget(details, false)
 	self.summary = self:AddWidget(ware_data.summary_fn and ware_data.summary_fn(self.inst), true)
 	self:Layout()
+
+	self.inst:PushEvent("initialized_ware", {
+		ware_name = ware_name,
+		power = power,
+		power_type = power_type
+	})
+end
+
+function VendingMachine:HasWare()
+	return self.ware_id ~= nil
+end
+
+function VendingMachine:GetProductDetails()
+	return self.product_details
 end
 
 VendingMachine.MakeTextWidget = MakeTextWidget
@@ -225,9 +201,12 @@ function VendingMachine:Layout()
 	prev = LayoutWidget(self.summary, prev)
 end
 
-function VendingMachine:MakePriceText(price)
+function VendingMachine:MakePriceText(balance)
 	-- TODO @chrisp #heal - probably want a progress bar for health
-	return string.format(CURRENCY_FORMAT_STRINGS[self.currency], price, self.cost)
+	return self.currency:MakePriceText({
+		balance = balance,
+		cost = self.cost,
+	})
 end
 
 -- Add a widget to our local root widget, hide it if necessary, and apply a world offset.
@@ -257,6 +236,8 @@ function VendingMachine:OnRemoveEntity()
 end
 
 function VendingMachine:OnNetSerialize()
+	CurrencyFactory.NetSerializeCurrency(self.inst.entity, self.currency)
+
 	-- data on which players have added teffra
 	self.inst.entity:SerializeUInt(Lume(self.deposited):values():count():result(), 3)
 
@@ -277,13 +258,18 @@ function VendingMachine:OnNetSerialize()
 		self.inst.entity:SerializeString(detail)
 	end
 
+	self.inst.entity:SerializeBoolean(self.emit_once)
+	if self.emit_once then
+		self.inst.entity:SerializeBoolean(self.item_emitted)
+	end
+
 	-- which specific ware id is on offer (from vendingmachine_wares.lua)
 	self.inst.entity:SerializeString(self.ware_id or "")
-
-	self.inst.entity:SerializeBoolean(self.crowdsourced_item_emitted)
 end
 
 function VendingMachine:OnNetDeserialize()
+	self.currency = CurrencyFactory.NetDeserializeCurrency(self.inst.entity)
+
 	-- data on which players have added teffra
 	local nrplayers = self.inst.entity:DeserializeUInt(3)
 	if nrplayers then
@@ -324,20 +310,23 @@ function VendingMachine:OnNetDeserialize()
 		product_details[i] = detail
 	end
 
+	self.emit_once = self.inst.entity:DeserializeBoolean()
+	if self.emit_once then
+		local item_emitted = self.inst.entity:DeserializeBoolean()
+		if item_emitted and not self.item_emitted then
+			self.item_emitted = item_emitted
+			self:ShutdownInteractable()
+		end
+	end
+
 	-- which specific ware id is on offer (from vendingmachine_wares.lua)
 	local ware_id = self.inst.entity:DeserializeString()
-	ware_id = ware_id ~= ""	and ware_id or nil
+	ware_id = ware_id ~= "" and ware_id or nil
 	if self.ware_id ~= ware_id
 		or self.product_details[1] ~= product_details[1]
 		or self.product_details[2] ~= product_details[2]
 	then
-		self:Initialize(ware_id, product_details[1], product_details[2])
-	end
-
-	local item_emitted = self.inst.entity:DeserializeBoolean()
-	if item_emitted and not self.crowdsourced_item_emitted and self:IsCrowdFunded() then 
-		self.crowdsourced_item_emitted = item_emitted
-		self:ShutdownInteractable()
+		self:HostInitializeWare(ware_id, product_details[1], product_details[2])
 	end
 
 	self:UpdatePriceTag()
@@ -364,15 +353,21 @@ end
 function VendingMachine:UpdatePlayerStatus(player)
 	local can, purchase_text = self:CanDeposit(player)
 	if can then
-		if self.currency == Currency.id.Health then
+		if self.currency:GetType() == CurrencyType.id.Health then
 			purchase_text = STRINGS.UI.VENDING_MACHINE.SAMPLE_HEALING_FOUNTAIN
+		elseif self.currency:GetType() == CurrencyType.id.Loot then
+			purchase_text = STRINGS.UI.VENDING_MACHINE.LOOT_FMT:subfmt({
+				icon = self.currency:GetIcon(),
+				cost = self.cost,
+				available = self.currency:GetAvailableFunds(player),
+			})
 		elseif self:IsCrowdFunded() then
 			purchase_text = STRINGS.UI.VENDING_MACHINE.DEPOSIT
 		else
 			purchase_text = STRINGS.UI.VENDING_MACHINE.PURCHASE
 		end
 	end
-	player.components.interactor:SetStatusText("VendingMachine", purchase_text)
+	player.components.interactor:SetStatusText(INTERACTOR_KEY, purchase_text)
 end
 
 function VendingMachine:OnGainInteractFocus(player)
@@ -413,7 +408,7 @@ function VendingMachine:OnLoseInteractFocus(player)
 	end
 	self:Layout()
 
-	player.components.interactor:SetStatusText("VendingMachine", nil)
+	player.components.interactor:SetStatusText(INTERACTOR_KEY, nil)
 	self.inst:RemoveEventCallback("perform_interact", self.on_perform_interact_fn)
 end
 
@@ -422,19 +417,8 @@ function VendingMachine:ShutdownInteractable()
 	self.root:Hide()
 end
 
-local CurrencyMaterial = {
-	[Currency.id.Run] = Consumable.Items.MATERIALS.konjur,
-	[Currency.id.Meta] = Consumable.Items.MATERIALS.konjur_soul_lesser,
-	[Currency.id.Cosmetic] = Consumable.Items.MATERIALS.glitz,
-	[Currency.id.Health] = nil,
-}
-
 function VendingMachine:GetAvailableFunds(player)
-	if self.currency == Currency.id.Health then
-		return player.components.health:GetMissing()
-	else
-		return player.components.inventoryhoard:GetStackableCount(CurrencyMaterial[self.currency])
-	end
+	return self.currency:GetAvailableFunds(player)
 end
 
 function VendingMachine:IsCrowdFunded()
@@ -452,17 +436,12 @@ function VendingMachine:GetTotalDeposited()
 end
 
 function VendingMachine:ReduceFunds(deposit, player, silent)
-	if self.currency == Currency.id.Health then
-		player.components.health:DoDelta(deposit)
-	else
-		player.components.inventoryhoard:RemoveStackable(CurrencyMaterial[self.currency], deposit)
-	end
-
+	self.currency:ReduceFunds(player, deposit)
 	if not silent then
 		--sound
 		local params = {}
 		params.fmodevent = fmodtable.Event.vendingMachine_deposit_oneShot
-		--@luca TODO this should probably be a loop instead
+		-- TODO this should probably be a loop instead
 		soundutil.PlayLocalSoundData(player, params) -- TODO: audio, may not rate-limit as desired
 	end
 end
@@ -492,27 +471,38 @@ end
 --- Return true if the player can deposit funds.
 -- this is NOT included in CanInteract on purpose so all players can see the details of the items on offer.
 function VendingMachine:CanDeposit(player)
-	if not self.ware_id then 
-		return 
+	if not self.ware_id then
+		return
+	end
+
+	if self.emit_once and self.item_emitted then
+		return false, nil
+	end
+
+	-- Check "can purchase" prior to "can spend" with the reasoning that if there is some reason the purchase cannot be
+	-- made, it doesn't matter if we have the funds or not.
+	-- TODO @chrisp #heal - concatenate with extant reasons, but probably we just want a list of reasons, shown one at a
+	-- time, so defer this until that feature comes online
+	local can_purchase, cannot_purchase_reason = self.can_purchase_fn(self.inst, player)	
+	if not can_purchase then
+		return false, cannot_purchase_reason
 	end
 
 	local available_funds = self:GetAvailableFunds(player)
 	local can_spend = self:IsCrowdFunded()
-		and available_funds > 0 -- Any non-zero amount is permissible for crowd-funded wares.
-		or available_funds >= self.cost -- Need the full cost to buy it if it is not crowd-funded.
+	and available_funds > 0 -- Any non-zero amount is permissible for crowd-funded wares.
+		or available_funds >= self.cost -- Need the full cost to buy it if it is not crowd-funded.	
 	if not can_spend then
-		return false, INSUFFICIENT_FUNDS[self.currency]
+		return false, self.currency:MakeInsufficientFundsText()
 	end
-	
-	-- TODO @chrisp #heal - concatenate with extant reasons, but probably we just want a list of reasons, shown one at a
-	-- time, so defer this until that feature comes online
-	return self.can_purchase_fn(self.inst, player)
+
+	return true
 end
 
 --- A VendingMachine remains interactable until ShutdownInteractable() is invoked. This lets players bring up the
 --- details widget even after they have purchased an item, though the purchase button will be hidden.
 function VendingMachine:CanInteract(player)
-	return true
+	return self:HasWare()
 end
 
 function VendingMachine:OnInteract(player)
@@ -528,33 +518,37 @@ function VendingMachine:DepositFunds(player)
 	if deposit > 0 then
 		self:ReduceFunds(deposit, player)
 		self:DeltaDepositForPlayerID(id, deposit)
-		-- If the vending machine isn't crowd funded we don't need to pool money with other players
-		if not self:IsCrowdFunded() then
-			self:LocalDepositCurrency(id, deposit)
-		else
+		if self.emit_once then
 			self:NetDepositCurrency(id, deposit)
+		else
+			self:LocalDepositCurrency(id, deposit)
 		end
 	end
 end
 
 function VendingMachine:LocalDepositCurrency(id, delta)
-	if self:IsCrowdFunded() then
-		if TheNet:IsHost() then -- only handle crowdsourced items on the host
-			if self:IsPurchaseComplete(id) then
-				local player = GetPlayerEntityFromPlayerID(id)
-
-				if not self.crowdsourced_item_emitted then  -- Only emit once
-					self:OnPurchaseComplete(player)
-					self.crowdsourced_item_emitted = true
-					self:ShutdownInteractable()
-				end
-			end
+	local function EmitOnPurchaseComplete()
+		if not self:IsPurchaseComplete(id) then
+			return
 		end
-	else
-		if self:IsPurchaseComplete(id) then
-			local player = GetPlayerEntityFromPlayerID(id)
+		local player = GetPlayerEntityFromPlayerID(id)
+		if self.emit_once then
+			if not self.item_emitted then
+				self:OnPurchaseComplete(player)
+				self.item_emitted = true
+				self:ShutdownInteractable()
+			end
+		else
 			self:OnPurchaseComplete(player)
 		end
+	end
+	
+	if self:IsCrowdFunded() then
+		if TheNet:IsHost() then -- only handle crowdsourced items on the host
+			EmitOnPurchaseComplete()
+		end
+	else
+		EmitOnPurchaseComplete()
 	end
 end
 
@@ -564,7 +558,9 @@ function VendingMachine:NetDepositCurrency(id, delta)
 	self.deferredDeposits[id] = (self.deferredDeposits[id] or 0) + delta
 
 	if not self._netdeposit_task then
-		self._netdeposit_task = self.inst:DoTaskInTicks(DEPOSIT_NETWORK_PERIOD_TICKS, function() self:_NetSendDeferredDeposits() end)
+		self._netdeposit_task = self.inst:DoTaskInTicks(DEPOSIT_NETWORK_PERIOD_TICKS, function() 
+			self:_NetSendDeferredDeposits() 
+		end)
 	end
 
 	if not TheNet:IsHost() then
@@ -572,7 +568,10 @@ function VendingMachine:NetDepositCurrency(id, delta)
 			self._netsync_task:Cancel()
 			self._netsync_task = nil
 		end
-		self._netsync_task = self.inst:DoTaskInTicks(90, function() self:_NetSyncDeposits() end)	-- Wait to update all network events before accepting the network data as ground truth
+		-- Wait to update all network events before accepting the network data as ground truth
+		self._netsync_task = self.inst:DoTaskInTicks(90, function() 
+			self:_NetSyncDeposits() 
+		end)	
 	end
 end
 
@@ -586,7 +585,6 @@ function VendingMachine:_NetSendDeferredDeposits()
 	self.deferredDeposits = {}
 	self._netdeposit_task = nil	-- Remove the timed send function
 end
-
 
 function VendingMachine:OnUpdate(dt)
 	local total = Lume.round(self:GetTotalDeposited())
@@ -609,9 +607,11 @@ function VendingMachine:OnUpdate(dt)
 		self.display_total_deposited = Lume.round(self.display_total_deposited + delta)
 		self:UpdatePriceTag()
 	end
+
+	for _, player in ipairs(self.inst.components.interactable.focused_players) do
+		self:UpdatePlayerStatus(player)
+	end
 end
-
-
 
 function VendingMachine:_NetSyncDeposits()
 	self._netsync_task = nil
@@ -672,21 +672,15 @@ function VendingMachine:RefundPlayer_Silent(id, amount)
 	-- deposits konjur directly into the player's inventory
 	-- called by the local client for that player id
 	local player = GetPlayerEntityFromPlayerID(id)
-	if self.currency == Currency.id.Health then
-		player.components.health:DoDelta(-amount)
-	else
-		player.components.inventoryhoard:AddStackable(CurrencyMaterial[self.currency], amount, true)
-	end
+	self.currency:IncreaseFunds(player, amount)
 end
 
--- TODO: networking2022, identify that this is host-only API?
 function VendingMachine:ResetAnyPlayerInteractingStatus()
 	if TheNet:IsHost() then
 		table.clear(self.is_interacting)
 	end
 end
 
--- TODO: networking2022, identify that this is host-only API?
 function VendingMachine:IsAnyPlayerInteracting()
 	if TheNet:IsHost() then
 		return next(self.is_interacting)
@@ -747,7 +741,7 @@ end
 
 function VendingMachine:OnPurchaseComplete(player)
 	-- Run the function to generate the ware we just built, and then position it.
-	local ware = self.purchased_fn and self.purchased_fn(self.inst, player)
+	local ware = self.purchased_fn and self.purchased_fn(self.inst, player, self.cost)
 	if ware then
 		local x, y, z = self.inst.Transform:GetWorldPosition()
 		z = z - TILE_SIZE / 2
@@ -756,6 +750,7 @@ function VendingMachine:OnPurchaseComplete(player)
 	if self.details.OnPurchaseComplete then
 		self.details:OnPurchaseComplete()
 	end
+	TheDungeon:GetDungeonMap():RecordActionInCurrentRoom("vending_machine")
 	self:UpdatePlayerStatus(player)
 end
 

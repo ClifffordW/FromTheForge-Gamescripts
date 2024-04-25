@@ -22,6 +22,8 @@ local elite_assets =
 local prefabs =
 {
 	"cine_gourdo_intro",
+	"cine_play_miniboss_intro",
+
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
 	"gourdo_projectile",
@@ -39,6 +41,9 @@ local prefabs =
 	GroupPrefab("fx_warning"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "gourdo")
+prefabutil.SetupDeathFxPrefabs(prefabs, "gourdo_elite")
+prefabutil.SetupDeathFxPrefabs(prefabs, "gourdo_seed")
+prefabutil.SetupDeathFxPrefabs(prefabs, "gourdo_seed_elite")
 
 local attacks =
 {
@@ -88,6 +93,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -138,6 +144,8 @@ local elite_attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local MONSTER_SIZE = 1.8
 
@@ -202,6 +210,14 @@ local function elite_fn(prefabname)
 	return inst
 end
 
+local function miniboss_fn(prefabname)
+	local inst = elite_fn(prefabname)
+	monsterutil.MakeMiniboss(inst)
+	inst:AddComponent("boss")
+
+	return inst
+end
+
 ---------------------------------------------------------------------------------------
 
 local debug_gourdo
@@ -222,7 +238,7 @@ local function HandleProjectileSetup(inst, owner)
 	inst.components.combat:AddTargetTags(owner ~= nil and owner.components.combat:GetTargetTags() or TargetTagGroups.Players)
 	inst.components.combat:AddFriendlyTargetTags(owner ~= nil and owner.components.combat:GetFriendlyTargetTags() or TargetTagGroups.Enemies)
 
-	inst.heal_amount = inst.tuning.heal_amount -- JAMBELL: possibly scale this for vs player or vs enemy?
+	inst.heal_amount = inst.tuning.heal_amount -- possibly scale this for vs player or vs enemy?
 	inst.heal_radius = inst.tuning.heal_radius
 
 	if owner then
@@ -284,9 +300,10 @@ local function HandleSeedSetup(inst, owner)
 	local radius = inst.tuning.heal_radius
 
 	inst.components.healingzone.heal_radius = radius
-	inst.components.healingzone.heal_amount = inst.tuning.heal_amount -- JAMBELL: possibly scale this for vs player or vs enemy?
-	inst.components.healingzone.heal_period = inst.tuning.heal_period -- JAMBELL: possibly scale this for vs player or vs enemy?
-	inst.components.health:SetMax(inst.tuning.health, true)
+	inst.components.healingzone.heal_amount = inst.tuning.heal_amount -- possibly scale this for vs player or vs enemy?
+	inst.components.healingzone.heal_period = inst.tuning.heal_period -- possibly scale this for vs player or vs enemy?
+	local mp_bonus = 1 + ((TheNet:GetNrPlayersOnRoomChange() - 1) * 0.333) -- extra health per player
+	inst.components.health:SetMax(inst.tuning.health * mp_bonus, true)
 
 	-- TODO: setmultcolor for radius circle.AnimState:SetMultColor(1, 1, 1, 1)
 	-- TODO: set color for this seed itself
@@ -313,6 +330,7 @@ local function MakeSeedEntity(inst, build, scale)
 	monsterutil.MakeAttackable(inst)
 	inst:AddTag("healingseed")
 	inst:AddTag("nocharm")
+	inst:AddTag("nointerrupt")
 
 	MakeObstacleMonsterPhysics(inst, 0.5)
 	inst.Transform:SetScale(scale, scale, scale)
@@ -370,6 +388,7 @@ end
 
 return Prefab("gourdo", normal_fn, assets, prefabs, nil, NetworkType_SharedHostSpawn)
 	, Prefab("gourdo_elite", elite_fn, elite_assets, prefabs, nil, NetworkType_SharedHostSpawn)
+	, Prefab("gourdo_miniboss", miniboss_fn, elite_assets, prefabs, nil, NetworkType_SharedHostSpawn)
 	, Prefab("gourdo_projectile", gourdo_projectile_fn, assets, prefabs, nil, NetworkType_SharedAnySpawn)
 	, Prefab("gourdo_healing_seed", gourdo_healing_seed_fn, assets, prefabs, nil, NetworkType_SharedAnySpawn)
 	, Prefab("gourdo_elite_seed", gourdo_elite_seed_fn, elite_assets, prefabs, nil, NetworkType_SharedAnySpawn)

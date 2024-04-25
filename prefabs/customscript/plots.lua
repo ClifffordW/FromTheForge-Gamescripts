@@ -2,6 +2,7 @@
 --Custom script for auto-generated prop prefabs
 ---------------------------------------------------------------------------------------
 local lume = require "util.lume"
+local spawnutil = require "util.spawnutil"
 
 local plots = {
 	default = {},
@@ -20,13 +21,23 @@ local function CollectPlotFlags()
 	return plot_flags
 end
 
+function plots.default.CollectPrefabs(prefabs, args)
+	assert(args.building_prefab)
+	table.insert(prefabs, ("%s_locked"):format(args.building_prefab))
+	table.insert(prefabs, ("%s_unlocked"):format(args.building_prefab))
+end
+
 function plots.default.CustomInit(inst, opts)
 	TheWorld.components.plotmanager:RegisterPlot(inst, opts.owner_prefab)
 	
 	inst:AddComponent("plot")
+	inst.components.plot:SetNPCPrefab(opts.owner_prefab)
 	inst.components.plot:SetBuildingPrefab(opts.building_prefab)
 	inst.components.plot:SetSpawnFlag(opts.spawn_flag)
-	inst.components.plot:SetNPCPrefab(opts.owner_prefab)
+
+	if TheDungeon:GetDungeonMap():IsDebugMap() and opts.building_prefab then
+		spawnutil.SetupPreviewPhantom(inst, ("%s_unlocked"):format(opts.building_prefab), 0.5)
+	end
 end
 
 function plots.PropEdit(editor, ui, params)
@@ -48,7 +59,6 @@ function plots.PropEdit(editor, ui, params)
 		args.building_prefab = building_prefab
 	end
 
-
 	local plot_flags = CollectPlotFlags()
 	local spawn_flag = args.spawn_flag or ""
 	local spawn_flag_idx = lume.find(plot_flags, spawn_flag)
@@ -59,7 +69,6 @@ function plots.PropEdit(editor, ui, params)
 		spawn_flag_idx = newvalue
 		args.spawn_flag = plot_flags[spawn_flag_idx]
 	end
-
 
 	if next(args) then
 		params.script_args = args

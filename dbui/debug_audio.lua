@@ -551,6 +551,15 @@ function DebugAudio:RenderPanel( ui, panel )
 		end
 	end
 
+	if ui:CollapsingHeader("Hasher") then
+		self.hasher_str = ui:_InputText("String to Hash", self.hasher_str)
+		local h = hash(self.hasher_str or "")
+		ui:Value("Hash", h)
+		ui:SameLineWithSpace()
+		if ui:Button(ui.icon.copy .."##hash", ui.icon.size) then
+			ui:SetClipboardText(h)
+		end
+	end
 end
 
 DebugNodes.DebugAudio = DebugAudio

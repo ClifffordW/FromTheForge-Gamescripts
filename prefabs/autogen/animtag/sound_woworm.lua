@@ -3,7 +3,60 @@ return {
   __displayName="sound_woworm",
   anim_events={
     woworm_bank={
+      flinch_hold={ events={ { frame=0, name="sfx-hit",},},},
+      flinch_pst={
+        events={
+          { frame=4, name="sfx-foley",},
+          { frame=9, name="sfx-foley",},
+          { frame=12, name="sfx-breath_out",},
+        },
+      },
+      hit_back_pst={ events={ { frame=2, name="sfx-foley",},},},
+      hit_hold={ events={ { frame=0, name="sfx-hit",},},},
+      hit_pst={ events={ { frame=2, name="sfx-foley",},},},
       idle={ events={ { frame=14, name="sfx-breath_in",}, { frame=35, name="sfx-foley",},},},
+      knockdown_getup={
+        events={
+          { frame=5, name="sfx-breath_out",},
+          { frame=11, name="sfx-foley",},
+          { frame=23, name="sfx-footstep",},
+        },
+      },
+      knockdown_hit_hold={ events={ { frame=0, name="sfx-hit",},},},
+      knockdown_hit_pst={ events={ { frame=2, name="sfx-foley",},},},
+      knockdown_hold={ events={ { frame=0, name="sfx-hit",},},},
+      knockdown_idle={
+        events={ { frame=51, name="sfx-breath_out",}, { frame=20, name="sfx-breath_in",},},
+      },
+      knockdown_pre={
+        events={
+          { frame=6, name="sfx-hit",},
+          { frame=6, name="sfx-bodyfall",},
+          { frame=11, name="sfx-knockdown",},
+        },
+      },
+      puke={ events={ { frame=4, name="sfx-barf",}, { frame=6, name="sfx-splash",},},},
+      puke_pre={ events={ { frame=1, name="sfx-barf_pre",},},},
+      shell_slam={
+        events={
+          { frame=2, name="sfx-bodyfall",},
+          { frame=1, name="sfx-shell_slam",},
+          { frame=52, name="sfx-breath_out",},
+        },
+      },
+      shell_slam_loop={ events={ { frame=2, name="sfx-tell",},},},
+      spawn={
+        events={
+          { frame=2, name="sfx-whoosh",},
+          { frame=7, name="sfx-foley",},
+          { frame=10, name="sfx-foley",},
+          { frame=16, name="sfx-bodyfall",},
+          { frame=21, name="sfx-foley",},
+          { frame=22, name="sfx-breath_out",},
+          { frame=26, name="sfx-footstep",},
+          { frame=9, name="sfx-whoosh",},
+        },
+      },
       turn_pre={ events={ { frame=4, name="sfx-foley",},},},
       turn_pre_walk_pre={ events={ { frame=4, name="sfx-foley",},},},
       turn_pst={ events={ { frame=2, name="sfx-footstep",}, { frame=1, name="sfx-breath_in",},},},

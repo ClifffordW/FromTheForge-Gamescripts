@@ -214,7 +214,7 @@ local function MakeStateGraph(params)
 	local events =
 	{
 		EventHandler("animover", function(inst)
-			-- TODO(dbriscoe): handle some kind of over state in editor?
+			-- TODO(cine): handle some kind of over state in editor?
 		end),
 	}
 
@@ -275,7 +275,7 @@ local function MakeStateGraph(params)
 				PauseAllEnemyBrains(inst)
 			end,
 
-			-- TODO(dbriscoe): Use an event handler instead?
+			-- TODO(cine): Use an event handler instead?
 			onupdate = function(inst)
 				if params.is_skippable
 					and TheInput:IsControlDownOnAnyDevice(Controls.Digital.CINE_HOLD_SKIP)
@@ -369,12 +369,16 @@ end
 
 function cineutil.ShowActor(inst)
 	inst:Show()
-	inst.Physics:SetEnabled(true)
+	if inst.Physics then
+		inst.Physics:SetEnabled(true)
+	end
 end
 
 function cineutil.HideActor(inst)
 	inst:Hide()
-	inst.Physics:SetEnabled(false)
+	if inst.Physics then
+		inst.Physics:SetEnabled(false)
+	end
 end
 
 function cineutil.SetupActor(inst, data, start_pos)
@@ -440,7 +444,10 @@ end
 function cineutil.MakeAutogenCine(name, params, is_debug)
 	local assets =
 	{
+		Asset("PKGREF", "scripts/prefabs/autogen/cine/".. name ..".lua"),
+		Asset("PKGREF", "scripts/prefabs/cine_autogen.lua"),
 		Asset("PKGREF", "scripts/prefabs/cine_autogen_data.lua"),
+		Asset("PKGREF", "scripts/prefabs/cineutil.lua"),
 	}
 
 	local function fn()

@@ -157,6 +157,12 @@ function kstring.rfind_plain(s, query, init)
 end
 
 
+-- Strip markup that could be interpreted as formatting to sanitize user input text.
+function kstring.sanitize_user_text(text)
+	-- Strip out <> markup to ensure invalid markup doesn't crash.
+	return text:gsub("%b<>", "")
+end
+
 -- Pass to table.sort to sort alphabetically but case insensitive.
 function kstring.cmp_alpha_case_insensitive(a, b)
 	return string.upper(a) < string.upper(b)
@@ -229,6 +235,7 @@ string.is_lower = kstring.is_lower
 string.is_whitespace = kstring.is_whitespace
 string.rfind = kstring.rfind
 string.rfind_plain = kstring.rfind_plain
+string.sanitize_user_text = kstring.sanitize_user_text
 string.split = kstring.split
 string.split_pattern = kstring.split_pattern
 string.startswith = kstring.startswith

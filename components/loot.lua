@@ -101,6 +101,23 @@ function Loot:OnPickedUpBy(player)
 		local item = Consumable.FindItem(self.loot_id)
 		if item ~= nil then
 			player:PushEvent("get_loot", { item = item, count = self.count })
+
+			-- TEMP?: randomize y offset for now until we have a smarter way of preventing overlap
+			local y_rnd = 50 * math.random(1, 4) -- Randomize with chunkiness so we don't end up with something 3px away
+			local time_rnd = 0.1 * math.random(1, 5) -- Randomize with chunkiness so we don't end up with something 3px away
+			local size_rnd = 1 * math.random(1, 5) -- Randomize with chunkiness so we don't end up with something 3px away
+
+			local str = string.format(STRINGS.UI.INVENTORYSCREEN.LOOT_PICKUP_POPTEXT, item.icon, item.pretty.name)
+			if item.name ~= "konjur" then
+				TheDungeon.HUD:MakePopText({
+					target = player,
+					button = str,
+					color = UICOLORS[item.rarity],
+					size = 75 + size_rnd,
+					fade_time = 1.25 + time_rnd,
+					y_offset = 125 + y_rnd,
+				})
+			end
 		else
 			dbassert(item ~= nil, "Loot ["..tostring(self.inst).."] without pickup item.")
 		end

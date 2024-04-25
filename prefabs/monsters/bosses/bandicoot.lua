@@ -3,6 +3,7 @@ local prefabutil = require "prefabs.prefabutil"
 local monsterutil = require "util.monsterutil"
 local playerutil = require "util.playerutil"
 local fmodtable = require "defs.sound.fmodtable"
+local soundutil = require "util.soundutil"
 
 local assets =
 {
@@ -23,6 +24,10 @@ local prefabs =
 	"tombstone",
 
 	"swamp_stalactite",
+
+	"cine_bandicoot_death",
+	"cine_bandicoot_intro",
+	"cine_boss_death_hit_hold",
 
 	--Drops
 	GroupPrefab("drops_generic"),
@@ -51,6 +56,11 @@ local attacks =
 		initialCooldown = 0,
 		pre_anim = "swipe_pre",
 		hold_anim = "swipe_hold",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			local current_phase = GetPhase(inst)
+			return current_phase <= PHASES[2]
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			local current_phase = GetPhase(inst)
 			return current_phase <= PHASES[2] and trange:IsInRange(MELEE_RANGE) and trange:IsInZRange(4)
@@ -148,6 +158,11 @@ local attacks =
 		initialCooldown = 0,
 		pre_anim = "bite_pre",
 		hold_anim = "bite_step",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			local current_phase = GetPhase(inst)
+			return current_phase >= PHASES[3]
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			local current_phase = GetPhase(inst)
 			local target = inst.components.combat:GetTarget()
@@ -162,9 +177,14 @@ local attacks =
 		cooldown = 5,
 		initialCooldown = 0,
 		pre_anim = "bite_below_pre",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			local current_phase = GetPhase(inst)
+			return current_phase >= PHASES[3]
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			local current_phase = GetPhase(inst)
-			local target = inst.components.combat:GetTarget()
+			--local target = inst.components.combat:GetTarget()
 			return current_phase >= PHASES[3] and trange:IsInRange(MELEE_LONG_RANGE)-- and inst:IsWithinAngleTo(target, -135, -45)
 		end
 	},
@@ -205,10 +225,19 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local function OnCombatTargetChanged(inst, data)
 	if data.old == nil and data.new ~= nil then
 		inst.boss_coro:Start()
+	end
+end
+
+local function StopRumbleSound(inst)
+	if inst.sg.mem.earthquake_low_rumble_LP then
+		soundutil.KillSound(inst, inst.sg.mem.earthquake_low_rumble_LP)
+		inst.sg.mem.earthquake_low_rumble_LP = nil
 	end
 end
 
@@ -282,6 +311,9 @@ local function bandicoot_boss_fn(prefabname)
 	inst:AddComponent("cineactor")
 	inst.components.cineactor:AfterEvent_PlayAsLeadActor("dying", "cine_boss_death_hit_hold", { "cine_bandicoot_death" })
 	inst.components.cineactor:QueueIntro("cine_bandicoot_intro")
+
+	inst:ListenForEvent("dying", function(inst) StopRumbleSound(inst) end)
+	inst:ListenForEvent("cine_boss_death_hit_hold", function(inst) StopRumbleSound(inst) end)
 
 	-- inst.components.foleysounder:SetFootstepSound(fmodtable.Event.badicoot_footstep)
 	-- inst.components.foleysounder:SetBodyfallSound(fmodtable.Event.badicoot_bodyfall)

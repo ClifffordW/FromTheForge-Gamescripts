@@ -21,7 +21,8 @@ local prefabs =
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
 	"groak_spawn_swallow",
-	"fx_bandicoot_groundring_solid",
+	"fx_bandicoot_groundring_solid", -- TODO: Maybe no longer used?
+	"fx_groak_groundring_solid",
 
 	--Drops
 	GroupPrefab("drops_generic"),
@@ -30,6 +31,8 @@ local prefabs =
 
 local elite_prefabs = lume.merge(prefabs,
 {
+	"cine_groak_intro",
+	"cine_play_miniboss_intro",
 })
 
 prefabutil.SetupDeathFxPrefabs(prefabs, "groak")
@@ -68,6 +71,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks = lume.merge(attacks,
 {
@@ -101,6 +105,7 @@ local elite_attacks = lume.merge(attacks,
 		end
 	},
 })
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 1.5
 
@@ -114,7 +119,6 @@ local function fn(prefabname)
 
 	inst.AnimState:SetBank("groak_bank")
 	inst.AnimState:SetBuild("groak_build")
-	inst.AnimState:PlayAnimation("idle", true)
 	--inst.AnimState:SetFrame(math.random(inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
 
 	inst.components.hitbox:SetHitFlags(HitGroup.ALL)
@@ -169,6 +173,21 @@ local function elite_fn(prefabname)
 	return inst
 end
 
+local function miniboss_fn(prefabname)
+	local inst = elite_fn(prefabname)
+	monsterutil.MakeMiniboss(inst)
+	inst:AddComponent("boss")
+
+	-- Set the spawn_pre animation and pause it on the miniboss so that in a network game, the idle animation doesn't flash for a frame on remote machines during the intro cinematic.
+	inst.AnimState:PlayAnimation("spawn_pre")
+	inst.AnimState:Pause()
+	inst:DoTaskInTicks(4, function()
+		inst.AnimState:Resume()
+	end)
+
+	return inst
+end
+
 ------------------------------------------------------------------------------
 -- Shockwave projectile
 local function Setup(inst, owner)
@@ -187,7 +206,7 @@ local function shockwave_fn(prefabname)
 		does_hitstop = true,
 		no_healthcomponent = true,
 		stategraph = "sg_groak_shockwave",
-		fx_prefab = "fx_bandicoot_groundring_solid",
+		fx_prefab = "fx_groak_groundring_solid",
 	})
 
 	inst.Setup = Setup
@@ -195,7 +214,7 @@ local function shockwave_fn(prefabname)
 	return inst
 end
 
-
 return Prefab("groak", normal_fn, assets, prefabs, nil, NetworkType_SharedHostSpawn)
 	, Prefab("groak_elite", elite_fn, elite_assets, elite_prefabs, nil, NetworkType_SharedHostSpawn)
+	, Prefab("groak_miniboss", miniboss_fn, elite_assets, elite_prefabs, nil, NetworkType_SharedHostSpawn)
 	, Prefab("groak_shockwave", shockwave_fn, nil, nil, nil, NetworkType_SharedAnySpawn)

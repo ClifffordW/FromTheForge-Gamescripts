@@ -2,15 +2,11 @@
 return {
   __displayName="canine_tangerine_skin_tone_1",
   cosmetic_data={
-    color={ 0.055555555555556, 0.8, 0.98,},
+    color={ 0.054901961237192, 0.78764480352402, 0.94208496809006,},
     color_species="canine",
     colorgroup="SKIN_TONE",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

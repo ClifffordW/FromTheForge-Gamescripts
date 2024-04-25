@@ -24,8 +24,7 @@ function RotwoodLocation:GetBiomeLocation()
     return biomes.locations[self.id]
 end
 
--- TODO(dbriscoe): Along with Agent.GetName, rename -> GetPrettyName.
-function RotwoodLocation:GetName()
+function RotwoodLocation:GetPrettyName()
     -- Ignore base implementation!
     return self:GetBiomeLocation().pretty.name
 end

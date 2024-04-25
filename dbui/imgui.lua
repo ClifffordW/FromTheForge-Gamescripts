@@ -231,6 +231,15 @@ RawImgui._VSliderFloat = function(...)
 	return v
 end
 
+RawImgui._DragInt = function(self, label, value, speed, minv, maxv, format)
+	local changed,v = TheRawImgui.DragInt(self, label, value, speed, minv, maxv, format)
+	if changed then
+		return v
+	else
+		return value
+	end
+end
+
 RawImgui._SliderInt = function(...)
 	local _,v = TheRawImgui.SliderInt(...)
 	return v

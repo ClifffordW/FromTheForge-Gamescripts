@@ -34,11 +34,8 @@ end
 
 --this is an update that always runs on wall time (not sim time)
 function WallUpdate(dt)
+	-- Profiled from native as "Lua Wall Update"
 	HandleGarbageCollection()
-
-	--TheSim:ProfilerPush("LuaWallUpdate")
-
-	HandleUserCmdQueue()
 
 	local error = TheSim:GetLuaError()
 	-- somehow this does not work from RenderOneFrame
@@ -79,17 +76,16 @@ function WallUpdate(dt)
 	if TheFrontEnd.error_widget then
 		TheFrontEnd:OnRender()
 		TheFrontEnd:OnRenderImGui(dt)
-		TheFrontEnd:UpdateControls(dt)
 		TheFrontEnd.error_widget:OnUpdate(dt)
 	else
 		TheFrontEnd:Update(dt)
 	end
 	TheSim:ProfilerPop()
-	--TheSim:ProfilerPop()
 end
 
 
 function NetworkSerialize()
+	-- Profiled from native as "Lua Network Serialize"
 	TheSim:ProfilerPush("networkserialize")
 	for ent in pairs(NetworkUpdatingEnts) do
 		ent:NetSerialize()	-- this will only do something if this entity is local and needs serializing
@@ -98,6 +94,7 @@ function NetworkSerialize()
 end
 
 function NetworkDeserialize()
+	-- Profiled from native as "Lua Network Deserialize"
 	TheSim:ProfilerPush("networkdeserialize")
 	for ent in pairs(NetworkUpdatingEnts) do
 		ent:NetDeserialize()	-- this will only do something if this entity is remote and needs deserializing
@@ -120,18 +117,8 @@ local _lastsimtick = 0
 local _net_restart = false
 --this runs on fixed sim ticks
 function Update(dt)
-
--- NW: This is now handled in the NetworkManager, which will get a NetError and will dispatch a NetworkDisconnectEvent system event
---	if InGamePlay() and not TheNet:IsInGame() then
---		if not _net_restart then
---			_net_restart = true
---			TheLog.ch.Networking:printf("******** Lost game session: Returning to main menu... ********")
---			RestartToMainMenu()
---		end
---	end
-
 	HandleClassInstanceTracking()
-	TheSim:ProfilerPush("LuaUpdate")
+	local p <close> = ScopedProfiler("Update")
 
 	local tick = GetTick()
 	dbassert(tick == _lastsimtick + 1)
@@ -149,7 +136,6 @@ function Update(dt)
 	TheSim:ProfilerPop()
 
 	if SimShuttingDown then
-		--TheSim:ProfilerPop()
 		return
 	end
 
@@ -164,7 +150,9 @@ function Update(dt)
 		for ent in pairs(UpdatingEnts) do
 			for cmp in pairs(ent.updatecomponents) do
 				if StopUpdatingComponents[cmp] == nil then
+					--~ TheSim:ProfilerPush(cmp.__zone_update_component or "Component:OnUpdate")
 					cmp:OnUpdate(dt)
+					--~ TheSim:ProfilerPop()
 				end
 			end
 		end
@@ -174,20 +162,20 @@ function Update(dt)
 	-- Spawn all new networked events BEFORE the SGManager updates the tick. (Otherwise OnPostEnterNewState gets called for each spawned event, which we don't want)
 	TheNetEvent:SpawnRemoteNetworkEvents()
 
-	TheSim:ProfilerPush("LuaSG")
+	TheSim:ProfilerPush("SG")
 	SGManager:Update(tick)
 	TheSim:ProfilerPop()
 
-	TheSim:ProfilerPush("LuaBrain")
+	TheSim:ProfilerPush("Brain")
 	BrainManager:Update(tick)
 	TheSim:ProfilerPop()
 
-	TheSim:ProfilerPop()
 end
 
 --This runs after each sim update or wall update
 function PostUpdate()
-	TheSim:ProfilerPush("LuaPostUpdate")
+	-- Profiled from native as "Simulation::luaPostUpdate"
+	TheSim:ProfilerPush("PostUpdate")
 
 	HitBoxManager:PostUpdate()
 	HitStopManager:PostUpdate()
@@ -205,6 +193,7 @@ end
 --Camera is always last and always updated
 --dt is synced with physics steps, and it can be 0
 function CameraUpdate(dt)
+	-- Profiled from native as "luaCameraUpdate"
 	TheSim:ProfilerPush("camera")
 	TheCamera:Update(dt)
 	TheSim:ProfilerPop()

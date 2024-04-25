@@ -74,7 +74,6 @@ local UITestScreen = Class(Screen, function(self)
 	-----------------------------------------------------------------------------
 	-----------------------------------------------------------------------------
 	self.tab_group:SetTabOnClick(function(tab_btn) self:OnTabClicked(tab_btn.tab_text) end)
-		:LayoutChildrenInRow(40)
 		:OpenTabAtIndex(1)
 	local tabs_w, tabs_h = self.tab_group:GetSize()
 	self.tab_bg:SetSize(tabs_w + 120, 130)
@@ -790,6 +789,7 @@ local slider = self:AddChild(CheckBox())
 		tab_group:AddTextTab("Tab 3", FONTSIZE.ROOMBONUS_TEXT)
 		tab_group:AddTextTab("Tab 4", FONTSIZE.ROOMBONUS_TEXT)
 		tab_group:AddTextTab("Tab 5", FONTSIZE.ROOMBONUS_TEXT)
+		tab_group:Layout()
 		tab_group:OpenTabAtIndex(1)
 		tab_group:SetTabOnClick(function(tab_btn)
 				self:_ShowClipboardNotification()
@@ -804,7 +804,7 @@ local tab_3 = tab_group:AddTextTab("Tab 3", FONTSIZE.ROOMBONUS_TEXT)
 local tab_4 = tab_group:AddTextTab("Tab 4", FONTSIZE.ROOMBONUS_TEXT)
 local tab_5 = tab_group:AddTextTab("Tab 5", FONTSIZE.ROOMBONUS_TEXT)
 
-tab_group:LayoutChildrenInRow(40)
+tab_group:Layout()
 	:OpenTabAtIndex(1)
 ]])
 			end)
@@ -820,6 +820,7 @@ tab_group:LayoutChildrenInRow(40)
 		icon_tab_group:AddIconTextTab("images/ui_ftf/input_2.tex","Tab 3"):SetSize(nil, 70)
 		icon_tab_group:AddIconTextTab("images/ui_ftf/input_3.tex","Tab 4"):SetSize(nil, 70)
 		icon_tab_group:AddIconTextTab("images/ui_ftf/input_4.tex","Tab 5"):SetSize(nil, 70)
+		icon_tab_group:Layout()
 		icon_tab_group:OpenTabAtIndex(1)
 		icon_tab_group:SetTabOnClick(function(tab_btn)
 				self:_ShowClipboardNotification()
@@ -835,7 +836,7 @@ local tab_3 = icon_tab_group:AddIconTextTab("images/ui_ftf/input_2.tex","Tab 3")
 local tab_4 = icon_tab_group:AddIconTextTab("images/ui_ftf/input_3.tex","Tab 4"):SetSize(nil, 70)
 local tab_5 = icon_tab_group:AddIconTextTab("images/ui_ftf/input_4.tex","Tab 5"):SetSize(nil, 70)
 
-icon_tab_group:LayoutChildrenInRow(40)
+icon_tab_group:Layout()
 	:OpenTabAtIndex(1)
 ]])
 			end)
@@ -870,7 +871,7 @@ local expanding_tab_group = expanding_tab_group_container:AddChild(ExpandingTabG
 	:SetName("Expanding tab group")
 	:SetTabOnClick(function(active_tab) end)
 	:SetOnTabSizeChange(function()
-		expanding_tab_group:LayoutChildrenInRow(5)
+		expanding_tab_group:Layout()
 		local tabs_w, tabs_h = expanding_tab_group:GetSize()
 		tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
 		expanding_tab_group:LayoutBounds("center", "center", tabs_background)
@@ -882,21 +883,21 @@ local tab_3 = expanding_tab_group:AddTab("images/ui_ftf/input_2.tex","Tab 3")
 local tab_4 = expanding_tab_group:AddTab("images/ui_ftf/input_3.tex","Tab 4")
 local tab_5 = expanding_tab_group:AddTab("images/ui_ftf/input_4.tex","Tab 5")
 
-expanding_tab_group:LayoutChildrenInRow(5)
+expanding_tab_group:Layout()
 local tabs_w, tabs_h = expanding_tab_group:GetSize()
 tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
 expanding_tab_group:LayoutBounds("center", "center", tabs_background)
 ]])
 			end)
 			:SetOnTabSizeChange(function()
-				expanding_tab_group:LayoutChildrenInRow(5)
+				expanding_tab_group:Layout()
 				local tabs_w, tabs_h = expanding_tab_group:GetSize()
 				tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
 				expanding_tab_group:LayoutBounds("center", "center", tabs_background)
 				expanding_tab_group_container:LayoutBounds("left", "below", icon_tab_group)
 					:Offset(0, -30)
 			end)
-		expanding_tab_group:LayoutChildrenInRow(5)
+		expanding_tab_group:Layout()
 		local tabs_w, tabs_h = expanding_tab_group:GetSize()
 		tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
 		expanding_tab_group:LayoutBounds("center", "center", tabs_background)
@@ -1135,7 +1136,7 @@ local title = "Discard Item?"
 local subtitle = "Decorative Pink Hedge"
 local message = "Discarding this item will convert it to 40 <p img='images/icons_ftf/ic_coin.tex' scale=1.0 color=0>. Are you sure?"
 
-local screen = ConfirmDialog(nil, nil, true,
+local screen = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 	title, -- Optional
 	subtitle, -- Optional
 	message -- Optional
@@ -1155,7 +1156,7 @@ screen:AnimateIn()
 				local title = "Discard Item?"
 				local subtitle = "Decorative Pink Hedge"
 				local message = "Discarding this item will convert it to 40 <p img='images/icons_ftf/ic_coin.tex' scale=1.0 color=0>. Are you sure?"
-				local screen = ConfirmDialog(nil, nil, true,
+				local screen = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 					title,
 					subtitle,
 					message)

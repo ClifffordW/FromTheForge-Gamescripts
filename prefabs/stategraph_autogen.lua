@@ -5,6 +5,7 @@
 local SGAutogenData = require "prefabs.stategraph_autogen_data"
 local eventfuncs = require "eventfuncs"
 local iterator = require "util.iterator"
+local lume = require "util.lume"
 
 
 embellishutil = {}
@@ -122,12 +123,23 @@ function embellishutil.EventIterator()
 	return iterator.coroutine(AllEventsCoro)
 end
 
+local function EnsureValidTable(t)
+	if not t or t == table.empty then
+		t = {}
+	end
+	return t
+end
+
 function RegisterEmbellishmentDependencies(prefab)
 	local def = STATEGRAPH_EMBELLISHMENTS_FINAL[prefab.name]
 	if def and def.embellishments then
-		for i,embellishmentname in pairs(def.embellishments) do
+		for _,embellishmentname in pairs(def.embellishments) do
 
-			local assets = {}
+			local assets = {
+				Asset("PKGREF", "scripts/prefabs/autogen/stategraph/".. embellishmentname ..".lua"),
+				Asset("PKGREF", "scripts/prefabs/stategraph_autogen.lua"),
+				Asset("PKGREF", "scripts/prefabs/stategraph_autogen_data.lua"),
+			}
 			local prefabs = {}
 
 			local embellishment = SGAutogenData[embellishmentname]
@@ -157,36 +169,22 @@ function RegisterEmbellishmentDependencies(prefab)
 				end
 			end
 			if #assets > 0 then
-				local prefab_assets = prefabs.assets == table.empty and {} or prefab.assets
+				prefab.assets = EnsureValidTable(prefab.assets)
+				local prefab_assets = prefab.assets
 				for i,newasset in pairs(assets) do
-					local found = false
-					for i,existing in pairs(prefab_assets) do
-						if newasset == existing then
-							found = true
-							break
-						end
-					end
-					if not found then
+					if not lume.find(prefab_assets, newasset) then
 						table.insert(prefab_assets, newasset)
 					end
 				end
-				prefab.assets = prefab_assets
 			end
 			if #prefabs > 0 then
-				local prefab_deps = prefab.deps == table.empty and {} or prefab.deps
+				prefab.deps = EnsureValidTable(prefab.deps)
+				local prefab_deps = prefab.deps
 				for i,newprefab in pairs(prefabs) do
-					local found = false
-					for i,existing in pairs(prefab_deps) do
-						if newprefab == existing then
-							found = true
-							break
-						end
-					end
-					if not found then
+					if not lume.find(prefab_deps, newprefab) then
 						table.insert(prefab_deps, newprefab)
 					end
 				end
-				prefab.deps = prefab_deps
 			end
 		end
 	end

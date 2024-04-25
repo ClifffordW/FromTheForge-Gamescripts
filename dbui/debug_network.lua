@@ -1,5 +1,6 @@
 local DebugNodes = require "dbui.debug_nodes"
 local DebugSettings = require "debug.inspectors.debugsettings"
+local Cosmetic = require "defs.cosmetics.cosmetics"
 local lume = require "util.lume"
 require "consolecommands"
 require "constants"
@@ -16,6 +17,7 @@ DebugNetwork.PANEL_HEIGHT = 800
 local selectedLocalBlob 
 local selectedRemoteClient 
 local selectedRemoteBlob
+local selectedPlayerID 
 
 local clientGraphs = {}
 local totalsendkbps = { 0.0, 0.0 }
@@ -273,7 +275,7 @@ function DebugNetwork:RenderPlayers(ui)
 	if ui:CollapsingHeader("Players") then
 
 		local colw = ui:GetColumnWidth()
-	
+
 		ui:Columns(7, "Players")
 
 		ui:TextColored(colors.header, "PlayerID")
@@ -292,33 +294,29 @@ function DebugNetwork:RenderPlayers(ui)
 		ui:NextColumn()
 
 
-		local players = TheNet:GetPlayerList()
+		for k, playerID in pairs(TheNet:GetPlayerList()) do
 
-		if players then
-			for k, playerID in pairs(players) do
+			local col = RGB(59, 222, 99)	-- green
+			local islocal = TheNet:IsLocalPlayer(playerID)
+			if not islocal then
+				col = RGB(207, 61, 61) -- red
+			end
 
-				local col = RGB(59, 222, 99)	-- green
-				local islocal = TheNet:IsLocalPlayer(playerID)
-				if not islocal then
-					col = RGB(207, 61, 61) -- red
-				end
-
-				ui:TextColored(col, tostring(playerID))
-				ui:NextColumn()
-				ui:TextColored(col, TheNet:GetPlayerName(playerID) or "")
-				ui:NextColumn()
-				ui:TextColored(col, tostring(islocal))
-				ui:NextColumn()
-				ui:TextColored(col, tostring(TheNet:FindInputIDForPlayerID(playerID) or ""))
-				ui:NextColumn()
-				ui:TextColored(col, tostring(TheNet:FindClientIDForPlayerID(playerID) or ""))
-				ui:NextColumn()
-				ui:TextColored(col, tostring(TheNet:FindEntityIDForPlayerID(playerID) or ""))
-				ui:NextColumn()
-				ui:TextColored(col, tostring(TheNet:FindGUIDForPlayerID(playerID) or ""))
-				ui:NextColumn()
-			end	
-		end
+			ui:TextColored(col, tostring(playerID))
+			ui:NextColumn()
+			ui:TextColored(col, TheNet:GetPlayerName(playerID) or "")
+			ui:NextColumn()
+			ui:TextColored(col, tostring(islocal))
+			ui:NextColumn()
+			ui:TextColored(col, tostring(TheNet:FindInputIDForPlayerID(playerID) or ""))
+			ui:NextColumn()
+			ui:TextColored(col, tostring(TheNet:FindClientIDForPlayerID(playerID) or ""))
+			ui:NextColumn()
+			ui:TextColored(col, tostring(TheNet:FindEntityIDForPlayerID(playerID) or ""))
+			ui:NextColumn()
+			ui:TextColored(col, tostring(TheNet:FindGUIDForPlayerID(playerID) or ""))
+			ui:NextColumn()
+		end	
 
 		ui:Columns()
 	end
@@ -327,31 +325,106 @@ end
 function DebugNetwork:RenderNetworkState(ui, panel)
 	if ui:CollapsingHeader("Host State") then
 		if TheNet:IsInGame() then
+			local tableFlags <const> = ui.TableFlags.Borders
+			local tableKeyWidth <const> = 200
 			local gm, gmseqnr = TheNet:GetCurrentGameMode();
 			ui:Text("Game Mode: " .. gm .. " SeqNr: " .. tostring(gmseqnr))
 			if ui:TreeNode("Room Data", ui.TreeNodeFlags.DefaultOpen) then
 				ui:TextColored(BGCOLORS.CYAN, "Simulation Sequence Number: " .. TheNet:GetSimSequenceNumber())
-
 				local roomdata = TheNet:GetRoomData()
-
 				local isRoomLocked = TheNet:GetRoomLockState()
 				local isReadyToStartRoom = TheNet:IsReadyToStartRoom()
 				local roomCompleteSeqNr, roomIsComplete, enemyHighWater, lastEnemyID = TheNet:GetRoomCompleteState()
 				local threatlevel = TheNet:GetThreatLevel()
 				if roomdata then
-					ui:Text("Action ID: " .. roomdata.actionID)
-					ui:Text("World Prefab: " .. roomdata.worldPrefab)
-					ui:Text("SceneGen Prefab: " .. roomdata.sceneGenPrefab)
-					ui:Text("Room ID: " .. roomdata.roomID)
-				end
-				ui:Text("Room Locked: " .. tostring(isRoomLocked))
-				ui:Text("Is Ready To Start Room: " .. tostring(isReadyToStartRoom))
-				ui:Text(string.format("Room Complete: SeqNr=%d IsComplete=%s EnemyHighWater=%d LastEnemyNetID=%d", roomCompleteSeqNr, roomIsComplete, enemyHighWater, lastEnemyID))
-				ui:Text("Threat Level: " .. threatlevel)
+					if ui:BeginTable("roomdata", 2, tableFlags) then
+						ui:TableSetupColumn("Room Data", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+						ui:TableSetupColumn("Value")
+						ui:TableHeadersRow()
 
-				if roomdata then
-					ui:Text(string.format("Number of Players on Room Change: " .. roomdata.playersOnRoomChange))
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Action ID")
+							ui:TableNextColumn()
+							ui:Text(roomdata.actionID)
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("World Prefab")
+							ui:TableNextColumn()
+							ui:Text(roomdata.worldPrefab)
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("SceneGen Prefab")
+							ui:TableNextColumn()
+							ui:Text(roomdata.sceneGenPrefab)
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Room ID")
+							ui:TableNextColumn()
+							ui:Text(roomdata.roomID)
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Force Reset")
+							ui:TableNextColumn()
+							ui:Text(roomdata.forceReset and "true" or "false")
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Num Players on Room Change")
+							ui:TableNextColumn()
+							ui:Text(roomdata.playersOnRoomChange)
+						ui:EndTable()
+					end
 				end
+				if ui:BeginTable("roomstatus", 2, tableFlags) then
+					ui:TableSetupColumn("Room Status", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Value")
+					ui:TableHeadersRow()
+
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Room Locked")
+						ui:TableNextColumn()
+						ui:Text(tostring(isRoomLocked))
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Is Ready To Start Room")
+						ui:TableNextColumn()
+						ui:Text(tostring(isReadyToStartRoom))
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Threat Level")
+						ui:TableNextColumn()
+						ui:Text(threatlevel)
+					ui:EndTable()
+				end
+				if ui:BeginTable("roomcomplete", 2, tableFlags) then
+					ui:TableSetupColumn("Room Complete", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Value")
+					ui:TableHeadersRow()
+
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Sequence Number")
+						ui:TableNextColumn()
+						ui:Text(roomCompleteSeqNr)
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Is Complete")
+						ui:TableNextColumn()
+						ui:Text(roomIsComplete)
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Enemy High Water")
+						ui:TableNextColumn()
+						ui:Text(enemyHighWater)
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Last Enemy EntityID")
+						ui:TableNextColumn()
+						ui:Text(lastEnemyID)
+					ui:EndTable()
+				end
+
 				if ui:TreeNode("Players on Last Room Change", ui.TreeNodeFlags.DefaultOpen) then
 					local colors = self.colorscheme
 					ui:Columns(5, "Players on Last Room Change")
@@ -388,45 +461,101 @@ function DebugNetwork:RenderNetworkState(ui, panel)
 					ui:Columns()
 					ui:TreePop()
 				end
-
 				ui:TreePop()
 			end
-			if ui:TreeNode("Run Data", ui.TreeNodeFlags.DefaultOpen) then
+			if ui:TreeNode("Start Run Data", ui.TreeNodeFlags.DefaultOpen) then
 				-- TODO: compare these values to those stored in local systems like worldmap, ascensionmanager, etc.
-				local mode, arenaWorldPrefab, regionID, locationID, seed, altMapGenID, ascensionLevel, seqNr, questParams = TheNet:GetRunData()
-				ui:Text("Mode: " .. mode)
-				if mode == STARTRUNMODE_ARENA then
-					ui:Text("Arena World Prefab: " .. arenaWorldPrefab)
-				end
-				ui:Text("Region ID: " .. regionID)
-				ui:Text("Location ID: " .. locationID)
-				ui:Text("Seed: " .. seed)
-				if mode == STARTRUNMODE_DEFAULT then
-					ui:Text("Alt MapGen ID: " .. altMapGenID)
-				end
-				ui:Text("Ascension Level: " .. ascensionLevel)
-				ui:Text("Sequence Number: " .. seqNr)
+				local mode, seqNr, dungeon_run_params, quest_params = TheNet:GetRunData()
+				if ui:BeginTable("rundata", 2, tableFlags) then
+					ui:TableSetupColumn("Run Data", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Value")
+					ui:TableHeadersRow()
 
-				local questParamNames = lume.keys(questParams)
-				table.sort(questParamNames)
-				local questTreeNodeFlags = #questParamNames > 0 and ui.TreeNodeFlags.DefaultOpen or ui.TreeNodeFlags.DefaultClosed
-				if ui:TreeNode("Quest Params", questTreeNodeFlags) then
-					local colors = self.colorscheme
-					ui:Columns(2, "Quest Params")
-					ui:SetColumnWidth(0, 150)
-					ui:SetColumnWidth(1, 150)
-					ui:TextColored(colors.header, "Key")
-					ui:NextColumn()
-					ui:TextColored(colors.header, "Value")
-					ui:NextColumn()
-					for _i,key in ipairs(questParamNames) do
-							ui:Text(key)
-							ui:NextColumn()
-							ui:Text(questParams[key])
-							ui:NextColumn()
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Sequence Number")
+						ui:TableNextColumn()
+						ui:Text(seqNr)
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Mode")
+						ui:TableNextColumn()
+						local mode_text = "Unknown"
+						if mode == STARTRUNMODE_ARENA then
+							mode_text = "Arena"
+						elseif mode == STARTRUNMODE_DEFAULT then
+							mode_text = "Default"
+						end
+						ui:Text(mode_text .. " (" .. mode .. ")")
+					ui:EndTable()
+				end
+				if ui:BeginTable("dungeonrunparams", 2, tableFlags) then
+					ui:TableSetupColumn("Dungeon Run Params", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Value")
+					ui:TableHeadersRow()
+
+					if mode == STARTRUNMODE_ARENA then
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Arena World Prefab")
+							ui:TableNextColumn()
+							ui:Text(dungeon_run_params.arena_world_prefab)
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Room Type")
+							ui:TableNextColumn()
+							ui:Text(dungeon_run_params.roomtype)
+					elseif mode == STARTRUNMODE_DEFAULT then
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Region ID")
+							ui:TableNextColumn()
+							ui:Text(dungeon_run_params.region_id)
 					end
-					ui:Columns()
-					ui:TreePop()
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Location ID")
+						ui:TableNextColumn()
+						ui:Text(dungeon_run_params.location_id)
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Seed")
+						ui:SameLineWithSpace()
+						if ui:Button(ui.icon.copy) then
+							ui:SetClipboardText(dungeon_run_params.seed or 0)
+						end
+						ui:TableNextColumn()
+						ui:Text(dungeon_run_params.seed)
+					if mode == STARTRUNMODE_DEFAULT then
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text("Alt MapGen ID")
+							ui:TableNextColumn()
+							ui:Text(dungeon_run_params.alt_mapgen_id)
+					end
+					ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text("Ascension Level")
+						ui:TableNextColumn()
+						ui:Text(dungeon_run_params.ascension)
+					ui:EndTable()
+				end
+
+				local quest_param_names = lume.keys(quest_params)
+				table.sort(quest_param_names)
+				if ui:BeginTable("questparams", 2, tableFlags) then
+					ui:TableSetupColumn("Quest Params", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Value")
+					ui:TableHeadersRow()
+
+					for _i,key in ipairs(quest_param_names) do
+						ui:TableNextRow()
+							ui:TableNextColumn()
+							ui:Text(key)
+							ui:TableNextColumn()
+							ui:Text(quest_params[key])
+					end
+					ui:EndTable()
 				end
 				ui:TreePop()
 			end
@@ -497,14 +626,17 @@ function DebugNetwork:RenderEntities(ui, panel)
 
 		local colw = ui:GetColumnWidth()
 	
-		local nrColumns = 11
+		local nrColumns = 12
 		ui:Columns(nrColumns, "Entities")
 
 		local onecolumn = colw / nrColumns;
 		ui:SetColumnWidth(0, onecolumn * 0.6)	-- guid
 		ui:SetColumnWidth(1, onecolumn * 0.6)	-- id
-		ui:SetColumnWidth(2, onecolumn * 1.5)	-- prefab
+		ui:SetColumnWidth(2, onecolumn * 1.7)	-- prefab
 		ui:SetColumnWidth(3, onecolumn * 1.5)	-- owner
+		ui:SetColumnWidth(4, onecolumn * 0.8)	-- minimal
+		ui:SetColumnWidth(5, onecolumn * 0.7)	-- seqnr
+		ui:SetColumnWidth(6, onecolumn * 0.7)	-- flags
 		local colors = self.colorscheme
 		ui:TextColored(colors.header, "Guid")
 		ui:NextColumn()
@@ -513,6 +645,8 @@ function DebugNetwork:RenderEntities(ui, panel)
 		ui:TextColored(colors.header, "Prefab")
 		ui:NextColumn()
 		ui:TextColored(colors.header, "Owner")
+		ui:NextColumn()
+		ui:TextColored(colors.header, "Minimal")
 		ui:NextColumn()
 		ui:TextColored(colors.header, "SeqNr")
 		ui:NextColumn()
@@ -549,6 +683,8 @@ function DebugNetwork:RenderEntities(ui, panel)
 				ui:NextColumn()
 				ui:TextColored(col, tostring(entity.owner))
 				ui:NextColumn()
+				ui:Checkbox("###" .. k, Ents[entity.guid]:IsMinimal())
+				ui:NextColumn()
 				ui:TextColored(col, tostring(entity.seqnr))
 				ui:NextColumn()
 				ui:TextColored(col, tostring(entity.flags))
@@ -579,6 +715,659 @@ function DebugNetwork:RenderEntities(ui, panel)
 		end
 
 		ui:Columns()
+	end
+end
+
+
+
+local WORLD_CATEGORIES = {
+	"FLAG",
+    "REGION",
+    "LOCATION",
+}
+
+
+local selectedWorldCategory
+local selectedWorldItem
+
+function DebugNetwork:RenderTestWorldUnlocks(ui)
+	ui:Columns(4)
+		ui:SetColumnWidth(0, 150)
+		ui:SetColumnWidth(1, 200)
+		ui:SetColumnWidth(2, 300)
+		ui:SetColumnWidth(3, 160)
+
+		ui:Text("IsUnlocked ")
+		ui:NextColumn()
+	
+		-- Combo box for category:
+		local index = 1
+		for i, v in ipairs(WORLD_CATEGORIES) do
+			if v == selectedWorldCategory then
+				index = i
+			end
+		end
+		selectedWorldCategory = WORLD_CATEGORIES[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##WorldCategory1", index, WORLD_CATEGORIES)
+		if changed then
+			selectedWorldCategory = WORLD_CATEGORIES[idx]
+		end
+
+
+		ui:NextColumn()
+
+		ui:SetNextItemWidth()
+		local changed, new_item = ui:InputText("##WorldItem1", selectedWorldItem)
+		if changed then
+			selectedWorldItem = new_item
+		end
+
+		ui:NextColumn()
+
+		-- Result:
+	
+		if TheWorldData:IsUnlocked(selectedWorldCategory, selectedWorldItem or "") then
+			ui:TextColored(UICOLORS.GREEN, "TRUE")
+		else
+			ui:TextColored(UICOLORS.RED, "FALSE")
+		end
+	ui:Columns()
+end
+
+
+function DebugNetwork:RenderNetworkWorldData(ui)
+	if TheNet:IsInGame() then
+		local data = TheWorldData:GetSaveData();
+
+		if data and data["Unlocks"] then
+			local unlocks = data["Unlocks"]
+
+			self:RenderTestWorldUnlocks(ui)
+
+			ui:Text("Size in bytes: ".. TheWorldData:GetSize())
+
+			for _, cat in pairs(WORLD_CATEGORIES) do
+				if ui:TreeNode(cat .. "##WorldCategory", ui.TreeNodeFlags.DefaultClosed) then
+					if unlocks[cat] then
+						ui:Indent()
+						for item, value in pairs(unlocks[cat]) do
+							ui:Text(item)
+						end
+						ui:Unindent()
+					end
+					ui:TreePop()
+				end
+			end
+
+--				if ui:Button("Dump worlddata") then
+--					dumptable(data)
+--				end
+		end
+	else
+		ui:Text("Not in network game")
+	end
+end
+
+function DebugNetwork:RenderNetworkWorldDataPanel(ui)
+	if ui:CollapsingHeader("WorldData") then
+		self:RenderNetworkWorldData(ui)
+	end
+end
+
+
+local PLAYER_CATEGORIES = {
+	"RECIPE",
+	"ENEMY",
+	"CONSUMABLE",
+	"ARMOUR",
+	"WEAPON_TYPE",
+	"POWER",
+--	"UNLOCKABLE_COSMETIC",
+--	"PURCHASABLE_COSMETIC",
+	"FLAG",
+--	"ASCENSION_LEVEL",
+	"LOCATION",
+	"REGION",
+}
+
+local selectedPlayerCategory
+local selectedPlayerItem
+
+function DebugNetwork:RenderTestPlayerUnlocks(playerID, ui)
+	ui:Columns(4)
+		ui:SetColumnWidth(0, 150)
+		ui:SetColumnWidth(1, 200)
+		ui:SetColumnWidth(2, 300)
+		ui:SetColumnWidth(3, 160)
+
+		ui:Text("IsUnlocked ")
+		ui:NextColumn()
+	
+		-- Combo box for category:
+		local index = 1
+		for i, v in ipairs(PLAYER_CATEGORIES) do
+			if v == selectedPlayerCategory then
+				index = i
+			end
+		end
+		selectedPlayerCategory = PLAYER_CATEGORIES[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##Category1", index, PLAYER_CATEGORIES)
+		if changed then
+			selectedPlayerCategory = PLAYER_CATEGORIES[idx]
+		end
+
+
+		ui:NextColumn()
+
+		ui:SetNextItemWidth()
+		local changed, new_item = ui:InputText("##Item1", selectedPlayerItem)
+		if changed then
+			selectedPlayerItem = new_item
+		end
+
+		ui:NextColumn()
+
+		-- Result:
+	
+		local unlocked = ThePlayerData:IsUnlocked(playerID, selectedPlayerCategory, selectedPlayerItem or "")
+		if unlocked then
+			ui:TextColored(UICOLORS.GREEN, "TRUE")
+		else
+			ui:TextColored(UICOLORS.RED, "FALSE")
+		end
+
+		ui:SameLineWithSpace()
+		if selectedPlayerItem and selectedPlayerItem~="" and ui:Button("Toggle") then
+			ThePlayerData:SetIsUnlocked(playerID, selectedPlayerCategory, selectedPlayerItem, not unlocked)
+		end
+	ui:Columns()
+end
+
+
+local Biomes = require"defs.biomes"
+
+local AllLocations
+local function FindAllLocations()
+	if not AllLocations then
+		AllLocations = {}
+		for id, def in pairs(Biomes.locations) do
+			if def.type == Biomes.location_type.DUNGEON then
+				table.insert(AllLocations, id)
+			end
+		end
+		table.sort(AllLocations)
+	end
+end
+
+
+local AllRegions
+local function FindAllRegions()
+	if not AllRegions then
+		AllRegions = {}
+		for id, def in pairs(Biomes.regions) do
+			table.insert(AllRegions, string.upper(id))
+		end
+		table.sort(AllRegions)
+	end
+
+end
+
+local AllWeaponTypes
+local function FindAllWeaponTypes()
+	if not AllWeaponTypes then
+		AllWeaponTypes = {}
+		for name, _ in pairs(WEAPON_TYPES) do
+			table.insert(AllWeaponTypes, name)
+		end
+		table.sort(AllWeaponTypes)
+	end
+end
+
+
+local selectedPlayerLocation
+local selectedPlayerWeapon
+
+function DebugNetwork:RenderTestPlayerAscension(playerID, ui)
+	ui:Columns(4)
+		ui:SetColumnWidth(0, 150)
+		ui:SetColumnWidth(1, 200)
+		ui:SetColumnWidth(2, 300)
+		ui:SetColumnWidth(3, 160)
+
+		ui:Text("Ascension Level ")
+		ui:NextColumn()
+	
+		-- Combo box for location:
+		FindAllLocations()
+
+		local index = 1
+		for i, v in ipairs(AllLocations) do
+			if v == selectedPlayerLocation then
+				index = i
+			end
+		end
+		selectedPlayerLocation = AllLocations[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##Location1", index, AllLocations)
+		if changed then
+			selectedPlayerLocation = AllLocations[idx]
+		end
+
+
+		ui:NextColumn()
+
+		-- Combo box for weapon:
+		local index = 1
+		FindAllWeaponTypes()
+		for i, v in ipairs(AllWeaponTypes) do
+			if v == selectedPlayerWeapon then
+				index = i
+			end
+		end
+		selectedPlayerWeapon = AllWeaponTypes[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##Weapon1", index, AllWeaponTypes)
+		if changed then
+			selectedPlayerWeapon = AllWeaponTypes[idx]
+		end
+
+		ui:NextColumn()
+
+		-- Result:
+		local level = ThePlayerData:GetCompletedAscensionLevel(playerID, selectedPlayerLocation, selectedPlayerWeapon) or -1;
+		ui:Text(tostring(level))
+
+		ui:BeginDisabled(level <= -1)
+			ui:SameLineWithSpace()
+			if ui:Button("-##AscMinus", 40) then
+				ThePlayerData:SetAscensionLevelCompleted(playerID, selectedPlayerLocation, selectedPlayerWeapon, level-1)			
+			end
+		ui:EndDisabled()
+
+		ui:BeginDisabled(level > 14)
+			ui:SameLineWithSpace()
+			if ui:Button("+##AscPlus", 40) then
+				ThePlayerData:SetAscensionLevelCompleted(playerID, selectedPlayerLocation, selectedPlayerWeapon, level+1)			
+			end
+		ui:EndDisabled()
+
+	ui:Columns()
+end
+
+local selectedPlayerCosmeticCategory
+local selectedPlayerCosmeticItem
+
+local allCosmeticCategories
+local allCosmetics
+local function FindAllCosmetics()
+	if not allCosmetics then
+		allCosmetics = {}
+		allCosmeticCategories = Cosmetic.GetOrderedSlots()
+
+		for cat, items in pairs(Cosmetic.Items) do
+			for itemname, params in pairs(items) do
+				if not allCosmetics[cat] then
+					allCosmetics[cat] = {}
+				end
+
+				table.insert(allCosmetics[cat], itemname)
+			end
+		end
+
+
+		-- Sort them alphabetically:
+		for cat, items in pairs(allCosmetics) do
+			table.sort(items)
+		end
+	end
+end
+
+function DebugNetwork:RenderTestPlayerCosmetics(playerID, ui)
+	FindAllCosmetics()
+
+	ui:Columns(4)
+		ui:SetColumnWidth(0, 150)
+		ui:SetColumnWidth(1, 200)
+		ui:SetColumnWidth(2, 300)
+		ui:SetColumnWidth(3, 160)
+
+		ui:Text("Is Cosmetic Unlocked")
+		ui:NextColumn()
+
+
+		-- Combo box for category:
+		local index = 1
+		for i, v in ipairs(allCosmeticCategories) do
+			if v == selectedPlayerCosmeticCategory then
+				index = i
+			end
+		end
+		selectedPlayerCosmeticCategory = allCosmeticCategories[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##CosmeticCategory1", index, allCosmeticCategories)
+		if changed then
+			selectedPlayerCosmeticCategory = allCosmeticCategories[idx]
+		end
+
+
+		ui:NextColumn()
+
+		-- Combo box for all items:
+		index = 1
+		local items = allCosmetics[selectedPlayerCosmeticCategory] or {}
+		for i, v in ipairs(items) do
+			if v == selectedPlayerCosmeticItem then
+				index = i
+			end
+		end
+		selectedPlayerCosmeticItem = items[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##CosmeticItem1", index, items)
+		if changed then
+			selectedPlayerCosmeticItem = items[idx]
+		end
+
+		ui:NextColumn()
+
+		-- Result:
+	
+		local unlocked = ThePlayerData:IsCosmeticUnlocked(playerID, selectedPlayerCosmeticCategory, selectedPlayerCosmeticItem or "")
+		if unlocked then
+			ui:TextColored(UICOLORS.GREEN, "TRUE")
+		else
+			ui:TextColored(UICOLORS.RED, "FALSE")
+		end
+
+		ui:SameLineWithSpace()
+		if selectedPlayerCosmeticItem and selectedPlayerCosmeticItem~="" and ui:Button("Toggle") then
+			ThePlayerData:SetIsCosmeticUnlocked(playerID, selectedPlayerCosmeticCategory, selectedPlayerCosmeticItem, not unlocked)
+		end
+
+	ui:Columns()
+end
+
+
+
+local selectedPlayerHeartRegion
+local selectedPlayerHeartIndex
+
+function DebugNetwork:RenderTestPlayerHeartLevels(playerID, ui)
+	ui:Columns(4)
+		ui:SetColumnWidth(0, 150)
+		ui:SetColumnWidth(1, 200)
+		ui:SetColumnWidth(2, 300)
+		ui:SetColumnWidth(3, 160)
+
+		ui:Text("Heart Level ")
+		ui:NextColumn()
+	
+		-- Combo box for location:
+		FindAllRegions();
+
+		local index = 1
+		for i, v in ipairs(AllRegions) do
+			if v == selectedPlayerHeartRegion then
+				index = i
+			end
+		end
+		selectedPlayerHeartRegion = AllRegions[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##HeartRegion1", index, AllRegions)
+		if changed then
+			selectedPlayerHeartRegion = AllRegions[idx]
+		end
+
+
+		ui:NextColumn()
+
+		-- Combo box for index:
+		local index = 1
+		local allPossibleIndices = { "1", "2" }
+		for i, v in ipairs(allPossibleIndices) do
+			if v == selectedPlayerHeartIndex then
+				index = i
+			end
+		end
+		selectedPlayerHeartIndex = allPossibleIndices[index]
+
+		ui:SetNextItemWidth()
+		local changed, idx = ui:Combo("##HeartIndex1", index, allPossibleIndices)
+		if changed then
+			selectedPlayerHeartIndex = allPossibleIndices[idx]
+		end
+
+		ui:NextColumn()
+
+		-- Result:
+		local level = ThePlayerData:GetHeartLevel(playerID, selectedPlayerHeartRegion, selectedPlayerHeartIndex) or 0;
+		ui:Text(tostring(level))
+
+		ui:BeginDisabled(level == 0)
+			ui:SameLineWithSpace()
+			if ui:Button("-##HeartMinus", 40) then
+				ThePlayerData:SetHeartLevel(playerID, selectedPlayerHeartRegion, selectedPlayerHeartIndex, level-1)			
+			end
+		ui:EndDisabled()
+
+		ui:BeginDisabled(level > 14)
+			ui:SameLineWithSpace()
+			if ui:Button("+##HeartPlus", 40) then
+				ThePlayerData:SetHeartLevel(playerID, selectedPlayerHeartRegion, selectedPlayerHeartIndex, level+1)			
+			end
+		ui:EndDisabled()
+	ui:Columns()
+end
+
+local show_synced = true
+local show_unsynced = true
+local COLOR_SYNCED <const> = WEBCOLORS.CYAN
+local COLOR_UNSYNCED <const> = WEBCOLORS.ORANGE
+
+function DebugNetwork:RenderNetworkPlayerDataUnlocksForPlayer(ui, playerID)
+	local data = ThePlayerData:GetSaveData(playerID);
+
+	if data then
+		self:RenderTestPlayerUnlocks(playerID, ui)
+		self:RenderTestPlayerAscension(playerID, ui)
+		self:RenderTestPlayerCosmetics(playerID, ui)
+		self:RenderTestPlayerHeartLevels(playerID, ui)
+
+		ui:Text("Size in bytes: ".. ThePlayerData:GetSize(playerID))
+
+		-- Render all flags:
+		if data["Unlocks"] then
+			if ui:CollapsingHeader("Unlocks") then
+				if ui:Checkbox("###ShowSynced", show_synced) then
+					show_synced = not show_synced
+				end
+				ui:SameLineWithSpace(5)
+				ui:Text("Show")
+				ui:SameLineWithSpace(5)
+				ui:TextColored(COLOR_SYNCED, "synced")
+
+				ui:SameLineWithSpace(20)
+
+				if ui:Checkbox("###ShowUnsynced", show_unsynced) then
+					show_unsynced = not show_unsynced
+				end
+				ui:SameLineWithSpace(5)
+				ui:Text("Show")
+				ui:SameLineWithSpace(5)
+				ui:TextColored(COLOR_UNSYNCED, "unsynced")
+
+				local unlocks = data["Unlocks"]
+
+				for _, cat in ipairs(PLAYER_CATEGORIES) do
+					local is_synced = ThePlayerData:IsCategorySynced(cat)
+					local color = is_synced and COLOR_SYNCED or COLOR_UNSYNCED
+					if is_synced and show_synced or not is_synced and show_unsynced then
+						if ui:TreeNode(cat .. "##PlayerCategory", ui.TreeNodeFlags.DefaultClosed) then
+							if unlocks[cat] then
+								ui:Indent()	
+
+								-- Sort the items alphabetically
+								local items = {}
+								for item, value in pairs(unlocks[cat]) do
+									table.insert(items, item)
+								end
+								table.sort(items)
+								
+								for _, item in ipairs(items) do
+									ui:TextColored(color, item);
+								end
+								ui:Unindent()
+							end
+							ui:TreePop()
+						end
+					end
+				end
+			end
+		end
+		if data["Ascension"] then
+			if ui:CollapsingHeader("Ascension Levels") then
+				local ascension = data["Ascension"]
+
+				for location, weapons in pairs(ascension) do
+					if ui:TreeNode(location .. "##PlayerLocation", ui.TreeNodeFlags.DefaultClosed) then
+						if weapons then
+							ui:Indent()	
+							for weapon, level in pairs(weapons) do
+								ui:Text(weapon .. "  - Level " .. level);
+							end
+							ui:Unindent()
+						end
+						ui:TreePop()
+					end
+				end
+			end
+		end
+		if data["Cosmetics"] then
+			if ui:CollapsingHeader("Cosmetics") then
+				local cosmetics = data["Cosmetics"]
+
+				for cat, items in pairs(cosmetics) do
+					if ui:TreeNode(cat .. "##PlayerCosmeticCategory", ui.TreeNodeFlags.DefaultClosed) then
+						if cosmetics[cat] then
+							ui:Indent()	
+
+							-- Sort the items alphabetically
+							local items = {}
+							for item, value in pairs(cosmetics[cat]) do
+								table.insert(items, item)
+							end
+							table.sort(items)
+
+							for _, item in ipairs(items) do
+								ui:Text(item);
+							end
+							ui:Unindent()
+						end
+						ui:TreePop()
+					end
+				end
+			end
+		end
+		if data["HeartLevels"] then
+			if ui:CollapsingHeader("Heart Levels") then
+				local heartlevels = data["HeartLevels"]
+
+				for reg, items in pairs(heartlevels ) do
+					if ui:TreeNode(reg .. "##PlayerHeartRegion", ui.TreeNodeFlags.DefaultClosed) then
+						if heartlevels[reg] then
+							ui:Indent()	
+							for item, level in pairs(heartlevels[reg]) do
+								ui:Text(item .. "  - Level " .. level);
+							end
+							ui:Unindent()
+						end
+						ui:TreePop()
+					end
+				end
+			end
+		end
+		if data["CharacterCreator"] then
+			if ui:CollapsingHeader("Character Creator") then
+				local ccdata = data["CharacterCreator"]
+
+				ui:Text("Species: " .. ccdata.species)
+
+				local ccdata_bodyparts = lume.sort(lume.keys(ccdata.bodyparts))
+				local ccdata_colorgroups = lume.sort(lume.keys(ccdata.colorgroups))
+				local tableKeyWidth <const> = 200
+				local tableFlags <const> = ui.TableFlags.Borders
+				if ui:BeginTable("charactercreator_bodyparts", 2, tableFlags) then
+					ui:TableSetupColumn("Body Part", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Name")
+					ui:TableHeadersRow()
+					for _i,k in ipairs(ccdata_bodyparts) do
+						ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text(k)
+						ui:TableNextColumn()
+						ui:Text(ccdata.bodyparts[k])
+					end
+					ui:EndTable()
+				end
+				if ui:BeginTable("charactercreator_colorgroups", 2, tableFlags) then
+					ui:TableSetupColumn("Color Group", ui.TableColumnFlags.WidthFixed, tableKeyWidth)
+					ui:TableSetupColumn("Name")
+					ui:TableHeadersRow()
+					for _i,k in ipairs(ccdata_colorgroups) do
+						ui:TableNextRow()
+						ui:TableNextColumn()
+						ui:Text(k)
+						ui:TableNextColumn()
+						ui:Text(ccdata.colorgroups[k])
+					end
+					ui:EndTable()
+				end
+			end
+		end
+	end
+end
+
+function DebugNetwork:RenderNetworkPlayerData(ui, panel)
+	if ui:CollapsingHeader("PlayerData") then
+		if TheNet:IsInGame() then
+			local playernames = {}
+			local playerIDs = {}
+
+			for _, playerID in ipairs(TheNet:GetPlayerList()) do
+				table.insert(playernames, TheNet:GetPlayerName(playerID) or "")
+				table.insert(playerIDs, playerID)
+			end
+
+			local index = 1
+			-- Find the previously selected player:
+			for i, v in ipairs(playerIDs) do
+				if v == selectedPlayerID then
+					index = i
+				end
+			end
+			selectedPlayerID = playerIDs[index]
+
+			local changed, idx = ui:Combo("Players##1", index, playernames)
+			if changed then
+				selectedPlayerID = playerIDs[idx]
+			end
+
+			if selectedPlayerID ~= nil then
+				ui:Indent()
+				self:RenderNetworkPlayerDataUnlocksForPlayer(ui, selectedPlayerID);
+				ui:Unindent()	
+			end
+		else
+			ui:Text("Not in network game")
+		end
 	end
 end
 
@@ -616,7 +1405,6 @@ end
 
 function DebugNetwork:RenderRemoteBlobs(ui, panel)
 	if ui:CollapsingHeader("Blobs (Remote)") then
-			
 		local clients = TheNet:GetRemoteClientsList()
 
 		if clients then
@@ -636,30 +1424,30 @@ function DebugNetwork:RenderRemoteBlobs(ui, panel)
 			end
 
 			if selectedRemoteClient ~= nil then
-			local remoteblobs = TheNet:GetRemoteBlobs(selectedRemoteClient)
-			if remoteblobs then
-				local index2 = 1
+				local remoteblobs = TheNet:GetRemoteBlobs(selectedRemoteClient)
+				if remoteblobs then
+					local index2 = 1
 
-				-- Find the previously selected blobID:
-				for i, v in ipairs(remoteblobs) do
-					if v == selectedRemoteBlob then
-						index2 = i
+					-- Find the previously selected blobID:
+					for i, v in ipairs(remoteblobs) do
+						if v == selectedRemoteBlob then
+							index2 = i
+						end
 					end
-				end
-				selectedRemoteBlob = remoteblobs[index2]
+					selectedRemoteBlob = remoteblobs[index2]
 
-				local changed, idx = ui:Combo("Blobs##2", index2, remoteblobs)
-				if changed then
-					selectedRemoteBlob = remoteblobs[idx]
-				end
+					local changed, idx = ui:Combo("Blobs##2", index2, remoteblobs)
+					if changed then
+						selectedRemoteBlob = remoteblobs[idx]
+					end
 
 					if selectedRemoteBlob ~= nil and selectedRemoteClient ~= nil then
-				ui:BeginChild("HexViewer##2", 0, 200, true, ui.WindowFlags.HorizontalScrollbar)
-					TheNet:ViewRemoteBlob(selectedRemoteBlob, selectedRemoteClient)
-				ui:EndChild()
+						ui:BeginChild("HexViewer##2", 0, 200, true, ui.WindowFlags.HorizontalScrollbar)
+						TheNet:ViewRemoteBlob(selectedRemoteBlob, selectedRemoteClient)
+						ui:EndChild()
+					end
+				end
 			end
-		end
-	end
 		end
 	end
 end
@@ -702,6 +1490,8 @@ function DebugNetwork:RenderPanel( ui, panel )
 	self:RenderBadConnectionSimulator(ui)
 
 	self:RenderNetworkState(ui, panel)
+	self:RenderNetworkWorldDataPanel(ui)
+	self:RenderNetworkPlayerData(ui, panel)
 	self:RenderPlayers(ui)
 	self:RenderNetworkEvents(ui, panel)
 	

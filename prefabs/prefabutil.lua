@@ -36,8 +36,62 @@ end
 function prefabutil.CollectAssetsForAnim(assets, build, bank, bankfile, force)
 	prefabutil.TryAddAsset_Anim(assets, build, force)
 
+	if bank and build ~= bank then
+		prefabutil.TryAddAsset_Anim(assets, bank, force)
+	end
 	if bankfile ~= nil and bankfile ~= build then
 		prefabutil.TryAddAsset_Anim(assets, bankfile, force)
+	end
+end
+
+function prefabutil.EditAnim(ui, editor, params)
+	if ui:TreeNode("Build/Bank (optional if same as Prefab)") then
+		--Build name
+		local _, newbuild = ui:InputText("Build", params.build, imgui.InputTextFlags.CharsNoBlank)
+		if newbuild ~= nil then
+			if string.len(newbuild) == 0 then
+				newbuild = nil
+			end
+			if params.build ~= newbuild then
+				params.build = newbuild
+				editor:SetDirty()
+			end
+		end
+		ui:SetTooltipIfHovered("The build is the movement for this anim.")
+
+		--Bank name
+		local _, newbank = ui:InputText("Bank", params.bank, imgui.InputTextFlags.CharsNoBlank)
+		if newbank ~= nil then
+			if string.len(newbank) == 0 then
+				newbank = nil
+			end
+			if params.bank ~= newbank then
+				params.bank = newbank
+				editor:SetDirty()
+			end
+		end
+		ui:SetTooltipIfHovered({
+				"The bank is the art for this anim. Generally the root symbol.",
+				"Often many builds are added to a single bank, like all weapons added to the player bank.",
+			})
+
+		--Bank file
+		local _, newbankfile = ui:InputText("Bank File", params.bankfile, imgui.InputTextFlags.CharsNoBlank)
+		if newbankfile ~= nil then
+			if string.len(newbankfile) == 0 then
+				newbankfile = nil
+			end
+			if params.bankfile ~= newbankfile then
+				params.bankfile = newbankfile
+				editor:SetDirty()
+			end
+		end
+		ui:SetTooltipIfHovered({
+				"When you have many .fla going into the same bank (root symbol).",
+				"Specify the bank file here that your art comes from to ensure it gets loaded. (No .zip or .fla)",
+			})
+
+		editor:AddTreeNodeEnder(ui)
 	end
 end
 
@@ -78,6 +132,30 @@ function prefabutil.CollectAssetsForParticleSystem(assets, params, force)
 			end
 		end
 	end
+end
+
+
+function prefabutil.CreateGroupPrefabs(autogen_data, prefabs)
+	local groups = {}
+	for name, params in pairs(autogen_data) do
+		if params.group and string.len(params.group) > 0 then
+			local group_items = groups[params.group] or {}
+			groups[params.group] = group_items
+			table.insert(group_items, name)
+		end
+	end
+
+	local group_prefabs = {}
+	for groupname, group_items in pairs(groups) do
+		-- Dummy prefab (no fn) for loading dependencies. Ignore "test" groups
+		-- since we won't need to load tests.
+		if not groupname:lower():startswith("test") then
+			local gname = GroupPrefab(groupname)
+			table.insert(prefabs, Prefab(gname, nil, nil, group_items))
+			table.insert(group_prefabs, gname)
+		end
+	end
+	return prefabs, group_prefabs
 end
 
 function prefabutil.ApplyScript(inst, prefab, scriptfile, script_args)

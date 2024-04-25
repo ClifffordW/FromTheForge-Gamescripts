@@ -1,5 +1,6 @@
 local Image = require "widgets.image"
 local AnimPuppet = require "widgets.animpuppet"
+local PlayerPuppet = require "widgets.playerpuppet"
 local Widget = require "widgets.widget"
 local easing = require "util.easing"
 
@@ -36,13 +37,14 @@ local SCALE_MIN = 0.001 -- use non-zero value in case anything needs to transfor
 --   puppetAnchorV (string) : defaults to "bottom"
 --   puppetOffset (Vector2) : screen space coordinates
 --   puppetScale (number)
+--   puppetPlayer (entity)
 --   urgent (bool) : explicitly set presentation style (defaults to true)
 local OffScreenIndicatorWidget = Class(Widget, function(self, offscreen_options)
 	Widget._ctor(self, "OffScreenIndicator")
 	offscreen_options = offscreen_options or {}
 
 	self.pipScale = offscreen_options.pipScale or (offscreen_options.pipCustomWidget and 1 or PIP_SCALE)
-	
+
 	-- puppetScale has a series of overrides when the target entity is set
 	self.puppetScale = offscreen_options.puppetScale
 	self.puppetOffset = offscreen_options.puppetOffset
@@ -62,7 +64,7 @@ local OffScreenIndicatorWidget = Class(Widget, function(self, offscreen_options)
 			self.portraitMask = self.pip:AddChild(Image("images/ui_ftf_ingame/player_portrait_mask.tex"))
 				:SetMask()
 		end
-		self.puppet = self.pip:AddChild(AnimPuppet())
+		self.puppet = self.pip:AddChild(offscreen_options.puppetPlayer and PlayerPuppet() or AnimPuppet())
 			:SetScale(self.puppetScale or PUPPET_SCALE)
 			:SetAnchors(offscreen_options.puppetAnchorH or "center", offscreen_options.puppetAnchorV or "bottom")
 		if not offscreen_options.hideBackground then
@@ -70,19 +72,51 @@ local OffScreenIndicatorWidget = Class(Widget, function(self, offscreen_options)
 			self.portraitBg = self.pip:AddChild(Image("images/ui_ftf_ingame/player_portrait_bg.tex"))
 				:SetAddColor(UICOLORS.BACKGROUND_DARK)
 		end
+
+		if offscreen_options.puppetPlayer then
+			assert(offscreen_options.puppetPlayer.prefab == "player_side")
+
+			self.puppet:CloneCharacterWithEquipment(offscreen_options.puppetPlayer)
+
+			self.inst:ListenForEvent(
+				"charactercreator_load",
+				function(inst)
+					self.puppet:CloneCharacterWithEquipment(inst)
+				end,
+				offscreen_options.puppetPlayer)
+
+			self.inst:ListenForEvent(
+				"loadout_changed",
+				function(inst)
+					self.puppet:CloneCharacterWithEquipment(inst)
+				end,
+				offscreen_options.puppetPlayer)
+
+			self.inst:ListenForEvent(
+				"newstate",
+				function(inst, _data)
+					self.puppet:SetFacing(inst.Transform:GetFacing())
+					self.puppet:GetAnimState():PlayAnimation(inst.AnimState:GetCurrentAnimationName())
+				end,
+				offscreen_options.puppetPlayer)
+		end
 	end
 
 	self.arrow = self:AddChild(Image("images/ui_ftf_ingame/ui_offscreen.tex"))
 		:SetScale(ARROW_SCALE)
 		:SetAnchors("center", "center")
 
-	self:SetUrgent(offscreen_options.urgent or true)
+	if offscreen_options.urgent ~= nil then
+		self:SetUrgent(offscreen_options.urgent)
+	else
+		self:SetUrgent(true)
+	end
 end)
 
 function OffScreenIndicatorWidget:SetUrgent(is_urgent)
 	assert(is_urgent ~= nil)
 	self.should_blink = is_urgent
-	local color = UICOLORS.LIGHT_TEXT
+	local color = UICOLORS.OVERLAY_LIGHT
 	if is_urgent then
 		color = UICOLORS.OVERLAY_ATTENTION_GRAB
 	end
@@ -106,7 +140,7 @@ function OffScreenIndicatorWidget:SetTargetEntity(proxy, target, isVisible)
 		self.lifetime = 0
 		self:SetPosition(x,y)
 
-		if self.puppet then
+		if self.puppet and self.puppet.SetTarget then
 			self.puppet:SetTarget(target)
 		end
 
@@ -135,14 +169,16 @@ function OffScreenIndicatorWidget:SetTargetEntity(proxy, target, isVisible)
 			self.puppet:SetPosition(self:CalculatePuppetPosition())
 		end
 
+		self.arrow:Show()
 		self:Show()
 		self:StartUpdating()
 	else
 		self.lifetime = 0
-		if self.puppet then
+		if self.puppet and self.puppet.ClearTarget then
 			self.puppet:ClearTarget()
 		end
 		self.pip:ScaleTo(self.pip:GetScale(), SCALE_MIN, PIP_SCALE_OUT_TIME, easing.outExpo, function() self:Hide() end)
+		self.arrow:Hide()
 		self:StopUpdating()
 	end
 
@@ -151,15 +187,18 @@ end
 
 function OffScreenIndicatorWidget:CalculatePuppetPosition()
 	dbassert(self.puppet ~= nil)
-	local headPos = self.puppet:GetSymbolPosition("head")
-	local footPos = self.puppet:GetSymbolPosition("foot")
+	local headPos, footPos
+	if self.puppet.GetSymbolPosition then
+		headPos = self.puppet:GetSymbolPosition("head")
+		footPos = self.puppet:GetSymbolPosition("foot")
+	end
 	local puppetPos = self.puppetOffset or Vector2(0, PUPPET_POS_Y)
 	-- puppet symbol positions are in absolute screenspace UI
 	-- the widget wants the local UI position
 	-- if the symbols are available, use them to try and keep the puppet centered and in-frame
 	if headPos and footPos then
 		local approxHeight = math.abs((headPos - footPos).y)
-		if self.puppet:HasExtraPart("head") then
+		if self.puppet.HasExtraPart and self.puppet:HasExtraPart("head") then
 			approxHeight = approxHeight + PUPPET_HEAD_OFFSET_Y
 		end
 		local yOffset = approxHeight * ((self.target:HasTag("large") or self.target:HasTag("giant")) and 0.1 or 0.5)

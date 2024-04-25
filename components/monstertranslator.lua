@@ -1,4 +1,5 @@
 local lume = require "util.lume"
+local FollowLabel = require "widgets.ftf.followlabel"
 
 -- These strings are defined here to translate into monster language from English.
 -- Once we can access English strings from any language and want to see translated monster language in-game,
@@ -7,27 +8,55 @@ local monster_strings =
 {
 	thatcher =
 	{
-		THATCHER_INTRO_1 = "[TEMP] Hello! Let's be friends!",
-		THATCHER_INTRO_2 = "[TEMP] Have you heard of a game called Rotwood? It's the best game ever!",
-		THATCHER_INTRO_3 = "[TEMP] No you haven't? Then prepare to DIE!",
+		THATCHER_INTRO_1 = "[TEMP] Who are you? Who are WE?",
+		THATCHER_INTRO_2 = "[TEMP] WE will protect her!",
+		THATCHER_INTRO_3 = "[TEMP] Our HIVE! Our QUEEN!\nAway! Away!",
+		THATCHER_INTRO_3 = "[TEMP] Shred! Shred! Shred!\nWE shred you!",
 
-		THATCHER_DEATH_1 = "[TEMP] Aaaah! This is it for me...",
-		THATCHER_DEATH_2 = "[TEMP] Please make my body parts into some fine armour!",
-		THATCHER_DEATH_3 = "[TEMP] Oh, and remember to buy Rotwood and tell your friends!",
-	},
+		THATCHER_DEATH_1 = "[TEMP] Q... QUEEN...",
+		THATCHER_DEATH_2 = "[TEMP] Hurts.\n...Why...?",
+		THATCHER_DEATH_3 = "[TEMP] Where is our body?",
+		THATCHER_DEATH_4 = "[TEMP] Where are my bodies?",
+		THATCHER_DEATH_4 = "[TEMP] QUEEN... help WE...",
+		THATCHER_DEATH_5 = "[TEMP] I... WE... Swarm...",
+
+		THATCHER_SPECIAL_1_1 = "[TEMP] Attack! Protect! We are getting you!",
+		THATCHER_SPECIAL_1_2 = "[TEMP] SPINNING MANTIS BLADE!",
+
+		THATCHER_SPECIAL_2_1 = "[TEMP] You cannot get away!",
+		THATCHER_SPECIAL_2_2 = "[TEMP] RISING GRASSHOPPER!",
+		THATCHER_SPECIAL_2_1 = "[TEMP] WE smell you!",
+
+		THATCHER_SPECIAL_3_1 = "[TEMP] Fear WE!",
+		THATCHER_SPECIAL_3_2 = "[TEMP] SUPER STING!",
+		THATCHER_SPECIAL_3_3 = "[TEMP] BIG ATTACK! YOU GET HURT NOW!",
+		THATCHER_SPECIAL_3_4 = "[TEMP] Leave HIVE alone!",
+
+		THATCHER_PHASE_TRANSITION_1 = "[TEMP] You are bad.\nNasty to the BONE.",
+		THATCHER_PHASE_TRANSITION_2 = "[TEMP] Your body will hit the FLOOR!",
+		THATCHER_PHASE_TRANSITION_2 = "[TEMP] WE... were formed... to be WILD.",
+
+		THATCHER_TAUNT_1 = "[TEMP] You are small! WE are many!",
+		THATCHER_TAUNT_2 = "[TEMP] WE give you... ENCORE!",
+		THATCHER_TAUNT_3 = "[TEMP] You want show?? WE give!",
+		THATCHER_TAUNT_4 = "[TEMP] You! You will not hurt our QUEEN!",
+		THATCHER_TAUNT_5 = "[TEMP] Away from loved QUEEN!\nAway!",
+	}
 }
 
 local MonsterTranslator = Class(function(self, inst)
 	self.inst = inst
-    self.display_string = nil
+	self.overlay_label = nil
+	self.overlay_label_remove_task = nil
+    self.current_id = nil
 end)
 
 function MonsterTranslator:OnNetSerialize()
 	local e = self.inst.entity
-	local has_display_string = self.display_string ~= nil
+	local has_display_string = self.current_id ~= nil
 	e:SerializeBoolean(has_display_string)
 	if has_display_string then
-		e:SerializeString(self.display_string)
+		e:SerializeString(self.current_id)
 	end
 end
 
@@ -35,10 +64,16 @@ function MonsterTranslator:OnNetDeserialize()
 	local e = self.inst.entity
 	local has_display_string = e:DeserializeBoolean()
 	if has_display_string then
-    	local updated_string = e:DeserializeString()
-		-- TODO: add code to show/update/hide serialized string if it changed compared to the local version.
-
-		self.display_string = updated_string
+    	local updated_string_id = e:DeserializeString()
+		-- Show/update/hide the serialized string if it changed compared to the local version.
+		if self.current_id ~= updated_string_id then
+			self:DisplayMonsterString(self.inst.prefab, updated_string_id)
+			self.current_id = updated_string_id
+		end
+	elseif self.current_id and self.overlay_label then
+		self.overlay_label:Remove()
+		self.overlay_label = nil
+		self.current_id = nil
 	end
 end
 
@@ -53,11 +88,12 @@ local monster_translators =
 	thatcher = function(str)
 		local vowel_replacements =
 		{
-			a = "'stee",
-			e = "'ielk", -- Thatcher's favourite word ;)
-			i = "'knahs",
-			o = "'aro",
-			u = "'truw",
+			a = "-CHRP- ",
+			e = "'Brr", -- Thatcher's favourite word ;)
+			i = "'Uzz",
+			o = "'Scree",
+			u = "'itchitch",
+			y = "'chit",
 		}
 
 		-- Generate consonant shift table
@@ -91,7 +127,7 @@ local monster_translators =
 					new_letter = string.upper(new_letter)
 				end
 				translated_string = translated_string .. new_letter
-			elseif str.match(chr, "[ !.?]") then
+			elseif str.match(chr, "[ !.?\n]") then
 				translated_string = translated_string .. chr
 			else
 				-- Ignore the character
@@ -128,6 +164,46 @@ function MonsterTranslator:GetMonsterString(id, string_id)
 	end
 
 	return monster_strings[id][string_id]
+end
+
+function MonsterTranslator:ClearMonsterString()
+	if self.overlay_label then
+		if self.overlay_label_remove_task then
+			self.overlay_label_remove_task:Cancel()
+		end
+
+		self.overlay_label:Remove()
+		self.overlay_label = nil
+	end
+end
+
+function MonsterTranslator:DisplayMonsterString(id, string_id, duration, offset_y)
+	-- TODO: Check to see if we should display the non-translated or translated monster string.
+	local text_string = self:GetTranslatedMonsterString(id, string_id)
+
+	-- Only allow one overlay label to be shown at a time; update the previous one if it exists.
+	self:ClearMonsterString()
+
+	self.overlay_label = TheDungeon.HUD:OverlayElement(FollowLabel())
+				:SetText(text_string)
+				:SetTarget(self.inst)
+				:Offset(0, offset_y or 600)
+				:SetClickable(false)
+	self.overlay_label:GetLabelWidget()
+				:SetShadowColor(UICOLORS.BLACK)
+				:SetShadowOffset(1, -1)
+				:SetOutlineColor(UICOLORS.BLACK)
+				:EnableShadow()
+				:EnableOutline()
+	if self.inst:IsLocal() then
+		self.overlay_label_remove_task = self.inst:DoTaskInAnimFrames(duration or 45, function()
+			self.overlay_label:Remove()
+			self.overlay_label = nil
+			self.current_id = nil
+		end)
+	end
+
+	self.current_id = string_id
 end
 
 return MonsterTranslator

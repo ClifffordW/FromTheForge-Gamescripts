@@ -17,7 +17,7 @@ local function PlayLandSplash(inst, x, z)
 end
 
 local function FindShoreForShotput(shotput)
-	--TEMP(jambell): SUPER temporary for now until the 'holes' are not considered walkable space, or another solution. Find a tile which is ground, spawn there.
+	--TEMP: SUPER temporary for now until the 'holes' are not considered walkable space, or another solution. Find a tile which is ground, spawn there.
 	local x,z = shotput.Transform:GetWorldXZ()
 	local final_x
 	local final_z

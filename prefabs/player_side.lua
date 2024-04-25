@@ -1,12 +1,17 @@
-local easing = require "util.easing"
 local Cosmetic = require "defs.cosmetics.cosmetics"
 local EffectEvents = require "effectevents"
 local Equipment = require "defs.equipment"
+local LootEvents = require "lootevents"
+local PlayerPlacer = require "components.playerplacer"
+local PlayerStatsFXer = require "components.playerstatsfxer"
 local Power = require "defs.powers"
-local fmodtable = require "defs.sound.fmodtable"
-local prefabutil = require "prefabs.prefabutil"
 local SGPlayerCommon = require "stategraphs.sg_player_common"
 local Weight = require "components.weight"
+local easing = require "util.easing"
+local fmodtable = require "defs.sound.fmodtable"
+local lume = require "util.lume"
+local prefabutil = require "prefabs.prefabutil"
+local playerutil = require "util.playerutil"
 
 PER_PLAYER_SILHOUETTE_COLOR = false
 PLAYER_SILHOUETTE_ALPHA = 0.2
@@ -55,6 +60,17 @@ local function SetPlayerColor(inst, skin_rgb)
 		inst.components.playerhighlight:SetPlayer(inst)
 	end
 
+	if inst.components.playerplacer then
+		inst.components.playerplacer:SetPlayer(inst)
+	end
+
+	-- To make the player 'pop' a bit more in the environment, let's nudge them a bit brighter.
+	-- They should 'pop' off the screen a bit more than the environment, other creatures, etc.
+	if inst:IsLocal() then
+		inst.AnimState:SetBrightness(1.2)
+	--	inst.AnimState:SetSaturation(1.1)
+	end
+
 	assert(inst.uicolor)
 end
 
@@ -86,6 +102,10 @@ local function OnPlayerEntered(inst)
 	end
 
 	SetPlayerColor(inst)
+
+	if inst.components.questcentral:IsCinematicDirector() then
+		TheCamera:Snap()
+	end
 end
 
 --------------------------------------------------------------------------
@@ -99,24 +119,31 @@ local function OnSetOwner(inst)
 	inst.name = inst.Network:GetClientName()
 	inst.userid = inst.Network:GetUserID()
 	inst.picking_character = true
+	-- if not TheSaveSystem.cheats:GetValue("skip_new_game_flow") and TheNet:IsHost() and playerutil.CountLocalPlayers() == 1 then
+	-- 	TheLog.ch.Audio:print ("***///***player_side.lua: We think this is a new game and heading to the intro quest. No delayed start of town music.")
+	-- 	TheWorld.components.ambientaudio.is_new_game = true
+	-- end
 
 	local playerID = inst.Network:GetPlayerID()
-	print("OnSetOwner for " .. inst.name .. " playerID=" .. playerID);
+	TheLog.ch.Player:printf("OnSetOwner for <%s> playerID=%s", inst, playerID);
 	if not inst:IsSpectating() then
 		TheNet:SetRunPlayerStatus(playerID, RUNPLAYERSTATUS_ACTIVE)
 	end
 
 	local on_player_set = function()
+
 		inst.picking_character = nil
 		-- give these every time, it's possible that they will change.
 
 		-- Seems these are not using OnPostSpawn so they don't fire until we
 		-- have a fully created and owned player?
-		inst.components.questcentral:OnPostSetPlayerOwner()
+		inst.components.huntunlocker:OnPostSetOwner() -- do this before questcentral so quests can respond.
+		inst.components.questcentral:OnPostSetOwner()
 		inst.components.powermanager:OnPostSetPlayerOwner()
 
 		if TheWorld:HasTag("town") then
 			inst.components.health:SetPercent(1)
+			inst:PushEvent("enter_town")
 		end
 
 		if inst.components.progresstracker:GetValue("total_num_runs") == 0 then
@@ -132,28 +159,28 @@ local function OnSetOwner(inst)
 			and TheNet:HasJoinCode()
 			and TheNet:HasShownJoinCodePopup() == false then
 				TheNet:CopyJoinCodeToClipboard()
-				TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/sharecode.tex", STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TITLE, string.format(STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TEXT, TheNet:GetJoinCode()), 8)
-				TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/playerscreen.tex", STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_PLAYERS_SCREEN_TITLE, string.format(STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_PLAYERS_SCREEN_TEXT, TheNet:GetJoinCode()), 12)
+				TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/sharecode.tex", STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TITLE, string.format(STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TEXT, GetNetworkJoinCode()), 8)
+				local text = STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_PLAYERS_SCREEN_TEXT
+				if not TheInput:GetKeyboard():GetPlayer() then
+					text = STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_PLAYERS_SCREEN_TEXT_PAUSE
+				end
+				TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/playerscreen.tex", STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_PLAYERS_SCREEN_TITLE, text, 12)
 				TheNet:SetShownJoinCodePopup()
 			end
 		end
 
 		inst:PushEvent("on_player_set")
+		TheDungeon:PushEvent("on_player_set", inst)
 	end
 
 	if TheSaveSystem.cheats:GetValue("skip_new_game_flow") then
 		TheSaveSystem.active_players:SetValue("quick_start", true)
-		-- if you have a last selected character slot, use that
-		if not TheSaveSystem.about_players:GetValue("last_selected_slot") then
-			-- if you don't have a last selected character slot, use slot 0
-			TheSaveSystem.about_players:SetValue("last_selected_slot", 0)
-		end
 	end
 
 	if TheSaveSystem.active_players:GetValue("quick_start") then
 		-- If there is only one local player, that player must be the "main" local player.
 		if inst:IsOnlyLocalPlayer() then
-			TheSaveSystem:LoadCharacterAsPlayerID(TheSaveSystem.about_players:GetValue("last_selected_slot"), playerID)
+			TheSaveSystem:LoadCharacterAsPlayerID(TheSaveSystem:GetLastSelectedCharacterSlot(), playerID)
 			TheSaveSystem.active_players:SetValue("quick_start", false)
 		end
 	end
@@ -163,14 +190,13 @@ local function OnSetOwner(inst)
 	local slot = TheSaveSystem:GetCharacterForPlayerID(playerID)
 	if slot ~= nil then
 		local character_save = TheSaveSystem:LoadCharacterAsPlayerID(slot, playerID)
-		local player_data =  character_save ~= nil and character_save:GetValue("player")
-
-		if player_data ~= nil then
-			inst:SetPersistData(player_data)
+		local player_entity_data =  character_save ~= nil and character_save:GetValue("player")
+		if player_entity_data ~= nil then
+			inst:SetPersistData(player_entity_data)
 		else
 			inst.components.inventoryhoard:GiveDefaultEquipment()
 		end
-		inst:PostLoadWorld(player_data)
+		inst:PostLoadWorld(player_entity_data)
 
 		on_player_set()
 	else
@@ -178,9 +204,17 @@ local function OnSetOwner(inst)
 		inst.components.inventoryhoard:GiveDefaultEquipment()
 
 		inst:Hide()
+
 		-- pick your character
-		local CharacterSelectionScreen = require("screens.character.characterselectionscreen")
-		local screen = CharacterSelectionScreen(inst, on_player_set)
+		local CharacterSelectionScreen = require "screens.character.characterselectionscreen"
+		local WaitingForSpawnScreen = require "screens.waitingforspawnscreen"
+		local function on_close_screen()
+			if inst:IsLocal() then
+				TheFrontEnd:PushScreen(WaitingForSpawnScreen())
+			end
+			on_player_set()
+		end
+		local screen = CharacterSelectionScreen(inst, on_close_screen)
 		screen:SetOnClickCloseFn(function()
 			if TheNet:GetNrLocalPlayers() == 1 then
 				-- This player just started a game, and they're cancelling picking a character
@@ -282,37 +316,38 @@ local function OnDespawn(inst)
 end
 
 -- display relevant player info around the character, like a health bar
-local function PeekFollowStatus(inst, options)
+local function PeekFollowStatus(inst, options, auto_fade)
 	options = options or {}
 
-	if options.showHealth then
-		if inst.follow_health_bar then
-			inst.follow_health_bar:Reveal()
-		end
-	end
-
 	local follow_status = inst.follow_status
-	if (options.showPlayerId or options.showPotionStatus) and follow_status then
-		local idx = inst:GetHunterId()
-		if idx then
-			local color = inst.uicolor
-			local data =
-			{
-				shake = options.doInputIdentifier,
-				show_id = options.showPlayerId,
-				show_potion = options.showPotionStatus,
-				show_powers = options.showPowers,
-				text = string.format("%dP", idx),
-				text_color = color,
-				toggleMode = options.toggleMode
-			}
+	if follow_status and inst:GetHunterId() then
 
-			follow_status:Reveal(data)
+		if options.show_potion then
+			follow_status:TryShowPotion(auto_fade)
 		end
-	end
 
-	if options.doInputIdentifier then
-		inst.components.playercontroller:TryPlayRumble_IdentifyPlayer()
+		if options.show_id then
+			follow_status:TryShowID(auto_fade)
+		end
+
+		if options.show_radial then
+			follow_status:TryShowRadial(auto_fade)
+		end
+
+		if options.do_input_identifier then
+			follow_status:TryShowID(auto_fade)
+			follow_status:DoShake()
+		end
+
+		-- local data =
+		-- {
+		-- 	shake = options.doInputIdentifier,
+		-- 	force_show_potion = options.show_potion,
+		-- 	show_id = options.show_id,
+		-- 	show_radial = options.show_radial,
+		-- }
+
+		-- follow_status:Reveal(data, auto_fade)
 	end
 end
 
@@ -333,38 +368,6 @@ local function PeekPlayerLoadout(inst, options)
 	end
 end
 
--- victorc: hack - local multiplayer, to help uniquely identify players
-local function GenerateFakeUserName()
-	local ADJECTIVES =
-	{
-		"Amazing", "Buff", "Confused", "Decent",
-		"Eager", "Fluent", "Gentle", "Happy",
-		"Intuitive", "Jovial", "Kinetic", "Lucid",
-		"Majestic", "Neutral", "Obliged", "Powerful",
-		"Quirky", "Running", "Super", "Tenacious",
-		"Untold", "Vicious", "Wild", "Xenic",
-		"Youthful", "Zenithal",
-	}
-
-	local NOUNS =
-	{
-		"Artist", "Bane", "Crewman", "Drummer",
-		"Entity", "Force", "Glint", "Heart",
-		"Integer", "Jammer", "Kicker", "Lurker",
-		"Maven", "Nomad", "Orator", "Paragon",
-		"Queen", "Rascal", "Superstar", "Tracker",
-		"Usurper", "Voice", "Whimsy", "X-Factor",
-		"Yapper", "Zest",
-	}
-
-	return ADJECTIVES[math.random(#ADJECTIVES)] .. " " .. NOUNS[math.random(#NOUNS)]
-end
-
-local function OnEntityBecameRemote(inst)
-	-- TODO: networking2022, victorc - temp hack to prevent lua crash
-	inst.components.inventoryhoard:GiveDefaultEquipment()
-end
-
 local function OnRoomComplete(inst, world, data)
 	-- revive players that were knocked out during a room battle to 1hp
 	-- however, don't allow weird post-defeat room completions to trigger this
@@ -379,7 +382,6 @@ end
 --------------------------------------------------------------------------
 -- Roll Speed/Distance modification
 local function UpdateTotalRollSpeedMult(inst)
-	--jambell: NOT TESTED, WIP stuff.
 	local total = 1
 	for id, bonus in pairs(inst.roll_speed_mults) do
 		total = total + bonus
@@ -431,7 +433,7 @@ local function ShakeCamera(inst, mode, duration, speed, scale, source_or_pt, max
 			local playerId = inst:GetHunterId()
 			local deviceId
 			local playercontroller = inst.components.playercontroller
-			-- TODO: victorc - maybe the camera shouldn't interface directly with input and instead go
+			-- TODO: input - maybe the camera shouldn't interface directly with input and instead go
 			-- through playercontroller for rummble requests; that way hardware isn't exposed
 			if playerId and playerId > 0
 				and playercontroller:GetLastInputDeviceType() == "gamepad" and playercontroller.gamepad_id then
@@ -484,7 +486,8 @@ local function GetCustomUserName(inst)
 	end
 
 	local playerID = TheNet:IsInGame() and inst.Network:GetPlayerID() or -1
-	return TheNet:GetPlayerName(playerID) or ""
+	local player_name = TheNet:GetPlayerName(playerID) or ""
+	return player_name:sanitize_user_text()
 end
 
 --------------------------------------------------------------------------
@@ -524,7 +527,7 @@ local function OnConversation(inst, data)
 			-- We've started a modal conversation.
 			inst.components.locomotor:TurnToDirection(inst:GetAngleTo(data.npc))
 
-			-- TODO jambell remove these until I fix the issues around conversations and callbacks
+			-- TODO remove these until I fix the issues around conversations and callbacks
 			--inst:PushEvent("sheathe_and_wait")
 		    -- elseif data.action == "end" then
 			-- 	inst:PushEvent("unsheathe_stop_waiting")
@@ -554,16 +557,16 @@ local function OnUpgradePower(inst, data)
 end
 
 --------------------------------------------------------------------------
+local weight_to_dodge_fx = {
+		[Weight.Status.s.Light] = "fx_iframe_dodge_light",
+		[Weight.Status.s.Normal] = "fx_iframe_dodge_med",
+		[Weight.Status.s.Heavy] = "fx_iframe_dodge_heavy",
+}
 
 local function OniFrameDodge(inst, _hitbox)
 	if inst.iframefx == nil and inst.sg:HasStateTag("dodge") then
 		local weight = inst.components.weight:GetStatus()
-		local fx_name = "fx_iframe_dodge_med"
-		if weight == Weight.Status.s.Light then
-			fx_name = "fx_iframe_dodge_light"
-		elseif weight == Weight.Status.s.Heavy then
-			fx_name = "fx_iframe_dodge_heavy"
-		end
+		local fx_name = weight_to_dodge_fx[weight] or weight_to_dodge_fx.Normal
 
 		local flip = inst.Transform:GetFacingRotation() == 0
 		local params =
@@ -731,6 +734,10 @@ local function IsSpectating(inst)
 	return inst.is_spectating
 end
 
+local function IsPickingCharacter(inst)
+	return inst.picking_character
+end
+
 --------------------------------------------------------------------------
 
 local function RefreshMouth(inst)
@@ -789,34 +796,53 @@ function MakePlayerMouth(name)
 end
 
 local function RefreshEmotes(inst)
-	-- jambell, network multiplayer playtest sept 2023
-	-- Hi Leira! Here I'm detecting what their species is, and then putting their species-specific emote into the RIGHT slot.
+	if not inst:IsLocal() then
+		return
+	end
+	-- network multiplayer playtest sept 2023
+	-- #MAKING_COSMETICS #MAKING_EMOTES
+	-- Here I'm detecting what their species is, and then putting their species-specific emote into the RIGHT slot.
 	-- Later we can do this in a more elegant way.
 	-- I'm just giving the ogre a "emote_pump" for now, since there's no specific ogre one yet! Feel free to change
 
 	-- Species Specific:
+	local emote_slot = 3
 	local species = inst.components.charactercreator:GetSpecies()
 	if species == "ogre" then
-		inst.components.playeremoter:EquipEmote(4, "emote_ogre_charged_jump")
+		inst.components.playeremoter:EquipEmote(emote_slot, "emote_ogre_charged_jump")
 	elseif species == "canine" then
-		inst.components.playeremoter:EquipEmote(4, "emote_mammimal_howl")
+		inst.components.playeremoter:EquipEmote(emote_slot, "emote_mammimal_howl")
 	elseif species == "mer" then
-		inst.components.playeremoter:EquipEmote(4, "emote_amphibee_bubble_kiss")
+		inst.components.playeremoter:EquipEmote(emote_slot, "emote_amphibee_bubble_kiss")
 	end
 
 	-- Weapon Specific:
+	emote_slot = 5
 	local weapon = inst.components.inventory:GetEquippedWeaponType()
 	if weapon then
 		if weapon == WEAPON_TYPES.HAMMER then
-			inst.components.playeremoter:EquipEmote(6, "emote_hammer_twirl")
+			inst.components.playeremoter:EquipEmote(emote_slot, "emote_hammer_twirl")
 		elseif weapon == WEAPON_TYPES.POLEARM then
-			inst.components.playeremoter:EquipEmote(6, "emote_polearm_twirl")
+			inst.components.playeremoter:EquipEmote(emote_slot, "emote_polearm_twirl")
 		elseif weapon == WEAPON_TYPES.CANNON then
-			inst.components.playeremoter:EquipEmote(6, "emote_cannon_twirl")
+			inst.components.playeremoter:EquipEmote(emote_slot, "emote_cannon_twirl")
 		elseif weapon == WEAPON_TYPES.SHOTPUT then
-			inst.components.playeremoter:EquipEmote(6, "emote_shotput_twirl")
+			inst.components.playeremoter:EquipEmote(emote_slot, "emote_shotput_twirl")
 		end
 	end
+end
+
+local function SetTempData(inst, key, value)
+	-- Data that does not save or network sync, used for logic that only needs to persist within the room.
+	-- Typically used for conversation context.
+	if not inst.temp_data then
+		inst.temp_data = {}
+	end
+	inst.temp_data[key] = value or true
+end
+
+local function GetTempData(inst, key)
+	return inst.temp_data and inst.temp_data[key]
 end
 
 -- UnlockTracker easy access functions
@@ -849,8 +875,40 @@ local function UnlockRegion(inst, region)
 	inst.components.unlocktracker:UnlockRegion(region)
 end
 
-local function UnlockLocation(inst, location)
-	inst.components.unlocktracker:UnlockLocation(location)
+local function UnlockLocation(inst, location_id)
+	inst.components.unlocktracker:UnlockLocation(location_id)
+end
+
+local function IsLocationUnlocked(inst, location_id)
+	return inst.components.unlocktracker:IsLocationUnlocked(location_id)
+end
+
+local function HasEverCompletedQuest(inst, ...)
+	return inst.components.questcentral:GetQuestManager():HasEverCompletedQuest(...)
+end
+
+local function HasEverCompletedQuestObjective(inst, ...)
+	return inst.components.questcentral:GetQuestManager():HasEverCompletedQuestObjective(...)
+end
+
+local function HasDoneMastery(inst, ...)
+	local mastery = inst.components.masterymanager:GetMasteryByName(...)
+	return mastery and mastery:IsClaimed()
+end
+
+local function HasUnlockedMasteries(inst, ...)
+	local should_unlock = false
+	print(inst)
+	for _, mastery_group in pairs(Mastery.Items) do		
+		for _, def in pairs(mastery_group) do
+			if def.default_unlocked and inst.components.masterymanager:GetMastery(def) == nil then
+				fn(def)
+			end
+		end
+	end	
+
+	loop_all_default_masteries(function() should_unlock = true end)
+	return should_unlock
 end
 
 local function MakePlayerCharacter(name, customprefabs, customassets, common_postinit, master_postinit)
@@ -860,6 +918,7 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		Asset("ANIM", "anim/player_bank_basic_2.zip"),
 		Asset("ANIM", "anim/player_bank_ui.zip"),
 		Asset("ANIM", "anim/player_bank_skills.zip"),
+		Asset("ANIM", "anim/player_bank_skills_miniboss.zip"),
 		Asset("ANIM", "anim/player_bank_emotes.zip"),
 		Asset("ANIM", "anim/player_bank_flying_machine.zip"),
 
@@ -867,21 +926,24 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		Asset("ANIM", "anim/player_bank_polearm_emotes.zip"),
 		Asset("ANIM", "anim/player_bank_cannon_emotes.zip"),
 		Asset("ANIM", "anim/player_bank_shotput_emotes.zip"),
+
+		Asset("ANIM", "anim/fx_player_weapon_smear.zip"),
+		Asset("ANIM", "anim/fx_player_smear.zip"),
 	}
 
-	if DEV_MODE then
+	if not IS_BUILD_STRIPPED and DEV_MODE then
 		assets[#assets + 1] = Asset("ANIM", "anim/1_player_master_template.zip")
 	end
-
-	Cosmetic.CollectBodyPartAssets(assets)
-	Cosmetic.CollectEquipmentDyeAssets(assets)
 
 	local prefabs =
 	{
 		"player_side_mouth",
 
 		"aim_pointer",
-		"indicator_player_health",
+		"aim_pointer_p1",
+		"aim_pointer_p2",
+		"aim_pointer_p3",
+		"aim_pointer_p4",
 		"ground_indicator_p1",
 		"ground_indicator_p2",
 		"ground_indicator_p3",
@@ -890,26 +952,30 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		"ground_indicator_ring_p2",
 		"ground_indicator_ring_p3",
 		"ground_indicator_ring_p4",
-		"aim_pointer_p1",
-		"aim_pointer_p2",
-		"aim_pointer_p3",
-		"aim_pointer_p4",
-		"indicator_player_health",
 		"indicator_player_health",
 
-		"cine_town_newgame",
+		"cine_boss_death_hit_hold",  -- shared by all bosses
+		"cine_main_defeat_megatreemon_intro",  -- queued from a quest
+		"cine_play_miniboss_intro",  -- shared by all minibosses
+		"cine_town_newgame",  -- more cine added below with RUN_STATE_TO_CINEMATIC
 
+		GroupPrefab("fx_for_player"),
+		GroupPrefab("fx_player"),
+		GroupPrefab("player_skills"),
 		"fx_heal_burst",
 		"fx_hit_player_round",
 		"fx_hurt_sweat",
 		"fx_player_flask_smash_glass",
 		"fx_player_flask_smash_impact",
+		"fx_player_ground_smash_dust",
+		"fx_player_ground_smash_ring",
+		GroupPrefab("impacts"),
+		"impact_dirt_small", -- default from SGCommon
 
-		"fx_iframe_dodge_heavy",
-		"fx_iframe_dodge_med",
-		"fx_iframe_dodge_light",
 		"fx_player_quickrise",
 		"fx_stunned_headstars",
+		GroupPrefab("fx_warning"),  -- I think we need this?
+		GroupPrefab("healing"),
 
 		"player_cannon_projectile",
 		"player_cannon_mortar_projectile",
@@ -927,27 +993,34 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		GroupPrefab("drops_startingforest"),
 		GroupPrefab("drops_swamp"),
 
+		-- TODO: Aren't these already added by Equipment?
 		GroupPrefab("fx_cannon"),
 		GroupPrefab("fx_cannon_basic"),
 		GroupPrefab("fx_cannon_electric"),
 
 		-- for player powers
 		GroupPrefab("player_power_prefabs"),
+		GroupPrefab("deps_player_cosmetics"),
 
 		"generic_projectile",
-		"fx_player_projectile_magic",
 		"ground_target",
-
-		"questmarker",
 
 		"soul_drop_lesser",
 		"soul_drop_greater",
 		"soul_drop_heart",
 	}
 
-	-- TODO(memory): Player should load basic build and current equipment
-	-- should load the builds.
+	-- TODO(memory): Player could load only basic build and equipment could
+	-- load its builds.
 	Equipment.CollectAssets(assets, prefabs)
+	LootEvents.CollectAssets(assets, prefabs)
+	PlayerPlacer.CollectAssets(assets, prefabs)
+	PlayerStatsFXer.CollectAssets(assets, prefabs)
+	prefabs = table.appendarrays(
+		prefabs,
+		lume.values(weight_to_dodge_fx),
+		lume.values(RUN_STATE_TO_CINEMATIC.ENTER_TOWN),
+		lume.values(RUN_STATE_TO_CINEMATIC.END_RUN))
 
 
 	if customprefabs ~= nil then
@@ -1098,6 +1171,8 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 
 		-- Player identifiers:
 		inst:AddComponent("playerhighlight")
+		inst:AddComponent("playerplacer")
+		inst:AddComponent("propremover")
 		inst:AddComponent("aimindicator")
 
 		inst:AddComponent("timer")
@@ -1118,7 +1193,7 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 			-- Once we have the color configured, send another event for ui to listen to.
 			inst:PushEvent("update_ui_color", inst.uicolor)
 		end)
-		inst:AddComponent("charactercreator")
+		inst:AddComponent("charactercreator", true)
 
 		inst:AddComponent("equipmentdyer")
 
@@ -1149,6 +1224,12 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 
 		inst:AddComponent("unlocktracker")
 
+		inst:AddComponent("hasseen")
+		inst:AddComponent("hasmade")
+
+		inst.SetTempData = SetTempData
+		inst.GetTempData = GetTempData
+
 		-- unlocktracker easy access functions --
 		inst.UnlockFlag = UnlockFlag
 		inst.LockFlag = LockFlag
@@ -1158,6 +1239,12 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		inst.UnlockRecipe = UnlockRecipe
 		inst.UnlockRegion = UnlockRegion
 		inst.UnlockLocation = UnlockLocation
+		inst.IsLocationUnlocked = IsLocationUnlocked
+
+		inst.HasEverCompletedQuest = HasEverCompletedQuest
+		inst.HasEverCompletedQuestObjective = HasEverCompletedQuestObjective
+
+		inst.HasDoneMastery = HasDoneMastery
 
 		inst:AddComponent("cineactor")
 
@@ -1175,7 +1262,7 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 
 		inst:AddComponent("entityocclusion")
 		inst.components.entityocclusion:SetOccluderTags({"large", "giant"})
-		inst:ListenForEvent("occluded", function(me, data) me:PeekFollowStatus({ showPlayerId = true }) end)
+		inst:ListenForEvent("occluded", function(me, data) me:PeekFollowStatus({ show_id = true }, true) end)
 
 		inst.low_health = SpawnPrefab("indicator_player_health", inst)
 		inst.low_health:WatchHealth(inst)
@@ -1187,11 +1274,11 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		end
 
 		inst:AddComponent("playeremoter")
-		inst.components.playeremoter:EquipEmote(1, "emote_nod_cheerful")
-		inst.components.playeremoter:EquipEmote(2, "emote_wave")
-		inst.components.playeremoter:EquipEmote(3, "emote_whistle")
-		inst.components.playeremoter:EquipEmote(5, "emote_no_thx")
-		inst.components.playeremoter:EquipEmote(8, "emote_dejected")
+		inst.components.playeremoter:EquipEmote(1, "emote_pump")
+		--inst.components.playeremoter:EquipEmote(2, "emote_wave")
+		--inst.components.playeremoter:EquipEmote(3, "emote_whistle")
+		--inst.components.playeremoter:EquipEmote(5, "emote_no_thx")
+		--inst.components.playeremoter:EquipEmote(8, "emote_dejected")
 		inst.components.playeremoter:EquipEmote(7, "emote_over_here")
 
 		inst:ListenForEvent("enter_town", OnEnterTown)
@@ -1200,6 +1287,7 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		inst:ListenForEvent("attacked", OnBasicAttackedIframes) -- ONLY applies iframes from BasicAttacks while the player is mid-attack. iframes for other attack types are applied in the state themselves, i.e. knockback or knockdown
 
 		inst:AddComponent("playerbusyindicator")
+		inst:AddComponent("worldbounded")
 
 		-- Roll Speed Modification
 		inst.AddRollSpeedMult = AddRollSpeedMult
@@ -1230,7 +1318,11 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 
 		inst:AddComponent("questcentral")
 
+		inst:AddComponent("tilehazard")
 		inst.components.powermanager:EnsureRequiredComponents()
+
+		inst:AddComponent("huntunlocker")
+		inst:AddComponent("grabbag")
 
 		if master_postinit ~= nil then
 			master_postinit(inst)
@@ -1246,7 +1338,6 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		inst.OnLoad = OnLoad
 		inst.OnPostLoadWorld = OnPostLoadWorld
 		inst.OnDespawn = OnDespawn
-		inst.OnEntityBecameRemote = OnEntityBecameRemote
 		inst.GetDisplayName = GetDisplayName
 		inst.GetHunterId = GetHunterId -- can't actually call until construction completes!
 		inst.PeekFollowStatus = PeekFollowStatus
@@ -1263,6 +1354,7 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 		inst.SetSpectating = SetSpectating
 		inst.IsSpectating = IsSpectating
 		inst.TryStopSpectating = TryStopSpectating
+		inst.IsPickingCharacter = IsPickingCharacter
 
 		inst.IsOnlyLocalPlayer = IsOnlyLocalPlayer
 
@@ -1285,6 +1377,8 @@ local function MakePlayerCharacter(name, customprefabs, customassets, common_pos
 			inst.created_by_debugspawn = true
 		end)
 
+		inst.offscreen = { urgent = false, silent = true, puppetPlayer = inst, puppetScale = 0.35 }
+
 		return inst
 	end
 
@@ -1305,7 +1399,7 @@ local function master_postinit(inst)
 
 	inst:ListenForEvent("conversation", OnConversation)
 
-	-- HACK(dbriscoe): https://quire.io/w/Sprint_Tracker/969/Split_player_save_data_into_dungeon_and_town
+	-- HACK(worldgen): https://quire.io/w/Sprint_Tracker/969/Split_player_save_data_into_dungeon_and_town
 	-- local hack_is_new_run = TheDungeon:GetDungeonMap():IsCurrentRoomDungeonEntrance()
 	-- if hack_is_new_run then
 	-- 	inst:DoTaskInTicks(2, function(inst_)
@@ -1343,6 +1437,13 @@ local function master_postinit(inst)
 		local playerID = inst.Network:GetPlayerID()
 		TheNet:SetRunPlayerStatus(playerID, RUNPLAYERSTATUS_CORPSE)
 		inst:ListenForEvent("revived", inst._onhealthchanged_corpse)
+	end)
+
+	-- Handler for when a player disconnects while reviving another player.
+	TheWorld:ListenForEvent("playerexited", function(TheWorld, reviver)
+		if inst.components.revive and inst.components.revive.reviver == reviver then
+			inst.components.revive:_ReviveeCancelReviving()
+		end
 	end)
 
 	SGPlayerCommon.Fns.SetupReviveInteractable(inst)

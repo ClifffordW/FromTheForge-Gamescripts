@@ -97,7 +97,7 @@ function PowerDescriptionButton:OnGainFocus()
 	self.frame:AlphaTo(1, 0.15, easing.outQuad)
 	self:LiftIcon()
 
-	self:AnimateFloating() -- TODO(jambell): shadow doesn't animate
+	self:AnimateFloating() -- TODO: shadow doesn't animate
 	self:DoGainFocusPresentation()
 end
 
@@ -112,14 +112,14 @@ function PowerDescriptionButton:OnLoseFocus()
 	end)
 	self:DoLoseFocusPresentation()
 	self:ReleaseIcon()
-	self:StopAnimateFloating() -- TODO(jambell): shadow doesn't animate
+	self:StopAnimateFloating() -- TODO: shadow doesn't animate
 end
 
 
 -- Make the button look like the "focused/picked" state, but don't respond to
 -- clicks. Converts to a static widget instead of a button.
 function PowerDescriptionButton:SetUnclickableAsFocused()
-	self:GainFocus()
+	self:GainFocus() -- TODO(playerfocus): who?
 	return self:SetUnclickable()
 end
 -- Convert to a static widget instead of a button.

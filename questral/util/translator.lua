@@ -1,12 +1,9 @@
 local Enum = require "util.enum"
-local contentutil = require "questral.util.contentutil"
 local kassert = require "util.kassert"
 local kstring = require "util.kstring"
 local loc = require "questral.util.loc"
 require "class"
 
-
-local LOC = contentutil.LOC
 
 
 ---------------------------------------------------------------------------
@@ -205,8 +202,6 @@ local function AggregateEntries( tbl_lookup, lookup_msgstr )
         local str = string.gsub(msgid, "\n", "\\n")
         str = string.gsub(str, "\r", "\\r")
         str = string.gsub(str, "\"", "\\\"")
-        -- If you hit this while porting, did loc.ReplaceNames() run?
-		kassert.assert_fmt(not str:find("{name.", nil, true), "Unreplaced {name} found:\n  %s = '%s'", path, msgid)
 
         local lines = {}
         -- #: indicates a reference comment (the string table path)

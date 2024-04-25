@@ -2,15 +2,11 @@
 return {
   __displayName="ogre_green_hair_color_1",
   cosmetic_data={
-    color={ 0.27777777777778, 0.43, 0.76,},
+    color={ 0.3552123606205, 0.43629342317581, 0.83783781528473,},
     color_species="ogre",
     colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

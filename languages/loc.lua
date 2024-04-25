@@ -1,28 +1,7 @@
 local LANGUAGE = require "languages.langs"
-local kassert = require "util.kassert"
+local Localization = require "questral.localization"
 require "constants"
 
-
-local localizations = {
-	--~ [LANGUAGE.FRENCH]         = { strings = "fr.po",      code = "fr",      scale = 1.0,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },
-	--~ [LANGUAGE.SPANISH]        = { strings = "es.po",      code = "es",      scale = 1.0,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },
-	--~ [LANGUAGE.SPANISH_LA]     = { strings = "es_419.po",  code = "es-419",  scale = 1.0,  in_steam_menu   = false, in_console_menu = false, shrink_to_fit_word = true },
-	--~ [LANGUAGE.GERMAN]         = { strings = "de.po",      code = "de",      scale = 1.0,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },
-	--~ [LANGUAGE.ITALIAN]        = { strings = "it.po",      code = "it",      scale = 1.0,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },
-	--~ [LANGUAGE.PORTUGUESE_BR]  = { strings = "pt_br.po",   code = "pt-BR",   scale = 1.0,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },
-	--~ [LANGUAGE.POLISH]         = { strings = "pl.po",      code = "pl",      scale = 1.0,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },
-	--~ [LANGUAGE.RUSSIAN]        = { strings = "ru.po",      code = "ru",      scale = 0.8,  in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = true },  -- Russian strings are very long (often the longest), and the characters in the font are big. Bad combination.
-	--~ [LANGUAGE.KOREAN]         = { strings = "ko.po",      code = "ko",      scale = 0.85, in_steam_menu   = false, in_console_menu = true,  shrink_to_fit_word = false },
-	[LANGUAGE.CHINESE_S]      = { strings = "zh_cn.po",   code = "zh-CN",   scale = 1,    in_steam_menu   = true,  in_console_menu = true,  shrink_to_fit_word = false },
-	--~ [LANGUAGE.CHINESE_S_RAIL] = { strings = "zh_rail.po", code = "zh-rail", scale = 1,    in_steam_menu   = false, in_console_menu = false, shrink_to_fit_word = false },
-	--~ [LANGUAGE.JAPANESE]       = { strings = "ja.po",      code = "ja",      scale = 0.85, in_console_menu = true},
-	--~ [LANGUAGE.CHINESE_T]      = { strings = "zh_hant.po", code = "zh-Hant", scale = 0.85, in_console_menu = true},
-}
---~ localizations[LANGUAGE.PORTUGUESE] = localizations[LANGUAGE.PORTUGUESE_BR]
---~ localizations[LANGUAGE.SPANISH_LA] = localizations[LANGUAGE.SPANISH]
-for id,t in pairs(localizations) do
-	t.id = id
-end
 
 local LOC_ROOT_DIR = "localizations/" -- in root data dir: Rotwood/data/localizations/
 local EULA_FILENAME = "eula_english.txt"
@@ -33,105 +12,66 @@ if Platform.IsXB1() then
 else
 	EULA_FILENAME = "eula_english_p.txt"
 end
-local PO_DIR = LOC_ROOT_DIR
 
-local LOCALE = { CurrentLocale = nil }
+
+
+local LOC = {}
+
+
+function LOC.GetActiveLocalization()
+	return TheGameContent:GetContentDB().current_localization
+end
+
+local function GetAllLocalizations()
+	return TheGameContent:GetContentDB():GetAll(Localization)
+end
+
+local function FindFirstLocalizationMatch(pred)
+	for _,loc in pairs(GetAllLocalizations()) do
+		if pred(loc) then
+			return loc
+		end
+	end
+end
 
 -- Find locale object by iso language code (eg, "zh-CN").
--- TODO(dbriscoe): Have a locale for english instead of returning two values.
-function LOCALE.GetLocaleByCode(lang_code)
-    if lang_code == nil or lang_code == "en" then
-        return nil, true
-    end
-
-    for _, loc in pairs(localizations) do
-        if lang_code == loc.code then
-            return loc, true
-        end
-    end
-	-- If we failed to find an exact match, ignore country codes and look again.
-	lang_code = lang_code:sub(1,2)
-    for _, loc in pairs(localizations) do
-        if lang_code == loc.code:sub(1,2) then
-            return loc, true
-        end
-    end
+function LOC._FindLocaleByCode(lang_code)
+	local found_loc = FindFirstLocalizationMatch(function(loc)
+		return loc:SupportsLocale(lang_code)
+	end)
+	found_loc = found_loc or FindFirstLocalizationMatch(function(loc)
+		return loc:IsFallbackForLocale(lang_code)
+	end)
+	return found_loc
 end
 
-function LOCALE.SetCurrentLocale(locale)
-	assert(not locale or kassert.typeof("table", locale))
-	LOCALE.CurrentLocale = locale
-end
-
-function LOCALE.GetLanguages()
-    local lang_options = {}
-    table.insert(lang_options, LANGUAGE.ENGLISH)
-    for _, loc in pairs(localizations) do
-        if Platform.IsConsole() then
-            if loc.in_console_menu then
-                table.insert(lang_options, loc.id)
-            end
-        elseif Platform.IsSteam() then
-            if loc.in_steam_menu then
-                table.insert(lang_options, loc.id)
-            end
-        end
-    end
-    return lang_options
-end
-
-function LOCALE.GetLocale(lang_id)
-    if lang_id == nil then
-        return LOCALE.CurrentLocale
-    end
-	kassert.typeof("string", lang_id) -- Use the LANGUAGE table from constants.
-
-    local locale = nil
-    for _, loc in pairs(localizations) do
-        if lang_id == loc.id then
-            locale = loc
-        end
-    end
-    return locale
-end
-
-function LOCALE.GetLocaleCode(lang_id)
-	local locale = LOCALE.GetLocale(lang_id)
-	if locale then
-		return locale.code
-	else
-		return "en"
+function LOC.GetLanguages()
+	local localizations = GetAllLocalizations()
+	local lang_options = {}
+	local native
+	for _, loc in pairs(localizations) do
+		if loc.is_game_authored_language then
+			native = loc
+		else
+			table.insert(lang_options, loc.id)
+		end
 	end
+	assert(native, "Must setup a Localization that is the game's native language.")
+	table.insert(lang_options, 1, native.id) -- make native language first.
+	return lang_options
 end
 
-function LOCALE.GetLanguage()
-    if LOCALE.CurrentLocale then
-        return LOCALE.CurrentLocale.id
-    else
-        return LANGUAGE.ENGLISH
-    end
+function LOC.GetCurrentLanguageId()
+	local loc = LOC.GetActiveLocalization()
+	return loc and loc.id or "<none>"
 end
 
-function LOCALE.IsLocalized()
-	return nil ~= LOCALE.CurrentLocale
-end
-
-function LOCALE.GetStringFile(lang_id)
-	local locale = LOCALE.GetLocale(lang_id)
-	local file = nil
-	if nil ~= locale then
-		file = PO_DIR .. locale.strings
-	end
-	
-	return file
-end
-
-function LOCALE.GetEulaFilename()
+function LOC.GetEulaFilename()
     local eula_file = LOC_ROOT_DIR .. EULA_FILENAME
     return eula_file
 end
 
-function LOCALE.DetectLanguage()
+function LOC.DetectLanguage()
 	local last_detected_code = TheGameSettings:Get("language.last_detected")
 	local platform_lang_code = TheSim:GetPreferredLanguage()
 	if last_detected_code == platform_lang_code then
@@ -139,8 +79,8 @@ function LOCALE.DetectLanguage()
 		-- selected a different one.
 		return
 	end
-	local platform_locale, has_locale = LOCALE.GetLocaleByCode(platform_lang_code)
-	if has_locale and (platform_locale ~= LOCALE.CurrentLocale or last_detected_code == "NONE") then
+	local platform_locale = LOC._FindLocaleByCode(platform_lang_code)
+	if platform_locale and (platform_locale ~= LOC.GetActiveLocalization() or last_detected_code == "NONE") then
 		local locale_id = platform_locale and platform_locale.id or LANGUAGE.ENGLISH
 		TheLog.ch.Loc:printf("Detected platform locale [%s] to use from platform language [%s].", locale_id, platform_lang_code)
 		-- Only set last_detected on successful language change so if we add
@@ -150,45 +90,63 @@ function LOCALE.DetectLanguage()
 	end
 end
 
-function LOCALE.SwapLanguage(lang_id)
-    -- TODO(l10n): Doesn't reliably set english from another language -- even
-    -- called before anything touches strings.
-    TheLog.ch.Loc:printf("SwapLanguage: Changing from locale [%s] to [%s].", LOCALE.GetLanguage(), lang_id)
-    local locale =  LOCALE.GetLocale(lang_id)
-    LOCALE.SetCurrentLocale(locale)
-    if nil ~= locale then
-        LanguageTranslator:LoadPOFile(PO_DIR .. locale.strings, locale.code)    
-    end
-    TranslateStringTable( STRINGS )
+function LOC.SwapLanguage(lang_id)
+    TheLog.ch.Loc:printf("SwapLanguage: Changing from locale [%s] to [%s].", LOC.GetCurrentLanguageId(), lang_id)
+    TheGameContent:SetLanguage(lang_id)
 end
 
-function LOCALE.GetTextScale()
-    if nil == LOCALE.CurrentLocale then
-        return 1.0
-    else
-        return LOCALE.CurrentLocale.scale
-    end
-end
+--~ function LOC.GetLongestTranslatedString(strid)
+--~     local str = nil
+--~     for _, lang in pairs(self.languages) do
+--~         if lang[strid] then
+--~             local temp_str = self:ConvertEscapeCharactersToRaw(lang[strid])
+--~             if nil == str then
+--~                 str = temp_str
+--~             elseif string.len(temp_str) > string.len(str) then
+--~                 str = temp_str
+--~             end
+--~         end
+--~     end
+--~     return str
+--~ end
 
-function LOCALE.RefreshServerLocale()
-	print("You probably shouldn't be calling this on clients...")
-end
+-- Recursive function to process table structure
+local function DoTranslateStringTable(db, base, tbl)
+	for k,v in pairs(tbl) do
+		local path = base.."."..k
+		if type(v) == "table" then
+			DoTranslateStringTable(db, path, v)
+		elseif type(v) == "string" then
+			local str = db:GetString(path)
+			--~ if LanguageTranslator.use_longest_locs then
+			--~     str = LanguageTranslator:GetLongestTranslatedString(path)
+			--~ else
+			--~     str = LanguageTranslator:GetTranslatedString(path)
+			--~ end
 
-function LOCALE.GetShouldTextFit()
-	if LOCALE.CurrentLocale then
-		return LOCALE.CurrentLocale.shrink_to_fit_word
-	else
-		return true
+			if str and str ~= "" then
+				tbl[k] = str
+			end
+		end
 	end
 end
 
-function LOCALE.GetNamesImageSuffix()
-    if LOCALE.CurrentLocale then
-        if LOCALE.CurrentLocale.id == LANGUAGE.CHINESE_S or LOCALE.CurrentLocale.id == LANGUAGE.CHINESE_S_RAIL then
-            return "_cn"
-        end
-	end
-    return ""
+--called during load
+function LOC.TranslateStringTable(tbl)
+	local root = "STRINGS"
+	DoTranslateStringTable(TheGameContent:GetContentDB(), root, tbl)
 end
 
-return LOCALE
+
+
+-- Call like LOC"STRINGS.UI.TOOLTIPS.LUCKY.NAME" to lookup strings by string
+-- id.
+-- Returns two values: the translated string and whether the string is missing
+-- translation.
+setmetatable(LOC, {
+	__call = function(class_tbl, ...)
+		return TheGameContent:GetContentDB():GetString(...)
+	end
+})
+
+return LOC

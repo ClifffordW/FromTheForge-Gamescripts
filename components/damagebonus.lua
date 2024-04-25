@@ -26,11 +26,9 @@ function DamageBonus:ModifyHeal(heal)
 				end
 			end
 		end
-	end
-
-	-- These two are split out to potentially leave room for "when you heal yourself, do X" and "when you are healed, do Y"
-	-- Right now they are the same thing, but Bryce intended for this to be a feature so I'm leaving this here to imply/remind the intent.
- 	if is_being_healed then
+ 	elseif is_being_healed then
+		-- These two are split out to potentially leave room for "when you heal yourself, do X" and "when you are healed, do Y"
+		-- Right now they are the same thing, but Bryce intended for this to be a feature so I'm leaving this here to imply/remind the intent.
 		for _, pow in pairs(powers) do
 			if not heal:SkipPowerHealModifiers() and pow.def.heal_mod_fn then
 				local used = pow.def.heal_mod_fn(pow, heal, outputs)

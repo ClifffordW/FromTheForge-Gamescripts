@@ -18,11 +18,11 @@ local EMPTY_TILE <const> = 0
 
 --- Helper to compute map layout information without loading a world.
 local MapLayout = Class(function(self, layout)
-	self.layout = layout
-	self.tilegroup = get_tile_group(layout)
-	self.ground = Lume(layout.layers):match(function(layer) return layer.name == "BG_TILES" end):result()
-	self.zones = Lume(layout.layers):match(function(layer) return layer.name == "ZONE_TILES" end):result()
-	self.portals = Lume(layout.layers):match(function(layer) return layer.name == "PORTALS" end):result()
+	self.layout = deepcopy(layout)  -- we may modify the layout in _CutOffExit
+	self.tilegroup = get_tile_group(self.layout)
+	self.ground  = Lume.match(self.layout.layers, function(layer) return layer.name == "BG_TILES" end)
+	self.zones   = Lume.match(self.layout.layers, function(layer) return layer.name == "ZONE_TILES" end)
+	self.portals = Lume.match(self.layout.layers, function(layer) return layer.name == "PORTALS" end)
 end)
 
 function MapLayout:CollectDeps(assets, prefabs)
@@ -81,13 +81,21 @@ end
 function MapLayout:_ChangeTile(x, y, new_tile_type, require_tile_type)
 	local tilesidx = self:TilePosToIdx(x, y)
 	local tile = self.ground.data[tilesidx]
-	if tile ~= EMPTY_TILE
+	if tile ~= EMPTY_TILE -- TODO @chrisp #tile - so we can only change non-Empty tiles?
 		and tile ~= new_tile_type
 		and (not require_tile_type or tile == require_tile_type)
 	then
 		--~ TheLog.ch.World:printf("Tile %i,%i: %s -> %s", x, y, tile, new_tile_type)
 		self.ground.data[tilesidx] = new_tile_type
 	end
+end
+
+function MapLayout:_ChangeZone(x, y, new_zone)
+	if not self.zones then
+		return
+	end
+	local _, i = self:GetZone(x, y)
+	self.zones.data[i] = new_zone
 end
 
 function MapLayout:_CutOffExit(cardinal, portals, world_sz)
@@ -110,12 +118,44 @@ function MapLayout:_CutOffExit(cardinal, portals, world_sz)
 			local x = portal_pos.x + dx
 			self:_ChangeTile(x, y, new_tile_type)
 		end
+
+		if self.zones then
+			-- Change the zone to match the nearest tile in the horizontal.
+			-- Get the tile just beyond the exit width, on the left.
+			local new_zone = self:GetZone(portal_pos.x - portal_hwidth - 1, y)
+			for dx = -portal_hwidth, 0 do
+				local x = portal_pos.x + dx
+				self:_ChangeZone(x, y, new_zone)
+			end
+			-- Get the tile just beyond the exit width, on the right.
+			new_zone = self:GetZone(portal_pos.x + portal_hwidth + 1, y)
+			for dx = 0, portal_hwidth do
+				local x = portal_pos.x + dx
+				self:_ChangeZone(x, y, new_zone)
+			end
+		end
 	end
 
 	local function ChangeTileColumn(x, new_tile_type)
 		for dy = -portal_hwidth, portal_hwidth do
 			local y = portal_pos.y + dy
 			self:_ChangeTile(x, y, new_tile_type)
+		end
+
+		if self.zones then
+			-- Change the zone to match the nearest tile in the vertical.
+			-- Get the tile just beyond the exit height, on the top.
+			local new_zone = self:GetZone(x, portal_pos.y - portal_hwidth - 1)
+			for dy = -portal_hwidth, 0 do
+				local y = portal_pos.y + dy
+				self:_ChangeZone(x, y, new_zone)
+			end
+			-- Get the tile just beyond the exit height, on the bottom.
+			new_zone = self:GetZone(x, portal_pos.y + portal_hwidth + 1)
+			for dy = 0, portal_hwidth do
+				local y = portal_pos.y + dy
+				self:_ChangeZone(x, y, new_zone)
+			end
 		end
 	end
 
@@ -160,6 +200,12 @@ end
 
 function MapLayout:TilePosToIdx(x, y)
 	return (x) + (y - 1) * self.ground.width
+end
+
+function MapLayout:GetZone(x, y)
+	local i = (x) + (y - 1) * self.zones.width
+	local tile = self.zones.data[i]
+	return tile, i
 end
 
 function MapLayout:GetTilePosFromLayoutObject(object)
@@ -440,8 +486,6 @@ function MapLayout:RenderDebugUI(ui, panel, colors)
 			ui:EndTable()
 		end
 	end
-
-	ui:Unindent()
 end
 
 return MapLayout

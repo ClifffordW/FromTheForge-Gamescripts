@@ -2,6 +2,10 @@ LootEvents = {}
 
 local kLuckyLootDelay = 1 -- seconds to wait for luck wrapper to reveal loot
 
+function LootEvents.CollectAssets(assets, prefabs)
+	table.insert(prefabs, "lucky_loot_explosion")
+end
+
 local function BreakCountIntoPrefabs(loot, amount)
 	local current_amount = amount
 	local thresholds = loot.components.loot.count_thresholds
@@ -287,6 +291,120 @@ function LootEvents.HandleEventSpawnCurrency(amount, pos, owner, isLucky, showAm
 			delayed_spawn:Remove()
 		end)
 	end
+end
+
+local function _CanBeEliteInFrenzy(monster, frenzy)
+	if frenzy <= 0 then return false end
+
+	local eligible_elites = TUNING:GetEligibleEliteCategories(frenzy)
+	local is_eligible = false
+	if TUNING[monster] and TUNING[monster].multiplayer_mods then
+		if table.contains(eligible_elites, TUNING[monster].multiplayer_mods) then
+			is_eligible = true
+		end
+	end
+
+	return is_eligible
+end
+
+function LootEvents.SpawnRandomLootForCurrentLocation(spawner, players, amount_to_drop)
+	local monsterutil = require"util/monsterutil"
+	local biomes = require"defs/biomes"
+	local lume = require"util/lume"
+	local krandom = require "util.krandom"
+
+	-- This will likely cause different loot to be shown on each client.
+	-- How do I change this to be deterministic?
+	local worldmap = TheDungeon:GetDungeonMap()
+	local seed = worldmap:GetRNG():Integer(2^32 - 1)
+	local rng = krandom.CreateGenerator(seed)
+
+	local frenzy = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+	local location = biomes.locations[TheDungeon:GetCurrentLocationID()]
+	-- get a random assortment of loot from the dungeon you're in.
+	-- if the monster of can be elite in your currently selected ascension level, drop elite loot.
+	-- never drop boss loot
+	local monsters = monsterutil.GetMonstersInLocation(location)
+	local items = monsterutil.GetItemsInLocation(location)
+
+	for _, boss in ipairs(location.monsters.bosses) do
+		-- remove all boss related data
+		items = lume.removeall(items, function(item) return string.find(item.source, boss) end)
+		monsters = lume.removeall(monsters, function(monster) return monster == boss end)
+	end
+
+	monsters = lume.filter(monsters, function(monster)
+		-- only keep monsters that have valid drops
+		for _, item in ipairs(items) do
+			if string.find(item.source, monster) then
+				return true
+			end
+		end
+		return false
+	end)
+
+	local possible_loot = {}
+
+	for _, monster in ipairs(monsters) do
+		local monster_drops = lume.filter(items, function(item) 
+			for tag, _ in pairs(item.tags) do
+				if string.find(tag, monster) then
+					return true
+				end
+			end
+			return false 
+		end)
+
+		local loot_tags = { "drops_normal" }
+
+		if _CanBeEliteInFrenzy(monster, frenzy) then
+			table.insert(loot_tags, "drops_elite")
+		end
+
+		for _, tag in ipairs(loot_tags) do
+			local loot = lume.match(monster_drops, function(drop) return drop.tags[tag] end)
+			possible_loot[loot.name] = 1
+		end
+	end
+
+	TheDungeon.components.lootweights:UpdateLootWeights()
+
+	local total_weight = 0
+
+	for drop, weight in pairs(possible_loot) do
+		local weight_mod = 0
+		weight_mod = math.max(weight_mod, TheDungeon.components.lootweights:GetLootWeight(drop))
+		local new_weight = possible_loot[drop] * weight_mod
+		possible_loot[drop] = new_weight
+		total_weight = total_weight + new_weight
+	end
+
+	if total_weight == 0 then
+		-- ok, no one needs anything. just drop random stuff.
+		for drop, weight in pairs(possible_loot) do
+			possible_loot[drop] = 1
+		end
+	end
+
+
+	local loot_drops = {}
+
+	for i = 1, amount_to_drop do
+		--distribute the loot against the weighted choices
+		table.insert(loot_drops, rng:WeightedChoice(possible_loot))
+	end
+
+	loot_drops = lume.frequency(loot_drops)
+
+	local loot_to_drop = {}
+	-- all players get the same loot drops
+	for _, player in ipairs(players) do
+		loot_to_drop[player] = shallowcopy(loot_drops)
+	end
+
+	-- player = { name = amount }
+	LootEvents.HandleEventDropLoot(spawner, loot_to_drop, {})
+	LootEvents.MakeEventGenerateLoot(spawner, loot_to_drop, {})
 end
 
 return LootEvents

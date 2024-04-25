@@ -70,7 +70,7 @@ local FOCUS_HITSTUN_MULTIPLIER = 1.25
 local REVERSE_HEAVY_TIER1_THRESHOLD = 8 * ANIM_FRAMES -- How many ticks have we held reverse heavy for? 3 different damage tiers based on how long you held.
 local REVERSE_HEAVY_TIER2_THRESHOLD = 16 * ANIM_FRAMES
 
-local HEAVY_SPIN_HITSTOP_MULTIPLIER = 2 -- victorc: 60Hz, review this as it may not have been intentional
+local HEAVY_SPIN_HITSTOP_MULTIPLIER = 2 -- 60Hz, review this as it may not have been intentional
 local ALLOWABLE_HEAVY_SPIN_LOOPS = 2 -- technically this is 3 loops, because one of them is in the _pst state... probably could account for that in the state itself
 
 local function OnHitBoxTriggered(inst, data)
@@ -112,42 +112,44 @@ local function OnHitBoxTriggered(inst, data)
 		attack:SetFocus(focushit)
 		attack:SetID(inst.sg.mem.attack_type)
 		attack:SetNameID(inst.sg.statemem.attack_id)
+		attack:SetHitFlags(inst.sg.statemem.hitflags or Attack.HitFlags.LOW_ATTACK)
 
+		local hit = false
 		if inst.sg.statemem.knockdownhit then
 			inst:ShakeCamera(CAMERASHAKE.FULL, .3, .02, .3)
-			inst.components.combat:DoKnockdownAttack(attack)
+			hit = inst.components.combat:DoKnockdownAttack(attack)
 		elseif inst.sg.statemem.knockbackhit then
 			inst:ShakeCamera(CAMERASHAKE.VERTICAL, .3, .02, .3)
-			inst.components.combat:DoKnockbackAttack(attack)
+			hit = inst.components.combat:DoKnockbackAttack(attack)
 		else
 			attack:SetPushback(inst.sg.statemem.pushback)
-			inst.components.combat:DoBasicAttack(attack)
+			hit = inst.components.combat:DoBasicAttack(attack)
 		end
 
-		hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+		if hit then
+			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-		-- Because the hammer's swing arc is so big, we want to adjust the y_offset for this weapon to account for the size of the target
-		local hitfx_y_offset = 1.75
-		local target_size = lume.round(v.Physics:GetSize(), 0.1)
-		if target_size < 1.4 then
-			--SMALL
-			hitfx_y_offset = hitfx_y_offset - 0.5
-		elseif target_size >= 1.4 and target_size < 1.8 then
-			--MEDIUM
-			hitfx_y_offset = hitfx_y_offset
-		else
-			--LARGE
-			hitfx_y_offset = hitfx_y_offset + 0.25
-		end
+			-- Because the hammer's swing arc is so big, we want to adjust the y_offset for this weapon to account for the size of the target
+			local hitfx_y_offset = 1.75
+			local target_size = lume.round(v.Physics:GetSize(), 0.1)
+			if target_size < 1.4 then
+				--SMALL
+				hitfx_y_offset = hitfx_y_offset - 0.5
+			elseif target_size >= 1.4 and target_size < 1.8 then
+				--MEDIUM
+				hitfx_y_offset = hitfx_y_offset
+			else
+				--LARGE
+				hitfx_y_offset = hitfx_y_offset + 0.25
+			end
 
-		inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_blunt", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
-		if hitstoplevel > HitStopLevel.MAJOR then -- plays an extra sound layer if we land a big hitstop impact
-			local params = {}
-			params.fmodevent = fmodtable.Event.Hit_blunt_heavy
-			params.sound_max_count = 1
-			soundutil.PlaySoundData(inst, params)
+			inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_blunt", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+			
+			if hitstoplevel > HitStopLevel.MAJOR then -- plays an extra sound layer if we land a big hitstop impact
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hit_blunt_heavy, { max_count = 1 })
+			end
+			SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
 		end
-		SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
 	end
 end
 
@@ -198,10 +200,7 @@ local states =
 		{
 			--sounds
 			FrameEvent(1, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_1
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_1, { max_count = 1 })
 			end),
 			--
 
@@ -238,14 +237,16 @@ local states =
 			-- FrameEvent(0, SGPlayerCommon.Fns.SetCanDodge),
 			-- FrameEvent(4, SGPlayerCommon.Fns.SetCannotDodge),
 
-			-- 
-			FrameEvent(8, SGPlayerCommon.Fns.SetCanDodge),
+			--
+			FrameEvent(7, SGPlayerCommon.Fns.SetCanDodge),
 			FrameEvent(8, function(inst)
 				inst.sg.statemem.lightcombostate = "light_attack2"
 				SGPlayerCommon.Fns.TryQueuedAction(inst, "lightattack")
 
 				inst.sg.statemem.heavycombostate = "default_heavy_attack"
 				SGPlayerCommon.Fns.TryQueuedAction(inst, "heavyattack")
+
+				SGPlayerCommon.Fns.SetCanSkill(inst)
 			end),
 		},
 
@@ -312,10 +313,7 @@ local states =
 			FrameEvent(0, function(inst) inst.sg.statemem.heavycombostate = nil end),
 			--sounds
 			FrameEvent(4, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_2
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_2, { max_count = 1 })
 			end),
 			--
 
@@ -495,10 +493,7 @@ local states =
 		timeline =
 		{
 			FrameEvent(2, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_3
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_3, { max_count = 1 })
 			end),
 			--
 
@@ -708,12 +703,7 @@ local states =
 			FrameEvent(5, function(inst)
 				inst.AnimState:SetSymbolBloom("weapon_back01", 0, 0, 0, 0)
 			end),
-			--
 
-			--FrameEvent(4, function(inst) SGPlayerCommon.Fns.AttachSwipeFx(inst, "fx_hammer_smash_air") end), --SLOTH/JAMBELL: replace with 'hammer_atk4' fx
-			--FrameEvent(4, function(inst)
-				--SGPlayerCommon.Fns.AttachPowerSwipeFx(inst, "fx_hammer_smash_air") --SLOTH/JAMBELL: replace with 'hammer_atk4' fx
-			--end),
 			FrameEvent(5, function(inst)
 				combatutil.StartMeleeAttack(inst)
 
@@ -729,11 +719,8 @@ local states =
 					inst.sg.statemem.knockdownhit = true
 					inst.sg.statemem.focushit = true
 					inst.sg.statemem.additionalfx = "fx_hammer_overhead_swipe_full"
-					local params = {}
-					params.fmodevent = fmodtable.Event.Hammer_atk_overhead_focus_whoosh
-					params.autostop = 1
-					params.sound_max_count = 1
-					soundutil.PlaySoundData(inst, params)
+					--sound
+					soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_overhead_focus_whoosh,{ max_count = 1 })
 					
 				elseif inst.sg.statemem.heldticks and inst.sg.statemem.heldticks >= REVERSE_HEAVY_TIER1_THRESHOLD	then
 					inst.sg.statemem.damage_mod = ATTACK_DAMAGE_MOD.REVERSE_ATTACK_TIER1
@@ -759,6 +746,8 @@ local states =
 				if inst.sg.statemem.additionalfx ~= nil then
 					SGPlayerCommon.Fns.AttachExtraSwipeFx(inst, inst.sg.statemem.additionalfx)
 				end
+
+				inst:PushEvent("hammer_heavy_hit_ground")
 			end),
 			FrameEvent(6, function(inst)
 				inst.components.hitbox:PushBeam(0, 4.2 * inst.sg.statemem.hitboxmult, 2.5, HitPriority.PLAYER_DEFAULT)
@@ -913,22 +902,17 @@ local states =
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 12 * ANIM_FRAMES)
 
 			inst.sg.statemem.attack_id = "HEAVY_ATTACK"
+			inst.sg.statemem.hitflags = Attack.HitFlags.DEFAULT -- Should hit airborne_high until later in the state
 		end,
 
 		timeline =
 		{
 			--sounds
 			FrameEvent(0, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_overhead
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_overhead, { max_count = 1 })
 			end),
 			FrameEvent(4, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_overhead_impact
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_overhead_impact, { max_count = 1 })
 			end),
 			--
 
@@ -940,6 +924,7 @@ local states =
 			--
 
 			FrameEvent(4, function(inst)
+
 				combatutil.StartMeleeAttack(inst)
 
 				inst.sg:RemoveStateTag("airborne") -- these actually happen on FrameEvent3, but to give the player a bit of leeway, I'm giving them an extra frame
@@ -955,7 +940,8 @@ local states =
 				inst.sg.statemem.knockbackhit = true
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.components.hitbox:PushBeam(1, 4.7, 3.0, HitPriority.PLAYER_DEFAULT)
-
+				
+				inst:PushEvent("hammer_heavy_hit_ground")
 			end),
 			FrameEvent(5, function(inst)
 				inst.components.hitbox:PushBeam(1, 4.7, 3.0, HitPriority.PLAYER_DEFAULT)
@@ -964,6 +950,8 @@ local states =
 			FrameEvent(6, function(inst)
 				SGPlayerCommon.Fns.DetachSwipeFx(inst)
 				SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
+
+				inst.sg.statemem.hitflags = Attack.HitFlags.LOW_ATTACK -- Should no longer hit airborne_high
 				inst.components.hitbox:PushBeam(1, 4.7, 3.0, HitPriority.PLAYER_DEFAULT)
 				combatutil.EndMeleeAttack(inst)
 			end),
@@ -1010,29 +998,20 @@ local states =
 			inst.components.playercontroller:OverrideControlQueueTicks("dodge", 8 * ANIM_FRAMES)
 
 			inst.sg.statemem.attack_id = "HEAVY_AIR_SPIN"
+			inst.sg.statemem.hitflags = Attack.HitFlags.DEFAULT -- Should hit airborne_high until later in the state
 		end,
 
 		timeline =
 		{
 			--sounds
 			FrameEvent(3, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_overhead_alt
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst,fmodtable.Event.Hammer_atk_overhead_alt,{ max_count = 1 })
 			end),
 			FrameEvent(13, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_air_focus_whoosh
-				params.autostop = 1
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_air_focus_whoosh, { max_count = 1, is_autostop = true })
 			end),
 			FrameEvent(19, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_overhead_impact
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_overhead_impact, { max_count = 1 })
 			end),
 			--
 
@@ -1100,8 +1079,11 @@ local states =
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.components.hitbox:PushBeam(-.5, 1, 2.5, HitPriority.PLAYER_DEFAULT)
 				inst.components.hitbox:PushBeam(1, 5.2, 3.0, HitPriority.PLAYER_DEFAULT)
+
+				inst:PushEvent("hammer_heavy_hit_ground")
 			end),
 			FrameEvent(19, function(inst)
+				inst.sg.statemem.hitflags = Attack.HitFlags.LOW_ATTACK -- Should no longer hit airborne_high
 				inst.components.hitbox:PushBeam(-.5, 1, 2.5, HitPriority.PLAYER_DEFAULT)
 				inst.components.hitbox:PushBeam(1, 5.2, 3.0, HitPriority.PLAYER_DEFAULT)
 				combatutil.EndMeleeAttack(inst)
@@ -1202,7 +1184,7 @@ local states =
 		tags = { "attack", "busy", "airborne", "heavy_attack" },
 
 		onenter = function(inst)
-			inst.AnimState:PlayAnimation("hammer_fade_to_smash_jump") --JAMBELL/MIKE: replace this with the L3 -> H transition anim
+			inst.AnimState:PlayAnimation("hammer_fade_to_smash_jump")
 		end,
 
 		timeline =
@@ -1407,10 +1389,7 @@ local states =
 		{
 			--sounds
 			FrameEvent(0, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_reverse
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_reverse, { max_count = 1 })
 			end),
 			--
 
@@ -1428,8 +1407,6 @@ local states =
 			--
 
 			FrameEvent(4, function(inst)
-				combatutil.StartMeleeAttack(inst)
-
 				-- inst.components.playercontroller:OverrideControlQueueTicks("dodge", 12 * ANIM_FRAMES)
 
 				inst.sg.statemem.hitboxmult = 1
@@ -1446,11 +1423,8 @@ local states =
 					inst.sg.statemem.focushit = true
 					inst.sg.statemem.additionalfx = "fx_hammer_charge_swipe_full"
 					inst.sg.statemem.knockdownhit = true
-					local params = {}
-					params.fmodevent = fmodtable.Event.Hammer_atk_charge_focus_whoosh
-					params.autostop = 1
-					params.sound_max_count = 1
-					soundutil.PlaySoundData(inst, params)
+					soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_charge_focus_whoosh,
+						{ max_count = 1, is_autostop = true })
 					inst.sg.statemem.attack_id = "GOLF_SWING_FULL"
 
 				elseif inst.sg.statemem.heldticks and inst.sg.statemem.heldticks >= REVERSE_HEAVY_TIER1_THRESHOLD then
@@ -1473,8 +1447,9 @@ local states =
 					inst.sg.statemem.chargedtier = 0
 					inst.sg.statemem.knockbackhit = true
 					inst.sg.statemem.attack_id = "GOLF_SWING_LIGHT"
-
 				end
+
+				combatutil.StartMeleeAttack(inst)
 
 				if inst.sg.statemem.additionalfx ~= nil then
 					SGPlayerCommon.Fns.AttachExtraSwipeFx(inst, inst.sg.statemem.additionalfx)
@@ -1532,27 +1507,6 @@ local states =
 
 		timeline =
 		{
-			-- jambell: old cancel window, based on charge length
-			-- FrameEvent(0, function(inst)
-			-- 	if inst.sg.statemem.chargedtier == 0 then
-			-- 		SGPlayerCommon.Fns.SetCanDodge(inst)
-			-- 		SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
-			-- 	end
-			-- end),
-
-			-- FrameEvent(7, function(inst)
-			-- 	if inst.sg.statemem.chargedtier == 1 then
-			-- 		SGPlayerCommon.Fns.SetCanDodge(inst)
-			-- 		SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
-			-- 	end
-			-- end),
-			-- FrameEvent(10, function(inst)
-			-- 	if inst.sg.statemem.chargedtier == 2 then
-			-- 		SGPlayerCommon.Fns.SetCanDodge(inst)
-			-- 		SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
-			-- 	end
-			-- end),
-
 			FrameEvent(16, SGPlayerCommon.Fns.RemoveBusyState)
 		},
 
@@ -1591,10 +1545,7 @@ local states =
 		{
 			--sounds
 			FrameEvent(7, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hammer_atk_fade
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Hammer_atk_fade,{ max_count = 1, is_autostop = true })
 			end),
 			--
 
@@ -1647,7 +1598,6 @@ local states =
 				SGPlayerCommon.Fns.DetachSwipeFx(inst)
 				SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
 				--SGPlayerCommon.Fns.AttachSwipeFx(inst, "fx_hammer_fade_atk_back")
-				--jambell: power back fx?
 				inst.sg.statemem.hitstoplevel = HitStopLevel.LIGHT
 				inst.sg.statemem.hitfx_x_offset = -1
 				inst.sg.statemem.backhit = true
@@ -1889,7 +1839,7 @@ local states =
 
 			EventHandler("controlupevent", function(inst, data)
 				if data.control == "heavyattack" then
-					-- victorc: 60Hz, this may need to be reconciled to work in anim frames
+					-- 60Hz, this may need to be reconciled to work in anim frames
 					if inst.sg:GetTicksInState() % inst.AnimState:GetCurrentAnimationNumFrames() < 3 then
 						inst.sg:GoToState("fading_heavy_spin_pst")
 					else

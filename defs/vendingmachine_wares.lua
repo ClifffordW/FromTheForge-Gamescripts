@@ -3,16 +3,17 @@ local lume = require "util.lume"
 local itemforge = require "defs.itemforge"
 local Equipment = require "defs.equipment"
 local Cosmetic = require "defs.cosmetics.cosmetics"
-local Currency = require "defs.currency"
+local CurrencyType = require "currency.currency_type"
 local VendingMachine = require "components.vendingmachine"
-local PowerDescriptionButton = require "widgets.ftf.powerdescriptionbutton"
+-- local PowerDescriptionButton = require "widgets.ftf.powerdescriptionbutton"
 local WorldPowerDescription = require "widgets.ftf.worldpowerdescription"
 local FollowPower = require "widgets.ftf.followpower"
 local Widget = require("widgets/widget")
 local EquipmentComparisonScreen = require "screens.dungeon.equipmentcomparisonscreen"
 local Consumable = require "defs.consumable"
 local recipes = require "defs.recipes"
-local UpgradeableItemWidget = require"widgets/ftf/upgradeableitemwidget"
+-- local UpgradeableItemWidget = require"widgets/ftf/upgradeableitemwidget"
+local EquipmentTooltip = require"widgets/ftf/equipmenttooltip"
 local Text = require "widgets.text"
 local SGPlayerCommon = require "stategraphs.sg_player_common"
 local ConfirmDialog = require "screens.dialogs.confirmdialog"
@@ -29,10 +30,13 @@ local items = {}
 -- Run Items
 
 items.potion = {
-	name = STRINGS.UI.VENDING_MACHINE.SHOP_INVENTORY.potion, --Potion Refill
-	cost = 50,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return STRINGS.UI.VENDING_MACHINE.SHOP_INVENTORY.potion end, --Potion Refill
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 50,
+			crowd_fundable = true,
+		},
+	},
 	details_fn = function() return VendingMachine.MakeTextWidget(STRINGS.UI.VENDING_MACHINE.SHOP_INVENTORY.potion) end,
 	purchased_fn = function(vendingmachine)
 		local potion = SpawnPrefab("potion_refill_single", vendingmachine)
@@ -47,10 +51,13 @@ items.potion = {
 }
 
 items.upgrade = {
-	name = STRINGS.UI.VENDING_MACHINE.SHOP_INVENTORY.upgrade, --Power Upgrade
-	cost = 100,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return STRINGS.UI.VENDING_MACHINE.SHOP_INVENTORY.upgrade end, --Power Upgrade
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 100,
+			crowd_fundable = true,
+		},
+	},
 	details_fn = function() return VendingMachine.MakeTextWidget(STRINGS.UI.VENDING_MACHINE.SHOP_INVENTORY.upgrade) end,
 	purchased_fn = function(vendingmachine)
 		return SpawnPrefab("relic_upgrade_single")
@@ -58,29 +65,31 @@ items.upgrade = {
 }
 
 items.shield = {
-	name = STRINGS.NAMES.concept_shield, --Shield
-	cost = 25,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return STRINGS.NAMES.concept_shield end, --Shield
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 25,
+			crowd_fundable = true,
+		}
+	},
 	summary_fn = function() return VendingMachine.MakeTextWidget(STRINGS.NAMES.concept_shield) end,
 	purchased_fn = function(vendingmachine)
 		return SpawnPrefab("shield_refill_single")
 	end,
 }
 
--- TODO @chrisp #vending - need glitz ware defintion
--- this manifests as a missing VendingMachine
-items.glitz = nil
-
 -- TODO @chrisp #vending - need loot ware defintion
 -- this manifests as a missing VendingMachine
 items.loot = nil
 
 items.corestone = {
-	name = STRINGS.NAMES.konjur_soul_lesser, --Corestone
-	cost = 200,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return STRINGS.NAMES.konjur_soul_lesser end, --Corestone
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 200,
+			crowd_fundable = true,
+		},
+	},
 	details_fn = function() return VendingMachine.MakeTextWidget(STRINGS.NAMES.konjur_soul_lesser) end,
 	purchased_fn = function(vendingmachine)
 		return SpawnPrefab("corestone_pickup_single", vendingmachine)
@@ -138,10 +147,18 @@ local function InitializePowerWare(vendingmachine, rng, power_type, rarity, incl
 end
 
 items.legendary = {
-	name = "",
-	cost = 150,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return "" end,
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 150,
+			crowd_fundable = true,
+		},
+		-- TODO @jamie #loot_sinks - this is the loot cost for a legendary drop
+		[CurrencyType.id.Loot] = {
+			cost = 10,
+			crowd_fundable = false,
+		},
+	},
 	init_fn = function(vendingmachine, rng)
 		return InitializePowerWare(
 			vendingmachine, 
@@ -156,10 +173,18 @@ items.legendary = {
 }
 
 items.fabled = {
-	name = "",
-	cost = 150,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return "" end,
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost =150,
+			crowd_fundable = true,
+		},
+		-- TODO @jamie #loot_sinks - this is the loot cost for a fabled drop
+		[CurrencyType.id.Loot] = {
+			cost = 10,
+			crowd_fundable = false,
+		},
+	},
 	init_fn = function(vendingmachine, rng)
 		return InitializePowerWare(
 			vendingmachine, 
@@ -174,10 +199,13 @@ items.fabled = {
 }
 
 items.epic = {
-	name = "",
-	cost = 100,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return "" end,
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 100,
+			crowd_fundable = true,
+		},
+	},
 	init_fn = function(vendingmachine, rng)
 		return InitializePowerWare(
 			vendingmachine, 
@@ -192,10 +220,13 @@ items.epic = {
 }
 
 items.common = {
-	name = "",
-	cost = 75,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return "" end,
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost = 75,
+			crowd_fundable = true,
+		},
+	},
 	init_fn = function(vendingmachine, rng)
 		return InitializePowerWare(
 			vendingmachine, 
@@ -210,10 +241,13 @@ items.common = {
 }
 
 items.skill = {
-	name = "",
-	cost = 75,
-	currency = Currency.id.Run,
-	crowd_fundable = true,
+	pretty_name_fn = function() return "" end,
+	costs = {
+		[CurrencyType.id.Run] = {
+			cost =75,
+			crowd_fundable = true,
+		},
+	},
 	init_fn = function(vendingmachine, rng)
 		return InitializePowerWare(
 			vendingmachine, 
@@ -230,10 +264,10 @@ items.skill = {
 -- TODO @chrisp #random_power - dead code?
 items.random_power = nil
 -- {
--- 	name = "",
--- currency = Currency.id.Run,
+-- 	pretty_name_fn = function() return "" end,
+--  currency = CurrencyType.id.Run,
 -- 	cost = 75, -- could be a bad roll if common, could be a great roll if Legendary.
-	   -- TODO @jambell #vending true these power drops against each other
+	   -- TODO #vending true these power drops against each other
 -- crowd_fundable = true,
 -- 	init_fn = function(vendingmachine, rng)
 -- 		local powerdropmanager = TheWorld.components.powerdropmanager
@@ -263,50 +297,47 @@ local EquipmentPreview = Class(Widget, function(self, itemDef)
 
 	self.itemDef = itemDef
 	self.item = itemforge.CreateEquipment(self.itemDef.slot, self.itemDef)
-	
-	local recipe = recipes.FindRecipeForItemDef(self.itemDef)
 
-	-- TODO @chrisp #interact - this is probably not an appropriate details widget as it contains player-specifics
-	self.details = self:AddChild(UpgradeableItemWidget(self.width, nil, self.item, recipe, false, false, true))
+	self.details = self:AddChild( EquipmentTooltip() )
 end)
 
 function EquipmentPreview:OnGainInteractFocus(player)
-	self.details:SetPlayer(player)
+	self.details:LayoutWithContent({
+		player = player,
+		item = self.item,
+	})
 end
 
 local function MakeEquipmentDetailsWidget(ilvl, def)
 	return EquipmentPreview(def)
 end
 
-local EQUIPMENT_COSTS <const> = {
-	[Equipment.Slots.HEAD] = 1, -- TODO: try 2
-	[Equipment.Slots.BODY] = 2, -- TODO: try 3
-	[Equipment.Slots.WAIST] = 1, -- TODO: try 2
-	[Equipment.Slots.WEAPON] = 3,
-}
-
-local WEAPON_LOCKED_MESSAGE <const> = {
-	[WEAPON_TYPES.HAMMER] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.HAMMER,
-	[WEAPON_TYPES.POLEARM] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.POLEARM,
-	[WEAPON_TYPES.GREATSWORD] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.GREATSWORD,
-	[WEAPON_TYPES.CANNON] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.CANNON,
-	[WEAPON_TYPES.SHOTPUT] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.SHOTPUT,
-	[WEAPON_TYPES.PROTOTYPE] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.PROTOTYPE,
-}
+local calculate_cost = function(base_cost, def)
+	local difficulty = TheSceneGen.components.scenegen:GetTier()
+	local difficulty_mod = TUNING.MARKET_ITEM_COSTS.DUNGEON_MODIFIER[difficulty]
+	local rarity_mod = TUNING.MARKET_ITEM_COSTS.RARITY_MODIFIER[def.rarity]
+	dbassert(rarity_mod ~= nil, string.format("No rarity modifier for rarity %s (%s)", tostring(def.rarity), def.name))
+	dbassert(difficulty_mod ~= nil, string.format("no difficulty modifier for difficulty %s (%s)", tostring(difficulty), TheDungeon:GetDungeonMap().data.location_id))
+	return math.ceil(base_cost * rarity_mod * difficulty_mod)
+end
 
 items.equipment = {
-	name = function(mannequin_inst)
+	pretty_name_fn = function(mannequin_inst)
 		local details = mannequin_inst.components.vendingmachine:GetProductDetails()
 		local def = Equipment.Items[details[1]][details[2]]
 		return def.pretty.name
 	end,
-	currency = Currency.id.Meta,
-	crowd_fundable = false,
-	cost = function(mannequin_inst)
-		local details = mannequin_inst.components.vendingmachine:GetProductDetails()
-		local slot = details[1]
-		return EQUIPMENT_COSTS[slot]
-	end,
+	costs = {
+		[CurrencyType.id.Meta] = {
+			cost = function(mannequin_inst)
+				local details = mannequin_inst.components.vendingmachine:GetProductDetails()
+				local def = Equipment.Items[details[1]][details[2]]
+				local slot = details[1]
+				return calculate_cost(TUNING.MARKET_ITEM_COSTS.EQUIPMENT_COSTS[slot], def)
+			end,
+			crowd_fundable = false,
+		},
+	},
 	details_fn = function(mannequin_inst)
 		local details = mannequin_inst.components.vendingmachine:GetProductDetails()
 		local def = Equipment.Items[details[1]][details[2]]
@@ -321,6 +352,15 @@ items.equipment = {
 		end
 
 		if def.slot == "WEAPON" then
+			local WEAPON_LOCKED_MESSAGE <const> = { -- Do not cache at file scope or it won't get translated!
+				[WEAPON_TYPES.HAMMER] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.HAMMER,
+				[WEAPON_TYPES.POLEARM] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.POLEARM,
+				[WEAPON_TYPES.GREATSWORD] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.GREATSWORD,
+				[WEAPON_TYPES.CANNON] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.CANNON,
+				[WEAPON_TYPES.SHOTPUT] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.SHOTPUT,
+				[WEAPON_TYPES.PROTOTYPE] = STRINGS.UI.VENDING_MACHINE.WEAPON_LOCKED.PROTOTYPE,
+			}
+
 			local unlock_tracker = player.components.unlocktracker
 			-- TODO @chrisp #deadcode - armour locked check in vending machine
 			-- Armours are not subject to locking/unlocking, it appears...
@@ -337,15 +377,14 @@ items.equipment = {
 		
 		return true
 	end,
-	purchased_fn = function(mannequin_inst, player)
+	purchased_fn = function(mannequin_inst, player, cost)
+		-- HACK: Add the currency back -- we don't actually want to spend this cost yet.
+		player.components.inventoryhoard:AddStackable(Consumable.Items.MATERIALS.konjur_soul_lesser, cost) 
+
 		local details = mannequin_inst.components.vendingmachine:GetProductDetails()
 		local slot = details[1]
 		local ware = details[2]
-		local def = Equipment.Items[details[1]][details[2]]
-
-		local cost = EQUIPMENT_COSTS[slot]
-		player.components.inventoryhoard:AddStackable(Consumable.Items.MATERIALS.konjur_soul_lesser, cost) -- HACK: Add the currency back -- we don't actually want to spend this cost yet.
-
+		local def = Equipment.Items[slot][ware]
 		local screen = EquipmentComparisonScreen(player, def, Consumable.Items.MATERIALS.konjur_soul_lesser, cost)
 		TheFrontEnd:PushScreen(screen)
 	end,
@@ -361,6 +400,7 @@ end
 
 -- The string to display to the user that identifies the dye.
 local function DyeLabel(dye_bottle)
+	dbassert(dye_bottle)
 	local details = dye_bottle.components.vendingmachine:GetProductDetails()
 	local slot = details[1]
 	local dye_id = details[2]
@@ -371,6 +411,7 @@ end
 
 local function MakeTextWidget(text)
 	return Text(FONTFACE.DEFAULT, FONTSIZE.DAMAGENUM_PLAYER, "", UICOLORS.INFO)
+		:SetClickable(false)
 		:SetShadowColor(UICOLORS.BLACK)
 		:SetShadowOffset(1, -1)
 		:SetOutlineColor(UICOLORS.BLACK)
@@ -429,12 +470,12 @@ end
 
 -- A popup dialog that asks the user if they want to apply the newly purchased dye and does so if they say yes.
 local function ApplyDyeDialog(dye_bottle, player)
-	local dialog = ConfirmDialog(nil, nil, false, DyeLabel(dye_bottle), nil, STRINGS.UI.DYE_PURCHASE_POPUP.TEXT)
+	local dialog = ConfirmDialog(player, nil, false, DyeLabel(dye_bottle), nil, STRINGS.UI.DYE_PURCHASE_POPUP.TEXT)
 	dialog
 		:SetYesButton(STRINGS.UI.DYE_PURCHASE_POPUP.YES_OPTION, function()
 			local armour_slot, dye_def = DyeDef(dye_bottle)
 			local dye_name = DyeName(dye_def)
-			player.components.equipmentdyer:SetEquipmentDye(armour_slot, dye_def.armour_set, dye_name) -- TODO @jambell make 'dye_name' just take an int instead		
+			player.components.equipmentdyer:SetEquipmentDye(armour_slot, dye_def.armour_set, dye_name) -- TODO make 'dye_name' just take an int instead		
 			SGPlayerCommon.Fns.CelebrateEquipment(player, 1)			
 			dialog:Close()
 		end)
@@ -449,10 +490,13 @@ local function ApplyDyeDialog(dye_bottle, player)
 end
 
 items.dye = {
-	name = DyeLabel,
-	currency = Currency.id.Cosmetic,
-	cost = 1500,
-	crowd_fundable = false,
+	pretty_name_fn = DyeLabel,
+	costs = {
+		[CurrencyType.id.Meta] = {
+			cost = 1,
+			crowd_fundable = false,
+		},
+	},
 	details_fn = function(dye_bottle) return DyeDetailsWidget(dye_bottle) end,
 	can_purchase_fn = CanPurchaseDye,
 	purchased_fn = function(dye_bottle, player)
@@ -470,14 +514,24 @@ items.dye = {
 }
 
 items.healing_fountain = {
-	name = STRINGS.UI.VENDING_MACHINE.HEALING_FOUNTAIN,
-	crowd_fundable = true,
-	currency = Currency.id.Health,
+	pretty_name_fn = function() return STRINGS.UI.VENDING_MACHINE.HEALING_FOUNTAIN end,
+	costs = {
+		[CurrencyType.id.Health] = {
+			cost = function(healing_fountain)
+				local HEALTH_PER_PLAYER <const> = 250
+				return HEALTH_PER_PLAYER * TheNet:GetNrPlayersOnRoomChange()
+			end,
+			crowd_fundable = true,
+		},
+	},
 	price_tag_visibility_by_proximity = true,
-	cost = function(healing_fountain)
-		local HEALTH_PER_PLAYER <const> = 250
-		return HEALTH_PER_PLAYER * TheNet:GetNrPlayersOnRoomChange()
-	end,
+	
 }
+
+for key,val in pairs(items) do
+	if type(val) == "table" and val.id == nil then
+		val.id = key
+	end
+end
 
 return items

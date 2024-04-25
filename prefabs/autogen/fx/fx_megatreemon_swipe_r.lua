@@ -8,6 +8,7 @@ return {
   build="fx_megatreemon",
   finaloffset=-1,
   glowcolor="6C00FFFF",
+  group="creatures",
   hue=50.0,
   multcolor="FFFFFF80",
   scalex=1.0,

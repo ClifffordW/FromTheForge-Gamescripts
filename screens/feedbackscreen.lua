@@ -118,6 +118,7 @@ FeedbackScreen = Class(Screen, function(self, gamestate, screen_shot_texture)
 		:SetAutoSize(TEXT_W)
 		:SetText(STRINGS.UI.FEEDBACK_SCREEN.SUBJECT_LABEL)
 	self.subject_inputbox = self.contents:AddChild(TextEdit(FONTFACE.DEFAULT, form_font_size))
+		:SetName("TextEdit:subject")
 		:SetSize(TEXT_W, INPUT_H)
 		:SetEditing(false)
 		:SetHAlign(ANCHOR_LEFT)
@@ -134,6 +135,7 @@ FeedbackScreen = Class(Screen, function(self, gamestate, screen_shot_texture)
 		:SetAutoSize(TEXT_W)
 		:SetText(STRINGS.UI.FEEDBACK_SCREEN.MESSAGE_LABEL)
 	self.message_inputbox = self.contents:AddChild(TextEdit(FONTFACE.DEFAULT, form_font_size))
+		:SetName("TextEdit:message")
 		:SetSize(TEXT_W, 700)
 		:SetEditing(false)
 		:SetAllowNewline(true)
@@ -344,7 +346,7 @@ function FeedbackScreen:SendFeedback()
 	end
 	self.submitting = true
 
-	local submit_popup = ConfirmDialog(nil, nil, true)
+	local submit_popup = ConfirmDialog(self:GetOwningPlayer(), nil, true)
 		:SetTitle(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTING_TITLE)
 		:HideArrow()
 		:HideYesButton()
@@ -354,6 +356,7 @@ function FeedbackScreen:SendFeedback()
 			TheFrontEnd:PopScreen(self.submit_popup)
 		end)
 		:CenterButtons()
+		:SuppressFocusBrackets()
 
 	self.submit_popup = submit_popup
 	local timer = 0
@@ -391,12 +394,12 @@ function FeedbackScreen:SendFeedback()
 
 					local data = {}
 					pcall(function()
-						data.safefile_runs = TheSaveSystem.progress:GetValue("num_runs")
+						data.safefile_runs = TheSaveSystem:GetActiveAboutSlot():GetValue("num_runs")
 						data.lifetime_runs = TheSaveSystem.permanent:GetValue("num_runs")
 						data.playercount_total = #AllPlayers
 						data.playercount_local = lume.count(AllPlayers, EntityScript.IsLocal)
 						data.playercount_remote = data.playercount_total - data.playercount_local
-						data.net_join_code = TheNet:GetJoinCode()
+						data.net_join_code = TheNet:GetJoinCode()	-- This one is invisible to the player so it won't need to go through GetNetworkJoinCode() which takes streamer Mode into account
 
 						data.player_name = self:_GetFeedbackName()
 						Profile:SetFeedbackName(data.player_name)
@@ -461,7 +464,7 @@ function FeedbackScreen:SubmitFeedbackResult(response_code, response)
 		if response_code == 200 then
 			-- think this went okay
 			TheFrontEnd:PushScreen(
-				ConfirmDialog(nil, nil, true)
+				ConfirmDialog(self:GetOwningPlayer(), nil, true)
 					:SetTitle(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTED_TITLE)
 					:SetText(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTED_BODY)
 					:HideArrow()
@@ -477,7 +480,7 @@ function FeedbackScreen:SubmitFeedbackResult(response_code, response)
 			if response_code == 413 then
 				-- too large
 				TheFrontEnd:PushScreen(
-					ConfirmDialog(nil, nil, true)
+					ConfirmDialog(self:GetOwningPlayer(), nil, true)
 						:SetTitle(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTED_TITLE_ERROR)
 						:SetText(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTED_BODY_ERROR_TOO_LARGE)
 						:HideArrow()
@@ -491,7 +494,7 @@ function FeedbackScreen:SubmitFeedbackResult(response_code, response)
 			else
 				-- other error
 				TheFrontEnd:PushScreen(
-					ConfirmDialog(nil, nil, true)
+					ConfirmDialog(self:GetOwningPlayer(), nil, true)
 						:SetTitle(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTED_TITLE_ERROR)
 						:SetText(STRINGS.UI.FEEDBACK_SCREEN.SUBMITTED_BODY_ERROR_UNKNOWN)
 						:HideArrow()
@@ -595,7 +598,7 @@ end
 -- 	end
 -- end
 
-function FeedbackScreen:HandleControlUp(control, device)
+function FeedbackScreen:HandleControlUp(control)
 	if control:Has(Controls.Digital.MENU_CANCEL) then
 		self:GetFE():PopScreen(self)
 		return true

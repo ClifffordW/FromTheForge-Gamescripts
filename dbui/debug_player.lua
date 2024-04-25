@@ -14,7 +14,7 @@ local DebugPlayer = Class(DebugNodes.DebugNode, function(self, inst)
 end)
 
 DebugPlayer.PANEL_WIDTH = 800
-DebugPlayer.PANEL_HEIGHT = 1000
+DebugPlayer.PANEL_HEIGHT = 800
 
 
 local function CaptureAnimList(player)
@@ -235,7 +235,6 @@ function DebugPlayer:RenderPanel( ui, panel )
 	local inventoryhoard = self.inst.components.inventoryhoard
 	ui:Value("Konjur", inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.konjur))
 	ui:Value("Corestone", inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.konjur_soul_lesser))
-	ui:Value("glitz", inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.glitz))
 	local multiplier = ui:PickValueMultiplier(1, 10, 100)
 	if ui:Button(ui.icon.arrow_down .." currency") then
 		c_select(self.inst) -- currency only applies to debug selection
@@ -245,6 +244,10 @@ function DebugPlayer:RenderPanel( ui, panel )
 	if ui:Button(ui.icon.arrow_up .." currency") then
 		c_select(self.inst) -- currency only applies to debug selection
 		c_currency(1 * multiplier)
+	end
+	ui:SameLineWithSpace()
+	if ui:Button("Make Rich") then
+		c_rich()
 	end
 
 	if ui:Button("Refill Potion") then
@@ -266,6 +269,62 @@ function DebugPlayer:RenderPanel( ui, panel )
 		else
 			self.anim_list = CaptureAnimList(self.inst)
 		end
+	end
+
+	if ui:CollapsingHeader("Player Craftables") then
+		if ui:Button("Unlock all") then
+			d_unlock_all_playercraftables()
+		end
+		ui:SameLineWithSpace()
+		if ui:Button("Lock all") then
+			d_lock_all_playercraftables()
+		end
+
+		ui:Columns(3)
+		ui:Text("Name")
+		ui:NextColumn()
+		ui:Text("Lock / Unlock")
+		ui:NextColumn()
+		ui:Text("Count")
+		ui:NextColumn()
+		ui:Separator()
+
+	    local ItemCatalog = require "defs.itemcatalog"
+		
+	    for _, item_group in pairs(ItemCatalog.Constructable.Items) do
+	        for item_name, item in iterator.sorted_pairs(item_group) do
+	            if item.tags.playercraftable then
+
+		        	if ui:Button(item_name) then
+		        		panel:PushNode( DebugNodes.DebugTable(item) )
+		        	end
+
+		        	ui:NextColumn()
+		        	local is_unlocked = self.inst.components.unlocktracker:IsRecipeUnlocked(item_name)
+		        	if ui:Button(string.format("%s##%s", is_unlocked and "Lock" or "Unlock", item_name)) then
+		        		if is_unlocked then
+		        			self.inst.components.unlocktracker:LockRecipe(item_name)
+		        		else
+		        			self.inst.components.unlocktracker:UnlockRecipe(item_name)
+		        		end
+		        	end
+		        	ui:NextColumn()
+
+		        	local count = self.inst.components.inventoryhoard:GetStackableCount(item)
+		        	ui:Text(tostring(count))
+		        	ui:SameLineWithSpace()
+		        	if ui:Button(string.format("+##%s", item_name)) then
+		        		self.inst.components.inventoryhoard:Debug_GiveItem(item.slot, item.name)
+		        	end
+		        	ui:SameLineWithSpace()
+		        	if ui:Button(string.format("-##%s", item_name)) then
+		        		self.inst.components.inventoryhoard:Debug_RemoveByName(item.slot, item.name)
+		        	end
+		        	ui:NextColumn()
+	            end
+	        end
+	    end    
+	    ui:Columns()
 	end
 end
 

@@ -23,7 +23,7 @@ local HEAVY_AUTOAIM_RANGE = 14 -- Within how much range from our natural target 
 
 local GHOST_DATA_THROWN  = 	{ starting_alpha = 0.2, ticks_between_ghosts = 2, max_count = 5 }
 local GHOST_DATA_REBOUND = 	{ starting_alpha = 0.1, ticks_between_ghosts = 2, max_count = 5 }
-local GHOST_DATA_SPIKED  = 	{ starting_alpha = 0.25, ticks_between_ghosts = 2, max_count = 7 }  -- TODO(jambell): increase T_B_G when moving through anim 3-2-1-
+local GHOST_DATA_SPIKED  = 	{ starting_alpha = 0.25, ticks_between_ghosts = 2, max_count = 7 }  -- TODO: increase T_B_G when moving through anim 3-2-1-
 local GHOST_DATA_DEBUG  = 	{ starting_alpha = 1, ticks_between_ghosts = 1, max_count = 15, permanent = true }
 
 local FOCUS_FLASH_DATA_SPIKED  = { color = { 0/255, 160/255, 160/255 }, frames = 2 }
@@ -45,10 +45,32 @@ end
 -------------------------------------------------
 -- GAMEPLAY FUNCTIONS
 
+local function _get_attack_id(inst)
+	local attack_id = ("shotput_projectile_%s"):format(inst.sg:GetCurrentState()):upper()
+	if inst.sg.statemem.attack_id then
+		-- can be overridden by manually setting a statemem.attack_id
+		-- did not automatically :upper() this string because it is manually set
+		attack_id = inst.sg.statemem.attack_id
+	end
+	-- printf_world(inst, attack_id)
+	return attack_id
+end
+
+local function _reset_juggle(inst)
+	if not inst.owner then return end
+	inst.owner:PushEvent("shotput_juggled", 0)
+end
+
+local function _increment_juggle(inst)
+	if not inst.owner then return end
+	inst.owner:PushEvent("shotput_juggled", 1)
+end
+
 local function DoAttack(inst, target, focus)
 	if not inst.owner then
 		return
 	end
+
 	-- TheLog.ch.Shotput:printf("DoAttack %s EntityID %d: owner = %s EntityID %d, target = %s EntityID %d",
 	-- 	inst, inst.Network:GetEntityID(),
 	-- 	inst.owner, inst.owner.Network:GetEntityID(),
@@ -58,7 +80,7 @@ local function DoAttack(inst, target, focus)
 	local attack = Attack(inst.owner, target)
 	local dir = 0
 
-	--TODO(jambell): think about scenario: ball is lobbed over top of enemy, lands on their right side. It was travelling --> but the knockback should be <--
+	--TODO: think about scenario: ball is lobbed over top of enemy, lands on their right side. It was travelling --> but the knockback should be <--
 	local vx, vy, vz = inst.Physics:GetVel()
 	if vx >= 0 then
 		dir = 0
@@ -74,7 +96,10 @@ local function DoAttack(inst, target, focus)
 	attack:SetHitstunAnimFrames(inst.hitstun_animframes)
 	attack:SetPushback(focus and 1 or inst.pushback)
 	attack:SetID(inst.attacktype)
+	attack:SetNameID(_get_attack_id(inst))
 	attack:SetProjectile(inst, inst.projectilelauncher)
+
+	-- printf_world(inst, attack:GetNameID())
 
 	if inst.source then
 		attack:SetSource("projectile")
@@ -89,7 +114,9 @@ local function DoAttack(inst, target, focus)
 		inst.owner.components.combat:DoBasicAttack(attack)
 	end
 
-	local fxspawned = inst.owner.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_jamball", target, inst, 0, pos.y, dir, hitstoplevel)
+	local hitfx = inst.sg:HasStateTag("hitfx_up") and "hits_player_jamball_up" or "hits_player_jamball"
+	local fxspawned = inst.owner.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, target, inst, 0, pos.y, dir, hitstoplevel)
+
 	if inst.sg.mem.facing == FACING_LEFT then
 		for id,fx in pairs(fxspawned) do
 			fx.AnimState:SetScale(-1, 1)
@@ -111,12 +138,19 @@ local ticksinstate_to_distancemult =
 }
 
 local function FindReboundTarget(inst, ticksinstate, outofbounds)
-	local x, y, z = inst.Transform:GetWorldPosition()
+	if inst.owner then
+		local weapondef = inst.owner.components.inventory:GetEquippedWeaponDef()
+		if weapondef.rebounds_to_owner then
+			local x, y, z = inst.owner.Transform:GetWorldPosition()
+			return Vector3(x, y, z)
+		end
+	end
 
+	local x, y, z = inst.Transform:GetWorldPosition()
 	local dist = outofbounds and OUT_OF_BOUNDS_REBOUND_DISTANCE or HIT_REBOUND_DISTANCE
 
     -- (LATER IN THE THROW, BOUNCE LESS FAR)
-    -- TODO(jambell): disabling this for now until I can get more work put into design+making it feel good. leaving bones here for later.
+    -- TODO: disabling this for now until I can get more work put into design+making it feel good. leaving bones here for later.
 	-- local dist_multiplier = PiecewiseFn(ticksinstate, ticksinstate_to_distancemult)
 	-- local spiked_multiplier = inst.sg.statemem.spiked and 1.2 or 1
 	-- print(ticksinstate, dist_multiplier, spiked_multiplier)
@@ -143,18 +177,18 @@ local function FindReboundTarget(inst, ticksinstate, outofbounds)
 	return Vector3(x + land_offset, 0, z)
 end
 
-local function FindLobTarget(inst)
-	if not inst.owner then
+local function FindLobTarget(inst, owner)
+	if not owner then
 		return Vector3(0,0,0)
 	end
-	local x, z = inst.owner.Transform:GetWorldXZ()
+	local x, z = owner.Transform:GetWorldXZ()
 	local land_offset = LOB_DISTANCE
-	local ownerfacing = inst.owner ~= nil and inst.owner.Transform:GetFacing() or FACING_RIGHT
+	local ownerfacing = owner ~= nil and owner.Transform:GetFacing() or FACING_RIGHT
 	land_offset = land_offset * (ownerfacing == FACING_LEFT and -1 or 1)
 
 	local target_x = x + land_offset
 
-	local closest, sqdist = GetClosestEntityToXZByTag(x + land_offset, z, HEAVY_AUTOAIM_RANGE, inst.owner.components.combat:GetTargetTags(), true)
+	local closest, sqdist = GetClosestEntityToXZByTag(x + land_offset, z, HEAVY_AUTOAIM_RANGE, owner.components.combat:GetTargetTags(), true)
 
 	if closest ~= nil then
 		-- Predict where they will be based on their velocity
@@ -162,7 +196,7 @@ local function FindLobTarget(inst)
 		local predicted_x = ent_x
 		local vx, vy, vz = closest.Physics:GetVel()
 
-		if inst.owner:GetDistanceSqToXZ(predicted_x + vx, z) < LOB_DISTANCE then
+		if owner:GetDistanceSqToXZ(predicted_x + vx, z) < LOB_DISTANCE then
 			predicted_x = closest:GetPosition().x + vx
 		end
 
@@ -312,12 +346,12 @@ local function SetupComplexProjectile(inst, targetpos)
     local maxrange = 20
     local speed = easing.linear(rangesq, 20, 3, maxrange * maxrange)
 
-    -- TODO(jambell): disabling this for now until I can get more work put into design+making it feel good. leaving bones here for later.
+    -- TODO: disabling this for now until I can get more work put into design+making it feel good. leaving bones here for later.
     -- print("rangesq:", rangesq)
     -- local gravity = PiecewiseFn(rangesq, rangesq_to_gravity)
     -- local speedmult = PiecewiseFn(rangesq, rangesq_to_speedmult)
 
-    --TODO(jambell): perhaps modify bounce HEIGHT based on inst.sg.mem.enemieshit
+    --TODO: perhaps modify bounce HEIGHT based on inst.sg.mem.enemieshit
     inst.components.complexprojectile:SetHorizontalSpeed(speed * 2)
     inst.components.complexprojectile:SetGravity(-80)
     inst.components.complexprojectile:Launch(targetpos)
@@ -368,7 +402,7 @@ local function OnThrownHitBoxTriggered(inst, data)
 end
 
 local function OnReboundHitBoxTriggered(inst, data)
-	--TODO(jambell): favour either a hit OR a catch, probably a catch
+	--TODO: favour either a hit OR a catch, probably a catch
 	if inst.sg.mem.enemieshit == nil then
 		inst.sg.mem.enemieshit = 0
 	end
@@ -431,49 +465,61 @@ local function OnRecalledHitBoxTriggered(inst, data)
 end
 
 local function OnAttacked(inst, attackdata)
-	if inst.sg:HasStateTag("hittable") then
-		combatutil.EndProjectileAttack(inst)
-		local bally = inst:GetPosition().y
-		local attack = attackdata.attack
-		local attacker = attackdata.attack:GetAttacker()
-		if not attacker:IsValid() then
-			return
-		end
-		local attacker_minx, attacker_miny, attacker_minz, attacker_maxx, attacker_maxy, attacker_maxz = attacker.entity:GetWorldAABB()
-		local attacker_thresholdy
+	if not inst.sg:HasStateTag("hittable") then
+		return
+	end
 
-		if attacker:HasTag("player") then --TODO(jambell): check for "shotputter" tag instead
-			attacker_thresholdy = bally + 1 -- always pass the next check -- the shotput stategraph handles this
-			if attack:IsLightAttack() then
-				inst.attacktype = "light_attack"
-			elseif attack:IsHeavyAttack() then
-				inst.attacktype = "heavy_attack"
-			else
-				-- TODO: ask jambell what this is supposed to be for non-light, non-heavy attacks
-				-- TheLog.ch.Shotput:printf("Setting attacktype to %s", attack:GetID())
-				inst.attacktype = attack:GetID()
-			end
-			attacker:PushEvent("projectile_launched", { inst })
-			inst.projectilelauncher = attacker -- for projectilelauncher attack property
+	combatutil.EndProjectileAttack(inst)
+	local bally = inst:GetPosition().y
+	local attack = attackdata.attack
+	local attacker = attackdata.attack:GetAttacker()
+	if not attacker:IsValid() then
+		return
+	end
+	local hit = false
+
+	local updateProjectileData = function()
+		if attack:IsLightAttack() then
+			inst.attacktype = "light_attack"
+		elseif attack:IsHeavyAttack() then
+			inst.attacktype = "heavy_attack"
 		else
-			attacker_thresholdy = attacker_maxy + 3 --(attacker_miny + attacker_maxy) * .75
-			inst.projectilelauncher = nil -- for projectilelauncher attack property
+			-- TODO: ask design team what this is supposed to be for non-light, non-heavy attacks
+			-- TheLog.ch.Shotput:printf("Setting attacktype to %s", attack:GetID())
+			inst.attacktype = attack:GetID()
 		end
+		attacker:PushEvent("projectile_launched", { inst })
+		inst.projectilelauncher = attacker -- for projectilelauncher attack property
+	end
 
-		-- Only accept a collision if the ball has actually reached the entity's height
-		if bally <= attacker_thresholdy then
-			inst.Physics:Stop()
-			inst.sg:RemoveStateTag("catchable")
-			inst.sg.mem.canland = false
-
-			if attacker.sg ~= nil then
-				attackdata.minheight = attacker.sg.statemem.minheight
-				attackdata.maxheight = attacker.sg.statemem.maxheight
+	if attacker:HasTag("player") and attacker.components.inventory:GetEquippedWeaponType() == "SHOTPUT" then -- Shotput players have lots of specific design for how they should hit balls. Other weapons don't, so let's use that specific design if it's there.
+		local attacker_thresholdy = bally + 1 -- always pass the next check -- the shotput stategraph handles this
+		updateProjectileData()
+		hit = bally <= attacker_thresholdy
+	else
+		-- This isn't a shotput player. We should use hitflags instead to see if it hit.
+		if attackdata.attack then
+			hit = inst.components.hitflagmanager:CanAttackHit(attackdata.attack)
+			if attacker:HasTag("player") then
+				updateProjectileData()
+			else
+				inst.projectilelauncher = nil
 			end
-
-			inst.sg.mem.facing = attackdata.attack:GetDir() == 0 and FACING_RIGHT or FACING_LEFT
-			inst.sg:GoToState("spiked", attackdata)
 		end
+	end
+
+	if hit then
+		inst.Physics:Stop()
+		inst.sg:RemoveStateTag("catchable")
+		inst.sg.mem.canland = false
+
+		if attacker.sg ~= nil then
+			attackdata.minheight = attacker.sg.statemem.minheight
+			attackdata.maxheight = attacker.sg.statemem.maxheight
+		end
+
+		inst.sg.mem.facing = attackdata.attack:GetDir() == 0 and FACING_RIGHT or FACING_LEFT
+		inst.sg:GoToState("spiked", attackdata)
 	end
 end
 
@@ -492,7 +538,7 @@ local states =
 
 	State({
 		name = "thrown",
-		tags = { },
+		tags = { "airborne" },
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("air_fast", true)
@@ -546,11 +592,10 @@ local states =
 		{
 			FrameEvent(0, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.velocity) end),
 			FrameEvent(0, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Shotput_thrown
-				params.sound_max_count = 1
-				params.stopatexitstate = true
-				soundutil.PlaySoundData(inst, params)
+				 soundutil.PlayCodeSound(inst,fmodtable.Event.Shotput_thrown,{
+						max_count = 1,
+						stopatexitstate = true,
+					})
 			end),
 			FrameEvent(8, function(inst) inst.sg.statemem.gravitying = true end),
 			FrameEvent(20, function(inst)
@@ -568,7 +613,7 @@ local states =
 
 	State({
 		name = "spiked",
-		tags = { },
+		tags = { "airborne" },
 
 		onenter = function(inst, attackdata)
 			-- First, see if this should be flying downward at an angle.
@@ -579,23 +624,29 @@ local states =
 			if attack ~= nil then
 				attacker = attack:GetAttacker()
 				if attacker ~= nil and attacker.sg ~= nil then
+					if attacker == inst.owner then
+						_increment_juggle(inst)
+					end
+
 					if attacker.sg.statemem.angledown and pos.y > SPIKED_ANGLEDOWN_HEIGHT_THRESHOLD then
+
+						inst.sg.statemem.attack_id = "SHOTPUT_PROJECTILE_SPIKED_KICK"
+
 						inst.sg.statemem.angledown = true
 						inst.sg.statemem.gravity = -0.0002 -- when spiked + gravity kicks in, reach the ground sooner
 					end
 				end
 			end
 
-			--sound
-			local params = {}
-			params.fmodevent = fmodtable.Event.Shotput_spiked
-			params.sound_max_count = 1
-			params.stopatexitstate = true
-			inst.sg.mem.spike_sound = soundutil.PlaySoundData(inst, params)
+			soundutil.PlayCodeSound(inst, fmodtable.Event.Shotput_spiked, {
+				max_count = 1,
+				stopatexitstate = true,
+			})
 			
 			-- Play the right animation, based on whether we're angled or not.
 			inst.AnimState:PlayAnimation(inst.sg.statemem.angledown and "air_spiked_angled_3" or "air_spiked_3", true)
 			MatchAnimToFacing(inst)
+
 
 			combatutil.StartProjectileAttack(inst)
 
@@ -676,7 +727,7 @@ local states =
 			local oob = CheckOutOfBounds(inst)
 			if not oob then
 				if inst.sg.mem.facing == FACING_LEFT then
-					inst.components.hitbox:PushBeam(-.25, 0.25, 1.5, HitPriority.MOB_DEFAULT) -- TODO(jambell): start smaller, to prevent hitting adjacent enemies
+					inst.components.hitbox:PushBeam(-.25, 0.25, 1.5, HitPriority.MOB_DEFAULT) -- TODO: start smaller, to prevent hitting adjacent enemies
 				else
 					inst.components.hitbox:PushBeam(-.25, .25, 1.5, HitPriority.MOB_DEFAULT)
 				end
@@ -725,7 +776,7 @@ local states =
 
 	State({
 		name = "rebound",
-		tags = {  },
+		tags = { "airborne", "hitfx_up" },
 
 		onenter = function(inst, targetpos)
 			inst.AnimState:PlayAnimation("air", true)
@@ -740,8 +791,9 @@ local states =
 			inst.Physics:SetEnabled(false)
 			inst.HitBox:SetNonPhysicsRect(1.25) -- Make the ball's hurtbox bigger so that it's easier to hit
 
+
 			if inst.focusthrow then
-				--TODO(jambell): make move faster... somehow... complexprojectile is v confusing to me ahahah. changing horizontalspeed makes it fly so high
+				--TODO: make move faster... somehow... complexprojectile is v confusing to me ahahah. changing horizontalspeed makes it fly so high
 			end
 
 			inst.focusthrow = true -- Focus Hit: any rebound hit is a focus hit
@@ -753,13 +805,36 @@ local states =
 
 			combatutil.StartProjectileAttack(inst)
 
+			local hitbox_radius
+			if inst.owner then
+				local weapon_def = inst.owner.components.inventory:GetEquippedWeaponDef()
+				hitbox_radius = weapon_def.rebound_hitbox_radius or TUNING.GEAR.WEAPONS.SHOTPUT.REBOUND_HITBOX_RADIUS
+			else
+				hitbox_radius = TUNING.GEAR.WEAPONS.SHOTPUT.REBOUND_HITBOX_RADIUS
+			end
+
+			inst.sg.statemem.hitbox_radius = hitbox_radius
 		end,
+
+		timeline =
+		{
+			FrameEvent(1, function(inst)
+				inst.sg:AddStateTag("airborne_high")
+			end),
+			FrameEvent(28, function(inst)
+				-- Removing this tag a little earlier than it should, visually, to help improve hittability by non-shotput players.
+				inst.sg:RemoveStateTag("airborne_high")
+			end),
+			FrameEvent(30, function(inst)
+				inst.sg:RemoveStateTag("airborne")
+			end),
+		},
 
 		onupdate = function(inst)
 			if inst.sg:GetAnimFramesInState() >= 15 then
 				-- If we're past the apex of the rebound, then turn on the hitbox + update the landing marker
 				inst.sg:AddStateTag("hittable")
-				inst.components.hitbox:PushCircle(0, 0, 2, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushCircle(0, 0, inst.sg.statemem.hitbox_radius, HitPriority.MOB_DEFAULT)
 			end
 		end,
 
@@ -804,12 +879,13 @@ local states =
 
 	State({
 		name = "recalled",
-		tags = { "hittable" },
+		tags = { "hittable", "airborne" },
 
 		onenter = function(inst, recaller)
 			inst.AnimState:PlayAnimation("air", true)
 			inst.Physics:SetEnabled(false)
 			inst.HitBox:SetNonPhysicsRect(1.25) -- Make the ball's hurtbox bigger so that it's easier to hit
+
 
 			local direction = inst:GetAngleTo(recaller)
 			if math.abs(direction) > 90 then
@@ -871,7 +947,7 @@ local states =
 	-- Alternate 'recall' state, where the ball flies horizontally like a throw instead of upward like a rebound.
 	State({
 		name = "summoned",
-		tags = { },
+		tags = { "airborne" },
 
 		onenter = function(inst, summoner)
 			local direction = inst:GetAngleTo(summoner)
@@ -931,9 +1007,9 @@ local states =
 
 	State({
 		name = "lobbed",
-		tags = { "hittable" },
+		tags = { "hittable", "hitfx_up", "airborne" },
 
-		onenter = function(inst)
+		onenter = function(inst, owner)
 			inst.AnimState:PlayAnimation("air", true)
 
 			inst.sg.mem.enemieshit = 0
@@ -947,23 +1023,41 @@ local states =
 			soundutil.PlaySoundData(inst, params)
 
 			inst.Physics:SetEnabled(false)
-			local targetpos = FindLobTarget(inst)
+			local targetpos = FindLobTarget(inst, owner)
 			SetupComplexProjectile(inst, targetpos)
 
-			if inst.focusthrow then
-				inst.components.shotputeffects:StartFocusParticles()
-			end
-
-			inst.sg:AddStateTag("catchable")
+			inst.sg.statemem.starting_y = 1.25
+			inst.Transform:SetHeight(inst.sg.statemem.starting_y)
 
 			combatutil.StartProjectileAttack(inst)
 
+			local hitbox_radius
+			if owner then
+				local weapon_def = owner.components.inventory:GetEquippedWeaponDef()
+				hitbox_radius = weapon_def.rebound_hitbox_radius or TUNING.GEAR.WEAPONS.SHOTPUT.REBOUND_HITBOX_RADIUS
+			else
+				hitbox_radius = TUNING.GEAR.WEAPONS.SHOTPUT.REBOUND_HITBOX_RADIUS
+			end
+
+			inst.sg.statemem.hitbox_radius = hitbox_radius
 		end,
+
+		timeline =
+		{
+			FrameEvent(2, function(inst) inst.sg:AddStateTag("airborne_high") end),
+
+			FrameEvent(7, function(inst)
+				inst.sg:AddStateTag("hittable")
+				inst.sg:AddStateTag("catchable")
+			end),
+
+			FrameEvent(10, function(inst) inst.sg:AddStateTag("airborne_high") end),
+		},
 
 		onupdate = function(inst)
 			if inst.sg:GetAnimFramesInState() > 10 then
 				-- If we're within 6 units from the ground, on the back end of the arc, be able to hit!
-				inst.components.hitbox:PushCircle(0, 0, 2, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushCircle(0, 0, inst.sg.statemem.hitbox_radius, HitPriority.MOB_DEFAULT)
 			end
 		end,
 
@@ -975,16 +1069,19 @@ local states =
 		events =
 		{
 			EventHandler("hitboxtriggered", OnReboundHitBoxTriggered),
+			EventHandler("attacked", function(inst, attackdata) OnAttacked(inst, attackdata) end),
 		},
 	}),
 
 	State({
 		name = "landing",
-		tags = { "hittable", "recallable" },
+		tags = { "hittable", "recallable", "airborne" },
 
 		onenter = function(inst, data)
 			inst.sg.statemem.vertical = data.vertical
 			inst.sg.statemem.spiked = data.spiked
+			inst.sg.statemem.spiked_secondbounce = data.spiked_secondbounce
+
 			local anim = "land_horizontal"
 			if data.vertical then
 				anim = "land_vertical"
@@ -1005,6 +1102,13 @@ local states =
 			inst.components.hitbox:SetUtilityHitbox(true)
 
 			inst.components.playerhighlight:ShowHighlight()
+
+			if inst.owner and inst.owner:IsValid() then
+				if not data.spiked_secondbounce then
+					TheNetEvent:PushEventOnOwnerEntity(inst.owner.GUID, inst.GUID, "shotput_landed")
+					-- inst.owner:PushEvent("shotput_landed", { projectile = inst })
+				end
+			end
 		end,
 
 		onupdate = function(inst)
@@ -1025,6 +1129,14 @@ local states =
 		{
 			FrameEvent(0, function(inst)
 				SGCommon.Fns.PlayGroundImpact(inst, { impact_type = GroundImpactFXTypes.id.ParticleSystem, impact_size = GroundImpactFXSizes.id.Small })
+				local foleysounder = inst.components.foleysounder
+				local tile_param_index = foleysounder:GetSurfaceAsParameter()
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Shotput_land, {
+					max_count = 1,
+					fmodparams = {
+						tile_surfacetile_surface = tile_param_index,
+					}
+				}) 
 				if not inst.sg.statemem.vertical then
 					local speed = inst.sg.statemem.spiked and 10 or 4
 					speed = speed * (inst.sg.mem.facing == FACING_RIGHT and 1 or -1)
@@ -1033,24 +1145,10 @@ local states =
 					inst.Physics:SetMotorVel(speed + random_addition)
 				end
 			end),
-			FrameEvent(0, function(inst)
-				local foleysounder = inst.components.foleysounder
-				local tile_param_index = foleysounder:GetSurfaceAsParameter()
-				local params = {}
-				params.fmodevent = fmodtable.Event.Shotput_land
-				params.sound_max_count = 1
-				local handle = soundutil.PlaySoundData(inst, params)
-				soundutil.SetInstanceParameter(inst, handle, "tile_surface", tile_param_index)
-				if inst.sg.mem.spike_sound then
-					soundutil.KillSound(inst, inst.sg.mem.spike_sound)
-					inst.sg.mem.spike_sound = nil
-				end
-
-			end),
 			FrameEvent(8, function(inst)
 				if not inst.sg.statemem.vertical then
 					if inst.sg.statemem.spiked then
-						inst.sg:GoToState("landing", { vertical = false, spiked = false })
+						inst.sg:GoToState("landing", { vertical = false, spiked = false, spiked_secondbounce = true })
 					end
 					inst.Physics:SetMotorVel(2 * (inst.sg.mem.facing == FACING_RIGHT and 1 or -1))
 				end
@@ -1080,6 +1178,7 @@ local states =
 		tags = { "hittable", "recallable" },
 
 		onenter = function(inst)
+			_reset_juggle(inst)
 			combatutil.EndProjectileAttack(inst)
 			inst.AnimState:PlayAnimation("ground", true)
 			inst.components.hitbox:SetUtilityHitbox(true)

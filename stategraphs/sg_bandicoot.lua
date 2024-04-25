@@ -232,7 +232,7 @@ local function GetSource(inst)
 end
 
 local function GetHidingSpots()
-	local hiding_spots = TheSim:FindEntitiesXZ(0, 0, 10000, { "hidingspot" })
+	local hiding_spots = TheSim:FindEntitiesXZ(0, 0, 1000, { "hidingspot" })
 	return hiding_spots
 end
 
@@ -255,7 +255,7 @@ local function UnhideFromHidingSpot(inst)
 	if hiding_spot then
 		inst.sg.mem.hiding_spot = nil
 	end
-	inst.components.powermanager:SetCanReceivePowers(true) -- Prevent Bandicoot from gaining any powers while in this state
+	monsterutil.ReinitializeStatusEffects(inst)
 end
 
 local function OnHidingSpotHit(inst, source, data)
@@ -286,8 +286,7 @@ end
 local function HideInHidingSpot(inst, hiding_spot)
 	inst.sg.mem.hiding_spot = hiding_spot
 
-	inst.components.powermanager:ResetData() -- Clear all powers, to remove any stacks of status effects
-	inst.components.powermanager:SetCanReceivePowers(false) -- Prevent Bandicoot from gaining any powers while in this state
+	monsterutil.RemoveStatusEffects(inst)
 
 	-- Listen for if the hiding spot is killed.
 	-- hiding_spot:ListenForEvent("attacked",
@@ -427,9 +426,15 @@ local function DoStalactiteFallPresentation(inst)
 	-- Shake the camera for all players
 	ShakeAllCameras(CAMERASHAKE.VERTICAL, 1.5, 0.02, 1)
 
-	local params = {}
-	params.fmodevent = fmodtable.Event.earthquake_low_rumble_LP
-	soundutil.PlaySoundData(inst, params, "rumble", inst)
+	inst.sg.mem.rumble_sound_LP = soundutil.PlayCodeSound(
+		inst,
+		fmodtable.Event.earthquake_low_rumble_LP,
+		{
+			name = "rumble",
+			max_count = 1,
+			is_autostop = true,
+		}
+	)
 end
 
 local function SpawnStalactites(inst)
@@ -446,6 +451,7 @@ end
 
 local TELEPORT_HIDE_OFFSET_X = 5
 local TELEPORT_RAGE_OFFSET_X = 15
+local TELEPORT_PHASE_TRANSITION_OFFSET_X <const> = 5
 
 local function TeleportToTarget(inst, teleport_target, offset)
 	-- Teleport to a walkable point in front or behind a random target.
@@ -544,7 +550,7 @@ local TAUNT_TIME = 2
 local TELEPORT_APPEAR_DELAY = 1
 local PEEK_A_BOO_APPEAR_ATTACK_DELAY = 0.025
 local MAX_RAGE_COUNT = 5
-local RAGE_TIRED_TIME = 6
+local RAGE_TIRED_TIME <const> = 4
 --local SWIPE_FAKE_CHANCE = 0.25
 local MIN_RUN_DISTANCE = 20
 local MAX_RUN_ANGLE = 45
@@ -642,9 +648,12 @@ local events =
 	end),
 
 	-- Transition to rage attack
-	EventHandler("attacked", function(inst)
-		if not inst:HasTag("clone") and not inst.sg.mem.is_rage_mode and inst:IsAlive() and inst.components.health:GetPercent() < PHASE_FOUR_THRESHOLD then
-			inst.sg:GoToState("rage_transition_pre")
+	EventHandler("boss_phase_changed", function(inst)
+		-- TODO: Clean this up when implementing new transition anims!
+		--[[if not inst:HasTag("clone") and not inst.sg.mem.is_rage_mode and inst:IsAlive() and inst.components.health:GetPercent() < PHASE_FOUR_THRESHOLD then
+			inst.sg:GoToState("rage_transition_pre")]]
+		if not inst:HasTag("clone") and not inst.sg.mem.is_rage_mode and inst:IsAlive() then
+			inst.sg:GoToState("phase_transition_hit_hold")
 		end
 	end),
 }
@@ -1339,15 +1348,49 @@ local states =
 				inst.AnimState:PlayAnimation("dodge")
 				inst.Physics:StartPassingThroughObjects()
 
+				inst.components.attacktracker:StartActiveAttack("bite_down") -- Need to start the attack here to see who else is doing it later on.
+
 				-- Move to a point at the top of the map above the player and move downwards
 				local reposition_pt = spawnutil.GetStartPointFromWorld(0, 1)
-				reposition_pt.x = targetpos.x
+				local mid_pt = spawnutil.GetStartPointFromWorld(0.5, 1)
+
+				local clones = TheSim:FindEntitiesXZ(0, 0, 1000, nil, nil, { "boss", "clone" })
+				-- If a clone or bandicoot is already doing this move, reposition to a point beside it
+				local attackers = {}
+				for _, clone in ipairs(clones) do
+					if clone.components.attacktracker:IsAttackActive("bite_down") then
+						table.insert(attackers, clone)
+					end
+				end
+
+				if #attackers > 1 then
+					local repos_x_min, repos_x_max
+					for _, attacker in ipairs(attackers) do
+						local target_x = attacker.sg.statemem.reposition_pt and attacker.sg.statemem.reposition_pt.x or attacker:GetPosition().x
+						if not repos_x_min or target_x < repos_x_min then
+							repos_x_min = target_x
+						end
+						if not repos_x_max or target_x > repos_x_max then
+							repos_x_max = target_x
+						end
+					end
+					-- See if more space to move on the left or right of the center point.
+					if math.abs(mid_pt.x - repos_x_min) > math.abs(mid_pt.x - repos_x_max) then
+						reposition_pt.x = repos_x_min - 10
+					else
+						reposition_pt.x = repos_x_max + 10
+					end
+				else
+					reposition_pt.x = targetpos.x
+				end
+
 				if not TheWorld.Map:IsWalkableAtXZ(reposition_pt.x, reposition_pt.z) then
 					reposition_pt = TheWorld.Map:FindClosestPointOnWalkableBoundary(reposition_pt)
 				end
 
 				-- Move to a point in front/back from where the player is standing, within acid spit range
 				inst.sg.statemem.movetotask = SGCommon.Fns.MoveToPoint(inst, reposition_pt, 0.25)
+				inst.sg.statemem.reposition_pt = reposition_pt
 				inst.sg:SetTimeoutAnimFrames(150)
 			else
 				inst.sg:GoToState("bite_down_pre")
@@ -1597,11 +1640,11 @@ local states =
 
 		timeline =
 		{
-			FrameEvent(33, function(inst)
-				if GetPhase(inst) < 3 then
-					inst.boss_coro:SetMusicPhase(2)
-				end
-			end),
+			-- FrameEvent(33, function(inst)
+			-- 	if GetPhase(inst) < 3 then
+			-- 		inst.boss_coro:SetMusicPhase(2)
+			-- 	end
+			-- end),
 			-- Spawn clones, start moving to positions.
 			FrameEvent(84, function(inst)
 				inst.Physics:StartPassingThroughObjects()
@@ -2303,10 +2346,12 @@ local states =
 		end,
 
 		onenter = function(inst)
-			--sound TEMP
-			local params = {}
-			params.fmodevent = fmodtable.Event.Destructible_Stalactite_Fall
-			soundutil.PlaySoundData(inst, params)
+
+			if inst.sg.mem.earthquake_low_rumble_LP then
+				soundutil.KillSound(inst, inst.sg.mem.earthquake_low_rumble_LP)
+				inst.sg.mem.earthquake_low_rumble_LP = nil
+			end
+			soundutil.PlayCodeSound(inst, fmodtable.Event.Destructible_Stalactite_Fall)
 
 			inst:Show()
 			inst.AnimState:PlayAnimation("peek_a_boom_stalag_fall")
@@ -2396,6 +2441,179 @@ local states =
 				inst.sg:GoToState("idle")
 			end),
 		},
+	}),
+
+	State({
+		name = "phase_transition_hit_hold",
+		tags = { "attack", "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("phase_transition_hit_hold")
+			inst.components.attacktracker:CancelActiveAttack()
+
+			-- Kill existing clones
+			local clones = TheSim:FindEntitiesXZ(0, 0, 1000, { "clone" })
+			for _, clone in ipairs(clones) do
+				clone.sg:ForceGoToState("clone_death_pre")
+			end
+
+			inst.sg:SetTimeout(0.25)
+
+			inst.components.hitstopper:PushHitStop(6)
+		end,
+
+		ontimeout = function(inst)
+			inst.sg:GoToState("phase_transition_pre")
+		end,
+	}),
+
+	State({
+		name = "phase_transition_pre",
+		tags = { "attack", "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("phase_transition_pre")
+			inst.Transform:SetRotation(0)
+		end,
+
+		timeline =
+		{
+			FrameEvent(23, function(inst)
+				inst.HitBox:SetEnabled(false)
+				inst.Physics:StartPassingThroughObjects()
+				inst.Physics:SetMotorVel(-TELEPORT_SPEED)
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("phase_transition")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:StopPassingThroughObjects()
+			inst.Physics:Stop()
+			inst.HitBox:SetEnabled(true)
+		end,
+	}),
+
+	State({
+		name = "phase_transition",
+		tags = { "attack", "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("phase_transition")
+			inst.components.hitbox:StartRepeatTargetDelay()
+			inst.components.hitbox:SetHitFlags(HitGroup.CHARACTERS | HitGroup.MOB) -- Enable friendly fire on this attack, but not on the clone, which is part of the BOSS hitgroup
+
+			inst.Transform:SetRotation(0)
+
+			local reposition_pt = spawnutil.GetStartPointFromWorld(0.5, 0.5)
+			reposition_pt.x = reposition_pt.x - TELEPORT_PHASE_TRANSITION_OFFSET_X
+			inst.Transform:SetPosition(reposition_pt:Get())
+			inst.Physics:StartPassingThroughObjects()
+			inst.Physics:SetMotorVel(TELEPORT_SPEED)
+
+			inst.HitBox:SetEnabled(false)
+		end,
+
+		timeline = {
+			FrameEvent(7, function(inst)
+				inst.Physics:StopPassingThroughObjects()
+				inst.Physics:Stop()
+				inst.HitBox:SetEnabled(true)
+			end),
+
+			FrameEvent(26, function(inst)
+				inst.components.hitbox:PushOffsetBeam(-2.00, 2.30, 2.00, -1.00, HitPriority.BOSS_DEFAULT)
+			end),
+			FrameEvent(27, function(inst)
+				inst.components.hitbox:PushOffsetBeam(-2.00, 2.30, 2.00, -1.00, HitPriority.BOSS_DEFAULT)
+			end),
+			FrameEvent(28, function(inst)
+				inst.components.hitbox:PushOffsetBeam(4.00, 9.00, 3.00, 0.50, HitPriority.BOSS_DEFAULT)
+			end),
+			FrameEvent(29, function(inst)
+				inst.components.hitbox:PushOffsetBeam(5.50, 9.00, 3.00, 0.50, HitPriority.BOSS_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(9.00, 10.50, 2.50, 1.00, HitPriority.BOSS_DEFAULT)
+			end),
+
+			FrameEvent(57, function(inst)
+				inst.components.hitbox:PushOffsetBeam(-1.50, 2.80, 2.25, -1.25, HitPriority.BOSS_DEFAULT)
+			end),
+			FrameEvent(58, function(inst)
+				inst.components.hitbox:PushOffsetBeam(-1.50, 2.80, 2.25, -1.25, HitPriority.BOSS_DEFAULT)
+			end),
+			FrameEvent(59, function(inst)
+				inst.components.hitbox:PushOffsetBeam(-5.50, 0.00, 2.25, -1.25, HitPriority.BOSS_DEFAULT)
+			end),
+			FrameEvent(60, function(inst)
+				inst.components.hitbox:PushOffsetBeam(-5.50, -2.00, 2.25, -1.25, HitPriority.BOSS_DEFAULT)
+				inst.components.hitbox:PushOffsetBeam(-7.00, -5.50, 1.50, 0.50, HitPriority.BOSS_DEFAULT)
+			end),
+
+			FrameEvent(94, function(inst)
+				DoStalactiteFallPresentation(inst)
+				local is_rage = inst.components.health:GetPercent() < PHASE_FOUR_THRESHOLD
+				inst.boss_coro:PhaseTransitionSpawnStalactites(is_rage)
+			end),
+		},
+
+		events =
+		{
+			EventHandler("hitboxtriggered", OnRageTransitionHitBoxTriggered),
+			EventHandler("animover", function(inst)
+				if inst.components.health:GetPercent() < PHASE_FOUR_THRESHOLD then
+					inst.sg:GoToState("rage_mode")
+				else
+					-- Spawn a clone
+					inst:PushEvent("clone", 1)
+				end
+			end),
+		},
+
+		onexit = function(inst)
+			inst.components.hitbox:StopRepeatTargetDelay()
+
+			inst.Physics:StopPassingThroughObjects()
+			inst.Physics:Stop()
+			inst.HitBox:SetEnabled(true)
+		end,
+	}),
+
+	State({
+		name = "rage_mode",
+		tags = { "attack", "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("rage_mode")
+			inst.HitBox:SetInvincible(true)
+		end,
+
+		timeline =
+		{
+			FrameEvent(21, function(inst)
+				inst.sg.mem.is_rage_mode = true
+				inst:PushEvent("enter_rage_mode")
+				inst.components.bossdata:SetBossPhaseChanged(true)
+				inst.HitBox:SetInvincible(false)
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:StopPassingThroughObjects()
+			inst.Physics:Stop()
+			inst.HitBox:SetInvincible(false)
+		end,
 	}),
 
 	State({
@@ -2540,18 +2758,7 @@ SGCommon.States.AddAttackHold(states, "bite",
 SGCommon.States.AddAttackPre(states, "bite_down",
 {
 	alwaysforceattack = true,
-	onenter_fn = function(inst)
-		local target = inst.components.combat:GetTarget()
-		SGCommon.Fns.FaceTarget(inst, target, true)
-
-		if not inst.sg.mem.in_position then
-			inst.sg.mem.in_position = true
-			inst.sg:GoToState("bite_down_reposition")
-			return
-		else
-			inst.sg.mem.in_position = nil
-		end
-	end,
+	reposition_state = "bite_down_reposition",
 })
 
 SGCommon.States.AddMonsterDeathStates(states,

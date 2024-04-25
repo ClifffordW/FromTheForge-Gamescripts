@@ -25,12 +25,12 @@ local VERTICAL_TEXT_FUDGE_FACTOR = 16
 -- button). It automatically adjusts to the target's size.
 -- Use SetAnchorOffset to adjust it.
 --
-local ConfirmDialog = Class(PopupDialog, function(self, controller, anchor_widget, blocksScreen, title, subtitle, dialogText, onDoneFn, onOpenFn)
-	PopupDialog._ctor(self, "ConfirmDialog", controller, blocksScreen)
-	self.controller = controller
+local ConfirmDialog = Class(PopupDialog, function(self, player, anchor_widget, blocksScreen, title, subtitle, dialogText, onDoneFn, onOpenFn)
+	PopupDialog._ctor(self, "ConfirmDialog", nil, blocksScreen)
+	self:SetOwningPlayer(player)
 	self.anchor_widget = anchor_widget
 
-	self:SetCallbackActionLabels(true, false, -1)
+	self:SetCallbackActionLabels(true, false, -1) -- Please call SetCallbackActionLabels instead of relying on -1
 	self.root = self:AddChild(Widget())
 	self.min_width = 100
 
@@ -72,8 +72,7 @@ local ConfirmDialog = Class(PopupDialog, function(self, controller, anchor_widge
 		:SetScaleOnFocus(false)
 		:SetText(STRINGS.UI.BUTTONS.OK)
 		:SetOnClick(function()
-			if onDoneFn then onDoneFn(true) end
-			if self.controller then self.controller:NextDialog() end
+			if onDoneFn then onDoneFn(self.cb_action_label.yes) end
 		end)
 	self.noButton = self.buttonsContainerTop:AddChild(ActionButton())
 		:SetSize(BUTTON_W * 0.8, BUTTON_H)
@@ -83,8 +82,7 @@ local ConfirmDialog = Class(PopupDialog, function(self, controller, anchor_widge
 		:SetText(STRINGS.UI.BUTTONS.NO)
 		:SetControlUpSound(nil)
 		:SetOnClick(function()
-			if onDoneFn then onDoneFn(false) end
-			if self.controller then self.controller:NextDialog() end
+			if onDoneFn then onDoneFn(self.cb_action_label.no) end
 		end)
 
 	self.buttonsContainerBottom = self.dialogTextContainer:AddChild(Widget("Buttons Bottom"))
@@ -94,8 +92,7 @@ local ConfirmDialog = Class(PopupDialog, function(self, controller, anchor_widge
 		:SetScaleOnFocus(false)
 		:SetText(STRINGS.UI.BUTTONS.CANCEL)
 		:SetOnClick(function()
-			if onDoneFn then onDoneFn(-1) end
-			if self.controller then self.controller:NextDialog() end
+			if onDoneFn then onDoneFn(self.cb_action_label.cancel) end
 		end)
 		:Hide()
 
@@ -103,10 +100,11 @@ local ConfirmDialog = Class(PopupDialog, function(self, controller, anchor_widge
 		:SetName("Close button")
 		:SetSize(BUTTON_SQUARE_SIZE, BUTTON_SQUARE_SIZE)
 		:SetOnClick(function()
-			if onDoneFn then onDoneFn(-1) end
-			if self.controller then self.controller:NextDialog() end
+			if onDoneFn then onDoneFn(self.cb_action_label.cancel) end
 		end)
 		:Hide()
+
+	self.btn_list = { self.yesButton, self.noButton, self.cancelButton, }
 
 	self.onOpenFn = onOpenFn
 
@@ -172,8 +170,7 @@ function ConfirmDialog:AddButton(text, fn)
 		:SetScaleOnFocus(false)
 		:SetText(text)
 		:SetOnClick(function()
-			if fn then fn(true) end
-			if self.controller then self.controller:NextDialog() end
+			if fn then fn(self.cb_action_label.yes) end
 		end)
 		:SetShown(text)
 
@@ -187,8 +184,7 @@ end
 function ConfirmDialog:SetYesButton(text, fn)
 	self.yesButton:SetText(text)
 		:SetOnClick(function()
-			if fn then fn(true) end
-			if self.controller then self.controller:NextDialog() end
+			if fn then fn(self.cb_action_label.yes) end
 		end)
 		:SetShown(text)
 	self:_LayoutDialog()
@@ -208,8 +204,7 @@ end
 function ConfirmDialog:SetNoButton(text, fn)
 	self.noButton:SetText(text)
 		:SetOnClick(function()
-			if fn then fn(false) end
-			if self.controller then self.controller:NextDialog() end
+			if fn then fn(self.cb_action_label.no) end
 		end)
 		:SetShown(text)
 	self:_LayoutDialog()
@@ -225,8 +220,7 @@ end
 function ConfirmDialog:SetCancelButton(text, fn)
 	self.cancelButton:SetText(text)
 		:SetOnClick(function()
-			if fn then fn(-1) end
-			if self.controller then self.controller:NextDialog() end
+			if fn then fn(self.cb_action_label.cancel) end
 		end)
 		:SetShown(text)
 	self:_LayoutDialog()
@@ -239,8 +233,7 @@ end
 
 function ConfirmDialog:SetCloseButton(fn)
 	self.close_button:SetOnClick(function()
-			if fn then fn(-1) end
-			if self.controller then self.controller:NextDialog() end
+			if fn then fn(self.cb_action_label.cancel) end
 		end)
 		:Show()
 	return self
@@ -354,30 +347,37 @@ function ConfirmDialog:_LayoutDialog()
 		self.root:LayoutBounds("center", "above", self.position.x, self.position.y)
 	end
 
+	-- Ensure the default focus is the most valid button.
+	for _,btn in ipairs(self.btn_list) do
+		if btn:IsShown() and btn:IsEnabled() then
+			self.default_focus = btn
+			break
+		end
+	end
+
 	return self
 end
 
--- TODO(dbriscoe): Use SetCallbackActionLabels everywhere and remove initial argument to onDoneFn.
+-- These are the values passed to your callback when a button is pressed. (Not
+-- user-visible labels.)
 function ConfirmDialog:SetCallbackActionLabels(yes, no, cancel)
 	self.cb_action_label = {
 		yes = yes,
 		no = no,
 		cancel = cancel,
 	}
+	return self
 end
 
 function ConfirmDialog:SetOnDoneFn(onDoneFn)
 	self.yesButton:SetOnClick(function()
-		if onDoneFn then onDoneFn(true, self.cb_action_label.yes) end
-		if self.controller then self.controller:NextDialog() end
+		if onDoneFn then onDoneFn(self.cb_action_label.yes) end
 	end)
 	self.noButton:SetOnClick(function()
-		if onDoneFn then onDoneFn(false, self.cb_action_label.no) end
-		if self.controller then self.controller:NextDialog() end
+		if onDoneFn then onDoneFn(self.cb_action_label.no) end
 	end)
 	self.cancelButton:SetOnClick(function()
-		if onDoneFn then onDoneFn(-1, self.cb_action_label.cancel) end
-		if self.controller then self.controller:NextDialog() end
+		if onDoneFn then onDoneFn(self.cb_action_label.cancel) end
 	end)
 	return self
 end
@@ -456,6 +456,13 @@ function ConfirmDialog:SetCancelButtonText(text)
 	return self
 end
 
+-- Will show focus brackets if there's a visible button. Call as part of
+-- creation to skip them.
+function ConfirmDialog:SuppressFocusBrackets()
+	self.suppress_focus_brackets = true
+	return self
+end
+
 function ConfirmDialog:OnOpen()
 	ConfirmDialog._base.OnOpen(self)
 	if self.anchor_widget then
@@ -478,9 +485,10 @@ function ConfirmDialog:OnOpen()
 
 	----------------------------------------------------------------------
 	-- Focus selection brackets
-	if self.yesButton:IsVisible()
-		or self.noButton:IsVisible()
-		or self.cancelButton:IsVisible()
+	if not self.suppress_focus_brackets
+		and (self.yesButton:IsVisible()
+			or self.noButton:IsVisible()
+			or self.cancelButton:IsVisible())
 	then
 		self:EnableFocusBracketsForGamepad()
 		-- self:EnableFocusBracketsForGamepadAndMouse()
@@ -490,16 +498,6 @@ function ConfirmDialog:OnOpen()
 
 	if self.onOpenFn ~= nil then
 		self.onOpenFn()
-	end
-end
-
-function ConfirmDialog:OnBecomeActive()
-	ConfirmDialog._base.OnBecomeActive(self)
-
-	-- Animate popup in if we're using a controller, meaning this is a conversation dialog sequence
-	-- If not, it means this popup was created not using a controller
-	if self.controller then
-		self:AnimateIn()
 	end
 end
 

@@ -20,6 +20,7 @@ local prefabs =
 	GroupPrefab("drops_treemon")
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "treemon")
+prefabutil.SetupDeathFxPrefabs(prefabs, "treemon_elite")
 
 local projectile_prefabs =
 {
@@ -56,6 +57,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -87,6 +89,8 @@ local elite_attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local function OnAttacked(inst, data)
 	if data ~= nil and data.attack:GetAttacker() ~= nil then

@@ -72,14 +72,6 @@ local SelectableArmorDye = Class(Clickable, function(self, size)
 		:LayoutBounds("right", "bottom", self.image)
 		:Offset(-20, 20)
 
-	self.hidden_label = self:AddChild(Text(FONTFACE.DEFAULT, 80, "HIDDEN\nHIDDEN\nHIDDEN\nHIDDEN"))
-		:LayoutBounds("center", "center", self.image)
-		:SetHiddenBoundingBox(true)
-		:SetGlyphColor(UICOLORS.RED)
-		:EnableOutline()
-		:SetOutlineColor(UICOLORS.BLACK)
-		:SetShown(false)
-
 	-- Focus brackets
 	self.focus_brackets = self:AddChild(Panel("images/ui_ftf_crafting/RecipeFocus.tex"))
 		:SetName("Focus brackets")
@@ -105,11 +97,6 @@ end
 function SelectableArmorDye:SetLocked(is_locked)
 	self.is_locked = is_locked
 	
-	if self.is_hidden then
-		self.lock_badge:SetShown(false)
-		return self
-	end
-	
 	if self.is_locked then
 		self.puppet:SetMultColor(HexToRGB(0x090909ff))
 			:SetAddColor(HexToRGB(0xBCA693ff))
@@ -117,35 +104,6 @@ function SelectableArmorDye:SetLocked(is_locked)
 		self.puppet:SetMultColor(1,1,1,1)
 			:SetAddColor(0,0,0,0)
 	end
-	return self
-end
-
-function SelectableArmorDye:SetPurchased(is_purchased)
-	self.is_purchased = is_purchased
-
-	if self.is_hidden then
-		return self
-	end
-
-	if self.is_purchased then
-		self.lock_badge:SetShown(false)
-	else
-		self.lock_badge:SetShown(true)
-	end
-
-	return self
-end
-
-function SelectableArmorDye:SetHidden(is_hidden)
-	self.is_hidden = is_hidden
-	self.hidden_label:SetShown(is_hidden)
-	
-	if is_hidden then
-		self.lock_badge:SetShown(false)
-		self.puppet:SetMultColor(HexToRGB(0x090909ff))
-				:SetAddColor(HexToRGB(0xBCA693ff))
-	end
-
 	return self
 end
 
@@ -170,8 +128,8 @@ function SelectableArmorDye:SetPuppetSpecies(species)
 end
 
 function SelectableArmorDye:SetCharacterData(data)
-	self.puppet_bg.components.charactercreator:OnLoad(data)
-	self.puppet.components.charactercreator:OnLoad(data)
+	self.puppet_bg.components.charactercreator:LoadFromTable(data)
+	self.puppet.components.charactercreator:LoadFromTable(data)
 	return self
 end
 

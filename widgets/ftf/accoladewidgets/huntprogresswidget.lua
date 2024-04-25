@@ -1,25 +1,31 @@
-local AccoladeWidget = require "widgets/ftf/accoladewidget"
 local Widget = require "widgets/widget"
 local Image = require "widgets/image"
 local Text = require "widgets/text"
 
 local easing = require "util/easing"
 local Enum = require "util/enum"
+local lume = require "util.lume"
 
 local soundutil = require "util.soundutil"
 local fmodtable = require "defs.sound.fmodtable"
 
 local Moods = Enum{
-	"MOTIVATIONAL",
-	"NERVOUS",
-	"SKEPTICAL"
+	"motivational",
+	"nervous",
+	"skeptical",
+	"confused",
+	"sad",
+	"frustrated"
 }
 
 local MOOD_TO_TEX =
 {
-	[Moods.s.MOTIVATIONAL] = "images/ui_ftf_dungeon_progress/Flitt1.tex",
-	[Moods.s.NERVOUS] = "images/ui_ftf_dungeon_progress/Flitt2.tex",
-	[Moods.s.SKEPTICAL] = "images/ui_ftf_dungeon_progress/Flitt3.tex",
+	[Moods.s.motivational] = "images/ui_ftf_dungeon_progress/Flitt1.tex",
+	[Moods.s.nervous] = "images/ui_ftf_dungeon_progress/Flitt2.tex",
+	[Moods.s.skeptical] = "images/ui_ftf_dungeon_progress/Flitt3.tex",
+	[Moods.s.confused] = "images/ui_ftf_dungeon_progress/Flitt4.tex",
+	[Moods.s.sad] = "images/ui_ftf_dungeon_progress/Flitt5.tex",
+	[Moods.s.frustrated] = "images/ui_ftf_dungeon_progress/Flitt6.tex",
 }
 
 local function _get_boss_icon()
@@ -72,31 +78,48 @@ end
 
 local FlittTipWidget = Class(Widget, function(self)
 	Widget._ctor(self, "FlittTipWidget")
-	self.flitt_tips = self:AddChild(Image("images/ui_ftf_dungeon_progress/Tips.tex"))
-	local w, h = self.flitt_tips:GetSize()
-
+	
 	local tip = self:GetTip()
 
-	self.tip_text = self.flitt_tips:AddChild(Text(FONTFACE.DEFAULT, 65, tip.text, HexToRGB(0x5E4E4AFF)))
-		:Offset(15, -15)
-		:SetRegionSize(w-40, h-60)
-		:EnableWordWrap(true)
-		:Spool(50)
+	if not tip then
+		-- fallback if no tip is selected
+		tip = {
+			text = STRINGS.UI.HUNTPROGRESSWIDGET.FALLBACK_FLITT_QUIP,
+			mood = "skeptical",
+		}
+	end
 
 	self.flitt_img = self:AddChild(Image(MOOD_TO_TEX[tip.mood]))
-		:LayoutBounds("left", "above", self.flitt_tips)
-		:Offset(-10, -75)
+
+	self.flitt_tips = self:AddChild(Image("images/ui_ftf_dungeon_progress/Tips.tex"))
+		:LayoutBounds("center", "above", self.flitt_img)
 		:SendToBack()
-		:SetScale(0.9)
+		:Offset(-250, -110)
+
+	local w, h = self.flitt_tips:GetSize()
+
+	self.tip_text = self.flitt_tips:AddChild(Text(FONTFACE.DEFAULT, 70, tip.text, HexToRGB(0x5E4E4AFF)))
+		:LeftAlign()
+		:SetRegionSize(620, 300)
+		:EnableWordWrap(true)
+		:LayoutBounds("left", "center", self.flitt_tips)
+		:Offset(100, 50)
+		:Spool(25)
+		-- commented out because this causes speech sounds that would need polish but we don't have time right now.
+		-- :SetPersonalityText(tip.text)
+
 end)
 
 function FlittTipWidget:GetTip()
 	local run_state = TheDungeon.progression.components.runmanager:GetRunState()
 	local progress = TheDungeon:GetDungeonProgress()
-	local tip_key = nil
+
+	local tags = {
+		"huntprogressscreen", -- primary tag that ensures these quips won't accidentally appear in convos
+	}
 
 	if run_state == RunStates.s.ABANDON then
-			tip_key = "ABANDONED"
+		table.insert(tags, "abandoned")
 	elseif run_state == RunStates.s.DEFEAT or run_state == RunStates.s.ACTIVE then
 		-- Support "ACTIVE" run state here so debug opening the screen still returns a string.
 		local miniboss_progress = _get_miniboss_progress()
@@ -104,31 +127,24 @@ function FlittTipWidget:GetTip()
 
 		if progress < miniboss_progress then
 			-- lost before reaching the miniboss
-			tip_key = "LOST_EARLY"
+			table.insert(tags, "lost_early")
 		elseif progress == miniboss_progress then
 			-- lost while fighting the miniboss
-			tip_key = "LOST_DURING_MINIBOSS"
-			local miniboss = TheDungeon:GetCurrentMiniboss()
-			miniboss = string.upper(miniboss)
-			local tips = STRINGS.UI.HUNTPROGRESSSCREEN[tip_key][miniboss]
+			table.insert(tags, "lost_during_miniboss")
+			table.insert(tags, TheDungeon:GetCurrentMiniboss())
 
-			if tips == nil then
-				-- couldn't find tips about this specific miniboss, return a general tip
-				tips = STRINGS.UI.HUNTPROGRESSSCREEN[tip_key]["GENERAL"]
-			end
-
-			return tips[math.random(#tips)]
 		elseif progress > miniboss_progress and progress < boss_progress then
 			-- lost after beating the miniboss, but before reaching the boss
-			tip_key = "LOST_BEAT_MINIBOSS"
+			table.insert(tags, "lost_beat_miniboss")
+			table.insert(tags, TheDungeon:GetCurrentMiniboss())
+
 		elseif progress >= boss_progress then
 			-- lost while fighting the boss
-			tip_key = "LOST_BOSS"
-			local boss = TheDungeon:GetCurrentBoss()
-			boss = string.upper(boss)
-			local tips = STRINGS.UI.HUNTPROGRESSSCREEN[tip_key][boss]
+			table.insert(tags, "lost_boss")
+			table.insert(tags, TheDungeon:GetCurrentBoss())
 
-			if tips ~= nil then
+			-- TODO: convert health into buckets to use in tags: boss_low_health, boss_mid_health...
+			if false then
 			    local ents = TheSim:FindEntitiesXZ(0, 0, 1000, { "boss" })
 				local boss_ent = ents and ents[1] or nil
 				if boss_ent ~= nil then
@@ -138,7 +154,10 @@ function FlittTipWidget:GetTip()
 
 					for _, tip in ipairs(tips) do
 						local health = tip.health or 1
-						if boss_health <= health then
+						-- print("PRINT!")
+						-- print(tip_options)
+						-- print(tip)
+						if tonumber(boss_health) <= health then
 							table.insert(tip_options, tip)
 						end
 					end
@@ -167,24 +186,41 @@ function FlittTipWidget:GetTip()
 					end
 				end
 			end
-
-			-- didn't find a tip? Return a general one as fallback.
-			tips = STRINGS.UI.HUNTPROGRESSSCREEN[tip_key]["GENERAL"]
-			return tips[math.random(#tips)]
 		end
 	elseif run_state == RunStates.s.VICTORY then
 		-- We currently do not show this screen if you win the run.
-		tip_key = "WON"
+		table.insert(tags, "won")
 	end
 
-	if tip_key ~= nil then
-		local tips = STRINGS.UI.HUNTPROGRESSSCREEN[tip_key]
-		return tips[math.random(#tips)]
+	-- get a random local player
+	local local_players = TheNet:GetLocalPlayerList()
+	local_players = lume.filter(local_players, function(id) 
+		local player = GetPlayerEntityFromPlayerID(id)
+		-- just needs to have a quest central... tags are not player-contextual
+		return player and player.components.questcentral ~= nil
+	end)
+
+	if #local_players > 0 then
+		local random_local_player = GetPlayerEntityFromPlayerID(local_players[math.random(#local_players)])
+
+		local questcentral = random_local_player.components.questcentral
+
+		local tip, match = questcentral:Quip(tags, "npc_scout")
+
+		if not tip then
+			table.insert(tags, "general")
+			tip, match = questcentral:Quip(tags, "npc_scout")
+		end
+
+		return {
+			text = tip,
+			mood = match and match.emote,
+		}
 	end
 end
 
 local HuntProgressMarker = Class(Widget, function(self, marker)
-	Widget._ctor(self, "HuntProgressWidget")
+	Widget._ctor(self, "HuntProgressMarker")
 	self:AddChild(Image("images/ui_ftf_dungeon_progress/ProgressPoint.tex"))
 
 	if marker.icon_fn ~= nil then
@@ -195,6 +231,7 @@ local HuntProgressMarker = Class(Widget, function(self, marker)
 			:SetMultColor(HexToRGB(0x5E4E4AFF))
 			:SetHiddenBoundingBox(true)
 	end
+
 end)
 
 local HuntProgressBar = Class(Widget, function(self)
@@ -240,42 +277,50 @@ local HuntProgressBar = Class(Widget, function(self)
 
 	self.player_marker:LayoutBounds("left", "above", middle_bar):Offset(-w/2, 0)
 
-	self.inst:DoTaskInTime(1, function() self:MoveMarkerToProgress(TheDungeon:GetDungeonProgress()) end)
+	-- speed up this sequence if you didn't make any progress
+	local dungeon_progress = TheDungeon:GetDungeonProgress()
+	local wait_time = dungeon_progress > 0 and 1 or 0
+	self.inst:DoTaskInTime(wait_time, function() self:MoveMarkerToProgress(TheDungeon:GetDungeonProgress()) end)
+
+	self.complete = false	
 end)
 
 function HuntProgressBar:MoveMarkerToProgress(progress)
 	local x, y = self.player_marker:GetPosition()
 	local x_delta = self.bar_w * progress
 	local x_tar = x + x_delta
+	local dungeon_progress = progress
 
 	-- tween time for both the marker and the sound parameter adjustment
 	-- also serves as cue for stopping the lp
-	local ease_time = 1.33
-	local dungeon_progress = TheDungeon:GetDungeonProgress()
+	local ease_time = dungeon_progress > 0 and 1.33 or 0
 
 	self:RunUpdater(Updater.Series{
-		Updater.Ease(function(v) self.player_marker:SetPosition(v, y) end, x, x_tar, ease_time, easing.outExpo)
+		Updater.Ease(function(v) self.player_marker:SetPosition(v, y) end, x, x_tar, ease_time, easing.outExpo),
+		Updater.Do( function()
+			self.complete = true
+			if self.progress_sound then
+				TheFrontEnd:GetSound():KillSound(self.progress_sound)
+				self.progress_sound = nil
+			end
+		end )
 	})
 
 	-- play sound if the widget's actually moving
 	if dungeon_progress > 0 then
-		-- Store the sound handle in a variable
-		local progressSound = TheFrontEnd:GetSound():PlaySound_Autoname(fmodtable.Event.ui_dungeonProgressWidget_LP)
+		self.progress_sound = TheFrontEnd:GetSound():PlaySound_Autoname(fmodtable.Event.ui_dungeonProgressWidget_LP,nil,true)
 
-		-- Ensure 'progressSound' is not nil or invalid
-		if progressSound then
-			self.progress_sound = progressSound
-
+		if self.progress_sound then
 			TheFrontEnd:GetSound():SetParameter(self.progress_sound, "ui_easePercentage", ease_time)
 
 			-- Create a parallel updater
 			self:RunUpdater(Updater.Parallel({
 				-- update param over the ease time from 0 to % dungeon progress
 				-- we stop the sound and easing earlier than 100% because movement gets infinitessimally small towards the end
-				Updater.Ease(function(v)
+				Updater.Ease(function(meter_value)
 					if self.progress_sound then
-						if v/dungeon_progress < .99 then
-							TheFrontEnd:GetSound():SetParameter(self.progress_sound, "progress", v)
+						if meter_value / dungeon_progress < .99 then
+							TheFrontEnd:GetSound():SetParameter(self.progress_sound, "progress", meter_value)
 						else
 							TheFrontEnd:GetSound():KillSound(self.progress_sound)
 							self.progress_sound = nil
@@ -290,16 +335,6 @@ function HuntProgressBar:MoveMarkerToProgress(progress)
 						TheFrontEnd:GetSound():SetParameter(self.progress_sound, "ui_easePercentage", v)
 					end
 				end, 0, ease_time, ease_time, easing.outQuad),
-
-				-- Second updater to stop the sound after the specified time
-				-- Updater.Do(function()
-				-- 	self.inst:DoTaskInTime(ease_time, function()
-				-- 		if self.progress_sound then
-				-- 			TheFrontEnd:GetSound():KillSound(self.progress_sound)
-				-- 			self.progress_sound = nil
-				-- 		end
-				-- 	end)
-				-- end)
 			}))
 		end
 	end
@@ -310,44 +345,67 @@ function HuntProgressBar:PopulateBar(data)
 
 end
 
-local HuntProgressWidget = Class(AccoladeWidget, function(self, data)
-	AccoladeWidget._ctor(self, "HuntProgressWidget")
+local HuntProgressWidget = Class(Widget, function(self, data)
+	Widget._ctor(self, "HuntProgressWidget")
+
+	self.panel_contents = self:AddChild(Widget())
+		:SetName("Panel contents")
+		:SendToBack()
+		:SetShowDebugBoundingBox(true)
+
+	self.bg = self.panel_contents:AddChild(Image("images/ui_ftf_dungeon_progress/PanelProgress.tex"))
+		:SetName("Background")
+
+	self:PopulatePanelContents()
 end)
+
+function HuntProgressWidget:IsAnimationComplete()
+	return self.progress_bar.complete
+end
 
 function HuntProgressWidget:PopulatePanelContents()
 
 	local biome = TheDungeon:GetDungeonMap().nav:GetBiomeLocation()
 
-	self.title = self:AddWidgetToContents(Text(FONTFACE.DEFAULT, 100, biome.pretty.name_upper, HexToRGB(0x5E4E4AFF)))
+	self.title_bg = self.panel_contents:AddChild(Image("images/ui_ftf_gems/gem_panel_title_bg.tex"))
+		:SetName("mastery title bg")
+	self.title = self.title_bg:AddChild(Text(FONTFACE.DEFAULT, 100, biome.pretty.name_upper, HexToRGB(0x5E4E4AFF)))
+
+	local w, h = self.title:GetSize()
+	self.title_bg:SetSize(w + 350, 120)
 		:LayoutBounds("center", "top", self.bg)
-		:Offset(0, -40)
+		:Offset(0, -20)
+
+	self.title:LayoutBounds("center", "center", self.title_bg)
 
 	local title_ornament = biome:GetRegion().title_ornament
 	local deco_offset = 20
 
-	self.deco_left = self:AddChild(Image(title_ornament))
+	self.deco_left = self.panel_contents:AddChild(Image(title_ornament))
 		:SetMultColor(HexToRGB(0x5E4E4AFF))
 		:LayoutBounds("before", "center", self.title)
 		:Offset(-deco_offset, 0)
 
-	self.deco_right = self:AddChild(Image(title_ornament))
+	self.deco_right = self.panel_contents:AddChild(Image(title_ornament))
 		:SetMultColor(HexToRGB(0x5E4E4AFF))
 		:LayoutBounds("after", "center", self.title)
 		:Offset(deco_offset, 0)
 		:SetScale(-1, 1)
 
-
-
-	self.flitt_tip = self:AddWidgetToContents(FlittTipWidget())
-		:LayoutBounds("center", "top", self.bg)
-		:Offset(0, -130)
-
-	self.progress_bar = self:AddWidgetToContents(HuntProgressBar())
+	self.progress_bar = self.panel_contents:AddChild(HuntProgressBar())
 	local w, h = self.progress_bar:GetSize()
-	self.progress_bar:LayoutBounds("center", "below", self.flitt_tips)
-		:Offset(0, -h * 4)
+	local progress_scale = 1.2
+	self.progress_bar
+		:SetScale(progress_scale, progress_scale)
+		:LayoutBounds("center", "center", self.bg)
+		--:Offset(0, 120)
 
-	HuntProgressWidget._base.PopulatePanelContents(self)
+	self.panel_contents:LayoutBounds("center", "bottom", self)
+
+	self.flitt_tip = self:AddChild(FlittTipWidget())
+		:SetHiddenBoundingBox(true)
+		:LayoutBounds("before", "bottom", self.panel_contents)
+		:Offset(385, 65)
 end
 
 return HuntProgressWidget

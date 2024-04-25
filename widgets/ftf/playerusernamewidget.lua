@@ -5,16 +5,23 @@ local PlayerWeaponWidget = require("widgets/ftf/playerweaponwidget")
 
 --- Displays a single player character's username
 -- Check PlayerStatusWidget to see this with a health bar, actions bar and buffs container
-local PlayerUsernameWidget =  Class(Widget, function(self, owner, colour)
+local PlayerUsernameWidget =  Class(Widget, function(self, owner, colour, max_width)
 	Widget._ctor(self, "PlayerUsernameWidget")
 
 	self.weapon_widget = self:AddChild(PlayerWeaponWidget(self.owner))
+
 	self.name_text = self:AddChild(Text(FONTFACE.DEFAULT, 18, nil, UICOLORS.LIGHT_TEXT_TITLE))
 		:EnableShadow()
 		:SetShadowColor(UICOLORS.BLACK)
 		:SetShadowOffset(1, -1)
 		:EnableOutline()
 		:SetOutlineColor(UICOLORS.BLACK)
+
+    if max_width then
+    	self.name_text:SetRegionSize(max_width, 45)
+        self.name_text:ShrinkToFitRegion(true)
+        self.name_text:LeftAlign()
+    end
 
 	if owner then
 		self:SetOwner(owner, colour)

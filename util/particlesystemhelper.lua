@@ -46,9 +46,15 @@ function ParticleSystemHelper.MakeOneShotAtPosition(position, effectName, lifeti
 	end
 end
 
--- TODO(dbriscoe): Make everything pass instigator
 function ParticleSystemHelper.HandleMakeOneShotAtPosition(position, effectName, lifetime, instigator, param)
 	local pfx = SpawnPrefab(effectName, instigator)
+
+	if param then
+		position.x = position.x + (param.offx or 0)
+		position.y = position.y + (param.offy or 0)
+		position.z = position.z + (param.offz or 0)
+	end
+
 	pfx.Transform:SetPosition(position.x, position.y, position.z)
 
 	-- print(position, effectName, lifetime, instigator, param)
@@ -105,7 +111,6 @@ function ParticleSystemHelper.HandleMakeOneShotAtPosition(position, effectName, 
 	return pfx
 end
 
--- TODO(dbriscoe): Make everything pass instigator
 function ParticleSystemHelper.AttachParticlesForTime(target, effectName, attachSymbol, lifetime, instigator)
 	local pfx = SpawnPrefab(effectName, instigator)
 	pfx.entity:SetParent(target.entity)
@@ -297,7 +302,13 @@ function ParticleSystemHelper.HandleEventSpawnParticles(inst, param)
 					emitter.inst.ParticleEmitter:SetGravity(gravity_x or 0, emitter.params.gravity_y or 0, emitter.params.gravity_z or 0)
 
 					-- Velocity
-					emitter.inst.ParticleEmitter:SetSpawnVel( table.unpack(emitter.params.spawn.vel) )
+					local vel = emitter.params.spawn.vel
+					if facing_left and vel then
+						vel = shallowcopy(emitter.params.spawn.vel)
+						vel[1] = -vel[1] -- X Velocity Min
+						vel[2] = -vel[2] -- X Velocity Max
+					end
+					emitter.inst.ParticleEmitter:SetSpawnVel( table.unpack(vel) )
 
 					-- Angle
 					if param.angle then

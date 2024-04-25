@@ -1,5 +1,5 @@
 
-local CAN_USE_DBUI = DEV_MODE and Platform.IsWindows()
+local CAN_USE_DBUI = DEV_MODE and (Platform.IsWindows() or Platform.IsAndroid() or Platform.IsIos())
 
 local cursor = require "content.cursor"
 local easing = require("util.easing")
@@ -23,22 +23,13 @@ local LoadingWidget = require "widgets/redux/loadingwidget"
 local ScriptErrorWidget = require "widgets/scripterrorwidget"
 local NotificationsQueueWidget = require "widgets/notificationsqueuewidget"
 local NotificationWidget = require "widgets/notificationwidget"
-local Tooltip = require "widgets/tooltip"
-local UIHelpers = require "ui/uihelpers"
+local ToolTipper = require "ui.tooltipper"
 local fmodtable = require "defs.sound.fmodtable"
 require "constants"
 
 
-local NAV_REPEAT_TIME = 0.25 -- see also Controls.Digital.MENU_RIGHT.repeat_rate.
-local SCROLL_REPEAT_TIME = .05
-local MOUSE_SCROLL_REPEAT_TIME = 0
-local SPINNER_REPEAT_TIME = .25
 
 local save_fade_time = .5
-
-
-local TTDELAY = 0--.2
-
 
 
 local FrontEnd = Class(function(self, name)
@@ -59,10 +50,11 @@ local FrontEnd = Class(function(self, name)
 
 	self.enable = true
 
-	self.screen_mode = SCREEN_MODE.MONITOR
+	self.screen_mode = ScreenMode.s.MONITOR
 	--------------------------------------------------------------------------------------------
 
 	self.screenstack = {}
+	self.focus_widgets = {} -- map hunterid (int) to widget. has holes so always iterate with MAX_PLAYER_COUNT.
 
 	self.sceneroot = Widget("sceneroot") --:SetFE(self)
 
@@ -197,13 +189,10 @@ local FrontEnd = Class(function(self, name)
 	self.gameinterface.entity:AddTwitchOptions()
 	self.gameinterface.entity:AddAccountManager()
 
-	TheInput:AddKeyHandler(function(key, down) self:OnRawKey(key, down) end )
+	TheInput:AddKeyHandler(function(key, down, input_device) self:OnRawKey(key, down, input_device) end )
 	TheInput:AddTextInputHandler(function(text) self:OnTextInput(text) end )
 
 	self.tracking_mouse = true
-	self.repeat_time = -1
-	self.scroll_repeat_time = -1
-	self.spinner_repeat_time = -1
 
 	self.topFadeHidden = false
 
@@ -212,7 +201,6 @@ local FrontEnd = Class(function(self, name)
 	self.save_indicator_time_left = 0
 	self.save_indicator_fade_time = 0
 	self.save_indicator_fade = nil
-	self.autosave_enabled = true
 
 	self.loading_widget = self.sceneroot:AddChild(LoadingWidget())
 	self.loading_widget:SetEnabled(true)	-- Enable it by default on a new sim
@@ -222,8 +210,10 @@ local FrontEnd = Class(function(self, name)
 	self:CreateDebugMenu()
 
 
-	self.tooltip_widgets = {}
-	self.tooltip_delay = TTDELAY
+	self.tooltippers = {}
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		self.tooltippers[hunter_id] = ToolTipper(hunter_id)
+	end
 
 	-- data from the current game that is to be passed back to the game when the server resets (used for showing results in events when back in the lobby)
 	-- Never set this to nil or people will crash. If needed, test for empty list if needed to control flow.
@@ -306,10 +296,19 @@ function FrontEnd:ShowTextNotification(icon, title, description, duration)
 	return new_notif
 end
 
-function FrontEnd:GetFocusWidget()
+-- Get focus for input player.
+-- Often easier to call Widget:GetFocusForOwner to auto get the hunter id.
+function FrontEnd:GetFocusWidget(target_hunter_id)
+	target_hunter_id = target_hunter_id or 1 -- TODO(playerfocus): How often is this wrong?
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		local w = self.focus_widgets[hunter_id]
+		if hunter_id == target_hunter_id then
+			return w
+		end
+	end
 	local top = self:GetActiveScreen()
 	if top then
-		return top:GetDeepestFocus()
+		return top:GetDeepestFocus(target_hunter_id)
 	end
 end
 
@@ -322,22 +321,35 @@ function FrontEnd:GetHitWidget()
 	end
 end
 
-function FrontEnd:GetIntermediateFocusWidgets()
+function FrontEnd:GetIntermediateFocusWidgets(hunter_id)
 	local top = self:GetActiveScreen()
 	if top then
 		local widgs = {}
-		local nextWidget = top:GetFocusChild()
+		local nextWidget = top:GetFocusChild(hunter_id)
 
-		while nextWidget and nextWidget ~= self:GetFocusWidget() do
+		while nextWidget and nextWidget ~= self:GetFocusWidget(hunter_id) do
 			table.insert(widgs, nextWidget)
-			nextWidget = nextWidget:GetFocusChild()
+			nextWidget = nextWidget:GetFocusChild(hunter_id)
 		end
 		return widgs
 	end
 end
 
+function FrontEnd:StartTrackingMouse()
+	self.tracking_mouse = true
+	local mouser = TheInput:GetMouse():GetPlayer()
+	if mouser then
+		mouser.components.playercontroller:_SetLastInputDeviceType("mouse")
+	end
+end
+
 function FrontEnd:StopTrackingMouse(autofocus)
 	self.tracking_mouse = false
+	local mouser = TheInput:GetMouse():GetPlayer()
+	if mouser then
+		mouser.components.playercontroller:_SetLastInputDeviceType("keyboard")
+	end
+
 	if autofocus then
 		local screen = self:GetActiveScreen()
 		if screen ~= nil then
@@ -353,52 +365,55 @@ end
 
 -- Called when directional navigation was used to give something focus
 -- (keyboard or gamepad)
-function FrontEnd:OnFocusMove(dir, down, device_type, device_id)
-	if self.focus_locked or self:IsControlsDisabled() then
+function FrontEnd:FocusMove(screen, dir, input_device)
+	if self.textProcessorWidget then
+		-- Skip repeat while editing a text box
+		return false
+	elseif self.focus_locked or self:IsControlsDisabled() then
 		return true
-	elseif #self.screenstack > 0 then
-		if self.screenstack[#self.screenstack]:OnFocusMove(dir, down, device_type, device_id) then
+	else
+		if screen:ApplyFocusMove(dir, input_device) then
 			self:GetSound():PlaySound(fmodtable.Event.hover)
-			self.tracking_mouse = false
+			self:StopTrackingMouse()
 			return true
-		elseif self.tracking_mouse and down and self.screenstack[#self.screenstack]:SetDefaultFocus() then
-			self.tracking_mouse = false
+		elseif self.tracking_mouse and screen:SetDefaultFocus() then
+			self:StopTrackingMouse()
 			return true
 		end
 	end
 end
 
 -- Called when something new gained focus
-function FrontEnd:OnFocusChanged(new_focus)
-	if self.error_widget then
+function FrontEnd:OnFocusChanged(new_focus, hunter_id)
+	if self.error_widget
+		and (self.error_widget == true
+			or not self.error_widget:IsAncestorOf(new_focus))
+	then
 		return
 	end
 
 	if self.focus_locked or self:IsControlsDisabled() then
 		return true
 	elseif #self.screenstack > 0 then
-		self.screenstack[#self.screenstack]:OnFocusChanged(new_focus)
+		self.screenstack[#self.screenstack]:OnFocusChanged(new_focus, hunter_id)
 	end
 end
 
-function FrontEnd:OnControl(controls, down, device_type, trace, device_id)
+function FrontEnd:OnControl(controls, down, trace)
 	if controls:Has(Controls.Digital.TOGGLE_LOG) then
 		print("Controls.Digital.TOGGLE_LOG down:",down)
 	end
 	-- if there is a textedit that is currently editing, stop editing if the player clicks somewhere else
-	if self.textProcessorWidget ~= nil and not self.textProcessorWidget.focus and not down and controls:Has(Controls.Digital.CLICK_PRIMARY) then
+	if self.textProcessorWidget ~= nil
+		and not self.textProcessorWidget:HasFocus()
+		and not down
+		and controls:Has(Controls.Digital.CLICK_PRIMARY)
+	then
 		self:SetForceProcessTextInput(false, self.textProcessorWidget)
 	end
 
-	if controls:Has(Controls.Digital.INVENTORY_EXAMINE) then
-		if self.tooltip_widget
-			and self.tooltip_widget.OnExamine -- only if it supports examine
-			and self.tooltip_focus
-			and self.tooltip_widget.shown
-			and not self.tooltip_focus.removed
-			and not self.tooltip_widget.ignores_input
-		then
-			self.tooltip_widget:OnExamine(down)
+	for _,tooltipper in ipairs(self.tooltippers) do
+		if tooltipper:OnControl(controls, down, trace) then
 			return true
 		end
 	end
@@ -406,14 +421,15 @@ function FrontEnd:OnControl(controls, down, device_type, trace, device_id)
 	if self:IsControlsDisabled() then
 		return false
 	elseif #self.screenstack > 0
-		and (self.textProcessorWidget ~= nil
-			and not self.textProcessorWidget.focus
-			and self.textProcessorWidget:OnControl(controls, down, device_type, trace, device_id))
+		and self.textProcessorWidget ~= nil
+		and not self.textProcessorWidget:HasFocus()
+		and self.textProcessorWidget:OnControl(controls, down, trace)
 	then
-		-- while editing a text box and hovering over something else, consume the accept button (the raw key handlers will deal with it).
+		-- While editing a text box and hovering over something else, consume
+		-- the accept button (the raw key handlers will deal with it).
 		return true
 
-	elseif not CONSOLE_ENABLED and not down and controls:Has(Controls.Digital.OPEN_DEBUG_CONSOLE) then
+	elseif CONSOLE_ENABLED and not down and controls:Has(Controls.Digital.OPEN_DEBUG_CONSOLE) then
 		local activeScreen = self:GetActiveScreen()
 		if activeScreen and not activeScreen:is_a(ConsoleScreen) then
 			self:PushScreen(ConsoleScreen())
@@ -435,7 +451,7 @@ function FrontEnd:OnControl(controls, down, device_type, trace, device_id)
 		--[[
 	elseif controls:Has(Controls.Digital.CANCEL) then
 		return screen:OnCancel(down)
---]]
+	--]]
 	end
 end
 
@@ -612,6 +628,7 @@ function FrontEnd:SetFadeLevel(alpha, time, time_total)
 	end
 end
 
+-- How obscured (black) is the screen from a FADE_IN/FADE_OUT?
 function FrontEnd:GetFadeLevel()
 	return self.alpha
 end
@@ -661,7 +678,7 @@ end
 function FrontEnd:UpdateConsoleOutput()
 	local consolestr = table.concat(GetConsoleOutputList(), "\n")
 	consolestr = consolestr.."\n(Press CTRL+L to close this log)"
-	self.consoletext:SetText(consolestr)
+	self.consoletext:SetTextRaw(consolestr)
 end
 
 function FrontEnd:CheckMouseHover( x, y, trace )
@@ -678,112 +695,6 @@ function FrontEnd:CheckMouseHover( x, y, trace )
 		return hover_widget
 	else
 		self.sceneroot:ClearHover()
-	end
-end
-
-function FrontEnd:UpdateControls(dt)
-	if self:IsControlsDisabled() then
-		return false
-	end
-
-	--Spinner repeat
-	if not (TheInput:IsControlDown(Controls.Digital.PREVVALUE)
-			or TheInput:IsControlDown(Controls.Digital.NEXTVALUE))
-	then
-		self.spinner_repeat_time = -1
-	elseif self.spinner_repeat_time > dt then
-		self.spinner_repeat_time = self.spinner_repeat_time - dt
-	elseif self.spinner_repeat_time < 0 then
-		self.spinner_repeat_time = SPINNER_REPEAT_TIME > dt and SPINNER_REPEAT_TIME - dt or 0
-	elseif TheInput:IsControlDown(Controls.Digital.PREVVALUE) then
-		self.spinner_repeat_time = SPINNER_REPEAT_TIME
-		self:OnControl(Controls.Digital.PREVVALUE, true)
-	else--if TheInput:IsControlDown(Controls.Digital.NEXTVALUE) then
-		self.spinner_repeat_time = SPINNER_REPEAT_TIME
-		self:OnControl(Controls.Digital.NEXTVALUE, true)
-	end
-
-	--Scroll repeat
-	if not (TheInput:IsControlDown(Controls.Digital.MENU_SCROLL_BACK)
-			or TheInput:IsControlDown(Controls.Digital.MENU_SCROLL_FWD))
-	then
-		self.scroll_repeat_time = -1
-
-	elseif self.scroll_repeat_time > dt then
-		self.scroll_repeat_time = self.scroll_repeat_time - dt
-
-	elseif TheInput:IsControlDown(Controls.Digital.MENU_SCROLL_BACK) then
-		local repeat_time =
-			TheInput:HasMouseWheel(Controls.Digital.MENU_SCROLL_BACK)
-			and MOUSE_SCROLL_REPEAT_TIME
-			or SCROLL_REPEAT_TIME
-		if self.scroll_repeat_time < 0 then
-			self.scroll_repeat_time = repeat_time > dt and repeat_time - dt or 0
-		else
-			self.scroll_repeat_time = repeat_time
-			self:OnControl(Controls.Digital.MENU_SCROLL_BACK, true)
-		end
-
-	else--if TheInput:IsControlDown(Controls.Digital.MENU_SCROLL_FWD) then
-		local repeat_time =
-			TheInput:HasMouseWheel(Controls.Digital.MENU_SCROLL_FWD)
-			and MOUSE_SCROLL_REPEAT_TIME
-			or SCROLL_REPEAT_TIME
-		if self.scroll_repeat_time < 0 then
-			self.scroll_repeat_time = repeat_time > dt and repeat_time - dt or 0
-		else
-			self.scroll_repeat_time = repeat_time
-			self:OnControl(Controls.Digital.MENU_SCROLL_FWD, true)
-		end
-	end
-
-	-- victorc: hack - local multiplayer.
-	-- This doesn't handle screen.owningdevice or players that are assigned to
-	-- an inputID but not a device (adding new players). OnFocusMove should go
-	-- through a similar flow to OnInputEvent so focus move and control events
-	-- have the same player-restricting behaviour.
-	--
-	-- If the screen implements GetOwningPlayer for player-specific customization, etc. then
-	-- use the owning player's PlayerController as the input "interface"
-	-- Currently only need IsControlDown
-	local topscreen = self:GetActiveScreen()
-	local screen_owner = topscreen and topscreen:GetOwningPlayer() or nil
-
-	local input
-	local inputFunction
-
-	if screen_owner and #AllPlayers > 1 then
-		input = screen_owner.components.playercontroller
-		inputFunction = input.IsControlDown
-	else
-		input = TheInput
-		inputFunction = input.IsControlDownOnAnyDevice
-	end
-
-	if self.repeat_time > dt then
-		if not inputFunction(input, Controls.Digital.MENU_LEFT)
-			and not inputFunction(input, Controls.Digital.MENU_RIGHT)
-			and not inputFunction(input, Controls.Digital.MENU_UP)
-			and not inputFunction(input, Controls.Digital.MENU_DOWN)
-		then
-			self.repeat_time = 0
-		else
-			self.repeat_time = self.repeat_time - dt
-		end
-	elseif not (self.textProcessorWidget ~= nil) then -- Skip repeat while editing a text box
-		self.repeat_time = NAV_REPEAT_TIME
-
-		if inputFunction(input, Controls.Digital.MENU_LEFT) then
-			self:OnFocusMove(MOVE_LEFT, true)
-		elseif inputFunction(input, Controls.Digital.MENU_RIGHT) then
-			self:OnFocusMove(MOVE_RIGHT, true)
-		elseif inputFunction(input, Controls.Digital.MENU_UP) then
-			self:OnFocusMove(MOVE_UP, true)
-		elseif inputFunction(input, Controls.Digital.MENU_DOWN) then
-			self:OnFocusMove(MOVE_DOWN, true)
-		else
-			self.repeat_time = 0
-		end
 	end
 end
 
@@ -836,8 +747,6 @@ function FrontEnd:Update(dt)
 	if #self.screenstack > 0 then
 		self.screenstack[#self.screenstack]:OnUpdate(dt)
 	end
-
-	self:UpdateControls(dt)
 
 	self:OnRenderImGui(dt)
 	--[[
@@ -899,9 +808,10 @@ function FrontEnd:Update(dt)
 	end
 
 	if not self.debugfreeze then
-		self:UpdateToolTip(dt)
+		for _,tooltipper in ipairs(self.tooltippers) do
+			tooltipper:UpdateToolTip(dt)
+		end
 	end
-
 
 	TheSim:ProfilerPop()
 end
@@ -967,16 +877,14 @@ function FrontEnd:PushScreen(screen)
 	table.insert(self.screenstack, screen)
 
 	-- screen:Show()
-	if not self.tracking_mouse then
-		screen:SetDefaultFocus()
-	end
+	screen:SetDefaultFocus()
 
 	screen:OnOpen()
 	screen:OnBecomeActive()
 
 	self:Update(0)
 
-	--print("FOCUS IS", screen:GetDeepestFocus(), self.tracking_mouse)
+	--print("FOCUS IS", screen:GetDeepestFocus(GetDebugPlayer():GetHunterId()), self.tracking_mouse)
 	--self:Fade(FADE_IN, 2)
 end
 
@@ -1014,8 +922,24 @@ function FrontEnd:SetConsoleLogCorner(halign, valign)
 	return self
 end
 
-function FrontEnd:DoFadeIn(time_to_take)
+-- Transition from black to visible.
+function FrontEnd:FadeInFromBlack(time_to_take)
+	if self:GetFadeLevel() == 0 and not self:IsFading() then
+		-- Don't fade if we're already faded in since retriggering a fade looks bad.
+		return false
+	end
 	self:Fade(FADE_IN, time_to_take)
+	return true
+end
+
+-- Transition to black.
+function FrontEnd:FadeToBlack(time_to_take)
+	if self:GetFadeLevel() == 1 and not self:IsFading() then
+		-- Already faded out, so no need!
+		return false
+	end
+	self:Fade(FADE_OUT, time_to_take)
+	return true
 end
 
 --[[
@@ -1101,6 +1025,8 @@ end
 -- a Rotwood-style anim instead.
 
 -- expected to return FADE_IN, FADE_OUT or nil
+-- FADE_IN: Transitioning from black to visible.
+-- FADE_OUT: Fade to black.
 function FrontEnd:GetFadeDirection()
 	return self.fadedir
 end
@@ -1149,7 +1075,7 @@ function FrontEnd:PopScreen(screen)
 		TheInput:UpdateEntitiesUnderMouse()
 		self:Update(0)
 
-		--print ("POP!", new_head:GetDeepestFocus(), self.tracking_mouse)
+		--print("POP!", new_head:GetDeepestFocus(GetDebugPlayer():GetHunterId()), self.tracking_mouse)
 		--self:Fade(FADE_IN, 1)
 	end
 end
@@ -1235,7 +1161,7 @@ function FrontEnd:SetForceProcessTextInput(takeText, widget)
 	end
 end
 
-function FrontEnd:OnRawKey(key, down)
+function FrontEnd:OnRawKey(key, down, input_device)
 	if self:IsControlsDisabled() then
 		return false
 	end
@@ -1243,8 +1169,8 @@ function FrontEnd:OnRawKey(key, down)
 	local screen = self:GetActiveScreen()
 	if screen ~= nil then
 		if self.forceProcessText and self.textProcessorWidget ~= nil then
-			self.textProcessorWidget:OnRawKey(key, down)
-		elseif not screen:OnRawKey(key, down) and CHEATS_ENABLED then
+			self.textProcessorWidget:OnRawKey(key, down, input_device)
+		elseif not screen:OnRawKey(key, down, input_device) and CHEATS_ENABLED then
 			DoDebugKey(key, down)
 		end
 	end
@@ -1285,10 +1211,10 @@ function FrontEnd:OnMouseButton(button, down, x, y)
 		return false
 	end
 
-	self.tracking_mouse = true
+	self:StartTrackingMouse()
 
 	local top = self:GetActiveScreen()
-	if top and top:OnMouseButton(button, down, x, y) then
+	if top and top:OnMouseButton(TheInput:GetMouse():GetOwnerId(), button, down, x, y) then
 		return true
 	end
 
@@ -1296,14 +1222,31 @@ function FrontEnd:OnMouseButton(button, down, x, y)
 end
 
 function FrontEnd:FocusHoveredWidget()
-	if not self.focus_locked then
-		local x, y = self:GetUIMousePos()
+	if self.focus_locked then
+		return
+	end
+	local x, y = self:GetUIMousePos()
 
+	local mouser = TheInput:GetMouse()
+	local hunter_id = mouser:GetOwnerId_strict()
+
+	local top = self:GetActiveScreen()
+	if hunter_id
+		or (top and top:CanDeviceInteract(mouser))
+	then
 		local hover_widget = self:CheckMouseHover( x, y )
 		if hover_widget then
-			hover_widget:SetFocus()
+			if hover_widget:CanDeviceInteract(mouser) then
+				hover_widget:SetFocus(hunter_id)
+				return true
+			else
+				-- Can't allow them to get focus, but don't want any fallback
+				-- either.
+				return false
+			end
 		elseif #self.screenstack > 0 then
-			self.screenstack[#self.screenstack]:SetFocus()
+			self.screenstack[#self.screenstack]:SetFocus(hunter_id)
+			return true
 		end
 	end
 end
@@ -1318,7 +1261,7 @@ function FrontEnd:OnMouseMove(x, y)
 		and self.lastx ~= x
 		and self.lasty ~= y
 	then
-		self.tracking_mouse = true
+		self:StartTrackingMouse()
 	end
 
 	self.lastx = x - self.screen_w/2
@@ -1552,176 +1495,6 @@ function FrontEnd:SetImguiFontSize( font_size )
 	Profile:Save()
 end
 
------------------------------------ GL ----------------------------------
---------------------------------------------- TOOLTIPS
-
-function FrontEnd:UpdateToolTip(dt)
-	if self.fading then
-		if self.tooltip_widget then
-			self.tooltip_widget:Hide()
-		end
-		return
-
-	end
-	local focus
-	if self.tooltip_focus_override then
-		if self.tooltip_focus_override.removed then
-			self.tooltip_focus_override = nil
-		else
-			focus = self.tooltip_focus_override
-		end
-	end
-
-
-	if focus == nil then
-		-- Get hover widget
-		focus = self:GetHoverWidget()
-		-- If the current focused widget should show tooltip on focus, do that
-		local focus_widget = self:GetFocusWidget()
-		if focus_widget then
-			if focus_widget.show_tooltip_on_focus then
-				focus = focus_widget
-			else
-				-- If any ancestor of focus_widget is flagged 'show_child_tooltip_on_focus', then also show tooltip.
-				local focus_parent = focus_widget.parent
-				while focus_parent do
-					if focus_parent.show_child_tooltip_on_focus then
-						focus = focus_widget
-						break
-					end
-					focus_parent = focus_parent.parent
-				end
-			end
-		end
-	end
-
-	local tt_class = Tooltip
-	local tt
-
-	if focus then
-		while tt == nil and focus do
-			tt = focus:GetToolTip()
-			tt_class = focus:GetToolTipClass() or Tooltip
-			if not tt then
-				focus = focus.parent
-			elseif not type(tt) == 'string' then
-				assert(type(tt) == 'string', ("A widget used self.tooltip for something other than the tooltip text: %s"):format(tostring(focus)))
-			end
-		end
-	end
-
-	if tt_class and self.tooltip_widgets[ tt_class ] == nil then
-		--print( "Creating new shared tooltip: ", tt_class._classname )
-		self.tooltip_widgets[ tt_class ] = self.fe_root:AddChild( tt_class():IgnoreInput( true ) )
-	end
-	local tooltip_widget = self.tooltip_widgets[ tt_class ]
-	local want_hide = self.tooltip_widget ~= nil and (self.tooltip_widget ~= tooltip_widget or not tt)
-	if want_hide then
-		self.tooltip_delay = self.tooltip_delay - dt
-
-		if self.tooltip_delay <= 0 or (self.tooltip_focus.removed or not self.tooltip_focus.shown) then
-			self.tooltip_widget:Hide()
-			self.tooltip_widget, self.tooltip_focus, self.tooltip_data = nil, nil, nil
-			self.tooltip_delay = TTDELAY
-		end
-	end
-
-	local want_show = tt and (focus ~= self.tooltip_focus or tt ~= self.tooltip_data or focus:GetToolTipDirty())
-	if want_show then
-		self.tooltip_delay = self.tooltip_delay - dt
-
-		if self.tooltip_delay <= 0 or (self.tooltip_widget and self.tooltip_widget.shown) then
-			local sm = self:GetScreenMode()
-			local layout_scale
-			if tooltip_widget.LAYOUT_SCALE then
-				layout_scale = tooltip_widget.LAYOUT_SCALE[ sm ] or LAYOUT_SCALE[ sm ]
-			else
-				layout_scale = LAYOUT_SCALE[ sm ]
-			end
-
-			tooltip_widget:SetOwningPlayer(nil) -- Shared tooltips have all content re-applied, so okay to clear.
-			tooltip_widget:SetOwningPlayer(focus and focus:GetOwningPlayer())
-
-			tooltip_widget:SetLayoutScale( layout_scale )
-			if tooltip_widget:LayoutWithContent(tt) then
-				self.tooltip_widget = tooltip_widget
-				self.tooltip_widget.nodebug = true
-				self.tooltip_widget:Show()
-				self.tooltip_focus = focus
-				self.tooltip_data = tt
-				self.tooltip_delay = TTDELAY
-				focus:SetToolTipDirty( nil )
-			else
-				tooltip_widget:Hide()
-			end
-		end
-	end
-
-	if self.tooltip_widget
-		and self.tooltip_focus
-		and self.tooltip_widget.shown
-		and not self.tooltip_focus.removed
-	then
-		self:UpdateToolTipPos( self.tooltip_widget )
-		-- if self.tooltip_focus.LayoutToolTip then
-		--     self.tooltip_focus:LayoutToolTip( self.tooltip_widget )
-		-- end
-		local tooltiplayoutfn = self.tooltip_focus:GetToolTipLayoutFn()
-		if tooltiplayoutfn then
-			tooltiplayoutfn( self.tooltip_focus, self.tooltip_widget )
-			self:ConstrainToolTipPos( tooltip_widget )
-		end
-	end
-
-end
-
-function FrontEnd:SetToolTipOverride( tooltip_focus )
-	self.tooltip_focus_override = tooltip_focus
-end
-
-function FrontEnd:GetToolTipOverride()
-	return self.tooltip_focus_override
-end
-
-function FrontEnd:UpdateToolTipPos( tooltip_widget )
-	if tooltip_widget and tooltip_widget.shown then
-		-- take the letterbox into account.
-		-- If we don't letterbox we want to use the widget's worldboundingbox and the screenDims instead
-		local screenw, screenh = RES_X, RES_Y
-		--        local screenw, screenh = self:GetScreenDims()
-		local scrx_min, scrx_max = -screenw/2, screenw/2
-		local scry_min, scry_max = -screenh/2, screenh/2
-
-		local xmin, ymin, xmax, ymax = tooltip_widget:GetVirtualBoundingBox()
-		--        local xmin, ymin, xmax, ymax = tooltip_widget:GetWorldBoundingBox()
-		local tw, th = xmax - xmin, ymax - ymin
-
-		local xmin, ymin, xmax, ymax = self.tooltip_focus:GetVirtualBoundingBox()
-		--        local xmin, ymin, xmax, ymax = self.tooltip_focus:GetWorldBoundingBox()
-
-		if (xmax  + tw)  <=  scrx_max and ymax <= scry_max then -- does it fit top right?
-			tooltip_widget:LayoutBounds( "after", "top", self.tooltip_focus )
-		elseif (xmin - tw) >= scrx_min and ymax <= scry_max then -- top left?
-			tooltip_widget:LayoutBounds( "before", "top", self.tooltip_focus )
-		elseif (xmax + tw) <= scrx_max and ymin >= scry_min then  -- bottom right?
-			tooltip_widget:LayoutBounds( "after", "bottom", self.tooltip_focus )
-		elseif (xmin - tw) >= scrx_min and ymin >= scry_min then -- bottom left?
-			tooltip_widget:LayoutBounds( "before", "bottom", self.tooltip_focus )
-		elseif (ymax + th) <= scry_max then -- center above
-			tooltip_widget:LayoutBounds( "center", "above", self.tooltip_focus )
-		else -- center below
-			tooltip_widget:LayoutBounds( "center", "below", self.tooltip_focus )
-			self:ConstrainToolTipPos( tooltip_widget )
-		end
-	end
-end
-
-function FrontEnd:ConstrainToolTipPos( tooltip_widget )
-	UIHelpers.KeepOnScreen(tooltip_widget)
-end
-
---------------------------------------------- TOOLTIPS
-
 function FrontEnd:GetScreenMode()
 	return self.screen_mode
 end
@@ -1950,21 +1723,24 @@ function FrontEnd:UIToWindow(x,y)
 	return x,y
 end
 
--- Looking for IsGamepadMode? This is probably what you want.
+-- Looking for IsGamepadMode? This is probably what you want instead.
+-- See also PlayerController:IsRelativeNavigation.
 function FrontEnd:IsRelativeNavigation()
-	-- True for both keyboard and gamepad navigation.
-	return not self.tracking_mouse or Platform.IsBigPictureMode()
+	-- Returns true for both keyboard and gamepad navigation.
+	return not self.tracking_mouse
 end
 
 function FrontEnd:GetDragWidget()
 	return self.drag and self.drag.w, self.drag and self.drag.id
 end
 
-function FrontEnd:OnControlDown( controls, device_type, trace, device_id )
+function FrontEnd:OnControlDown( controls, trace )
 	if not self.enable or (self.fading and self.fade_out) then
 		return false
 	end
+	local input_device = controls:GetDevice()
 
+	local device_type = input_device.device_type
 	if ( device_type == "mouse" or device_type == "touch" ) then
 		if not controls:Has(Controls.Digital.MENU_SCROLL_FWD, Controls.Digital.MENU_SCROLL_BACK) then
 			-- Checking mouse hover here specifically for touch screens.
@@ -1981,16 +1757,16 @@ function FrontEnd:OnControlDown( controls, device_type, trace, device_id )
 		end
 	end
 
-	local ret = self:OnControl(controls, true, device_type, trace, device_id)
+	local ret = self:OnControl(controls, true, trace)
 	if not ret then
-		ret =  self:OnInputEvent( Widget.OnControlDown, controls, device_type, trace, device_id )
+		ret =  self:_OnInputEvent( Screen.OnControlDown, controls, trace )
 	end
 	return ret
 end
 
-function FrontEnd:OnInputEvent( fn, controls, device_type, trace, device_id )
-
-
+function FrontEnd:_OnInputEvent( fn, controls, trace )
+	local input_device = controls:GetDevice()
+	local device_type = input_device.device_type
 	--[[ KAJ: I don't think we want this?
 	if ( device_type == "mouse" or device_type == "keyboard" ) then
 		self:SetPendingControlMode( CONTROL_MODE.MOUSE_KEYBOARD, nil )
@@ -1999,20 +1775,17 @@ function FrontEnd:OnInputEvent( fn, controls, device_type, trace, device_id )
 	elseif device_type == "gamepad" then
 		self:SetPendingControlMode( CONTROL_MODE.GAMEPAD, device_id )
 	end
-]]
-	if device_type == "gamepad" then
-		if self.tracking_mouse then
-			self:StopTrackingMouse(true)
-		end
+	]]
+	if self.tracking_mouse
+		and device_type ~= "mouse"
+	then
+		self:StopTrackingMouse(true)
 	end
 
-	local device_owner = TheInput:GetDeviceOwner(device_type, device_id)
 	for i = #self.screenstack, 1, -1 do
 		local screen = self.screenstack[i]
-		if device_type ~= "gamepad"
-			or screen:CanDeviceInteract(device_type, device_id, device_owner)
-		then
-			if fn( screen, controls, device_type, trace, device_id ) then
+		if screen:CanDeviceInteract(input_device) then
+			if fn( screen, controls, trace ) then
 				return true
 			elseif screen:SinksInput() then
 				break
@@ -2022,7 +1795,9 @@ function FrontEnd:OnInputEvent( fn, controls, device_type, trace, device_id )
 	return false
 end
 
-function FrontEnd:OnControlUp( controls, device_type, device_id )
+function FrontEnd:OnControlUp( controls )
+	local input_device = controls:GetDevice()
+	local device_type = input_device.device_type
 	if self.drag and ( device_type == "mouse" or device_type == "touch" ) then
 		return false
 	end
@@ -2038,9 +1813,9 @@ function FrontEnd:OnControlUp( controls, device_type, device_id )
 		return false
 	end
 
-	local ret = self:OnControl(controls, false, device_type, nil, device_id)
+	local ret = self:OnControl(controls, false)
 	if not ret then
-		ret = self:OnInputEvent( Widget.OnControlUp, controls, device_type, nil, device_id )
+		ret = self:_OnInputEvent( Screen.OnControlUp, controls )
 	end
 	-- When ending a click/tap, only clear hover after notifying all widgets, so that the focused/hovered ones get to process input
 	--[[
@@ -2053,51 +1828,92 @@ function FrontEnd:OnControlUp( controls, device_type, device_id )
 	return ret
 end
 
+local function HasMouseOwner(widget)
+	local owner = widget and widget:GetOwningPlayer()
+	return not owner or owner == TheInput:GetMouse():GetPlayer()
+end
+
+-- A softer version of SetFocus: *suggests* a widget to focus without doesn't
+-- stealing focus from the mouse position.
+-- Not sure how well this works with multiple players.
 function FrontEnd:HintFocusWidget( widget )
-	if self.tracking_mouse or widget == nil then
-		TheFrontEnd:FocusHoveredWidget()
-		-- Should we store the hint and activate it if we stop tracking the
-		-- mouse? Right now we only stop using the mouse when changing focus.
-	else
+	local should_focus = true
+	if widget == nil
+		or (self.tracking_mouse and widget:CanDeviceInteract(TheInput:GetMouse()))
+	then
+		should_focus = not TheFrontEnd:FocusHoveredWidget()
+	end
+
+	if should_focus and widget then
 		widget:SetFocus()
 	end
 end
 
-function FrontEnd:SetFocusWidget( widget )
-	if widget ~= self.focus_widget then
+local function TryEnsureHunter(widget, hunter_id)
+	if widget and not hunter_id then
+		local player = widget:GetOwningPlayer()
+		hunter_id = player and player:GetHunterId()
+	end
+	return hunter_id
+end
 
-		assert( widget:is_a(Widget))
-		assert( not widget.removed, tostring(widget) )
-		-- assert( widget.can_focus_with_nav, widget ) -- Can't assert this: FtF often gives screens focus.
-
-		-- print( "FOCUS:", self.focus_widget, '->', widget, debug.traceback() )
-
-		self:ClearFocusWidget(widget)
-		self.focus_widget = widget
-
-		-- Somewhat arbitrary according to the feature I'm implementing, but if focus changes, the tooltip override should be cleared.
-		self.tooltip_focus_override = nil
-
-		widget:GiveFocus()
-
-		--TODO_KAJ        self.game:BroadcastEvent( "focus_changed", prev_focus, widget )
-		self:OnFocusChanged(self.focus_widget)
-		self.wants_control_option_refresh = true
+function FrontEnd:SetFocusWidget(widget, source_hunter_id)
+	dbassert(self.sceneroot:IsAncestorOf(widget), "Setting focus before widget is in hierarchy. It's parents won't correctly handle focus until focus changes. Selection brackets will be initially broken.")
+	source_hunter_id = TryEnsureHunter(widget, source_hunter_id)
+	if source_hunter_id then
+		self:_SetPlayerFocusWidget(widget, source_hunter_id)
 	else
-		--TODO_KAJ        self.game:BroadcastEvent( "focus_changed", self.focus_widget, nil )
+		for hunter_id=1,MAX_PLAYER_COUNT do
+			self:_SetPlayerFocusWidget(widget, hunter_id)
+		end
 	end
 end
 
-function FrontEnd:ClearFocusWidget(new_focus_widget)
+function FrontEnd:_SetPlayerFocusWidget(widget, hunter_id)
+	dbassert(hunter_id)
+	local focus_widget = self.focus_widgets[hunter_id]
+	if widget ~= focus_widget then
+
+		assert( widget:is_a(Widget), "Must focus Widgets.")
+		assert( not widget.removed, tostring(widget) )
+		-- assert( widget.can_focus_with_nav, widget ) -- Can't assert this: FtF often gives screens focus.
+
+		-- TheLog.ch.FrontEnd:printf("FOCUS[%s]: %s -> %s  %s", hunter_id, focus_widget, widget, debug.traceback())
+
+		self:ClearFocusWidget(widget, hunter_id)
+		focus_widget = widget
+
+		-- Somewhat arbitrary according to the feature I'm implementing, but if
+		-- focus changes, the tooltip override should be cleared.
+		self.tooltippers[hunter_id]:SetToolTipOverride(nil)
+
+		widget:GiveFocus(hunter_id)
+
+		self:OnFocusChanged(focus_widget, hunter_id)
+	end
+	self.focus_widgets[hunter_id] = focus_widget
+end
+
+function FrontEnd:ClearFocusWidget(new_focus_widget, source_hunter_id)
+	source_hunter_id = TryEnsureHunter(new_focus_widget, source_hunter_id)
+	if source_hunter_id then
+		self:_ClearPlayerFocusWidget(new_focus_widget, source_hunter_id)
+	else
+		for hunter_id=1,MAX_PLAYER_COUNT do
+			self:_ClearPlayerFocusWidget(new_focus_widget, hunter_id)
+		end
+	end
+end
+
+function FrontEnd:_ClearPlayerFocusWidget(new_focus_widget, hunter_id)
 	dbassert(not self.focus_locked)
-	local widget = self.focus_widget
+	local widget = self.focus_widgets[hunter_id]
 	--TODO_KAJ    self.game:BroadcastEvent( "focus_changed", widget, nil )
 	if widget then
-		-- print( "CLEAR FOCUS:", self.focus_widget, debug.traceback() )
-		self.focus_widget = nil
-		self.tooltip_focus_override = nil
-		self.wants_control_option_refresh = true
-		widget:RemoveFocus(new_focus_widget)
+		-- TheLog.ch.FrontEnd:printf("CLEAR FOCUS[%s]: %s  %s", hunter_id, widget, debug.traceback() )
+		self.focus_widgets[hunter_id] = nil
+		self.tooltippers[hunter_id]:SetToolTipOverride(nil)
+		widget:RemoveFocus(hunter_id, new_focus_widget)
 	end
 end
 

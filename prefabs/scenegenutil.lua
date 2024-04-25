@@ -1,9 +1,10 @@
 -- A SceneGen generates prop placements at runtime. Its member data specializes it for a particular dungeon.
 
+local GroundTiles = require "defs.groundtiles"
+local Lume = require "util.lume"
 local SceneGenAutogenData = require "prefabs.scenegen_autogen_data"
 local kassert = require "util.kassert"
-local Lume = require "util.lume"
-local GroundTiles = require "defs.groundtiles"
+local prefabutil = require "prefabs.prefabutil"
 require "prefabs.world_autogen" -- for CollectAssetsFor*
 
 
@@ -39,17 +40,19 @@ end
 -- A prefab is a constructor function and all of its dependencies.
 local function NewSceneGenPrefab(name, params)
 	local Biomes = require "defs.biomes"
-	local props = params.zone_gens
-		and Lume(params.zone_gens)
-			:map(function(zone_gen)
-				return zone_gen.scene_props
-					and Lume(zone_gen.scene_props)
-						:map(function(scene_prop) return scene_prop.prop end)
-						:result()
-					or {}
-			end)
-			:result()
-		or {}
+	local props = {}
+	local fxes = {}
+	for _,zone_gen in ipairs(params.zone_gens or {}) do
+		table.appendarrays(props, zone_gen.scene_props)
+		table.appendarrays(fxes, zone_gen.fxes)
+	end
+	props = Lume(props)
+		:map("prop")
+		:result()
+	fxes = Lume(fxes)
+		:map("fx")
+		:result()
+
 	local destructibles = params.destructibles
 		and Lume(params.destructibles)
 			:map(function(destructible) return destructible.prop end)
@@ -65,11 +68,6 @@ local function NewSceneGenPrefab(name, params)
 			:map(function(particle_system) return particle_system.particle_system end)
 			:result()
 		or {}
-	local fxes = params.fxes
-		and Lume(params.fxes)
-			:map(function(fx) return fx.fx end)
-			:result()
-		or {}
 	local creature_spawners = {}
 	for _, category in pairs(params.creature_spawners) do
 		for _, spawner in ipairs(category) do
@@ -78,17 +76,23 @@ local function NewSceneGenPrefab(name, params)
 	end
 
 	local prefabs = {}
-	local assets = {}
-	prefabs = table.appendarrays(prefabs, table.unpack(props))
-	prefabs = table.appendarrays(prefabs, creature_spawners)
-	prefabs = table.appendarrays(prefabs, destructibles)
-	prefabs = table.appendarrays(prefabs, underlay_props)
-	prefabs = table.appendarrays(prefabs, particle_systems)	
-	prefabs = table.appendarrays(prefabs, fxes)	
+	local assets = {
+		Asset("PKGREF", "scripts/prefabs/autogen/scenegen/".. name ..".lua"),
+		Asset("PKGREF", "scripts/prefabs/scenegen_autogen.lua"),
+		Asset("PKGREF", "scripts/prefabs/scenegen_autogen_data.lua"),
+		Asset("PKGREF", "scripts/prefabs/scenegenutil.lua"),
+	}
+	prefabs = table.appendarrays(
+		prefabs,
+		props,
+		creature_spawners,
+		destructibles,
+		underlay_props,
+		particle_systems,
+		fxes)
 	if params.rooms then
 		prefabs = table.appendarrays(prefabs, params.rooms)
 	end
-	prefabs = Lume(prefabs):unique():result()
 	local location_deps = Biomes.GetLocationDeps(params.biome, params.dungeon)
 	if location_deps then
 		table.insert(assets, location_deps.tile_bank)
@@ -116,32 +120,13 @@ local function NewSceneGenPrefab(name, params)
 		name,
 		function(_) return NewSceneGenEntity(name, params) end,
 		assets,
-		prefabs
+		Lume(prefabs):unique():result()
 	)
 	RegisterSceneGenPrefab(params, prefab)
 	return prefab
 end
 
-local groups = {}
-for name, params in pairs(SceneGenAutogenData) do
-	-- If the prefab specifies a group, manifest the group and add the prefab to it.
-	if params.group ~= nil and string.len(params.group) > 0 then
-		local group = groups[params.group] or {}
-		table.insert(group, name)
-		groups[params.group] = group
-	end
-end
-
--- In addition to all of the SceneGen prefabs, return all the group prefabs.
-local group_prefabs = Lume(groups)
-	:enumerate(function(name, group)
-		return not name:lower():startswith("test")
-			and Prefab(GroupPrefab(name), nil, nil, group)
-	end)
-	:result()
-
-
-
+local group_prefabs = prefabutil.CreateGroupPrefabs(SceneGenAutogenData, {})
 
 local scenegenutil = {}
 scenegenutil.ASSERT_ON_FAIL = { "assert_on_fail" }
@@ -198,17 +183,33 @@ function scenegenutil.FindSceneGenForLocation(location_id)
 end
 
 -- Returns a list of layouts (rooms created in WorldEditor) with names ending
--- with suffix.
-function scenegenutil.FindLayoutsForRoomSuffix(scene_gen, suffix)
-	kassert.typeof("string", scene_gen, suffix)
+-- with suffix. If no matching rooms exist but "nesw" rooms do, return them.
+function scenegenutil.FindLayoutsForRoomSuffix(scene_gen, room_type_suffix, exits_suffix)
+	kassert.typeof("string", scene_gen, room_type_suffix)
+	kassert.typeof("string", scene_gen, exits_suffix)
+
 	local scene_data = SceneGenAutogenData[scene_gen]
-	if scene_data and scene_data.rooms then
-		return Lume(scene_data.rooms)
-			:filter(function(scene_gen_room)
-				return string.endswith(scene_gen_room, suffix)
-			end)
-			:result()
+	if not (scene_data and scene_data.rooms) then
+		return {}
 	end
+
+	local suffix = room_type_suffix..exits_suffix
+	local perfect_matches = Lume(scene_data.rooms)
+		:filter(function(scene_gen_room)
+			return string.endswith(scene_gen_room, suffix)
+		end)
+		:result()
+	if next(perfect_matches) then
+		return perfect_matches
+	end
+
+	suffix = room_type_suffix.."_nesw"
+	local all_exits_fallbacks = Lume(scene_data.rooms)
+		:filter(function(scene_gen_room)
+			return string.endswith(scene_gen_room, suffix)
+		end)
+		:result()
+	return all_exits_fallbacks
 end
 
 function scenegenutil.GetAllLocations()

@@ -7,6 +7,20 @@ return {
   stategraphs={
     ["*"]={
       events={
+        deposit_heart={
+          {
+            eventtype="spawnparticles",
+            frame=10,
+            param={
+              followsymbol="head01",
+              ischild=true,
+              offx=0.0,
+              offy=-202.0,
+              offz=0.0,
+              particlefxname="player_heart_deposit",
+            },
+          },
+        },
         konjur_accept={
           {
             eventtype="spawneffect",

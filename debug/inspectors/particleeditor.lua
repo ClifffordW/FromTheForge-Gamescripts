@@ -564,15 +564,15 @@ function ParticleEditor:RenderEmitter( ui, index, emitter )
 			local atlasregions = TheSim:GetAtlasRegions(atlas)
 			table.sort(atlasregions, function (k1, k2) return string.lower(k1) < string.lower(k2) end)
 			local region = params.texture[2]
-			region = ui:_ComboAsString("Region", region, atlasregions)
+			local region_live, region_confirmed = ui:_ComboAsString_Raw("Region", region, atlasregions)
 			if ui:IsItemHovered(ui.HoveredFlags.AllowWhenBlockedByPopup) then
 				ui:BeginTooltip()
 				ui:Value("Atlas", atlas)
-				ui:Value("Tex", region)
-				ui:AtlasImage(atlas, region, 300,300)
+				ui:Value("Tex", region_live)
+				ui:AtlasImage(atlas, region_live, 300,300)
 				ui:EndTooltip()
 			end
-			params.texture[2] = region
+			params.texture[2] = region_confirmed
 
 			params.spawn.color = params.spawn.color or 0xffffffff
 			params.spawn.color = ui:_ColorHex4_Int("Colour", params.spawn.color)
@@ -980,11 +980,11 @@ function ParticleEditor:RenderEmitter( ui, index, emitter )
 			-- One gradient editor per emitter to avoid repeatedly loading data
 			-- which breaks editing: the editor does fixup every frame which
 			-- messes with its internal curve.
-			local gradient_editor = self.gradient_editors[self]
+			local gradient_editor = self.gradient_editors[emitter]
 			if gradient_editor == nil then
 				local BackgroundGradientEditorPane = require "debug.inspectors.panes.backgroundgradient"
 				gradient_editor = BackgroundGradientEditorPane(max_colors, true)
-				self.gradient_editors[self] = gradient_editor
+				self.gradient_editors[emitter] = gradient_editor
 			end
 
 			if 0 == params.curves.color.num then
@@ -1393,6 +1393,19 @@ function ParticleEditor:RenderPanel( ui )
 			ui:Dummy(20, 0)
 			ui:Spacing()
 			ui:EndPopup()
+		end
+
+		if self.particles then
+			ui:SameLine_RightAligned(105)
+			local changed, want_visible = ui:Checkbox("Show Handle", self.particles:IsVisible())
+			ui:SetTooltipIfHovered("Uncheck to hide the red circle handle, but you won't be able to drag the item around.")
+			if changed then
+				if want_visible then
+					self.particles:Show()
+				else
+					self.particles:Hide()
+				end
+			end
 		end
 
 		ui:Spacing()

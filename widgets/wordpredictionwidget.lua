@@ -17,11 +17,11 @@ local WordPredictionWidget = Class(Widget, function(self, text_edit, max_width, 
     self.word_predictor = WordPredictor()
 	self.text_edit = text_edit
 
-	self.enter_complete = string.match(mode, "enter", 1, true) ~= nil
-	self.tab_complete = string.match(mode, "tab", 1, true) ~= nil
+	self.enter_complete = string.find(mode, "enter", 1, true) ~= nil
+	self.tab_complete = string.find(mode, "tab", 1, true) ~= nil
 
 	self.sizey = FONT_SIZE + 4 * HACK_FOR_4K
-	self.max_width = max_width or 300 * HACK_FOR_4K
+	self.max_width = max_width or 600
 
 	local root = self:AddChild(Widget("wordpredictionwidget_root"))
 	root:SetPosition(10 * HACK_FOR_4K, self.sizey*0.5)
@@ -50,7 +50,7 @@ function WordPredictionWidget:IsMouseOnly()
 	return self.enter_complete == false and self.tab_complete == false
 end
 
-function WordPredictionWidget:OnRawKey(key, down)
+function WordPredictionWidget:OnRawKey(key, down, input_device)
 	if down and key == InputConstants.Keys.BACKSPACE or key == InputConstants.Keys.DELETE then
 		self.active_prediction_btn = nil
 		self:RefreshPredictions()
@@ -86,8 +86,8 @@ function WordPredictionWidget:OnRawKey(key, down)
 	return false
 end
 
-function WordPredictionWidget:OnControl(controls, down)
-    if WordPredictionWidget._base.OnControl(self,controls, down) then return true end
+function WordPredictionWidget:OnControl(controls, down, ...)
+    if WordPredictionWidget._base.OnControl(self,controls, down, ...) then return true end
 
 	if self.word_predictor.prediction ~= nil then
 		if controls:Has(Controls.Digital.CANCEL) then

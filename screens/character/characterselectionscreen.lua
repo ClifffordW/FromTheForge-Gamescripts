@@ -12,12 +12,10 @@ local krandom = require "util.krandom"
 local lume = require "util.lume"
 local easing = require "util.easing"
 
-
-local MusicTrack = fmodtable.Event.mus_CharacterCreation_LP
-
 -- Lets the player pick a character from their save slots (or start the creation of a new one)
 local CharacterSelectionScreen = Class(Screen, function(self, owner, on_close_cb)
 	Screen._ctor(self, "CharacterSelectionScreen")
+	self:SetAudioCategory(Screen.AudioCategory.s.Fullscreen)
 
 	if owner.components.playercontroller:HasInputDevice() then
 		self:SetOwningPlayer(owner)
@@ -53,7 +51,7 @@ local CharacterSelectionScreen = Class(Screen, function(self, owner, on_close_cb
 		:LayoutBounds("right", "top", self.panel_bg)
 		:Offset(-40, 30)
 
-	self.character_slot_data = TheSaveSystem.character_slots
+	self.character_slot_data = TheSaveSystem:GetActiveCharacterSaves()
 
 	self.choose_character_title = self.choose_character_contents:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TITLE))
 		:SetName("Choose-character title")
@@ -81,11 +79,18 @@ local CharacterSelectionScreen = Class(Screen, function(self, owner, on_close_cb
 
 	self.choose_character_contents.start_x, self.choose_character_contents.start_y = self.choose_character_contents:GetPos()
 
-	TheAudio:PlayPersistentSound(audioid.persistent.ui_music, MusicTrack)
+	if TheNet:IsGameTypeLocal() and TheNet:GetNrLocalPlayers() == 1 then -- you're playing a local game and you aren't joining a game in progress, so play char screen music
+		TheLog.ch.Audio:print("***///***characterselectionscreen.lua: You're playing a local game and you aren't joining a game in progress, so play char screen music.")
+		TheAudio:PlayPersistentSound(audioid.persistent.ui_music, fmodtable.Event.mus_CharacterCreation_LP)
+	else -- you're joining in progress
+		TheLog.ch.Audio:print("***///***characterselectionscreen.lua: You're joining in progress.")
+	end
 
 	self.default_focus = self.continue_btn
 
 	self:Refresh()
+
+	TheFrontEnd:FadeInFromBlack()
 end)
 
 CharacterSelectionScreen.CONTROL_MAP =
@@ -93,8 +98,9 @@ CharacterSelectionScreen.CONTROL_MAP =
 	{
 		control = Controls.Digital.CANCEL,
 		fn = function(self)
-			if TheFrontEnd:IsRelativeNavigation() then
+			if self:IsRelativeNavigation() then
 				self:OnClickClose()
+				TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_simulate_click)
 				return true
 			end
 		end,
@@ -104,10 +110,10 @@ CharacterSelectionScreen.CONTROL_MAP =
 		fn = function(self)
 
 			-- This handler is just for gamepad. Mouse has altclick callbacks set on the buttons
-			if not TheFrontEnd:IsRelativeNavigation() then return false end
+			if not self:IsRelativeNavigation() then return false end
 
 			-- Get selected slot
-			local focus = TheFrontEnd:GetFocusWidget()
+			local focus = self:GetFocusForOwner()
 			if focus and self.choose_character_buttons:IsAncestorOf(focus) then
 				focus:AltClick()
 			end
@@ -131,12 +137,12 @@ function CharacterSelectionScreen:OnClickClose()
 end
 
 function CharacterSelectionScreen:OnInputModeChanged(old_device_type, new_device_type)
-	self.continue_btn:SetShown(not TheFrontEnd:IsRelativeNavigation() and self.selected_slot)
+	self.continue_btn:SetShown(not self:IsRelativeNavigation() and self.selected_slot)
 	self.info_label:RefreshText()
 end
 
 function CharacterSelectionScreen:Refresh()
-	self.character_slot_data = TheSaveSystem.character_slots
+	self.character_slot_data = TheSaveSystem:GetActiveCharacterSaves()
 
 	self.choose_character_buttons:RemoveAllChildren()
 	self.character_slot_puppets = {}
@@ -146,10 +152,11 @@ function CharacterSelectionScreen:Refresh()
 	local num_slots = table.count(self.character_slot_data)
 	-- we want these to always be in the same order but the table isn't an indexed table so we have to do it manually
 	for i = 1, num_slots do
-		local slot = i - 1 -- character slot data is indexed starting at 0 to match playerIDs
+		local slot = i
 		local save = self.character_slot_data[slot]
 
-		local player_data = save:GetValue("player")
+		local player_entity_data = save:GetValue("player")
+		local player_data = save:GetValue("playerdata")
 		local button = self.choose_character_buttons:AddChild(SelectablePuppet(self.label_font_size))
 				:LayoutBounds("after")
 				:Offset(300, 0)
@@ -168,16 +175,16 @@ function CharacterSelectionScreen:Refresh()
 			self:OnCharacterFocusChanged(has_focus, button, slot, i)
 		end)
 
-		if player_data then
+		if player_entity_data then
 			button.can_be_deleted = true
-			button:SetPlayerData(player_data)
-			button:UpdateName(string.format(STRINGS.CHARACTER_SELECTOR.SLOT, i))
+			button:SetPlayerData(player_entity_data, player_data)
+			button:UpdateName(STRINGS.CHARACTER_SELECTOR.SLOT:subfmt({ slot_number = i }))
 
 			if TheSaveSystem:IsSlotActive(slot) then
 				if TheSaveSystem:GetCharacterForPlayerID(self.ownerPlayerID) == slot then
-					button:UpdateName(string.format(STRINGS.CHARACTER_SELECTOR.SLOT_YOUR_SLOT, i))
+					button:UpdateName(STRINGS.CHARACTER_SELECTOR.SLOT_YOUR_SLOT:subfmt({ slot_number = i }))
 				else
-					button:UpdateName(string.format(STRINGS.CHARACTER_SELECTOR.SLOT_IN_USE, i))
+					button:UpdateName(STRINGS.CHARACTER_SELECTOR.SLOT_IN_USE:subfmt({ slot_number = i }))
 					-- slot is claimed, disable button
 					button.puppet:SetSaturation(0)
 					button:Disable()
@@ -217,7 +224,6 @@ end
 
 function CharacterSelectionScreen:OnBecomeInactive()
 	CharacterSelectionScreen._base.OnBecomeInactive(self)
-	TheAudio:StopPersistentSound(audioid.persistent.ui_music)
 end
 
 function CharacterSelectionScreen:PlayEmote(button)
@@ -240,7 +246,7 @@ function CharacterSelectionScreen:PlayEmote(button)
 	-- local species = button:GetSpecies()
 	-- table.insert(emotes, species_emotes[species])
 
-	button.puppet:PlayAnimSequence({krandom.PickFromArray(emotes), "idle"})
+	button.puppet:PlayAnimSequence({krandom.PickFromArray(emotes), "idle_ui"})
 end
 
 function CharacterSelectionScreen:OnCharacterClicked(button, slot)
@@ -250,11 +256,10 @@ function CharacterSelectionScreen:OnCharacterClicked(button, slot)
 		btn:SetSelected(button == btn)
 	end
 
-	--self:PlayEmote(button)
-
+	self:PlayEmote(button)
 	self.selected_slot = slot
 
-	if TheFrontEnd:IsRelativeNavigation() then
+	if self:IsRelativeNavigation() then
 		-- On gamepad, trigger the game starting
 		self:OnContinueClicked()
 	else
@@ -270,12 +275,11 @@ function CharacterSelectionScreen:OnClickCharacterDelete(button, slot, idx)
 		local mcb = MultiCallback()
 
 		-- Don't leave last selected slot dangling.
-		if TheSaveSystem.about_players:GetValue("last_selected_slot") == slot then
-			TheSaveSystem.about_players:SetValue("last_selected_slot", nil)
+		if TheSaveSystem:GetLastSelectedCharacterSlot() == slot then
+			TheSaveSystem:SetLastSelectedCharacterSlot(nil, mcb:AddInstance())
 		end
-		TheSaveSystem.about_players:Save(mcb:AddInstance())
 
-		TheSaveSystem.character_slots[slot]:Erase(mcb:AddInstance())
+		TheSaveSystem:ErasePlayerSave(slot, mcb)
 
 		mcb:WhenAllComplete(function()
 			-- refresh the screen
@@ -290,9 +294,11 @@ function CharacterSelectionScreen:OnClickCharacterDelete(button, slot, idx)
 		TheFrontEnd:PopScreen() -- confirmation message box
 	end
 
-	local confirmation = ConfirmDialog(nil, nil, true,
+	local confirmation = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 			STRINGS.CHARACTER_SELECTOR.DELETE_TITLE,
-			string.format(STRINGS.CHARACTER_SELECTOR.DELETE, idx),
+			STRINGS.CHARACTER_SELECTOR.DELETE:subfmt({
+				slot_number = idx,
+			}),
 			STRINGS.CHARACTER_SELECTOR.DELETE_SUBTITLE
 		)
 		:SetYesButton(STRINGS.CHARACTER_SELECTOR.DELETE_CONFIRM, delete_character)
@@ -306,19 +312,17 @@ end
 
 function CharacterSelectionScreen:OnCharacterFocusChanged(has_focus, button, slot, idx)
 
-	if not TheFrontEnd:IsRelativeNavigation() then return self end
+	if not self:IsRelativeNavigation() then return self end
 
-	
 	-- Unselect other puppets
 	for k, btn in ipairs(self.choose_character_buttons.children) do
 		btn:SetSelected(button == btn)
-		
-		
 	end
 	if has_focus then
-		--self:PlayEmote(button)
+		self:PlayEmote(button)
+		self.selected_slot = slot
 	end
-	self.selected_slot = slot
+
 end
 
 function CharacterSelectionScreen:CreateNewCharacter(new_character_data)
@@ -339,22 +343,22 @@ function CharacterSelectionScreen:OnContinueClicked()
 
 	local on_close = function()
 		local character_save = TheSaveSystem:LoadCharacterAsPlayerID(self.selected_slot, self.ownerPlayerID)
-		local player_data = character_save and character_save:GetValue("player")
 
+		local player_entity_data = character_save and character_save:GetValue("player")
 		owner:PushEvent("character_slot_changed")
 		TheFrontEnd:PopScreen(self)
 
-		if player_data ~= nil then
-			owner:SetPersistData(player_data)
-			owner:PostLoadWorld(player_data)
+		if player_entity_data ~= nil then
+			owner:SetPersistData(player_entity_data)
+			owner:PostLoadWorld(player_entity_data)
+			TheLog.ch.Audio:print("***///***charcterselectionscreen.lua: Stopping character creation music.")
+			TheAudio:StopPersistentSound(audioid.persistent.ui_music)
 			if self.on_close_cb then
 				self.on_close_cb(self.owner)
 			end
 		else
-			local new_character_data = self.character_slot_puppets[self.selected_slot+1].puppet.components.charactercreator:OnSave()
+			local new_character_data = self.character_slot_puppets[self.selected_slot].puppet.components.charactercreator:SaveToTable()
 			self:CreateNewCharacter(new_character_data)
-			-- TODO: Pop up character customization screen after this if the slot you just picked has no player data.
-			-- Remove character customization step from intro quest flow
 			-- Change game startup flow to not even try to enter the game until both of these steps are done.
 		end
 	end
@@ -394,7 +398,7 @@ function CharacterSelectionScreen:ShowCharacters()
 	-- Activate most recent slot late so the select emote is fully visible (not
 	-- playing during AnimateIn).
 	local button = lume.match(self.character_slot_puppets, function(btn)
-		return btn:IsEnabled() and btn.character_slot == TheSaveSystem.about_players:GetValue("last_selected_slot")
+		return btn:IsEnabled() and btn.character_slot == TheSaveSystem:GetLastSelectedCharacterSlot()
 	end)
 	if not button then
 		-- Can't select the most recent (maybe another player is using), so use first available.

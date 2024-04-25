@@ -5,6 +5,7 @@ local GameNode = require "questral.gamenode"
 local RotwoodActor = require "questral.game.rotwoodactor"
 local RotwoodInteractable = require "questral.game.rotwoodinteractable"
 local RotwoodLocation = require "questral.game.rotwoodlocation"
+local RotwoodPlayer = require "questral.game.rotwoodplayer"
 local biomes = require "defs.biomes"
 local kstring = require "util.kstring"
 local lume = require "util.lume"
@@ -85,25 +86,25 @@ function CastManager:__tostring()
     return string.format( "CastManager[%s %s]", self.inst, kstring.raw(self) )
 end
 
-function CastManager:AttachPlayer(player)
-	if not player:IsLocal() then return end
+function CastManager:AttachQuester(quester)
+	if not quester:IsLocal() then return end
 
-	local qc = player.components.questcentral
-	self.questcentrals[player] = qc
+	local qc = quester.components.questcentral
+	self.questcentrals[quester] = qc
 	self:AttachChild(qc)
 end
 
-function CastManager:DetachPlayer(player)
-	if not player:IsLocal() then return end
+function CastManager:DetachQuester(quester)
+	if not quester:IsLocal() then return end
 
-	local qc = player.components.questcentral
-	self.questcentrals[player] = nil
-	assert(not qc:IsActivated(), "QuestCentral should be inactive when it detaches the player.")
+	local qc = quester.components.questcentral
+	self.questcentrals[quester] = nil
+	assert(not qc:IsActivated(), "QuestCentral should be inactive when it detaches the quester.")
 	local is_child = qc:GetParent() == self
 	if is_child then -- might not have attached yet.
 		self:DetachChild(qc)
 	end
-	-- else: player was never fully created (probably player canceled selection).
+	-- else: quester was never fully created (probably quester canceled selection).
 end
 
 function CastManager:GetActivePlayers()
@@ -141,7 +142,7 @@ function CastManager:_RegisterEnemy(enemy)
 	local mon = self.enemynodes[enemy.prefab]
 	if mon and mon.is_reservation then
 		mon:FillReservation(enemy)
-		-- TODO(dbriscoe): What do we do if enemy dies?
+		-- TODO(quest): What do we do if enemy dies?
 	end
 
 	TheDungeon:PushEvent("player_seen", enemy)
@@ -201,7 +202,7 @@ end
 function CastManager:GetPlayerNode(player)
 	local actor = self.playernodes[player]
 	if not actor then
-		actor = RotwoodActor(player)
+		actor = RotwoodPlayer(player)
 		self.locations.current:AttachChild(actor)
 		self.playernodes[player] = actor
 	end
@@ -213,7 +214,7 @@ function CastManager:GetLocationActor(location_id)
 end
 
 function CastManager:AllocateEnemy(prefab_name)
-	-- TODO(dbriscoe): Consider handling enemies more generically so we don't
+	-- TODO(quest): Consider handling enemies more generically so we don't
 	-- need a new actor for each one (or keep around actors from old quests).
 	local enemy = self:_GetCastForPrefab(prefab_name, self.enemynodes)
 	enemy:SetHostile(true)
@@ -221,7 +222,7 @@ function CastManager:AllocateEnemy(prefab_name)
 end
 
 function CastManager:AllocateInteractable(prefab_name)
-	-- TODO(dbriscoe): Consider handling interactables more generically so we don't
+	-- TODO(quest): Consider handling interactables more generically so we don't
 	-- need a new actor for each one (or keep around actors from old quests).
 	local interactable = self:_GetInteractable(prefab_name)
 	return interactable

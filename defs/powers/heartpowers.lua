@@ -84,7 +84,7 @@ Power.AddHeartPower("owlitzer",
 
 	tuning = {
 		[Power.Rarity.COMMON] = { 
-			heal = StackingVariable(1):SetFlat() 
+			heal_on_enter = StackingVariable(1):SetFlat() 
 		},
 	},
 
@@ -92,7 +92,7 @@ Power.AddHeartPower("owlitzer",
 	{
 		["start_gameplay"] = function(pow, inst, data)
 			local power_heal = Attack(inst, inst)
-			power_heal:SetHeal(pow.persistdata:GetVar("heal"))
+			power_heal:SetHeal(pow.persistdata:GetVar("heal_on_enter"))
 			power_heal:SetSource(pow.def.name)
 			inst.components.combat:ApplyHeal(power_heal)
 
@@ -110,28 +110,35 @@ Power.AddHeartPower("bandicoot",
 	tuning =
 	{
 		[Power.Rarity.COMMON] = {
-			dodge_speed = StackingVariable(1):SetFlat(), --% distance further of dodge
+			roll_speed_bonus = StackingVariable(1):SetPercentage(),
 		},
 	},
 
-	on_add_fn = function(pow, inst)
-		if not pow.persistdata.did_init then
-			local dodge_mod = pow.persistdata:GetVar("dodge_speed")
-			inst.components.playerroller:AddDistanceMultModifier(pow.def.name, dodge_mod/100)
-			pow.persistdata.did_init = true
-		end
-	end,
-
 	on_stacks_changed_fn = function(pow, inst)
-		local dodge_mod = pow.persistdata:GetVar("dodge_speed")
-		inst.components.playerroller:AddDistanceMultModifier(pow.def.name, dodge_mod/100)
+		if pow.persistdata.init then
+			inst.components.playerroller:RemoveTicksMultModifier(pow.def.name)
+		end
+
+		pow.persistdata.init = true
+		local percent = pow.persistdata:GetVar("roll_speed_bonus")
+		inst.components.playerroller:AddTicksMultModifier(pow.def.name, -percent)
 	end,
 
 	on_remove_fn = function(pow, inst)
-		inst.components.playerroller:RemoveDistanceMultModifier(pow.def.name)
-		pow.persistdata.did_init = false
+		if pow.persistdata.init then
+			pow.persistdata.init = false
+			inst.components.playerroller:RemoveTicksMultModifier(pow.def.name)
+		end
 	end,
 })
+
+local function thatcher_GetBonusIFrames(pow, inst)
+	local percent = pow.persistdata:GetVar("percent_extra_iframes")
+	local normal_frames = inst.components.playerroller:GetIframes()
+	local bonus_frames = math.ceil(normal_frames * percent) -- ceil makes it so that each level gives at least 1f even for Light Dodge
+
+	return bonus_frames
+end
 
 Power.AddHeartPower("thatcher",
 {
@@ -142,26 +149,25 @@ Power.AddHeartPower("thatcher",
 	tuning =
 	{
 		[Power.Rarity.COMMON] = {
-			dodge_speed = StackingVariable(1):SetFlat(), --% distance further of dodge
+			percent_distance_bonus = StackingVariable(1):SetPercentage(), -- % multiplier of iframes
 		},
 	},
 
-	on_add_fn = function(pow, inst)
-		if not pow.persistdata.did_init then
-			local dodge_mod = pow.persistdata:GetVar("dodge_speed")
-			inst.components.playerroller:AddDistanceMultModifier(pow.def.name, dodge_mod/100)
-			pow.persistdata.did_init = true
-		end
-	end,
-
 	on_stacks_changed_fn = function(pow, inst)
-		local dodge_mod = pow.persistdata:GetVar("dodge_speed")
-		inst.components.playerroller:AddDistanceMultModifier(pow.def.name, dodge_mod/100)
+		if pow.persistdata.init then
+			inst.components.playerroller:RemoveDistanceMultModifier(pow.def.name)
+		end
+
+		pow.persistdata.init = true
+		local percent = pow.persistdata:GetVar("percent_distance_bonus")
+		inst.components.playerroller:AddDistanceMultModifier(pow.def.name, percent)
 	end,
 
 	on_remove_fn = function(pow, inst)
-		inst.components.playerroller:RemoveDistanceMultModifier(pow.def.name)
-		pow.persistdata.did_init = false
+		if pow.persistdata.init then
+			pow.persistdata.init = false
+			inst.components.playerroller:RemoveDistanceMultModifier(pow.def.name)
+		end
 	end,
 })
 -- heart features should generally be powers that allow the player to fine-tune how their character controls

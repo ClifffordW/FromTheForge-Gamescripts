@@ -49,13 +49,13 @@ local platform_overrides =
 	
 	ANDROID =
 	{
-		hide_vignette = true,
-		force_netbookmode = true,
+--		hide_vignette = true,		-- RM - Disabled because we should do a fresh analysis on performance
+--		force_netbookmode = true,	-- RM - Disabled because it causes Android to crash due to NULL-pointer to save-file.
 	},
 	IOS =
 	{
-		hide_vignette = true,
-		force_netbookmode = true,
+--		hide_vignette = true,		-- RM - Disabled because we should do a fresh analysis on performance
+--		force_netbookmode = true,	-- RM - Disabled because it (likely) causes iOS to crash like it did for Android.
 	},
 }
 

@@ -8,9 +8,9 @@ return {
     name_key="nod_cheerful",
   },
   group="PLAYER_EMOTE",
-  hidden=false,
+  
   locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  
+  
+  
 }

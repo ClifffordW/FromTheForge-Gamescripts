@@ -2,8 +2,8 @@
 return {
   __displayName="sound_cabbagerolls2",
   anim_events={
-    cabbagerolls_double_bank={
-      behavior={
+	cabbageroll4_bank={
+      cabbageroll2_behavior={
         done=true,
         events={
           { frame=20, name="sfx-footstep",},
@@ -16,7 +16,7 @@ return {
         done=true,
         events={ { frame=1, name="sfx-vo_pitched",}, { frame=9, name="sfx-footstep",},},
       },
-      combine={
+      cabbageroll2_combine={
         done=true,
         events={ { frame=1, name="sfx-bodyfall",}, { frame=4, name="sfx-vo_pitched",},},
       },
@@ -25,10 +25,10 @@ return {
         done=true,
         events={ { frame=1, name="sfx-vo_pitched",}, { frame=5, name="sfx-hit",},},
       },
-      hit_back_hold={ done=true, events={ { frame=0, name="sfx-knockdown",},},},
-      hit_back_pst={ done=true,},
-      hit_hold={ done=true, events={ { frame=0, name="sfx-hit",},},},
-      knockdown={ done=true, events={ { frame=1, name="sfx-knockdown",},},},
+      cabbageroll2_hit_back_hold={ done=true, events={ { frame=0, name="sfx-knockdown",},},},
+      cabbageroll2_hit_back_pst={ done=true,},
+      cabbageroll2_hit_hold={ done=true, events={ { frame=0, name="sfx-hit",},},},
+      cabbageroll2_knockdown={ done=true, events={ { frame=1, name="sfx-knockdown",},},},
       slam={
         done=true,
         events={
@@ -62,15 +62,15 @@ return {
       },
       throw_hold={ events={ { frame=1, name="sfx-hold",},},},
       turn_pre={ done=true,},
-      turn_pre_walk_pre={ done=true,},
+      turn_pre_cabbageroll2_walk_pre={ done=true,},
       turn_pst={ done=true,},
-      turn_pst_walk_pre={ done=true,},
-      walk_loop={
+      turn_pst_cabbageroll2_walk_pre={ done=true,},
+      cabbageroll2_walk_loop={
         done=true,
         events={ { frame=4, name="sfx-footstep",}, { frame=12, name="sfx-footstep",},},
       },
-      walk_pre={ done=true,},
-      walk_pst={ done=true,},
+      cabbageroll2_walk_pre={ done=true,},
+      cabbageroll2_walk_pst={ done=true,},
     },
   },
   prefab={ { prefab="cabbagerolls2",},},

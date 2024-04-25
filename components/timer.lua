@@ -245,7 +245,7 @@ function Timer:OnNetSerialize()
 	assert(timer_count < TimerCountMaxValue)
 	e:SerializeUInt(timer_count, TimerCountNrBits)
 	for name,timer in pairs(self.timers) do
-		e:SerializeString(name) -- TODO: networking2022, add timer names to network string registry at source locations
+		e:SerializeString(name) -- non-registry strings are not prevented from serializing but would be inefficient
 		e:SerializeBoolean(self:IsPaused(name))
 		local ticksremaining = timer.task and timer.task:GetTicksRemaining() or timer.ticksremaining
 		e:SerializeUInt(math.clamp(ticksremaining, 0, TimerTicksMaxValue), TimerTicksNrBits)

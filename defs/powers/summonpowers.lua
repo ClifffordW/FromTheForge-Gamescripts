@@ -1,3 +1,4 @@
+local EffectEvents = require("effectevents")
 local Power = require("defs.powers.power")
 local lume = require "util.lume"
 local monsterutil = require "util.monsterutil"
@@ -35,7 +36,7 @@ function Power.AddSummonPlayerPower(id, data)
 	Power.AddPower(Power.Slots.SUMMON, id, "summon_powers", data)
 end
 
-Power.AddPowerFamily("SUMMON")
+Power.AddPowerFamily("SUMMON", nil, 8)
 
 Power.AddSummonPower("summon_slots",
 {
@@ -145,7 +146,7 @@ Power.AddSummonPower("summon_on_kill",
 					victim = victim,
 					summon_types = { "minion_melee", "minion_ranged" }
 				})
-				-- inst:PushEvent("used_power", pow.def) -- TODO jambell, only send this on successful summon? might need to do summon logic in here
+				-- inst:PushEvent("used_power", pow.def) -- TODO, only send this on successful summon? might need to do summon logic in here
 			end
 		end,
 	},
@@ -156,7 +157,9 @@ local function spawn_charmed_creature(summoner, prefab, x, z)
 		local creature = SpawnPrefab(prefab, summoner)
 		if creature then
 			creature.Transform:SetPosition(x, 0, z)
-			monsterutil.CharmMonster(creature, summoner)
+			creature.summoner = summoner
+			creature:Face(summoner)
+			creature:SetPermanentFlags(PFLAG_CHARMED) -- this will call monsterutil.CharmMonster(creature) through HandlePermanentFlagChange
 			return creature
 		else
 			TheLog.ch.SummonPowers:printf("spawn_charmed_creature failed (network support not implemented)")
@@ -167,7 +170,9 @@ end
 Power.AddSummonPower("charm_on_kill",
 {
 	tags = { },
-	prefabs = { },
+	prefabs = {
+		GroupPrefab("charm"),
+	},
 	tuning = { [Power.Rarity.LEGENDARY] = {} },
 
 	on_add_fn = function(pow, inst)
@@ -181,7 +186,6 @@ Power.AddSummonPower("charm_on_kill",
 	event_triggers =
 	{
 		["kill"] = function(pow, inst, data)
-			-- TODO: networking2022, this needs to be rewritten to support networking
 			local victim = data.attack:GetTarget()
 
 			if pow.mem.charmedcreature == nil and victim:HasTag("mob") and not victim:HasTag("nocharm") then
@@ -225,7 +229,21 @@ Power.AddSummonPower("summon_wormhole_on_dodge",
 	-- IDEA: moving through the portal makes that entity's next hit deal extra damage.
 {
 	tags = { },
-	prefabs = { "summoned_wormhole", "fx_portal", "electric_chain_arc_sml", "electric_chain_arc_lrg", "fx_portal_pulse_in3", "fx_portal_pulse_out3", "fx_portal_pulse_in2", "fx_portal_pulse_out2", "fx_portal_pulse_in", "fx_portal_pulse_out" },
+	prefabs = {
+		"summoned_wormhole",
+		GroupPrefab("portals"), -- should have all the fx
+		"fx_portal",
+		"electric_chain_arc_sml",
+		"electric_chain_arc_lrg",
+		"fx_portal_jump_sml",
+		"fx_portal_jump_lrg",
+		"fx_portal_pulse_in3",
+		"fx_portal_pulse_out3",
+		"fx_portal_pulse_in2",
+		"fx_portal_pulse_out2",
+		"fx_portal_pulse_in",
+		"fx_portal_pulse_out"
+	},
 	tuning = { [Power.Rarity.LEGENDARY] = {} },
 
 	on_add_fn = function(pow, inst)
@@ -347,6 +365,98 @@ Power.AddSummonPower("summon_wormhole_on_dodge",
 			end
 		end,
 	},
+})
+
+local function OnTeleportStart(inst)
+	inst.Physics:SetEnabled(false)
+	inst.HitBox:SetEnabled(false)
+	inst:Hide()
+	if inst.sg then
+		inst.sg:Pause("teleporting")
+	end
+	inst.AnimState:Pause("teleporting")
+	inst:PushEvent("teleport_start", inst:GetPosition())
+
+	-- TODO: Would be nice to help the player execute moves they input while 'in between' -- increase the controlqueuetick count and try to execute their attack on the way out.
+	-- if inst.components.playercontroller ~= nil then
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", TELEPORT_DELAY)
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("lightattack", TELEPORT_DELAY)
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("dodge", TELEPORT_DELAY)
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("potion", TELEPORT_DELAY)
+	-- end
+end
+
+local function OnTeleportEnd(inst)
+	inst.Physics:SetEnabled(true)
+	inst.HitBox:SetEnabled(true)
+	if inst.sg then
+		inst.sg:Resume("teleporting")
+	end
+	inst.AnimState:Resume("teleporting")
+	inst:Show()
+	inst:PushEvent("teleport_end")
+
+	-- TODO: Would be nice to help the player execute moves they input while 'in between' -- increase the controlqueuetick count and try to execute their attack on the way out.
+	-- Not currently working because TryNextQueuedAction doesn't always seem to respect the state we're in... probably needs more carefully written player stategraphs.
+	-- if inst.components.playercontroller ~= nil then
+	-- 	SGPlayerCommon.Fns.TryNextQueuedAction(inst)
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", nil)
+	-- 	inst.components.playercontroller:OverrideCdontrolQueueTicks("lightattack", nil)
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
+	-- 	inst.components.playercontroller:OverrideControlQueueTicks("potion", nil)
+	-- end
+end
+
+
+Power.AddSummonPower("teleporting",
+{
+	tuning = { [Power.Rarity.COMMON] = { delay = 25, } },
+
+	show_in_ui = false,
+	can_drop = false,
+	selectable = false,
+
+	on_add_fn = function(pow, inst)
+		pow.mem.delay = pow.persistdata:GetVar("delay")
+		OnTeleportStart(inst)
+
+		local grounded_position = inst:GetPosition()
+		grounded_position.y = 0
+		ParticleSystemHelper.MakeOneShotAtPosition(grounded_position, "fx_portal_burst_in", 1, inst)
+		EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_portal_pulse_in2" } )
+		EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_portal_pulse_in" } )
+	end,
+
+	on_update_fn = function(pow, inst)
+		if not pow.mem.delay then
+			pow.mem.delay = 0
+		end
+
+		pow.mem.delay = pow.mem.delay - 1
+		if pow.mem.delay <= 0 then
+			inst.components.powermanager:RemovePower(pow.def)
+		end
+	end,
+
+	on_remove_fn = function(pow, inst)
+		OnTeleportEnd(inst)
+
+		EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_portal_pulse_out3" } )
+		EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_portal_pulse_out2" } )
+		EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_portal_pulse_out" } )
+
+		local grounded_position = inst:GetPosition()
+		grounded_position.y = 0
+		ParticleSystemHelper.MakeOneShotAtPosition(grounded_position, "fx_portal_burst_out", 1, inst)
+	end,
+
+	on_net_serialize_fn = function(pow, e)
+		e:SerializeUInt(pow.mem.delay, 5)
+	end,
+
+	on_net_deserialize_fn = function(pow, e)
+		pow.mem.delay = e:DeserializeUInt(5)
+	end,
 })
 
 -- TODO: re-enable after making work with new, non-stacks system

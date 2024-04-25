@@ -1,9 +1,26 @@
+-- Ensure this file can be loaded from a vanilla lua instance.
+require "util.strict" -- for dbassert
+
+require "class"
+require "constants"
+require "json"
+require "util.kstring"
+
 local Enum = require "util.enum"
+local LANGUAGE = require "languages.langs"
 local Platform = require 'util.platform'
-local audioid = require "defs.sound.audioid"
+local Settings = require "settings.settings"
 local cursor = require "content.cursor"
 local fmodtable = require "defs.sound.fmodtable"
 local lume = require "util.lume"
+
+
+local gamesettings = {}
+
+function gamesettings.CreateSettingsInstance()
+	return Settings("gamesettings")
+end
+
 
 local function OnRawKey(key, down, settings)
 	if not down then
@@ -20,16 +37,12 @@ local function OnRawKey(key, down, settings)
 	end
 end
 
-local function RegisterGameSettings(settings)
+function gamesettings.RegisterGameSettings(settings)
 	-- Incrementing version will reset all settings to defaults. Only increment
 	-- when previous data will be *invalid* and not for new settings!
-	settings:SetVersion(5)
+	settings:SetVersion(2)
 
 	-- Gameplay
-	settings:RegisterSetting("gameplay.dialog_speed")
-		:SetDefault(1)
-	settings:RegisterSetting("gameplay.animation_speed")
-		:SetDefault(1)
 	settings:RegisterSetting("gameplay.vibration")
 		:SetDefault(true)
 		:SetApplyFunction(function(value)
@@ -43,17 +56,18 @@ local function RegisterGameSettings(settings)
 
 	-- Graphics
 	settings:RegisterSetting("graphics.fullscreen")
-		:SetDefault(false)
+		:SetDefault(true)
 		:SetLocalToCurrentMachine()
 		:SetApplyFunction(function(value)
 			settings:GetGraphicsOptions()
 				:SetFullScreen(value)
 		end)
-	settings:RegisterSetting("graphics.resolution")
-		:SetDefault({ w = 3840, h = 2160, })
+	settings:RegisterSetting("graphics.max_y_resolution")
+		:SetDefault(RES_Y)  -- Default to max
 		:SetLocalToCurrentMachine()
-	settings:RegisterSetting("graphics.cursor") -- TODO: Unused. Remove when we bump version next.
-		:SetDefault(0)
+		:SetApplyFunction(function(value)
+			TheSim:SetMaxYResolution(value)
+		end)
 	settings:RegisterSetting("graphics.cursor_size")
 		:SetEnum(cursor.Size)
 		:SetDefault(cursor.Size.s.normal)
@@ -78,8 +92,8 @@ local function RegisterGameSettings(settings)
 		:SetApplyFunction(function(value)
 			settings:GetGraphicsOptions():SetShadowsEnabled(value)
 		end)
-	settings:RegisterSetting("graphics.lod")
-		:SetDefault(1)
+	--~ settings:RegisterSetting("graphics.lod")
+	--~ 	:SetDefault(1)
 	settings:RegisterSetting("graphics.screen_shake")
 		:SetDefault(true)
 		:SetQueriedInsteadOfApplied()
@@ -162,7 +176,7 @@ local function RegisterGameSettings(settings)
 		:SetDefault(true)
 		:SetQueriedInsteadOfApplied()
 	settings:RegisterSetting("audio.master_volume")
-		:SetDefault(80)
+		:SetDefault(100)
 		:SetApplyFunction(function(value)
 			local vol = value/100
 			TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.userVolume_Master_g, vol)
@@ -170,26 +184,46 @@ local function RegisterGameSettings(settings)
 	settings:RegisterSetting("audio.music_volume")
 		:SetDefault(100)
 		:SetApplyFunction(function(value)
-			local vol = value/100
+			local vol = value/125
 			TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.userVolume_Music_g, vol)
 		end)
 	settings:RegisterSetting("audio.ambience_volume")
-		:SetDefault(80)
+		:SetDefault(100)
 		:SetApplyFunction(function(value)
-			local vol = value/100
+			local vol = value/125
 			TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.userVolume_Ambience_g, vol)
 		end)
 	settings:RegisterSetting("audio.voice_volume")
 		:SetDefault(100)
 		:SetApplyFunction(function(value)
-			local vol = value/100
+			local vol = value/125
 			TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.userVolume_Voice_g, vol)
 		end)
 	settings:RegisterSetting("audio.sfx_volume")
 		:SetDefault(100)
 		:SetApplyFunction(function(value)
-			local vol = value/100
+			local vol = value/125
 			TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.userVolume_SFX_g, vol)
+		end)
+
+	settings:RegisterSetting("network.streamer_mode")
+		:SetDefault(false)
+		:SetApplyFunction(function(value)
+			-- Update all UI that uses the joincode:
+			if TheGlobalInstance then
+				TheGlobalInstance:PushEvent("ui_streamer_mode_changed")
+			end
+		end)
+
+	-- deprecated
+	settings:RegisterSetting("gameplay.constrain_mouse")
+		:SetDefault(true)
+		:SetApplyFunction(function() end) -- handled in native
+
+	settings:RegisterSetting("gameplay.mouse_constrain_mode")
+		:SetDefault(MOUSE_CONSTRAIN_MODE.FULLSCREEN)
+		:SetApplyFunction(function(value)
+			TheSim:SetMouseConstrainMode(value)
 		end)
 
 	-- Controls
@@ -294,7 +328,6 @@ local function RegisterGameSettings(settings)
 	--~ 	return b
 	--~ end
 
-	local LANGUAGE = require "languages.langs"
 	settings:RegisterSetting("language.selected")
 		:SetDefault(LANGUAGE.ENGLISH)
 		:SetApplyFunction(function(lang_id)
@@ -307,9 +340,44 @@ local function RegisterGameSettings(settings)
 	-- Other
 	settings:RegisterSetting("other.metrics")
 		:SetDefault(true)
+		:SetApplyFunction(function() end) -- handled in native
 
 
-	TheInput:AddKeyHandler(function(key, down) OnRawKey(key, down, settings) end)
+	TheInput:AddKeyHandler(function(key, down, input_device) OnRawKey(key, down, settings) end)
 end
 
-return RegisterGameSettings
+function gamesettings.LoadSettings(settings)
+	gamesettings.RegisterGameSettings(settings)
+	settings:Load(function(success) print("Load gamesettings, result = "..tostring(success)) end)
+
+	if Platform.IsBigPictureMode() then
+		TheGameSettings:Set("graphics.fullscreen", true)
+	end
+end
+
+-- Never call CreateReadOnlySettings from the normal lua sim: it's for the
+-- minimal startup lua state in gamesettings.cpp.
+function gamesettings.CreateReadOnlySettings(save_data)
+	-- Mock globals accessed on Register/Load that we don't need. We don't need
+	-- to apply settings to these this early in boot.
+	local noop = function() end
+	Controls = require 'input.controls' -- bindings
+	EntityScript = Class() -- tableutil
+	TheAudio = {
+		PlayPersistentSound = noop,
+		SelectOutputDeviceById = noop,
+		SetGlobalParameter = noop,
+		GetOutputDevices = noop,
+	}
+	TheInput = {
+		AddKeyHandler = noop,
+	}
+	TheLog = require("util.logchan")()
+
+	local settings = gamesettings.CreateSettingsInstance()
+	gamesettings.RegisterGameSettings(settings)
+	-- Caller will use settings:LoadAsReadOnly to load data.
+	return settings
+end
+
+return gamesettings

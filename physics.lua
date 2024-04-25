@@ -79,7 +79,9 @@ function MakeObstacleMonsterPhysics(inst, size)
 	phys:CollidesWith(COLLISION.ITEMS)
 	phys:CollidesWith(COLLISION.CHARACTERS)
 	phys:CollidesWith(COLLISION.GIANTS)
-	phys:SetRoundRect(size)
+	if size > 0 then -- TODO: Apply this to the other Make Physics functions.
+		phys:SetRoundRect(size)
+	end
 	return phys
 end
 

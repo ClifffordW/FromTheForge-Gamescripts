@@ -23,8 +23,6 @@ function shopitems.ConfigureShopItem(inst, opts)
 
 	-- These have hitboxes so that they can do an 'attack' which clears out props / traps as they land.
 	-- They cannot be attacked.
-	-- TODO @chrisp #soleoccupant - The SoleOccupant component does something similar, perhaps less effectively as it 
-	-- does not work for network MP. Consolidate.
 	inst:AddComponent("combat")
 	inst.entity:AddHitBox()
 	inst:AddComponent("hitbox")

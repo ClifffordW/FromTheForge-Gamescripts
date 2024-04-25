@@ -68,11 +68,11 @@ local states =
 			aoe_obj.Transform:SetPosition(pos.x, 0, pos.z)
 			aoe_obj:Setup(inst.owner)
 
-			local splat_fx = SpawnPrefab("fx_battoad_projectile_land", inst)
+			--[[local splat_fx = SpawnPrefab("fx_acid_projectile_land", inst)
 			splat_fx:SetupDeathFxFor(inst)
 
-			local splat_ground_fx = SpawnPrefab("fx_battoad_projectile_land_ground", inst)
-			splat_ground_fx:SetupDeathFxFor(inst)
+			local splat_ground_fx = SpawnPrefab("fx_acid_projectile_land_ground", inst)
+			splat_ground_fx:SetupDeathFxFor(inst)]]
 		end,
 
 		timeline =

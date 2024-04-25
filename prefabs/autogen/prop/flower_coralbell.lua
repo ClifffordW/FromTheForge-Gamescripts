@@ -3,7 +3,7 @@ return {
   __displayName="flower_coralbell",
   brightness=-12.0,
   gridsize={ { h=2, w=2,},},
-  group="forest_props",
+  group="construct_decor",
   looping=true,
   parallax={
     { anim="front", dist=-0.5,},

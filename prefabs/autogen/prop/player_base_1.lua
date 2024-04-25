@@ -4,6 +4,9 @@ return {
   clickable=true,
   gridsize={ { expand={ bottom=2,}, h=3, w=3,},},
   group="town_buildings",
+  hostspawn=true,
+  isminimal=true,
+  networked=1,
   parallax={
     { anim="chair_front", dist=-0.8, shadow=true,},
     { anim="chair_back", dist=-0.6, shadow=true,},
@@ -15,7 +18,6 @@ return {
   parallax_use_baseanim_for_idle=true,
   physicssize=1.5,
   physicstype="dec",
-  placer=true,
   script="buildings",
   script_args={
     skins={ groups={  }, sets={  }, symbols={  },},

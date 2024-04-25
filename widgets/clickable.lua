@@ -20,13 +20,8 @@ local Clickable = Class(Widget, function(self, name)
     self.animate_scale = nil
     self.animate_scales = true
 
-	self.gainfocus_sound = fmodtable.Event.hover
+	self:SetGainFocusSound(fmodtable.Event.hover)
 end)
-
-function Clickable:SetGainFocusSound(sound)
-	self.gainfocus_sound = sound
-	return self
-end
 
 function Clickable:SetOnHighlight( fn )
     self.hilite_fn = fn
@@ -49,10 +44,18 @@ function Clickable:UpdateHighlight()
     end
     if self.animate_scales then
         if self.down then
-            if self.animate_scale_out_timing then self:ScaleTo(nil,self.scale_down,self.animate_scale_out_timing) else self:SetScale(self.scale_down) end
+            if self.animate_scale_out_timing then
+                self:ScaleTo(nil,self.scale_down,self.animate_scale_out_timing)
+            else
+                self:SetScale(self.scale_down)
+            end
             self:SetBGMult(0.9)
-        elseif self.hover or self.selected or self.focus then
-            if self.animate_scale_in_timing then self:ScaleTo(nil,self.scale_hover,self.animate_scale_in_timing) else self:SetScale(self.scale_hover) end
+        elseif self.hover or self.selected or self:HasFocus() then
+            if self.animate_scale_in_timing then
+                self:ScaleTo(nil,self.scale_hover,self.animate_scale_in_timing)
+            else
+                self:SetScale(self.scale_hover)
+            end
             self:SetBGMult(1.8)
         else
             if self.animate_scale_out_timing then self:ScaleTo(nil,self.scale_normal,self.animate_scale_out_timing) else self:SetScale(self.scale_normal) end
@@ -60,7 +63,7 @@ function Clickable:UpdateHighlight()
         end
     end
     if self.hilite_fn then
-        self.hilite_fn( self.down, self.hover, self.selected, self.focus )
+        self.hilite_fn( self.down, self.hover, self.selected, self:HasFocus() )
     end
 end
 
@@ -71,10 +74,13 @@ function Clickable:SetBGMult( m )
     return self
 end
 
-function Clickable:OnControl(controls, down, device_type, trace, device_id)
-	if Clickable._base.OnControl(self, controls, down, device_type, trace, device_id) then return true end
+function Clickable:OnControl(controls, down, trace)
+	if Clickable._base.OnControl(self, controls, down, trace) then return true end
 
-	if not self:IsEnabled() or not self.focus then return false end
+	if not self:IsEnabled() or not self:HasFocus() then return false end
+
+	local input_device = controls:GetDevice()
+	local device_type, device_id = input_device:unpack()
 
 	if controls:Has(self.control) then
 
@@ -155,6 +161,7 @@ function Clickable:OnUpdate(dt)
 	end
 end
 
+-- To scale up/down on focus, see SetScales.
 function Clickable:SetOnGainFocus( fn )
     self.ongainfocus = fn
     return self
@@ -167,10 +174,6 @@ end
 
 function Clickable:OnGainFocus()
 	Clickable._base.OnGainFocus(self)
-
-	if self:IsEnabled() and TheFrontEnd:GetFadeLevel() <= 0 and self.gainfocus_sound ~= nil then
-		TheFrontEnd:GetSound():PlaySound(self.gainfocus_sound)
-	end
 
     self:UpdateHighlight()
 
@@ -220,9 +223,7 @@ end
 
 function Clickable:OnUnselect()
 	if self:IsEnabled() then
-		if not self.focus then
-			self:LoseFocus()
-		end
+		self:RefreshFocus()
 	else
 		self:OnDisable()
 	end
@@ -287,11 +288,6 @@ end
 
 function Clickable:SetOnDown( fn )
 	self.ondown = fn
-	return self
-end
-
-function Clickable:SetOnUp( fn )
-	self.onup = fn
 	return self
 end
 

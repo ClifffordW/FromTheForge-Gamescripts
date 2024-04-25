@@ -24,4 +24,10 @@ local ActionAvailableIcon = Class(Widget, function(self)
 		}))
 end)
 
+function ActionAvailableIcon:ChangeToStar()
+	self.icon:SetTexture("images/ui_ftf/star.tex")
+		:SetSize(40, 40)
+	return self
+end
+
 return ActionAvailableIcon

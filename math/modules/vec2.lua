@@ -398,6 +398,20 @@ function vec2.from_table(v, a)
 	return v
 end
 
+--- Assign a vec2 from values.
+--
+-- Simplify caching vectors instead of creating per-frame:
+--   pos:assign_values(widget:GetPosition())
+-- @tparam vec2 a Vector to receive the values
+-- @tparam x,y the component values
+-- @treturn vec2
+function vec2.assign_values(v, x, y)
+	assert(x and y, "from_values: Wrong argument type for right hand operand.")
+	v.x = x
+	v.y = y
+	return v
+end
+
 vec2_mt.__index    = vec2
 vec2_mt.__tostring = vec2.to_string
 

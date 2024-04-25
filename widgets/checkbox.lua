@@ -18,12 +18,8 @@ local CheckBox = Class(Button, function(self, color_palette)
 		self.palette.bg_focus = self.palette.primary_active
 		self.palette.bg_unselected = deepcopy(self.palette.primary_inactive)
 		self.palette.bg_unselected.a = 0.25
-		self.palette.handle_enabled = self.palette.primary_inactive
-		self.palette.handle_disabled = deepcopy(self.palette.primary_inactive)
-		self.palette.handle_disabled.a = 0.30
+
 	end
-	-- We modify this color, so ensure we don't touch the original.
-	self.palette.handle_disabled = deepcopy(self.palette.handle_disabled)
 
 	-- Text is next to (not on top of) bg, so use match colours.
 	self.textcolour = self.palette.primary_inactive
@@ -74,10 +70,10 @@ function CheckBox:SetIsSlider(should_slide)
 		if self.w <= self.h then
 			self.w = self.h * 2
 		end
-		self.palette.handle_disabled.a = 0.30
+		self.toggle_bg:Show()
 	else
 		self.w = self.h
-		self.palette.handle_disabled.a = 0.1
+		self.toggle_bg:Hide()
 	end
 	self:SetSize(self.w, self.h)
 	return self
@@ -113,7 +109,7 @@ end
 
 function CheckBox:SetValue(state, silent)
 	self.state = state
-	self:OnFocusChange(self.focus)
+	self:OnFocusChange(self:HasFocus())
 	self:Layout()
 
 	if not silent and self.onchangedfn then
@@ -133,33 +129,33 @@ end
 
 function CheckBox:OnGainHover()
     CheckBox._base.OnGainHover(self)
-	self:OnFocusChange(self.focus)
+	self:OnFocusChange(self:HasFocus())
 end
 
 function CheckBox:OnLoseHover()
     CheckBox._base.OnLoseHover(self)
-	self:OnFocusChange(self.focus)
+	self:OnFocusChange(self:HasFocus())
 end
 
 function CheckBox:OnGainFocus()
     CheckBox._base.OnGainFocus(self)
-	self:OnFocusChange(self.focus)
+	self:OnFocusChange(self:HasFocus())
 end
 
 function CheckBox:OnLoseFocus()
     CheckBox._base.OnLoseFocus(self)
-	self:OnFocusChange(self.focus)
+	self:OnFocusChange(self:HasFocus())
 end
 
 function CheckBox:Enable()
     CheckBox._base.Enable(self)
-    self:OnFocusChange(self.focus)
+    self:OnFocusChange(self:HasFocus())
     return self
 end
 
 function CheckBox:Disable()
     CheckBox._base.Disable(self)
-    self:OnFocusChange(self.focus)
+    self:OnFocusChange(self:HasFocus())
     return self
 end
 
@@ -168,26 +164,27 @@ function CheckBox:Layout()
 	local side = "center"
 	if self.is_slider then
 		side = self.state and "right" or "left"
+		self.toggle_handle:SetTexture("images/ui_ftf_options/toggle_button.tex")
+	else
+		self.toggle_handle:SetTexture(self.state and "images/ui_ftf_options/checkbox_checked.tex" or "images/ui_ftf_options/checkbox_unchecked.tex")
 	end
 	self.toggle_handle:LayoutBounds(side, "center", self.toggle_bg)
 	return self
 end
 
-function CheckBox:_GetHandleColor()
-	if self.state then
-		return self.palette.handle_enabled
+function CheckBox:_UpdateTextColour(r,g,b,a)
+	self._base._UpdateTextColour(self, r, g, b, a)
+	if self.toggle_handle then
+		self.toggle_handle:SetMultColor(r,g,b,a)
 	end
-	return self.palette.handle_disabled
+	return self
 end
 
 function CheckBox:OnFocusChange(hasFocus)
-	local handle_color = self:_GetHandleColor()
 	if hasFocus then
-		self.toggle_bg:TintTo(nil, self.palette.bg_focus, 0.2, easing.inOutQuad)
-		self.toggle_handle:TintTo(nil, handle_color, 0.2, easing.inOutQuad)
+		self.toggle_bg:SetMultColor(self.palette.bg_focus)
 	else
-		self.toggle_bg:TintTo(nil, self.palette.bg_unselected, 0.4, easing.inOutQuad)
-		self.toggle_handle:TintTo(nil, handle_color, 0.4, easing.inOutQuad)
+		self.toggle_bg:SetMultColor(self.palette.bg_unselected)
 	end
 	return self
 end

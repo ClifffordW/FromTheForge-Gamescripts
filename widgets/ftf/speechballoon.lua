@@ -69,9 +69,9 @@ local SpeechBalloon = Class(Clickable, function(self)
 
 	self.horizontalContentPadding = 150
 	self.top_padding = 60
-	self.bottom_padding = 60
+	self.bottom_padding = 100
 	self.minWidth = 500  -- adapts to TitleText
-	self.maxWidth = 1400 -- hard limit
+	self.maxWidth = 1200 -- hard limit
 	self.max_text_width = self.maxWidth - self.horizontalContentPadding*2
 	self.minHeight = 380
 
@@ -122,6 +122,7 @@ local SpeechBalloon = Class(Clickable, function(self)
 		:SetGlyphColor(UICOLORS.SPEECH_TEXT)
 		:LeftAlign()
 		:SetAutoSize(self.max_text_width)
+		:OverrideLineHeight(FONTSIZE.SPEECH_TEXT * 1.05)
 	-- To display other stuff than text
 	self.content_widget = self.contents_column:AddChild(Widget())
 		:SetName("Content widget")
@@ -149,6 +150,7 @@ local SpeechBalloon = Class(Clickable, function(self)
 		:SetHiddenBoundingBox(true)
 
 	-- Animate it
+	self.target_scale = 1
 	local speed = 0.24
 	local amplitude = -6
 	self.continue_arrow:RunUpdater(
@@ -173,7 +175,7 @@ SpeechBalloon.CONTROL_MAP =
 		fn = function(self)
 			-- Bit of a hack, we should revise this once the demo is done
 			local is_gamepad = ThePlayer.components.playercontroller:GetLastInputDeviceType() == "gamepad"
-			if not self:IsEnabled() or not self.focus or is_gamepad then 
+			if not self:IsEnabled() or not self:HasFocus() or is_gamepad then 
 				return false 
 			end
 
@@ -184,15 +186,15 @@ SpeechBalloon.CONTROL_MAP =
 	}
 }
 
-function SpeechBalloon:OnControl(controls, down)
-	if not self:IsEnabled() or not self.focus then return false end
+function SpeechBalloon:OnControl(controls, down, ...)
+	if not self:IsEnabled() or not self:HasFocus() then return false end
 	if down and controls:Has(Controls.Digital.MENU_ACCEPT) then
 		if self.fsonclick ~= nil then
 			self.fsonclick()
 			return true
 		end
 	end
-	return SpeechBalloon._base.OnControl(self, controls, down)
+	return SpeechBalloon._base.OnControl(self, controls, down, ...)
 end
 
 function SpeechBalloon:GetText()
@@ -219,6 +221,10 @@ end
 function SpeechBalloon:SnapSpool()
 	self.content_text:SnapSpool()
 	return self
+end
+
+function SpeechBalloon:SetTargetScale(scale)
+	self.target_scale = scale
 end
 
 function SpeechBalloon:PopulateHireRequirements(recipe, player)
@@ -326,10 +332,10 @@ function SpeechBalloon:_Layout()
 
 	-- If there's a click interaction, make the bubble react to hover
 	if self.inputs_hint_text:IsShown() then
-		self:SetScales(1, 1.03, 1.1, 0.15)
+		self:SetScales(1*self.target_scale, 1.03*self.target_scale, 1.1*self.target_scale, 0.15*self.target_scale)
 	else
 		-- Remove hover effect
-		self:SetScales(1, 1, 1, nil)
+		self:SetScales(1*self.target_scale, 1*self.target_scale, 1*self.target_scale, nil)
 	end
 
 	-- Size up the background
@@ -386,7 +392,7 @@ function SpeechBalloon:PrepareAnimation()
 
 	self.bubble:SetMultColorAlpha(0)
 	self.bubble:SetPosition(0, -140)
-	self.bubble:SetScale(1, 0.6)
+	self.bubble:SetScale(1*self.target_scale, 0.6*self.target_scale)
 	self.name_block:SetMultColorAlpha(0)
 	self.bubble_arrow:SetMultColorAlpha(0)
 
@@ -407,7 +413,7 @@ function SpeechBalloon:AnimateIn(onDoneFn, callbackDelay)
 	-- Move and fade in the content and the arrow
 	animationParallel:Add(Updater.Ease(function(v) self.bubble:SetMultColorAlpha(v) end, 0, 1, 0.2, easing.inOutQuad))
 	animationParallel:Add(Updater.Ease(function(v) self.bubble:SetPosition(0, v) end, -70, 0, 0.5, easing.outElasticSpeechBubble))
-	animationParallel:Add(Updater.Ease(function(v) self.bubble:SetScale(1, v) end, 0.6, 1, 0.2, easing.inOutQuad))
+	animationParallel:Add(Updater.Ease(function(v) self.bubble:SetScale(1*self.target_scale, v*self.target_scale) end, 0.6, 1, 0.2, easing.inOutQuad))
 
 	if self.name_block:IsShown() then
 		animationParallel:Add(Updater.Series{
@@ -448,6 +454,13 @@ function SpeechBalloon:CreateAnimateOut()
 			-- Updater.Ease(function(v) self.bubble:SetPosition(0, v) end,    0, -70, 0.5, easing.outElasticSpeechBubble),
 			-- Updater.Ease(function(v) self.bubble:SetScale(1, v) end,       1, 0.6, 0.2, easing.inOutQuad),
 		})
+end
+
+function SpeechBalloon:SetIsInteractable(interactable)
+	self:SetSaturation(interactable and 1 or 0.8)
+		:SetTargetScale(interactable and 1 or 0.9)
+
+	self.contents_column:SetMultColorAlpha(interactable and 1 or 0.75)
 end
 
 return SpeechBalloon

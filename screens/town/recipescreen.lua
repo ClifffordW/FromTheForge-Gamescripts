@@ -96,7 +96,7 @@ RecipeScreen.CONTROL_MAP =
 			table.insert(right, loc.format(LOC"UI.CONTROLS.PREV_TAB", Controls.Digital.MENU_TAB_PREV))
 		end,
 		fn = function(self)
-			-- TODO(dbriscoe): POSTVS I think we should disable TabGroup and
+			-- TODO(ui): POSTVS I think we should disable TabGroup and
 			-- all the tabs when animating.
 			if not self.recipeDetailsPanel:_IsAnimating() then
 				self.craftingPanel:NextTab(-1)

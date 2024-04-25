@@ -685,6 +685,15 @@ function AddImguiTestSection_ImguiLuaProxy()
             table.insert(arr, math.sin(v))
         end
         ui:PlotLines("Curve", "", arr)
+
+        local data = { -- from critchance_i_data
+            {0,    0},
+            {0.25, 0.5},
+            {0.50, 0.75},
+            {0.75, 0.85},
+            {1.00, 1},
+        }
+        progress = ui:DrawPiecewiseFn("PiecewiseFn", data, progress)
     end
 
     if ui:CollapsingHeader("Color") then

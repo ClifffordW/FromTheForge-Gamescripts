@@ -1,3 +1,6 @@
+local Pool = require "util.pool"
+
+
 local coroutine = coroutine
 
 local Task = Class(function(self, ...)
@@ -12,7 +15,7 @@ end)
 
 function Task:GetTicksRemaining()
 	local t = (self.targettick or math.huge) - GetTick()
-	-- networking2022, victorc - figure out why net serialization of timers calls this when targettick has expired
+	-- networking2022, figure out why net serialization of timers calls this when targettick has expired
 	if t < 0 then
 		TheLog.ch.Task:printf("Task:GetTicksRemaining() prevented from returning negative value: %d", t)
 	end
@@ -55,7 +58,7 @@ local TaskScheduler = Class( function(self)
 	self.numtasks = 0
 	self.numthreads = 0
 	self.tickwaiters = {}
-	self.waiterspool = SimpleTablePool()
+	self.waiterspool = Pool.SimpleTablePool()
 end)
 
 Scheduler = TaskScheduler()

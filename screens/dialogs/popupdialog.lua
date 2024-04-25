@@ -9,7 +9,7 @@ local PopupDialog = Class(Screen, function(self, id, controller, blocksScreen)
 
 	self.controller = controller
 	self.blocksScreen = blocksScreen == nil and true or blocksScreen
-	-- TODO(dbriscoe): blocksScreen should proably set is_overlay
+	-- TODO(ui): blocksScreen should proably set is_overlay
 
 	-- Background fade out everything
 	if self.blocksScreen then

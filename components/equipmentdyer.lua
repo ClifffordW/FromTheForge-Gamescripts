@@ -14,21 +14,11 @@ end)
 -- 	return owner.components.unlocktracker:IsCosmeticUnlocked(name, "PLAYER_BODYPART")
 -- end
 
--- function EquipmentDyer:IsBodyPartPurchased(name, owner)
--- 	owner = owner or self.inst
--- 	return owner.components.unlocktracker:IsCosmeticPurchased(name, "PLAYER_BODYPART")
--- end
-
 function EquipmentDyer:IsDyeEquipped(armour_slot, armour_set, name)
 	local slot_dyes = self.applied_dyes[armour_slot]
 	local equipped_dye = slot_dyes and slot_dyes[armour_set]
 	return equipped_dye == name
 end
-
--- function EquipmentDyer:IsColorPurchased(name, owner)
--- 	owner = owner or self.inst
--- 	return owner.components.unlocktracker:IsCosmeticPurchased(name, "PLAYER_COLOR")
--- end
 
 function EquipmentDyer:GetActiveDye(armour_slot, armour_set)
 	local slot_dyes = self.applied_dyes[armour_slot]

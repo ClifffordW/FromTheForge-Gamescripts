@@ -18,6 +18,7 @@ local Difficulty = Enum{
 
 local Reward = Enum{
 	'none',
+	'material',    -- a package of monster dropped materials
 	'coin',        -- konjur
 	'plain',       -- player power
 	'small_token', -- normal crafting mat
@@ -44,6 +45,7 @@ local TrivialRoom = Enum{
 	"powerupgrade",
 	"resource",
 	"market",
+	"metaunlock",
 
 	"mystery", -- a mystery room can be any room, but is typically a Wanderer or Ranger room
 	"wanderer", -- these rooms are not typically placed into a dungeon specifically, just appear via a mystery
@@ -58,7 +60,7 @@ local RoomType = Enum(table.appendarrays({}, EnemyRoom:Ordered(), TrivialRoom:Or
 
 -- Here's the format of a mapgen "biome":  {{{1
 --   demo = {
---   	forbidden_keys = { "wf_blah" }, <-- If this forbidden_key is unlocked by the world, this mapgen will not be selected.
+--   	forbidden_world_flags = { "wf_blah" }, <-- If this forbidden_world_flags is unlocked by the world, this mapgen will not be selected.
 --   	enforce_difficulty_ramp = true, <-- Optional, defaults to false.
 --   	branchdist = {
 --			-- [number of exits] = weight, <-- Controls how frequently we choose each number of exits.
@@ -216,7 +218,7 @@ local mapgen = {
 		treemon_forest = {
 			branchdist = {
 				[1] = 3,
-				[2] = 2, --JAMBELL: possibly, increase to increase likelihood of 2-branches
+				[2] = 2, -- possibly, increase to increase likelihood of 2-branches
 				[3] = 1,
 			},
 			dimensions = {
@@ -242,6 +244,7 @@ local mapgen = {
 						monster = 1,
 					},
 					reward = {
+						material = 1,
 						coin = 1,
 						plain = 1,
 						small_token = 1
@@ -272,6 +275,7 @@ local mapgen = {
 					reward = {
 						coin = 10,
 						plain = 10,
+						material = 1,
 						small_token = 1,
 					},
 					difficulty_distribution = {
@@ -289,6 +293,7 @@ local mapgen = {
 					reward = {
 						coin = 10,
 						plain = 10,
+						material = 1,
 						small_token = 1,
 					},
 					difficulty_distribution = {
@@ -313,6 +318,18 @@ local mapgen = {
 					},
 				},
 				['8-8'] = {
+					roomtype = {
+						metaunlock = 1,
+					},
+					reward = {
+						plain = 1, --ignored
+					},
+					difficulty_distribution = {
+						easy = 1, --ignored
+					},
+					join_all_branches = true,
+				},
+				['9-9'] = {
 					-- Miniboss at halfway point.
 					roomtype = {
 						miniboss = 1,
@@ -325,7 +342,7 @@ local mapgen = {
 					},
 					join_all_branches = true, -- Only show a single miniboss.
 				},
-				['9-9'] = {
+				['10-10'] = {
 					--  Give a small token.
 					roomtype = {
 						monster = 1,
@@ -333,6 +350,7 @@ local mapgen = {
 					},
 					reward = {
 						small_token = 1, -- higher chance of soul after miniboss
+						material = 1,
 						plain = 0.001, -- in case we get easy
 					},
 					difficulty_distribution = {
@@ -341,7 +359,7 @@ local mapgen = {
 						hard = 5,
 					},
 				},
-				['10-11'] = {
+				['11-12'] = {
 					roomtype = {
 						monster = 10,
 						potion = 5,
@@ -359,7 +377,7 @@ local mapgen = {
 						hard = 5,
 					},
 				},
-				['12-14'] = {
+				['13-15'] = {
 					roomtype = {
 						monster = 10,
 						mystery = 1,
@@ -370,13 +388,14 @@ local mapgen = {
 						plain = 200,
 						fabled = 200,
 						small_token = 10, -- small_token = 100, -- Removing this because snooze don't work with these rewards, so them being this likely means we get flooded.
+						material = 10,
 					},
 					difficulty_distribution = {
 						medium = 10,
 						hard = 10,
 					},
 				},
-				['15-15'] = {
+				['16-16'] = {
 					-- Choice before boss.
 					force_all_roomtypes = true,
 					roomtype = {
@@ -411,6 +430,7 @@ local mapgen = {
 					powerupgrade = 3,
 					mystery = 2,
 					small_token = 3,
+					material = 3,
 				},
 				-- Room will not be seen again until we've seen this many
 				-- options (seen, not entered).
@@ -420,16 +440,17 @@ local mapgen = {
 					powerupgrade = 4,
 					mystery = 2,
 					small_token = 4,
+					material = 4,
 				},
 			},
 		},
 
 		treemon_forest_tutorial1 = {
-			forbidden_keys = { "wf_first_miniboss_seen" },
+			forbidden_player_flags = { "pf_first_miniboss_seen" },
 			enforce_difficulty_ramp = true, -- optional, defaults to false
 			branchdist = {
 				[1] = 3,
-				[2] = 2, --JAMBELL: possibly, increase to increase likelihood of 2-branches
+				[2] = 2, -- possibly, increase to increase likelihood of 2-branches
 				[3] = 0,
 			},
 			dimensions = {
@@ -490,10 +511,19 @@ local mapgen = {
 					forced_encounter = "tutorial4",
 				},
 				['5-5'] = {
-					-- Guarantee a potion before the miniboss in the tutorial.
 					roomtype = {
-						quest = 1,
-						potion = 1
+						powerupgrade = 1,
+					},
+					reward = {
+						plain = 1, --ignored
+					},
+					difficulty_distribution = {
+						easy = 1, --This difficulty affects how much loot is dropped.
+					},
+				},
+				['6-6'] = {
+					roomtype = {
+						metaunlock = 1,
 					},
 					reward = {
 						plain = 1, --ignored
@@ -501,8 +531,9 @@ local mapgen = {
 					difficulty_distribution = {
 						easy = 1, --ignored
 					},
+					join_all_branches = true,
 				},
-				['6-6'] = {
+				['7-7'] = {
 					-- Miniboss is a bit earlier than other mapgens.
 					roomtype = {
 						miniboss = 1,
@@ -515,9 +546,9 @@ local mapgen = {
 					},
 					join_all_branches = true, -- Only show a single miniboss.
 				},
-				-- Once a player beats this room, once they die they are into TUTORIAL2.
-				['7-7'] = {
+				['8-8'] = {
 					-- In the tutorial, guarantee a small token after the miniboss
+					-- TODO: Consider a designed tutorial encounter here.
 					roomtype = {
 						monster = 1,
 					},
@@ -526,49 +557,58 @@ local mapgen = {
 					},
 					difficulty_distribution = {
 						hard = 1, -- Hard room to provide challenge and pressure back towards the town -- this room will only be hard in THIS mapgen... if they die here they go to tutorial2 where this is easier.
-								  -- Tuning note: this may be too difficult! If they go "UGH THIS GAME IS HARD! NO WAY I CAN DO THAT" then this should be bumped down to medium.
-								  -- Try it out and see.
 					},
 				},
-
-				-- The above mapgen is what most new players will spend their first few runs in.
-				-- From this point on, if a player gets here on their first run, they're doing QUITE well.
-				-- So I'm going to crank up the difficulty a little bit to apply some pressure to start the Town Loop.
-				-- Apply that pressure to make it more likely that the player gets sent back to town.
-
-				['8-11'] = {
+				['9-10'] = {
 					roomtype = {
-						monster = 10,
-						mystery = 1,
+						monster = 1,
 					},
 					reward = {
+						small_token = 1,
+						material = 1,
 						plain = 1,
-						fabled = 1,
 					},
 					difficulty_distribution = {
-						medium = 2,
+						easy = 2,
+						medium = 10,
 						hard = 5,
+					},
+				},
+				['11-11'] = {
+					force_all_roomtypes = true, -- if this isn't set, then it can sometimes add two branches with the same option
+					roomtype = {
+						wanderer = 1,
+					},
+					reward = {
+						plain = 0.001, -- ignored
+					},
+					difficulty_distribution = {
+						easy = 1,
+						medium = 5,
+						hard = 5, -- Pressure more so it's more likely they die.
 					},
 				},
 				['12-14'] = {
 					roomtype = {
 						monster = 10,
-						mystery = 1,
+						quest = 1,
+						powerupgrade = 10,
 					},
 					reward = {
-						coin = 1,
-						small_token = 1,
+						coin = 100,
+						plain = 200,
+						small_token = 10,
+						material = 10,
 					},
 					difficulty_distribution = {
-						hard = 1,
+						medium = 10,
+						hard = 10,
 					},
 				},
 				['15-15'] = {
 					-- Choice before boss.
 					force_all_roomtypes = true,
 					roomtype = {
-						powerupgrade = 1,
-						potion = 1,
 						market = 1,
 					},
 					reward = {
@@ -579,12 +619,13 @@ local mapgen = {
 					},
 				},
 			},
+
 			roomlimit = {
 				max_seen = {
-					potion = 3,
+					potion = 0, -- no potion in the first tutorial
 					resource = 1,
-					powerupgrade = 3,
-					mystery = 4,
+					powerupgrade = 2,
+					mystery = 2,
 				},
 				max_visited = {
 					quest = 1,
@@ -592,8 +633,8 @@ local mapgen = {
 				snooze_depth = {
 					potion = 3,
 					resource = 2,
-					powerupgrade = 3,
-					mystery = 2,
+					powerupgrade = 4,
+					mystery = 3,
 				},
 				snooze_seen = {
 					potion = 4,
@@ -612,19 +653,16 @@ local mapgen = {
 
 			-- NOTE: they will definitely have an Entrance room Power at this point.
 
-			-- Once we defeat the miniboss, we move onto Tutorial3.
-
 			-- The goal for this tutorial is to get them to:
 			-- 		Get a corestone
 			--		Have enough konjur to upgrade a power,
 			--		While still having enough left to buy stuff from the market.
 
-			-- Breaks out of this once they've seen the market.
-
-			forbidden_keys = { "wf_seen_npc_market_merchant", },
+			-- Breaks out of this once they've seen the market.. they don't actually have to beat the miniboss to get past this, so they won't spend TOO much time here.
+			forbidden_player_flags = { "pf_seen_room_market", },
 			branchdist = {
 				[1] = 3,
-				[2] = 2, --JAMBELL: possibly, increase to increase likelihood of 2-branches
+				[2] = 2, -- possibly, increase to increase likelihood of 2-branches
 				[3] = 1,
 			},
 			intro_rooms = 1,
@@ -640,7 +678,7 @@ local mapgen = {
 						-- Force an actual helpful choice until they've killed the miniboss.
 						[Equipment.Slots.HEAD] = "basic",
 						[Equipment.Slots.BODY] = "blarmadillo",
-						[Equipment.Slots.WAIST] = "yammo",
+						[Equipment.Slots.WAIST] = "cabbageroll",
 					},
 				},
 			},
@@ -709,6 +747,21 @@ local mapgen = {
 					},
 				},
 				['7-7'] = {
+					-- Give them a meta progress room AFTER the miniboss, where they likely spent corestones.
+					-- We would rather they spend corestones on market this early, so don't show it to them before market.
+					-- Let them start to make the connection between the XP widget and the widget on this building.
+					roomtype = {
+						metaunlock = 1,
+					},
+					force_all_roomtypes = true,
+					reward = {
+						plain = 1,
+					},
+					difficulty_distribution = {
+						medium = 1,
+					},
+				},
+				['8-8'] = {
 					-- Miniboss still a bit earlier
 					roomtype = {
 						miniboss = 1,
@@ -721,11 +774,13 @@ local mapgen = {
 					},
 					join_all_branches = true, -- Only show a single miniboss.
 				},
-				['8-8'] = {
-					-- in the tutorial, guarantee a small token after the miniboss (after this is grabbed, this mapgen is turned off)
+				['9-9'] = {
+					-- in the tutorial, guarantee a small token after the miniboss
 					roomtype = {
 						monster = 1,
+						potion = 1,
 					},
+					force_all_roomtypes = true,
 					reward = {
 						small_token = 1,
 					},
@@ -734,11 +789,10 @@ local mapgen = {
 					},
 				},
 				-- TUTORIAL MAPGEN ENDS FOR NOW:
-				-- From here on out, it is equivalent to a normal mapgen:
-				['9-11'] = {
+				-- From here on out, it is roughly equivalent to a normal mapgen:
+				['10-12'] = {
 					roomtype = {
 						monster = 10,
-						potion = 5,
 						powerupgrade = 5,
 						mystery = 1,
 						quest = 1,
@@ -755,7 +809,7 @@ local mapgen = {
 						hard = 5,
 					},
 				},
-				['12-14'] = {
+				['13-15'] = {
 					roomtype = {
 						monster = 10,
 						mystery = 1,
@@ -770,12 +824,10 @@ local mapgen = {
 						hard = 10,
 					},
 				},
-				['15-15'] = {
-					-- Choice before boss.
+				['16-16'] = {
+					-- Don't unlock potion rooms yet.
 					force_all_roomtypes = true,
 					roomtype = {
-						powerupgrade = 1,
-						potion = 1,
 						market = 1,
 					},
 					reward = {
@@ -788,7 +840,7 @@ local mapgen = {
 			},
 			roomlimit = {
 				max_seen = {
-					potion = 3,
+					potion = 0,
 					resource = 1,
 					powerupgrade = 3,
 					mystery = 4,
@@ -817,10 +869,10 @@ local mapgen = {
 
 			-- They are building up gear to beat miniboss at this point.
 
-			forbidden_keys = { "wf_first_miniboss_defeated" },
+			forbidden_player_flags = { "pf_first_miniboss_defeated" },
 			branchdist = {
 				[1] = 3,
-				[2] = 3, --JAMBELL: possibly, increase to increase likelihood of 2-branches
+				[2] = 3, -- possibly, increase to increase likelihood of 2-branches
 				[3] = 1,
 			},
 			dimensions = {
@@ -835,7 +887,7 @@ local mapgen = {
 						-- Force an actual helpful choice until they've killed the miniboss.
 						[Equipment.Slots.HEAD] = "basic",
 						[Equipment.Slots.BODY] = "blarmadillo",
-						[Equipment.Slots.WAIST] = "yammo",
+						[Equipment.Slots.WAIST] = "cabbageroll",
 					},
 				},
 			},
@@ -944,6 +996,18 @@ local mapgen = {
 					},
 				},
 				['8-8'] = {
+					roomtype = {
+						metaunlock = 1,
+					},
+					force_all_roomtypes = true,
+					reward = {
+						plain = 1,
+					},
+					difficulty_distribution = {
+						medium = 1,
+					},
+				},
+				['9-9'] = {
 					-- Miniboss at halfway point.
 					roomtype = {
 						miniboss = 1,
@@ -956,7 +1020,7 @@ local mapgen = {
 					},
 					join_all_branches = true, -- Only show a single miniboss.
 				},
-				['9-9'] = {
+				['10-10'] = {
 					-- in the tutorial, guarantee a small token after the miniboss (after this is grabbed, this mapgen is turned off)
 					roomtype = {
 						monster = 1,
@@ -970,7 +1034,7 @@ local mapgen = {
 				},
 				-- TUTORIAL MAPGEN ENDS FOR NOW:
 				-- From here on out, it is equivalent to a normal mapgen:
-				['10-11'] = {
+				['11-12'] = {
 					roomtype = {
 						monster = 10,
 						potion = 5,
@@ -989,7 +1053,7 @@ local mapgen = {
 					},
 				},
 				-- Introduce small tokens to the mix randomly
-				['12-14'] = {
+				['13-15'] = {
 					roomtype = {
 						monster = 10,
 						mystery = 1,
@@ -1006,7 +1070,7 @@ local mapgen = {
 						hard = 10,
 					},
 				},
-				['15-15'] = {
+				['16-16'] = {
 					-- Choice before boss.
 					force_all_roomtypes = true,
 					roomtype = {
@@ -1071,11 +1135,11 @@ mapgen.biomes.treemon_forest_hard.room_distribution['6-6'].difficulty_distributi
 
 	-- ALL MYSTERIES:
 		treemon_forest_tutorial1 = {
-			forbidden_keys = { "wf_town_has_armorsmith" },
+			forbidden_world_flags = { "wf_town_has_armorsmith" },
 			enforce_difficulty_ramp = true, -- optional, defaults to false
 			branchdist = {
 				[1] = 3,
-				[2] = 2, --JAMBELL: possibly, increase to increase likelihood of 2-branches
+				[2] = 2, -- possibly, increase to increase likelihood of 2-branches
 				[3] = 1,
 			},
 			intro_rooms = 3,
@@ -1352,9 +1416,9 @@ end
 
 -- TODO(mapgen): Once worldgen is figured out and we want to use these
 -- worlds, we can make custom tuning for them.
-assert(not mapgen.biomes.kanft_swamp, "Remove this block when we setup mapgen for this location.")
-mapgen.biomes.kanft_swamp = mapgen.biomes.treemon_forest
-mapgen.biomes.kanft_swamp_hard = mapgen.biomes.treemon_forest_hard
+assert(not mapgen.biomes.bandi_swamp, "Remove this block when we setup mapgen for this location.")
+mapgen.biomes.bandi_swamp = mapgen.biomes.treemon_forest
+mapgen.biomes.bandi_swamp_hard = mapgen.biomes.treemon_forest_hard
 assert(not mapgen.biomes.thatcher_swamp, "Remove this block when we setup mapgen for this location.")
 mapgen.biomes.thatcher_swamp = mapgen.biomes.treemon_forest
 mapgen.biomes.thatcher_swamp_hard = mapgen.biomes.treemon_forest_hard

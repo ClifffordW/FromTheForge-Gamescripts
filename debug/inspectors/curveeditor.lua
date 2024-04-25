@@ -24,9 +24,10 @@ CurveEditor.PANEL_HEIGHT = 990
 local default_curve = CreateCurve()
 
 function CurveEditor:AddEditableOptions(ui, params)
-	if not next(params) then
+	params.curve = params.curve or {}
+	if not next(params.curve) then
 		for i,val in ipairs(default_curve) do
-			params[i] = val
+			params.curve[i] = val
 		end
 	end
 
@@ -42,7 +43,7 @@ function CurveEditor:AddEditableOptions(ui, params)
 	--~ 	params.max = val
 	--~ end
 
-	local changed = ui:CurveEditor("Curve", params)
+	local changed = ui:CurveEditor("Curve", params.curve)
 	if changed then
 		self:SetDirty()
 	end

@@ -106,20 +106,20 @@ function RadioButtons:UpdateButtons()
         if buttonwidget.button:IsEnabled() == true then
 
             -- clear these, they may get set again if there is a next widget
-            buttonwidget.button:SetFocusChangeDir(MOVE_RIGHT, nil)
-            buttonwidget.button:SetFocusChangeDir(MOVE_DOWN, nil)
+            buttonwidget.button:SetFocusChangeDir(FocusMove.s.right, nil)
+            buttonwidget.button:SetFocusChangeDir(FocusMove.s.down, nil)
 
             if prevenabled ~= nil then
                 if self.horizontal_layout then
-                    buttonwidget.button:SetFocusChangeDir(MOVE_LEFT, prevenabled.button)
-                    prevenabled.button:SetFocusChangeDir(MOVE_RIGHT, buttonwidget.button)
+                    buttonwidget.button:SetFocusChangeDir(FocusMove.s.left, prevenabled.button)
+                    prevenabled.button:SetFocusChangeDir(FocusMove.s.right, buttonwidget.button)
                 else
-                    buttonwidget.button:SetFocusChangeDir(MOVE_UP, prevenabled.button)
-                    prevenabled.button:SetFocusChangeDir(MOVE_DOWN, buttonwidget.button)
+                    buttonwidget.button:SetFocusChangeDir(FocusMove.s.up, prevenabled.button)
+                    prevenabled.button:SetFocusChangeDir(FocusMove.s.down, buttonwidget.button)
                 end
             else
-                buttonwidget.button:SetFocusChangeDir(MOVE_LEFT, nil)
-                buttonwidget.button:SetFocusChangeDir(MOVE_UP, nil)
+                buttonwidget.button:SetFocusChangeDir(FocusMove.s.left, nil)
+                buttonwidget.button:SetFocusChangeDir(FocusMove.s.up, nil)
             end
 
             -- Make the currently selected radio the focus_forward target. This might not be good general-case,

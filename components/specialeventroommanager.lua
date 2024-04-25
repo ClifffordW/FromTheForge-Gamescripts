@@ -12,7 +12,7 @@ local krandom = require "util.krandom"
 local lume = require "util.lume"
 
 
---[[ TODO @jambell here are the param values for the music states
+--[[ TODO here are the param values for the music states
 intro - 0
 countdown (silence) - 1
 minigame music - 2
@@ -170,7 +170,7 @@ function SpecialEventRoomManager:ScoreWrapUp()
 end
 
 function SpecialEventRoomManager:EvaluatePerformance()
-	--JAMBELL(todo): support multiplayer
+	--TODO: support multiplayer
 	local type = self.selectedevent.score_type
 	local thresholds = self.selectedevent.score_thresholds
 
@@ -195,7 +195,7 @@ function SpecialEventRoomManager:EvaluatePerformance()
 end
 
 function SpecialEventRoomManager:DoResultsSequence()
-	--TODO(jambell): support multiplayer
+	--TODO: support multiplayer
 	local type = self.selectedevent.score_type
 	local result = self.rewardtier_achieved
 	local secondsbetween = 3

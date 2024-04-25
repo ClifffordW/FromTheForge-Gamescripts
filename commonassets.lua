@@ -1,3 +1,5 @@
+local Enum = require "util.enum"
+
 SPACING =
 {
     TITLE_DESC = 4, -- Vertical offset for text right under a title
@@ -16,21 +18,18 @@ FONT_SIZE =
     ITEM_NAME = 44, -- Selectable item/location/agent's name on screen, title font
     ITEM_SUBTITLE = 32, -- Descriptor/type/category/rarity for an item, title font. Also list-item title, if it has no subtitle
     ITEM_DESC = 28, -- Info text about an item, body font. List-item text
-    
+
     BUTTON = 26, -- Icon/panel buttons
     SMALL_TEXT = 24, -- Small block of text, body font. For labels, small buttons, counters
     BODY_TEXT = 28, -- Regular block of text, body font
 }
 
-SCREEN_MODE = MakeEnum{ "MONITOR", "SMALL", "TV" }
-SCREEN_MODE_INDEX = {
-    [1] = SCREEN_MODE.MONITOR,
-    [2] = SCREEN_MODE.TV,
-    [3] = SCREEN_MODE.SMALL
-}
+-- Use ScreenMode:FromId() instead of the old SCREEN_MODE_INDEX.
+ScreenMode = Enum{ "MONITOR", "SMALL", "TV" }
+
 LAYOUT_SCALE =
 {
-    [SCREEN_MODE.MONITOR] = 1,
-    [SCREEN_MODE.TV] = 1.3,
-    [SCREEN_MODE.SMALL] = 1.4,
+    [ScreenMode.s.MONITOR] = 1,
+    [ScreenMode.s.TV] = 1.3,
+    [ScreenMode.s.SMALL] = 1.4,
 }

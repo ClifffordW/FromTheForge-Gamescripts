@@ -28,9 +28,9 @@ local ManageMPScreen = Class(Screen, function(self)
 		:SetSize(2500,1600)
 
 
-	local joincode = TheNet:GetJoinCode()
+	local joincode = GetNetworkJoinCode()
 	if joincode ~= "" then
-		self.online_joincode_button = self:AddChild(templates.Button(STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL .. " " .. joincode))
+		self.online_joincode_button = self:AddChild(templates.Button(STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL:subfmt({ joincode = joincode })))
 			:SetToolTip(STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL_TOOLTIP)
 			:SetUncolored()	
 			:SetAnchors("left", "top")
@@ -39,6 +39,13 @@ local ManageMPScreen = Class(Screen, function(self)
 			:SetOnClick(function() self:OnClickOnlineJoinCode() end)
 			:LayoutBounds("left", "top", self.bg)
 			:Offset(20,-20)
+
+		self.online_joincode_button.on_streamer_mode_changed = function()
+			local newstr = STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL:subfmt({ joincode = GetNetworkJoinCode() })
+			self.online_joincode_button:SetText(newstr);
+		end
+
+		self.online_joincode_button.inst:ListenForEvent("ui_streamer_mode_changed", self.online_joincode_button.on_streamer_mode_changed, TheGlobalInstance)
 	end
 
 
@@ -102,6 +109,7 @@ end)
 function ManageMPScreen:SetOwningPlayer(player)
 	ManageMPScreen._base.SetOwningPlayer(self, player)
 	self.controls:SetOwningPlayer(player)
+	return self
 end
 
 function ManageMPScreen:OnClickOnlineJoinCode()

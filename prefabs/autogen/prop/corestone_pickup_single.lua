@@ -8,7 +8,6 @@ return {
   clickable=true,
   glowcolor="3700FFFF",
   group="shop_items",
-  hostspawn=true,
   looping=true,
   networked=1,
   nonpersist=true,

@@ -9,6 +9,7 @@ local prefabs =
 local assets =
 {
 	Asset("ANIM", "anim/fx_player_projectile_shotput.zip"),
+	Asset("ANIM", "anim/fx_shadow.zip"),
 }
 
 local ATTACKS =
@@ -31,7 +32,12 @@ local function OnRemoveEntity(inst)
 	end
 end
 
-local function SetOwner(inst, owner)
+-- TODO: shotput - figure out why owner may be valid but inventory may not be configured in a network scenario
+local function CanSetOwner(owner)
+	return owner and owner:IsValid() and owner.components.inventory:GetEquippedWeaponDef() ~= nil
+end
+
+local function SetOwner(inst, owner, params)
 	inst.owner = owner
 	inst.source = owner
 
@@ -41,6 +47,14 @@ local function SetOwner(inst, owner)
 	inst.components.playerhighlight:SetPlayer(inst.owner, true) -- start hidden
 
 	inst.AnimState:SetBuild(inst.build)
+
+	if params and params.lobbed then
+		inst.attacktype = "skill"
+		inst.sg:GoToState("lobbed", owner)
+	else
+		inst.attacktype = "heavy_attack" -- always starts this way
+		inst.sg:GoToState("thrown")
+	end
 end
 
 local TESTMODE = false
@@ -50,9 +64,6 @@ local TESTMODE_DELAY = 5
 -- params is normally empty but if the owner is nil, it is an unresolved GUID that is a pending spawn
 -- in that case, params.ownerEntityID will be present
 local function HandleSetup(inst, owner, params)
-	inst.attacktype = "heavy_attack" -- always starts this way
-	inst.sg:GoToState("thrown")
-
 	if TESTMODE and owner and not owner:IsLocal() then
 		TheLog.ch.Shotput:printf("Test: Delayed setup of owner %s by %d frames...", owner, TESTMODE_DELAY)
 		local xowner = owner
@@ -71,23 +82,52 @@ local function HandleSetup(inst, owner, params)
 		inst._onentityspawned = function(_inst, xowner)
 			if xowner:IsNetworked() and xowner.Network:GetEntityID() == params.ownerEntityID then
 				TheLog.ch.Shotput:printf("%s resolving owner %s EntityID %d", inst, xowner, params.ownerEntityID)
-				SetOwner(inst, xowner)
+
+				local last_test_mode
+				if TESTMODE then
+					last_test_mode = TESTMODE
+					TESTMODE = false
+				end
+
+				HandleSetup(inst, xowner, params)
+
+				if last_test_mode then
+					TESTMODE = last_test_mode
+				end
+
 				inst:RemoveEventCallback("entity_spawned", inst._onentityspawned, TheGlobalInstance)
 				inst._onentityspawned = nil
 			end
 		end
 		inst:ListenForEvent("entity_spawned", inst._onentityspawned, TheGlobalInstance)
 		return
+	elseif not CanSetOwner(owner) then
+		TheLog.ch.ShotputSpam:printf("Deferred owner setup required")
+		inst.deferred_setup_tries = 0
+		inst.deferred_setup_task = inst:DoPeriodicTask(0, function(_inst)
+			if not CanSetOwner(owner) then
+				inst.deferred_setup_tries = inst.deferred_setup_tries + 1
+				return
+			end
+
+			SetOwner(inst, owner, params)
+
+			TheLog.ch.ShotputSpam:printf("Deferred owner setup successful after %d tries", inst.deferred_setup_tries)
+			inst.deferred_setup_task:Cancel()
+			inst.deferred_setup_task = nil
+			inst.deferred_setup_tries = nil
+		end)
+		return
 	end
 
-	SetOwner(inst, owner)
+	SetOwner(inst, owner, params)
 end
 
-local function Setup(inst, owner)
+local function Setup(inst, owner, params)
 	if inst:ShouldSendNetEvents() then
-		TheSim:HandleEntitySetup(inst.GUID, owner.GUID)
+		TheSim:HandleEntitySetup(inst.GUID, owner.GUID, params)
 	else
-		HandleSetup(inst, owner)
+		HandleSetup(inst, owner, params)
 	end
 end
 
@@ -119,6 +159,8 @@ local function fn(prefabname)
 	inst:AddComponent("shotputeffects")
 	inst:AddComponent("playerhighlight")
 
+	inst:AddComponent("hitflagmanager") -- For detecting whether attackers should actually hit the ball or not -- if it's too high, most attacks shouldn't hit it.
+
 	inst.serializeHistory = true	-- Tell it to precisely sync animations
 
 	-- Entity lifetime function configuration
@@ -130,7 +172,7 @@ local function fn(prefabname)
 
 	inst:AddTag("shotput")
 	inst:AddTag("nokill")
-
+	inst:AddTag("ACID_IMMUNE")
 
 	local attack = ATTACKS.THROW
 	inst.damage_mod = attack.DMG_NORM or 1

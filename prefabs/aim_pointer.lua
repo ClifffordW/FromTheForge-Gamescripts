@@ -24,7 +24,12 @@ local function CreatePointer()
 end
 
 local function OnRemove(inst)
-	inst.pointer:Remove()
+	if inst.pointer then
+		if inst.pointer:IsValid() then
+			inst.pointer:Remove()
+		end
+		inst.pointer = nil
+	end
 end
 
 local function fn(prefabname)

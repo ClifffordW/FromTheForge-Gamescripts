@@ -76,6 +76,60 @@ local HitBoxShape =
 	Circle = 1,
 }
 
+local TestHitbox = Class(function(self)
+	self.shape = HitBoxShape.Beam
+
+	-- Beam parameters
+	self.beam =
+	{
+		start_dist = 0,
+		end_dist = 1,
+		thickness = 1,
+		zoffset = 0,
+
+		start_dist_z = -1,
+		end_dist_z = 1,
+	}
+
+	-- Circle parameters
+	self.circle =
+	{
+		distance = 0,
+		rotation = 0,
+		radius = 1,
+		zoffset = 0,
+	}
+end)
+
+local function ProcessHitboxes(self)
+	self.testhitboxes = {}
+	for _, hitbox_data in ipairs(HitBoxManager.queue) do
+		local newHitbox = TestHitbox()
+		table.insert(self.testhitboxes, newHitbox)
+
+		if (type(hitbox_data[5]) == "function" and HitBoxManager.fntoname[hitbox_data[5]] == "TriggerBeam") or
+			(type(hitbox_data[6]) == "function" and HitBoxManager.fntoname[hitbox_data[6]] == "TriggerBeam") then
+			newHitbox.shape = HitBoxShape.Beam
+			newHitbox.beam.start_dist = hitbox_data[2]
+			newHitbox.beam.end_dist = hitbox_data[3]
+			newHitbox.beam.thickness = hitbox_data[4]
+			newHitbox.beam.zoffset = type(hitbox_data[5]) == "number" and hitbox_data[5] or 0
+
+			local scale = self.testprefab.Transform:GetScale() or 1
+			newHitbox.beam.start_dist_z = (-newHitbox.beam.thickness + (newHitbox.beam.zoffset or 0)) * scale
+			newHitbox.beam.end_dist_z = (newHitbox.beam.thickness + (newHitbox.beam.zoffset or 0)) * scale
+		elseif (type(hitbox_data[5]) == "function" and HitBoxManager.fntoname[hitbox_data[5]] == "TriggerCircle") or
+			(type(hitbox_data[6]) == "function" and HitBoxManager.fntoname[hitbox_data[6]] == "TriggerCircle") then
+			newHitbox.shape = HitBoxShape.Circle
+
+			newHitbox.circle.distance = hitbox_data[2]
+			newHitbox.circle.rotation = hitbox_data[3]
+			newHitbox.circle.radius = hitbox_data[4]
+			newHitbox.circle.zoffset = type(hitbox_data[5]) == "number" and hitbox_data[5] or 0
+		end
+	end
+end
+
 local Embellisher = Class(PrefabEditorBase, function(self)
 	PrefabEditorBase._ctor(self, _static)
 
@@ -117,30 +171,10 @@ local Embellisher = Class(PrefabEditorBase, function(self)
 		self:HotReload(isPreHotReload)
 	end)
 
-	-- data for test hitbox
-	self.testhitbox =
-	{
-		enabled = false,
-		shape = HitBoxShape.Beam,
-
-		-- Beam parameters
-		beam =
-		{
-			start_dist = 0,
-			end_dist = 1,
-			thickness = 1,
-			zoffset = 0,
-		},
-
-		-- Circle parameters
-		circle =
-		{
-			distance = 0,
-			rotation = 0,
-			radius = 1,
-			zoffset = 0,
-		},
-	}
+	-- data for test hitboxes
+	self.testhitboxes = {}
+	self.hitpriority_table = table.reverse(table.invert(shallowcopy(HitPriority)))
+	self.hitpriority_idx = 1
 end)
 
 Embellisher.PANEL_WIDTH = 660
@@ -205,9 +239,10 @@ end
 local function MakeSafeGoToState(editor)
 	local function SafeGoToState(self, name, data)
 		editor.lua_error = nil
-		local status, msg = pcall(function()
+		-- TODO: Still sometimes get a single line callstack.
+		local status, msg = xpcall(function()
 			StateGraphInstance.GoToState(self, name, data)
-		end)
+		end, generic_error)
 		if not status then
 			TheLog.ch.Embellisher:print("Error - " .. msg)
 			editor.lua_error = msg
@@ -2087,147 +2122,220 @@ function Embellisher:AddEditableOptions(ui, params)
 		-- Hitbox test visualizer for setting hitbox size & offset
 		if ui:TreeNode("Hitbox Test Visualizer") then
 			ui:PushItemWidth(200)
-			local changed, value = ui:Checkbox("Enable Test Hitbox", self.testhitbox.enabled)
-			if changed then
-				self.testhitbox.enabled = value
+
+			if ui:Button("Auto-load Hitbox") then
+				if self.testprefab then
+					local sg = self.testprefab.sg
+					local currentframe = math.floor(sg:GetAnimFramesInState()) * 2
+
+					for _, frameevent in ipairs(sg.currentstate.timeline or {}) do
+						if frameevent.frame == currentframe then
+							frameevent.fn(self.testprefab) -- We're running the actual frame event function; potentially stuff might happen if things other than hitbox push functions are called.
+							ProcessHitboxes(self)
+						end
+					end
+
+					-- Scan the state's onupdate() for hitboxes
+					if sg.currentstate.onupdate then
+						sg.currentstate.onupdate(self.testprefab) -- We're running the actual onupdate function; potentially stuff might happen if things other than hitbox push functions are called.
+						if HitBoxManager.queue then
+							ProcessHitboxes(self)
+						end
+					end
+				end
+			end
+			if ui:IsItemHovered() then
+				ui:SetTooltip("Loads hitbox data specified on the current frame in the object's stategraph state.")
 			end
 
-			if self.testhitbox.enabled then
-				-- Select hitbox shape
-				local _, selectedHitbox = nil, self.testhitbox.shape
-				_, selectedHitbox = ui:RadioButton("Beam", selectedHitbox, HitBoxShape.Beam)
-				ui:SameLineWithSpace()
-				_, selectedHitbox = ui:RadioButton("Circle", selectedHitbox, HitBoxShape.Circle)
+			ui:Separator()
 
-				if selectedHitbox ~= self.testhitbox.shape then
-					self.testhitbox.shape = selectedHitbox
+			if ui:Button("Add Test Hitbox") then
+				local newHitbox = TestHitbox()
+				table.insert(self.testhitboxes, newHitbox)
+			end
+
+			for i, testhitbox in ipairs(self.testhitboxes) do
+
+				ui:Separator()
+
+				-- Select hitbox shape
+				local _, selectedHitbox = nil, testhitbox.shape
+				_, selectedHitbox = ui:RadioButton("Beam##_" .. i, selectedHitbox, HitBoxShape.Beam)
+				ui:SameLineWithSpace()
+				_, selectedHitbox = ui:RadioButton("Circle##_" .. i, selectedHitbox, HitBoxShape.Circle)
+
+				if selectedHitbox ~= testhitbox.shape then
+					testhitbox.shape = selectedHitbox
+				end
+
+				ui:SameLineWithSpace(240)
+				if ui:Button("Remove Test Hitbox##_" .. i) then
+					table.remove(self.testhitboxes, i)
 				end
 
 				-- Beam Hitbox Shape UI
-				if self.testhitbox.shape == HitBoxShape.Beam then
+				if testhitbox.shape == HitBoxShape.Beam then
 					-- Start Distance
-					if ui:Button("Reset##BeamStartDistance") then
-						self.testhitbox.beam.start_dist = 0
+					if ui:Button("Reset##BeamStartDistance_" .. i) then
+						testhitbox.beam.start_dist = 0
 					end
 
 					ui:SameLineWithSpace()
 
-					local changedStartDist, start_dist = ui:DragFloat("Start Distance", self.testhitbox.beam.start_dist, 0.01, -100, -100)
+					local changedStartDist, start_dist = ui:DragFloat("Start Distance##_" .. i, testhitbox.beam.start_dist, 0.01, -100, -100)
 					if changedStartDist then
-						self.testhitbox.beam.start_dist = start_dist
+						testhitbox.beam.start_dist = start_dist
 					end
 
 					-- End Distance
-					if ui:Button("Reset##BeamEndDistnace") then
-						self.testhitbox.beam.end_dist = 1
+					if ui:Button("Reset##BeamEndDistnace_" .. i) then
+						testhitbox.beam.end_dist = 1
 					end
 
 					ui:SameLineWithSpace()
 
-					local changedEndDist, end_dist = ui:DragFloat("End Distance", self.testhitbox.beam.end_dist, 0.01, -100, 100)
+					local changedEndDist, end_dist = ui:DragFloat("End Distance##_" .. i, testhitbox.beam.end_dist, 0.01, -100, 100)
 					if changedEndDist then
-						self.testhitbox.beam.end_dist = end_dist
+						testhitbox.beam.end_dist = end_dist
 					end
+
+					local scale = self.testprefab and self.testprefab.Transform:GetScale() or 1
 
 					-- Thickness
-					if ui:Button("Reset##BeamThickness") then
-						self.testhitbox.beam.thickness = 1
+					if ui:Button("Reset##BeamThickness_" .. i) then
+						testhitbox.beam.thickness = 1
+
+						testhitbox.beam.start_dist_z = (-1 + testhitbox.beam.zoffset) * scale
+						testhitbox.beam.end_dist_z = (1 + testhitbox.beam.zoffset) * scale
 					end
 
 					ui:SameLineWithSpace()
 
-
-					local changedThickness, thickness = ui:DragFloat("Thickness", self.testhitbox.beam.thickness, 0.01, 0, 100)
+					local changedThickness, thickness = ui:DragFloat("Thickness##_" .. i, testhitbox.beam.thickness, 0.01, 0, 100)
 					if changedThickness then
-						self.testhitbox.beam.thickness = thickness
+						testhitbox.beam.thickness = thickness
+
+						testhitbox.beam.start_dist_z = (-thickness + testhitbox.beam.zoffset) * scale
+						testhitbox.beam.end_dist_z = (thickness + testhitbox.beam.zoffset) * scale
+					end
+
+					ui:SameLineWithSpace(36)
+					local changedStartDistZ, startdist_z = ui:DragFloat("Start Z##_" .. i, testhitbox.beam.start_dist_z, 0.01, -100, 100)
+					if changedStartDistZ then
+						testhitbox.beam.start_dist_z = startdist_z
+
+						testhitbox.beam.thickness = math.abs(testhitbox.beam.end_dist_z - startdist_z) * 0.5 * scale
+						testhitbox.beam.zoffset = startdist_z + (testhitbox.beam.end_dist_z - startdist_z) * 0.5 * scale
+					end
+					if ui:IsItemHovered() then
+						ui:SetTooltip("Changes Thickness & z-offset when modified.")
 					end
 
 					-- z-Offset
-					if ui:Button("Reset##BeamZoffset") then
-						self.testhitbox.beam.zoffset = 0
+					if ui:Button("Reset##BeamZoffset_" .. i) then
+						testhitbox.beam.zoffset = 0
+
+						testhitbox.beam.start_dist_z = -testhitbox.beam.thickness * scale
+						testhitbox.beam.end_dist_z = testhitbox.beam.thickness * scale
 					end
 
 					ui:SameLineWithSpace()
 
-					local changedZoffset, zoffset = ui:DragFloat("z-Offset", self.testhitbox.beam.zoffset, 0.01, -100, 100)
+					local changedZoffset, zoffset = ui:DragFloat("z-Offset##_" .. i, testhitbox.beam.zoffset, 0.01, -100, 100)
 					if changedZoffset then
-						self.testhitbox.beam.zoffset = zoffset
+						testhitbox.beam.zoffset = zoffset
+
+						testhitbox.beam.start_dist_z = (-testhitbox.beam.thickness + zoffset) * scale
+						testhitbox.beam.end_dist_z = (testhitbox.beam.thickness + zoffset) * scale
 					end
 
-					if ui:Button("Copy values to Clipboard##BeamHitbox") then
-						if self.testhitbox.beam.zoffset ~= 0 then
-							ui:SetClipboardText(string.format("inst.components.hitbox:PushOffsetBeam(%.2f, %.2f, %.2f, %.2f, HitPriority.??)", self.testhitbox.beam.start_dist, self.testhitbox.beam.end_dist, self.testhitbox.beam.thickness, self.testhitbox.beam.zoffset))
+					ui:SameLineWithSpace(50)
+					local changedEndDistZ, enddist_z = ui:DragFloat("End Z##_" .. i, testhitbox.beam.end_dist_z, 0.01, -100, 100)
+					if changedEndDistZ then
+						testhitbox.beam.end_dist_z = enddist_z
+
+						testhitbox.beam.thickness = math.abs(enddist_z - testhitbox.beam.start_dist_z) * 0.5 * scale
+						testhitbox.beam.zoffset = startdist_z + (enddist_z - testhitbox.beam.start_dist_z) * 0.5 * scale
+					end
+					if ui:IsItemHovered() then
+						ui:SetTooltip("Changes Thickness & z-offset when modified.")
+					end
+
+					if ui:Button("Copy values to Clipboard##BeamHitbox_" .. i) then
+						if testhitbox.beam.zoffset ~= 0 then
+							ui:SetClipboardText(string.format("inst.components.hitbox:PushOffsetBeam(%.2f, %.2f, %.2f, %.2f, HitPriority.%s)", testhitbox.beam.start_dist, testhitbox.beam.end_dist, testhitbox.beam.thickness, testhitbox.beam.zoffset, self.hitpriority_table[self.hitpriority_idx]))
 						else
-							ui:SetClipboardText(string.format("inst.components.hitbox:PushBeam(%.2f, %.2f, %.2f, HitPriority.??)",self.testhitbox.beam.start_dist, self.testhitbox.beam.end_dist, self.testhitbox.beam.thickness))
+							ui:SetClipboardText(string.format("inst.components.hitbox:PushBeam(%.2f, %.2f, %.2f, HitPriority.%s)",testhitbox.beam.start_dist, testhitbox.beam.end_dist, testhitbox.beam.thickness, self.hitpriority_table[self.hitpriority_idx]))
 						end
 					end
 
 					-- Draw the test hitbox
 					if self.testprefab then
 						local x, z = self.testprefab.Transform:GetWorldXZ()
-						local start_x = x + self.testhitbox.beam.start_dist
-						local start_z = z - self.testhitbox.beam.thickness + self.testhitbox.beam.zoffset
-						local end_x = x + self.testhitbox.beam.end_dist
-						local end_z = z + self.testhitbox.beam.thickness + self.testhitbox.beam.zoffset
+						local start_x = x + testhitbox.beam.start_dist
+						local start_z = z - testhitbox.beam.thickness + testhitbox.beam.zoffset
+						local end_x = x + testhitbox.beam.end_dist
+						local end_z = z + testhitbox.beam.thickness + testhitbox.beam.zoffset
 						local scale = self.testprefab.Transform:GetScale()
 
 						DebugDraw.GroundRect(start_x, start_z, end_x * scale, end_z * scale, BGCOLORS.YELLOW, 4)
 					end
-				elseif self.testhitbox.shape == HitBoxShape.Circle then
+				elseif testhitbox.shape == HitBoxShape.Circle then
 					-- Distance
-					if ui:Button("Reset##CircleDistance") then
-						self.testhitbox.circle.distance = 0
+					if ui:Button("Reset##CircleDistance_" .. i) then
+						testhitbox.circle.distance = 0
 					end
 
 					ui:SameLineWithSpace()
 
-					local changedDist, distance = ui:DragFloat("Distance", self.testhitbox.circle.distance, 0.01, -100, -100)
+					local changedDist, distance = ui:DragFloat("Distance##_" .. i, testhitbox.circle.distance, 0.01, -100, -100)
 					if changedDist then
-						self.testhitbox.circle.distance = distance
+						testhitbox.circle.distance = distance
 					end
 
 					-- Rotation
-					if ui:Button("Reset##CircleRotation") then
-						self.testhitbox.circle.rotation = 0
+					if ui:Button("Reset##CircleRotation_" .. i) then
+						testhitbox.circle.rotation = 0
 					end
 
 					ui:SameLineWithSpace()
 
-					local changedRotation, rotation = ui:DragFloat("Rotation", self.testhitbox.circle.rotation, 0.1, -180, 180)
+					local changedRotation, rotation = ui:DragFloat("Rotation##_" .. i, testhitbox.circle.rotation, 0.1, -180, 180)
 					if changedRotation then
-						self.testhitbox.circle.rotation = rotation
+						testhitbox.circle.rotation = rotation
 					end
 
 					-- Radius
-					if ui:Button("Reset##CircleRadius") then
-						self.testhitbox.circle.radius = 1
+					if ui:Button("Reset##CircleRadius_" .. i) then
+						testhitbox.circle.radius = 1
 					end
 
 					ui:SameLineWithSpace()
 
 
-					local changedRadius, radius = ui:DragFloat("Radius", self.testhitbox.circle.radius, 0.01, 0, 100)
+					local changedRadius, radius = ui:DragFloat("Radius##_" .. i, testhitbox.circle.radius, 0.01, 0, 100)
 					if changedRadius then
-						self.testhitbox.circle.radius = radius
+						testhitbox.circle.radius = radius
 					end
 
 					-- z-Offset
-					if ui:Button("Reset##CircleZoffset") then
-						self.testhitbox.circle.zoffset = 0
+					if ui:Button("Reset##CircleZoffset_" .. i) then
+						testhitbox.circle.zoffset = 0
 					end
 
 					ui:SameLineWithSpace()
 
-					local changedZoffset, zoffset = ui:DragFloat("z-Offset", self.testhitbox.circle.zoffset, 0.01, -100, 100)
+					local changedZoffset, zoffset = ui:DragFloat("z-Offset##_" .. i, testhitbox.circle.zoffset, 0.01, -100, 100)
 					if changedZoffset then
-						self.testhitbox.circle.zoffset = zoffset
+						testhitbox.circle.zoffset = zoffset
 					end
 
-					if ui:Button("Copy values to Clipboard##CircleHitbox") then
-						if self.testhitbox.circle.zoffset ~= 0 then
-							ui:SetClipboardText(string.format("inst.components.hitbox:PushOffsetCircle(%.2f, %.2f, %.2f, %.2f, HitPriority.??)", self.testhitbox.circle.distance, self.testhitbox.circle.rotation, self.testhitbox.circle.radius, self.testhitbox.circle.zoffset))
+					if ui:Button("Copy values to Clipboard##CircleHitbox_" .. i) then
+						if testhitbox.circle.zoffset ~= 0 then
+							ui:SetClipboardText(string.format("inst.components.hitbox:PushOffsetCircle(%.2f, %.2f, %.2f, %.2f, HitPriority.%s)", testhitbox.circle.distance, testhitbox.circle.rotation, testhitbox.circle.radius, testhitbox.circle.zoffset, self.hitpriority_table[self.hitpriority_idx]))
 						else
-							ui:SetClipboardText(string.format("inst.components.hitbox:PushCircle(%.2f, %.2f, %.2f, HitPriority.??)", self.testhitbox.circle.distance, self.testhitbox.circle.rotation, self.testhitbox.circle.radius))
+							ui:SetClipboardText(string.format("inst.components.hitbox:PushCircle(%.2f, %.2f, %.2f, HitPriority.%s)", testhitbox.circle.distance, testhitbox.circle.rotation, testhitbox.circle.radius, self.hitpriority_table[self.hitpriority_idx]))
 						end
 					end
 
@@ -2235,17 +2343,26 @@ function Embellisher:AddEditableOptions(ui, params)
 					if self.testprefab then
 						local x, z = self.testprefab.Transform:GetWorldXZ()
 						local scale = self.testprefab.Transform:GetScale()
-						local distance = self.testhitbox.circle.distance * scale
-						local radius = self.testhitbox.circle.radius * scale
-						local rot = math.rad(self.testhitbox.circle.rotation + self.testprefab.Transform:GetFacingRotation() or self.testprefab.Transform:GetRotation())
+						local distance = testhitbox.circle.distance * scale
+						local radius = testhitbox.circle.radius * scale
+						local rot = math.rad(testhitbox.circle.rotation + self.testprefab.Transform:GetFacingRotation() or self.testprefab.Transform:GetRotation())
 						x = x + distance * math.cos(rot)
-						z = z - distance * math.sin(rot) + self.testhitbox.circle.zoffset
+						z = z - distance * math.sin(rot) + testhitbox.circle.zoffset
 
 						DebugDraw.GroundCircle(x, z, radius, BGCOLORS.YELLOW, 4)
 					end
 				end
 			end
 
+			ui:Separator()
+
+			-- Select hitbox priority
+			local changed, new_idx = ui:Combo("Hit Priority", self.hitpriority_idx, self.hitpriority_table)
+			if changed then
+				self.hitpriority_idx = new_idx
+			end
+
+			ui:Separator()
 			ui:PopItemWidth()
 			self:AddTreeNodeEnder(ui)
 		end
@@ -2322,7 +2439,15 @@ function Embellisher:AddEditableOptions(ui, params)
 		end
 	end
 
-	if self.edit_options.showhitbox and self.testprefab and self.testprefab.HitBox then
+
+
+	if not self.testprefab then
+		-- Rest of the ui directly or indirectly requires an instance.
+		return
+	end
+
+
+	if self.edit_options.showhitbox and self.testprefab.HitBox then
 		self:DrawHitBoxes()
 	end
 
@@ -2336,17 +2461,16 @@ function Embellisher:AddEditableOptions(ui, params)
 		end
 	end
 
-	if self.testprefab then
-		for i, v in pairs(self.testprefab and (self.testprefab.hitboxes or { body = self.testprefab })) do
-			--ui:Text(i)
-			if self.hitboxesvis and self.hitboxesvis[i] then
-				local w = v.HitBox:GetSize()
-				local h = v.HitBox:GetDepth()
-				local pt = v:GetPosition()
-				local enabled = v.HitBox:IsEnabled()
-				if enabled then
-					DebugDraw.GroundRect(pt.x - w, pt.z - h, pt.x + w, pt.z + h, BGCOLORS.WHITE)
-				end
+
+	for i, v in pairs(self.testprefab.hitboxes or { body = self.testprefab }) do
+		--ui:Text(i)
+		if self.hitboxesvis and self.hitboxesvis[i] then
+			local w = v.HitBox:GetSize()
+			local h = v.HitBox:GetDepth()
+			local pt = v:GetPosition()
+			local enabled = v.HitBox:IsEnabled()
+			if enabled then
+				DebugDraw.GroundRect(pt.x - w, pt.z - h, pt.x + w, pt.z + h, BGCOLORS.WHITE)
 			end
 		end
 	end
@@ -2355,10 +2479,8 @@ function Embellisher:AddEditableOptions(ui, params)
 		local statelist = {}
 		-- focused_state is where the UI is choosing to jump.
 		self.focused_state = self.focused_state or active_state
-		if self.testprefab then
-			for i, v in pairs(self.testprefab.sg.sg.states) do
-				table.insert(statelist, i)
-			end
+		for i, v in pairs(self.testprefab.sg.sg.states) do
+			table.insert(statelist, i)
 		end
 		table.sort(statelist, function(a, b)
 			return a < b
@@ -2403,7 +2525,7 @@ function Embellisher:AddEditableOptions(ui, params)
 		local events = ("'%s' Events"):format(short_state)
 		local sgname = self:GetEmbellishSGName(params)
 
-		local sg = ("'%s' Events"):format(self.testprefab and sgname or "StateGraph")
+		local sg = ("'%s' Events"):format(sgname)
 		if sgname == "*" then
 			sg = "StateGraph Events"
 		end

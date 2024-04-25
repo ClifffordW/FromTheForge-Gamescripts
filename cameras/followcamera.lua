@@ -88,9 +88,16 @@ function FollowCamera:GetOffset()
 	return self.offset
 end
 
-function FollowCamera:SetOffset(x, y, z)
+function FollowCamera:SetOffset(source, x, y, z)
 	assert(not isnan(x) and not isnan(y) and not isnan(z), "FollowCamera:SetOffset attempted to set nan value.")
 	self.offset.x, self.offset.y, self.offset.z = x, y, z
+	self.last_offset_source = source
+end
+
+function FollowCamera:ClearOffsetFrom(source)
+	if self.last_offset_source == source then
+		self:SetOffset(nil, 0,0,0)
+	end
 end
 
 function FollowCamera:GetDistance()
@@ -182,7 +189,7 @@ function FollowCamera:Snap()
 	local x, y, z = 0, 0, 0
 	if self.target ~= nil then
 		if self.target.components.focalpoint ~= nil then
-			self.target.components.focalpoint:OnUpdate(0)
+			self.target.components.focalpoint:Snap()
 		end
 		x, y, z = self.target.Transform:GetWorldPosition()
 		-- Not sure why the position is ind.

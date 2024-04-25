@@ -2,7 +2,7 @@
 return {
   __displayName="fx_floracrane_elite",
   isfinal=true,
-  prefab={ "floracrane_elite",},
+  prefab={ "floracrane_elite", "floracrane_miniboss",},
   stategraphs={
     sg_floracrane={
       sg_events={
@@ -67,11 +67,30 @@ return {
           },
         },
         {
+          eventtype="spawneffect",
+          name="vfx-dive_swipe",
+          param={ fxname="fx_floracrane_dive", inheritrotation=true, ischild=true,},
+        },
+        {
           eventtype="spawnparticles",
           name="vfx-spinning_bird_kick_loop",
           param={
+            duration=30.0,
             ischild=true,
-            name="1",
+            offx=0.0,
+            offy=0.0,
+            offz=0.0,
+            particlefxname="fire_follow_v1",
+            stopatexitstate=true,
+            use_entity_facing=true,
+          },
+        },
+        {
+          eventtype="spawnparticles",
+          name="vfx-spinning_bird_kick_loop",
+          param={
+            duration=30.0,
+            ischild=true,
             offx=0.0,
             offy=0.0,
             offz=0.0,
@@ -79,11 +98,6 @@ return {
             stopatexitstate=true,
             use_entity_facing=true,
           },
-        },
-        {
-          eventtype="spawneffect",
-          name="vfx-dive_swipe",
-          param={ fxname="fx_floracrane_dive", inheritrotation=true, ischild=true,},
         },
       },
     },

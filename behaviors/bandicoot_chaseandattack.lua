@@ -109,9 +109,7 @@ function BandicootChaseAndAttack:Visit()
 			local forcestop = false
 			local canattack = not self.inst.components.combat:IsInCooldown()
 			if canattack then
-				if self.inst.components.combat:HitStunPressureFramesExceeded() then
-					self.inst:PushEvent("dohitstunpressureattack", { target = target })
-				elseif not self.inst.sg:HasStateTag("moving") then
+				if not self.inst.sg:HasStateTag("moving") then
 					self.inst:PushEvent("doattack", { target = target })
 				elseif not self.inst.components.timer:HasTimer("howl_cd") then
 					local range = 6 + targetsize
@@ -208,9 +206,7 @@ function BandicootChaseAndAttack:Visit()
 						if ismoving then
 							self.inst.components.locomotor:Stop()
 						else
-							if self.inst.components.combat:HitStunPressureFramesExceeded() then
-								self.inst:PushEvent("dohitstunpressureattack", { target = target })
-							elseif canattack then
+							if canattack then
 								self.inst:PushEvent("doattack", { target = target })
 							end
 							if self.inst.sg:HasStateTag("idle") or t < self.approachdelay or DiffAngle(self.inst.Transform:GetFacingRotation(), self.inst:GetAngleTo(target)) > 90 then

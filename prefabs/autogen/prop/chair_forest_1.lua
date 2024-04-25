@@ -3,7 +3,10 @@ return {
   __displayName="chair_forest_1",
   clickable=true,
   gridsize={ { h=2, w=2,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
+  networked=1,
   parallax={
     { anim="chair1_front", dist=-0.2, shadow=true,},
     { anim="chair1_middle", shadow=true,},

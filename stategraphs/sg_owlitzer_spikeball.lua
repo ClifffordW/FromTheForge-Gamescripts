@@ -27,6 +27,8 @@ local function OnRoomComplete(inst)
 end
 
 local HEIGHT_DAMAGE_THRESHOLD <const> = 3.5
+local HEIGHT_AIRBORNE_THRESHOLD <const> = 1.5
+local REPEAT_TARGET_DELAY_ANIM_FRAMES <const> = 4 -- Set anim frame delay to handle the case where we dodge into it, which counts as a 'hit', and being able to get hit again normally afterwards.
 
 local states =
 {
@@ -49,7 +51,7 @@ local states =
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("idle")
 			inst.HitBox:SetInvincible(false)
-			inst.components.hitbox:StartRepeatTargetDelay()
+			inst.components.hitbox:StartRepeatTargetDelayAnimFrames(REPEAT_TARGET_DELAY_ANIM_FRAMES)
 			inst.components.projectilehitbox:SetEnabled(true)
 		end,
 
@@ -60,7 +62,7 @@ local states =
 
 	State({
 		name = "thrown",
-		tags = { "flying", "nointerrupt", "attack" },
+		tags = { "flying", "nointerrupt", "attack", "airborne_high" },
 
 		onenter = function(inst, targetpos)
 			inst.HitBox:SetInvincible(true)
@@ -108,10 +110,16 @@ local states =
 
 		onupdate = function(inst)
 			local pos = inst:GetPosition()
-			if pos.y <= HEIGHT_DAMAGE_THRESHOLD then
+			if pos.y <= HEIGHT_DAMAGE_THRESHOLD and inst.sg.statemem.height_damage_threshold_enabled then
 				inst.HitBox:SetEnabled(true)
 				inst.HitBox:SetInvincible(false)
+				inst.components.hitbox:StartRepeatTargetDelayAnimFrames(REPEAT_TARGET_DELAY_ANIM_FRAMES)
 				inst.components.projectilehitbox:SetEnabled(true)
+				inst.sg.statemem.height_damage_threshold_enabled = true
+			elseif pos.y <= HEIGHT_AIRBORNE_THRESHOLD and inst.sg.statemem.height_airborne_threshold_enabled then
+				inst.sg:RemoveStateTag("airborne_high")
+				inst.sg:AddStateTag("airborne")
+				inst.sg.statemem.height_airborne_threshold_enabled = true
 			end
 		end,
 
@@ -133,7 +141,7 @@ local states =
 			inst.Physics:SetEnabled(true)
 			inst.AnimState:SetShadowEnabled(true)
 
-			inst.components.hitbox:StartRepeatTargetDelay()
+			inst.components.hitbox:StartRepeatTargetDelayAnimFrames(REPEAT_TARGET_DELAY_ANIM_FRAMES)
 			inst.components.projectilehitbox:SetEnabled(true)
 			--inst.components.projectilehitbox:SetRepeatTargetDelayTicks(6 * ANIM_FRAMES)
 		end,

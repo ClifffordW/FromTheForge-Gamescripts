@@ -4,6 +4,12 @@ local lume = require "util.lume"
 
 local cursor = {}
 
+-- When making cursor art, SDL is quite picky:
+-- * thicker outlines are better (may need minimum 3px width)
+-- * best to use only opaque pixels but rounded designs will appear jagged
+-- * very transparent pixels along bottom of image become visible
+-- * remove bottom and right transparent pixels to avoid artifacts
+
 local cursor_spec = {
 	-- style_fmt: path within data. Requires all sizes.
 	-- hot: hotx, hoty (where the clicking registers).

@@ -46,7 +46,7 @@ local monsterutil = require "util/monsterutil"
 local TEMP_BIOMES_TO_SHOW = {
 	{ region = "forest", location = "treemon_forest" },
 	{ region = "forest", location = "owlitzer_forest" },
-	{ region = "swamp", location = "kanft_swamp" },
+	{ region = "swamp", location = "bandi_swamp" },
 }
 
 local ItemCodex = Class(Widget, function(self, w, h)
@@ -92,7 +92,7 @@ local ItemCodex = Class(Widget, function(self, w, h)
 			self:OnCategoryTabClicked(tab_btn, tab_btn.region)
 		end)
 		:SetOnTabSizeChange(function()
-			self.tabs_widget:LayoutChildrenInGrid(100, self.tabs_spacing)
+			self.tabs_widget:Layout()
 			local tabs_w, tabs_h = self.tabs_widget:GetSize()
 			self.tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
 			self.tabs_widget:LayoutBounds("center", "center", self.tabs_background)
@@ -105,7 +105,7 @@ local ItemCodex = Class(Widget, function(self, w, h)
 	-- Stats container
 	self.stats_container = self:AddChild(Widget())
 		:SetName("Stats container")
-		:Hide() -- jambell: hiding, but leaving there in case we want to re-enable these someday.
+		:Hide() -- hiding, but leaving there in case we want to re-enable these someday.
 	self:_SetupArmourStats()
 
 end)
@@ -154,7 +154,7 @@ function ItemCodex:Refresh(player)
 
 	-- Layout tabs
 	self:Layout()
-	self.tabs_widget:LayoutChildrenInGrid(100, self.tabs_spacing)
+	self.tabs_widget:Layout()
 		:AddCycleIcons()
 		:SetNavFocusable(false) -- rely on CONTROL_MAP
 		:LayoutBounds("center", "center", self.tabs_background)
@@ -223,7 +223,7 @@ function ItemCodex:_UpdateTabAvailableActions()
 							local owned = item ~= nil
 
 							if owned then
-								recipe = recipes.FindUpgradeRecipeForItem(item)
+								recipe = recipes.FindUsageUpgradeRecipeForItem(item)
 							else
 								item = itemforge.CreateEquipment( itemdef.slot, itemdef )
 							end
@@ -512,7 +512,7 @@ function ItemCodex:_RefreshArmourStats()
 
 			if owned then
 				-- What level is the player's item at
-				self.armour_stats["head"].current = self.armour_stats["head"].current + item:GetItemLevel()
+				self.armour_stats["head"].current = self.armour_stats["head"].current + item:GetEffectiveItemLevel()
 			else
 				-- The player doesn't own this item. Let's create a proxy
 				item = itemforge.CreateEquipment( armour["HEAD"].slot, armour["HEAD"] )
@@ -531,7 +531,7 @@ function ItemCodex:_RefreshArmourStats()
 
 			if owned then
 				-- What level is the player's item at
-				self.armour_stats["body"].current = self.armour_stats["body"].current + item:GetItemLevel()
+				self.armour_stats["body"].current = self.armour_stats["body"].current + item:GetEffectiveItemLevel()
 			else
 				-- The player doesn't own this item. Let's create a proxy
 				item = itemforge.CreateEquipment( armour["BODY"].slot, armour["BODY"] )

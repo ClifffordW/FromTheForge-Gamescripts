@@ -9,7 +9,7 @@ local mortar_prefabs =
 	-- GroupPrefab("bombs_traps"),
 }
 
-local function Setup(inst, owner, damage_mod, hitstun_animframes, hitboxradius, pushback, focus, attacktype, numberinbatch, maxinbatch)
+local function Setup(inst, owner, damage_mod, hitstun_animframes, hitboxradius, pushback, focus, attacktype, numberinbatch, maxinbatch, clusterbombs)
 	inst.owner = owner
 	inst.damage_mod = damage_mod or 1
 	inst.hitstun_animframes = hitstun_animframes or 1
@@ -21,6 +21,7 @@ local function Setup(inst, owner, damage_mod, hitstun_animframes, hitboxradius, 
 	inst.attacktype = attacktype
 	inst.numberinbatch = numberinbatch
 	inst.maxinbatch = maxinbatch
+	inst.numclusterbombs = clusterbombs
 
 	local _on_heavy_attack = function(source, data)
 		owner:PushEvent("heavy_attack", data)
@@ -42,6 +43,14 @@ local function Setup(inst, owner, damage_mod, hitstun_animframes, hitboxradius, 
 	owner:ListenForEvent("heavy_attack", _on_heavy_attack, inst)
 	owner:ListenForEvent("light_attack", _on_light_attack, inst)
 	owner:ListenForEvent("onremove", _on_remove, inst)
+
+	if owner then
+		local weapon_def = owner.components.inventory:GetEquippedWeaponDef()
+		inst.build = weapon_def.build
+
+		inst.AnimState:SetBuild(inst.build)
+	end
+
 
 	SGPlayerCommon.Fns.AttachPowerFxToProjectile(inst, "projectile_cannon_mortar", inst.owner, inst.attacktype)
 

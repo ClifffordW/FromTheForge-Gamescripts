@@ -8,6 +8,7 @@ return {
   build="aim_pointer_ground_indicator",
   finaloffset=-1,
   glowcolor="0074FFFF",
+  group="UI",
   looping=true,
   multcolor="2B36FFD4",
   onground=true,

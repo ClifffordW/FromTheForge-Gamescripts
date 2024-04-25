@@ -262,7 +262,7 @@ function ActionButton:_RefreshImageState()
 	elseif self:IsEnabled() then
 		if self.down then
 			self.background:SetMultColor(self.colourDown)
-		elseif self.focus then
+		elseif self:HasFocus() then
 			self.background:SetMultColor(self.colourFocus)
 		else
 			self.background:SetMultColor(self.colourNormal)
@@ -393,7 +393,7 @@ end
 function ActionButton:SetFocusScale(scale)
 	self.scaleFocus = scale or 1.2
 
-	if self.focus and self.scaleOnFocus and not self.selected then
+	if self:HasFocus() and self.scaleOnFocus and not self.selected then
 		self:ScaleTo(nil, self.scaleFocus, 0.1, easing.inOutQuad)
 	end
 	return self
@@ -402,7 +402,7 @@ end
 function ActionButton:SetNormalScale(scale)
 	self.scaleNormal = scale or 1
 
-	if not self.focus and self.scaleOnFocus then
+	if not self:HasFocus() and self.scaleOnFocus then
 		self:ScaleTo(nil, self.scaleNormal, 0.2, easing.inOutQuad)
 	end
 	return self
@@ -415,7 +415,7 @@ function ActionButton:SetImageNormalColour(r,g,b,a)
 		self.colourNormal = r
 	end
 
-	if self:IsEnabled() and not self.focus and not self.selected then
+	if self:IsEnabled() and not self:HasFocus() and not self.selected then
 		self.background:SetMultColor(self.colourNormal)
 	end
 	return self
@@ -428,7 +428,7 @@ function ActionButton:SetImageFocusColour(r,g,b,a)
 		self.colourFocus = r
 	end
 
-	if self.focus and not self.selected then
+	if self:HasFocus() and not self.selected then
 		self.background:SetMultColor(self.colourFocus)
 	end
 	return self

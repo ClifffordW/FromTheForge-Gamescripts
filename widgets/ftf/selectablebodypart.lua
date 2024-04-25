@@ -43,7 +43,7 @@ local SelectableBodyPart = Class(Clickable, function(self, size)
 		:SetHiddenBoundingBox(true)
 		:SetSize(self.width, self.height)
 		:SetMask()
-	
+
 	self.puppet_bg = self:AddChild(PlayerPuppet())
 		:SetName("Puppet")
 		:SetHiddenBoundingBox(true)
@@ -74,29 +74,17 @@ local SelectableBodyPart = Class(Clickable, function(self, size)
 
 	self.price_bg = self:AddChild(Image("images/ui_ftf_character/ItemPriceBg.tex"))
 		:SetName("Price BG")
-		:SetScale(0.9)
+		:SetScale(0.75)
 		:LayoutBounds("left", "bottom", self.image)
+		:Hide()
 
-	self.price_badge = self.price_bg:AddChild(Image("images/hud_images/hud_glitz_drops_currency.tex"))
-		:SetName("Price badge")
-		:SetHiddenBoundingBox(true)
-		:SetSize(70,70)
+	local price_str = string.format(STRINGS.UI.INVENTORYSCREEN.KONJUR_SOUL_LESSER, 10)
+	self.price_label = self.price_bg:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.CHARACTER_CREATOR_TAB, price_str))
 		:LayoutBounds("left", "bottom", self.price_bg)
-		:Offset(20, 10)
-
-	self.price_label = self.price_bg:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.CHARACTER_CREATOR_TAB, "500"))
-		:LayoutBounds("after", "center", self.price_badge)
 		:SetHiddenBoundingBox(true)
 		:SetGlyphColor(UICOLORS.BLACK)
-		:Offset(10, 0)
-
-	self.hidden_label = self:AddChild(Text(FONTFACE.DEFAULT, 80, "HIDDEN\nHIDDEN\nHIDDEN\nHIDDEN"))
-		:LayoutBounds("center", "center", self.image)
-		:SetHiddenBoundingBox(true)
-		:SetGlyphColor(UICOLORS.RED)
-		:EnableOutline()
-		:SetOutlineColor(UICOLORS.BLACK)
-		:SetShown(false)
+		:Offset(20, 20)
+		:SetScale(1.25)
 
 	-- Focus brackets
 	self.focus_brackets = self:AddChild(Panel("images/ui_ftf_crafting/RecipeFocus.tex"))
@@ -123,53 +111,26 @@ end
 function SelectableBodyPart:SetLocked(is_locked)
 	self.is_locked = is_locked
 	
-	if self.is_hidden then
-		self.lock_badge:SetShown(false)
-		return self
-	end
-	
 	self.lock_badge:SetShown(self.is_locked)
 	if self.is_locked then
-		self.puppet:SetMultColor(HexToRGB(0x090909ff))
-			:SetAddColor(HexToRGB(0xBCA693ff))
+		self.puppet_bg:Hide()
+		-- self.puppet:SetMultColor(HexToRGB(0x090909ff))
+		-- 	:SetAddColor(HexToRGB(0xBCA693ff))
 	end
 	return self
 end
 
-function SelectableBodyPart:SetPurchased(is_purchased)
-	self.is_purchased = is_purchased
-
-	if self.is_hidden then
-		self.price_bg:SetShown(false)
-		return self
-	end
-
-	if self.is_locked then
-		self.price_bg:SetShown(false)
-	else
-		self.price_bg:SetShown(not self.is_purchased)
+function SelectableBodyPart:SetPurchasable(is_purchasable, price)
+	self.is_purchasable = is_purchasable
+	if is_purchasable then
+		self.is_locked = false
 		self.puppet:SetMultColor(1,1,1,1)
 			:SetAddColor(0,0,0,0)
-	end
-
-	return self
-end
-
-function SelectableBodyPart:SetCost(cost)
-	self.cost = cost
-	self.price_label:SetText(tostring(cost))
-	return self
-end
-
-function SelectableBodyPart:SetHidden(is_hidden)
-	self.is_hidden = is_hidden
-	self.hidden_label:SetShown(is_hidden)
-	
-	if is_hidden then
-		self.price_bg:SetShown(false)
-		self.lock_badge:SetShown(false)
-		self.puppet:SetMultColor(HexToRGB(0x090909ff))
-				:SetAddColor(HexToRGB(0xBCA693ff))
+		
+		self.price_bg:Show()
+		self.price_label:SetText(string.format(STRINGS.UI.INVENTORYSCREEN.KONJUR_SOUL_LESSER, price))
+	else
+		self.price_bg:Hide()
 	end
 
 	return self
@@ -196,8 +157,8 @@ function SelectableBodyPart:SetPuppetSpecies(species)
 end
 
 function SelectableBodyPart:SetCharacterData(data)
-	self.puppet_bg.components.charactercreator:OnLoad(data)
-	self.puppet.components.charactercreator:OnLoad(data)
+	self.puppet_bg.components.charactercreator:LoadFromTable(data)
+	self.puppet.components.charactercreator:LoadFromTable(data)
 	return self
 end
 

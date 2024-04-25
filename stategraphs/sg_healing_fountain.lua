@@ -66,7 +66,6 @@ local states = {
 			if vending_machine:GetRemainingCost() == 0 then
 				inst.sg:GoToState("finish")
 			end			
-			-- -- TODO @luca #heal
 			-- soundutil.SetInstanceParameter(
 			-- 	inst,
 			-- 	inst.sg.mem.interacting_sound_handle, 

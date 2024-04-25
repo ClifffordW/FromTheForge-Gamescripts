@@ -43,10 +43,7 @@ function PlayerCrafter:UnlockAll()
 	for _, group in pairs(itemcatalog.All.Items) do
 		for k, v in pairs(group) do
 			if v.tags.playercraftable then
-				if self.data.unlockedItems[k] ~= true then
-					self.data.unseenItems[k] = true
-				end
-				self.data.unlockedItems[k] = true
+				self:UnlockItem(k)
 			end
 		end
 	end

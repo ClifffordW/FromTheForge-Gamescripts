@@ -11,6 +11,13 @@ return {
           { eventtype="playsound", frame=1, param={ soundevent="mothball_spawner_spawn",},},
           { eventtype="stopsound", frame=1, param={ name="spawn",},},
         },
+        spawn_battlefield={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ soundevent="mothball_spawner_spawning",},
+          },
+        },
         spawn_pre={
           {
             eventtype="playsound",

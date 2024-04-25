@@ -198,7 +198,7 @@ EventFunc({
 			SGPlayerCommon.Fns.DetachSwipeFx(inst)
 			SGPlayerCommon.Fns.DetachPowerSwipeFx(inst)
 
-			-- For now, detaching BG Swipe FX at the same time. Sloth may want an option to detach these separately later, but for now they can be aligned.
+			-- For now, detaching BG Swipe FX at the same time. We may want an option to detach these separately later, but for now they can be aligned.
 			SGPlayerCommon.Fns.DetachSwipeFx(inst, true)
 			SGPlayerCommon.Fns.DetachPowerSwipeFx(inst, true)
 		end
@@ -462,6 +462,7 @@ EventFunc({
 		editor:SymbolName(ui, param, prefab)
 		local parent = param.ischild
 		local inheritrotation = param.inheritrotation
+		local rotatezoffset = param.rotatezoffset
 
 		ui:Columns(2, "parentflags", false)
 		parent = ui:_Checkbox("Parent to Entity", parent)
@@ -488,6 +489,8 @@ EventFunc({
 		end
 		editor:PoseButton(event, ui, prefab)
 		param.ischild = parent == true or nil
+		rotatezoffset = ui:_Checkbox("Flip Z Offset with Facing", rotatezoffset)
+		param.rotatezoffset = rotatezoffset == true or nil
 
 		local changed, sx, sz = ui:DragFloat2("scale", param.scalex or 1, param.scalez or 1, 0.005, 0, 5)
 		if changed then
@@ -526,6 +529,9 @@ EventFunc({
 		else
 			local x, y, z = prefab.Transform:GetWorldPosition()
 			local dir = prefab.Transform:GetFacing() == FACING_LEFT and -1 or 1
+			if not param.rotatezoffset then
+				offz = dir == -1 and offz * -1 or offz
+			end
 			local x, y = TheSim:WorldToScreenXY(x + dir * offx, y + offy, z + dir * offz)
 			TheSim:WorldToScreenXY(x + dir * offx, y + offy, z + dir * offz)
 			ui:ScreenLine({ x - 10, y }, { x + 10, y }, color)
@@ -671,9 +677,6 @@ EventFunc({
 		local event_source = param.event_source
 		-- data is only set if it's an event handler
 		local name = param.name
-		if param.stopatexitstate then
-			name = soundutil.AddSGAutogenStopSound(inst, param)
-		end
 		TheLog.ch.AudioSpam:print("Play Sound:", param.soundevent)
 		soundutil.PlaySoundData(inst, param, name, inst)
 		return param.fallthrough
@@ -745,7 +748,7 @@ EventFunc({
 		return soundutil.PlayCountedSound(inst, param)
 	end,
 	viz = function(self, ui, param)
-		local s = String(param.soundevent .. " - " .. math.floor(param.maxcount or 1))
+		local s = String(param.soundevent .. " - rollover at " .. math.floor(param.maxcount or 2))
 		if param.name then
 			s = s .. " as " .. String(param.name)
 		end
@@ -773,11 +776,16 @@ EventFunc({
 		editor:SoundVolume(ui, param)
 
 		ui:Separator()
-		ui:Text('Current count will be sent to the FMOD event as the parameter "Count"')
-		local changed, maxcount = ui:DragInt("Max Count", param.maxcount or 1, 1, 1, 99)
+		ui:Text('On play, send current count to the FMOD event as the parameter "Count".')
+		local changed, maxcount = ui:SliderInt("Rollover Count At", param.maxcount or 2, 2, 99)
+		ui:SetTooltipIfHovered({
+			"fmod will never receive this count. When we hit this count, we'll roll over to 1 instead.",
+			"Using 2 gives 1,2,1,2 rhythm.",
+		})
 		if changed then
-			param.maxcount = maxcount or 1
+			param.maxcount = maxcount or 2
 		end
+		ui:TextWrapped([[Doesn't limit how of this sound are played! See "Play Windowed Sound" or "Play Sound" to limit simultaneous sounds.]])
 	end,
 })
 
@@ -867,6 +875,7 @@ EventFunc({
 EventFunc({
 	name = "stopallsounds",
 	nicename = "Stop All Named Sounds",
+	run_on_skip = true,
 	func = function(inst, param)
 		inst.SoundEmitter:KillAllNamedSounds()
 	end,
@@ -875,6 +884,7 @@ EventFunc({
 EventFunc({
 	name = "stopsound",
 	nicename = "Stop Sound",
+	run_on_skip = true,
 	always_can_overlap = true,
 	func = function(inst, param)
 		soundutil.KillSound(inst, param.name)
@@ -1170,6 +1180,12 @@ EventFunc({
 					:SetText(text_string)
 					:SetTarget(inst)
 					:Offset(0, param.offset_y or 600)
+		text:GetLabelWidget()
+					:SetShadowColor(UICOLORS.BLACK)
+					:SetShadowOffset(1, -1)
+					:SetOutlineColor(UICOLORS.BLACK)
+					:EnableShadow()
+					:EnableOutline()
 		DoAfterDurationOrStateExit(inst, param.duration or 0,
 			function()
 				text:Remove()
@@ -1613,7 +1629,7 @@ EventFunc({
 	func = function(inst, param)
 		param.duration = param.duration or 0
 		if param.cut then
-			camerautil.ApplyOffset(param.offset)
+			camerautil.ApplyOffset(inst, param.offset)
 			TheCamera:Snap()
 		else
 			camerautil.BlendOffset(inst, param)
@@ -1776,6 +1792,19 @@ EventFunc({
 })
 
 EventFunc({
+	name = "musicstart",
+	nicename = "Start World Music",
+	required_editor = "cineeditor",
+	run_on_skip = true,
+	no_overlap = true,
+
+	func = function(inst, param)
+		TheLog.ch.Audio:print("***///***eventfuncs.lua: Starting room / world music.")
+		TheWorld.components.ambientaudio:StartMusic()
+	end,
+})
+
+EventFunc({
 	name = "musicbossstart",
 	nicename = "Play Boss Music",
 	required_editor = "cineeditor",
@@ -1785,8 +1814,9 @@ EventFunc({
 	no_overlap = true,
 
 	func = function(inst, param, data)
-		TheWorld.components.ambientaudio:StopAllMusic()
-		TheWorld.components.ambientaudio:StopAmbient()
+		-- TheWorld.components.ambientaudio:StopAllMusic()
+		-- TheWorld.components.ambientaudio:StopAmbient()
+		TheLog.ch.Audio:print("***///***eventfuncs.lua: Starting boss or miniboss music.")
 		TheAudio:PlayPersistentSound(audioid.persistent.boss_music, fmodtable.Event[param.soundevent] or "")
 		return param.fallthrough
 	end,
@@ -1822,7 +1852,7 @@ EventFunc({
 
 	func = function(inst, param)
 		TheAudio:SetPersistentSoundParameter(audioid.persistent.boss_music, "Music_BossKillshot", 1)
-		--TheFrontEnd:GetSound():PlaySound(fmodtable.Event.Hit_boss_killshot)
+		TheFrontEnd:GetSound():PlaySound(fmodtable.Event.boss_death)
 	end,
 })
 
@@ -1838,32 +1868,6 @@ EventFunc({
 		TheAudio:SetPersistentSoundParameter(audioid.persistent.boss_music, "Music_BossComplete", 1)
 		TheWorld.components.ambientaudio:StartAmbient()
 		TheWorld.components.ambientaudio:SetIsInBossFlowParameter(false)
-	end,
-})
-
-EventFunc({
-	name = "levelmusicstop",
-	nicename = "Stop Level Music",
-	required_editor = "cineeditor",
-	run_on_skip = true,
-	no_overlap = true,
-
-	func = function(inst, param)
-		TheLog.ch.Audio:print("***///***eventfuncs.lua: Stopping level music.")
-		TheWorld.components.ambientaudio:StopWorldMusic()
-	end,
-})
-
-EventFunc({
-	name = "roommusicstop",
-	nicename = "Stop Room Music",
-	required_editor = "cineeditor",
-	run_on_skip = true,
-	no_overlap = true,
-
-	func = function(inst, param)
-		TheLog.ch.Audio:print("***///***eventfuncs.lua: Stopping room music.")
-		TheWorld.components.ambientaudio:StopRoomMusic()
 	end,
 })
 
@@ -1888,33 +1892,20 @@ EventFunc({
 	no_overlap = true,
 
 	func = function(inst, param)
-		TheLog.ch.Audio:print("***///***eventfuncs.lua / cinematic editor: Stopping level music.")
+		TheLog.ch.Audio:print("***///***eventfuncs.lua / cinematic editor: Stopping all music.")
 		TheWorld.components.ambientaudio:StopAllMusic()
 	end,
 })
 
 EventFunc({
-	name = "ambientstop",
-	nicename = "Stop Ambient Sounds",
-	required_editor = "cineeditor",
-	run_on_skip = true,
-	no_overlap = true,
-
-	func = function(inst, param)
-		TheLog.ch.Audio:print("***///***eventfuncs.lua / cinematic editor: Stopping all ambient sounds.")
-		TheWorld.components.ambientaudio:StopAmbient()
-	end,
-})
-
-EventFunc({
-	name = "ambientstop",
+	name = "allsoundstop",
 	nicename = "Stop All Music and Ambient Sounds",
 	required_editor = "cineeditor",
 	run_on_skip = true,
 	no_overlap = true,
 
 	func = function(inst, param)
-		TheLog.ch.Audio:print("***///***eventfuncs.lua / cinematic editor: Stopping all ambient sounds.")
+		TheLog.ch.Audio:print("***///***eventfuncs.lua / cinematic editor: Stopping all music and ambient sounds.")
 		TheWorld.components.ambientaudio:StopEverything()
 	end,
 })

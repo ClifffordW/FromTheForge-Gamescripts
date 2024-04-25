@@ -8,24 +8,29 @@ local assets =
 {
 	Asset("ANIM", "anim/totolili_bank.zip"),
 	Asset("ANIM", "anim/totolili_build.zip"),
+	Asset("ANIM", "anim/fx_totolili.zip"),
 }
 
 local elite_assets =
 {
 	Asset("ANIM", "anim/totolili_bank.zip"),
 	Asset("ANIM", "anim/totolili_elite_build.zip"),
+	Asset("ANIM", "anim/fx_totolili.zip"),
 }
 
 local prefabs =
 {
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
+	"totolili_projectile",
+	"totolili_elite_projectile",
 
 	--Drops
 	GroupPrefab("drops_generic"),
 	GroupPrefab("drops_totolili"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "totolili")
+prefabutil.SetupDeathFxPrefabs(prefabs, "totolili_elite")
 
 local attacks =
 {
@@ -35,11 +40,11 @@ local attacks =
 		damage_mod = 1,
 		startup_frames = 3,
 		cooldown = 3,
-		initialCooldown = 1,
+		initialCooldown = 2,
 		pre_anim = "lily_toss_pre",
 		hold_anim = "lily_toss_hold",
 		start_conditions_fn = function(inst, data, trange)
-			return trange:TestBeam(-16, 16, 1.2)
+			return trange:TestBeam(-12, 12, 1.2)
 		end
 	},
 	lily_toss_spin =
@@ -52,10 +57,21 @@ local attacks =
 		pre_anim = "lily_toss_spin_pre",
 		hold_anim = "lily_toss_spin_hold",
 		start_conditions_fn = function(inst, data, trange)
-			return trange:IsInRange(14)
+			return trange:IsInRange(16)
+		end
+	},
+	hop_back =
+	{
+		priority = 2,
+		cooldown = 4,
+		initialCooldown = 0,
+		pre_anim = "hop_back",
+		start_conditions_fn = function(inst, data, trange)
+			return trange:IsInRange(5)
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 1
 
@@ -68,6 +84,7 @@ local function fn(prefabname)
 	inst.HitBox:SetNonPhysicsRect(0.9)
 	--inst.Transform:SetScale(1, 1, 1) --TEMP
 	inst.components.scalable:SnapshotBaseSize()
+	inst.components.attacktracker:SetMinimumCooldown(0.3)
 
 	inst.AnimState:SetBank("totolili_bank")
 	inst.AnimState:SetBuild("totolili_build")
@@ -143,6 +160,8 @@ local function bullet_fn(prefabname)
 		--collision_callback = function() end
 	})
 
+	inst.Physics:ClearCollidesWith(COLLISION.GROUND)
+	inst.Physics:ClearCollidesWith(COLLISION.OBSTACLES)
 	inst.Physics:StartPassingThroughObjects()
 	inst.serializeHistory = true	-- the projectile doesn't move in a predictable fashion, so use history to make sure the positions are correct
 	inst.Setup = monsterutil.BasicProjectileSetup
@@ -168,6 +187,8 @@ local function bullet_elite_fn(prefabname)
 
 	inst.AnimState:SetScale(1.2, 1.2)
 	inst.serializeHistory = true	-- the projectile doesn't move in a predictable fashion, so use history to make sure the positions are correct
+	inst.Physics:ClearCollidesWith(COLLISION.GROUND)
+	inst.Physics:ClearCollidesWith(COLLISION.OBSTACLES)
 	inst.Physics:StartPassingThroughObjects()
 	inst.Setup = monsterutil.BasicProjectileSetup
 	inst.components.projectilehitbox:PermanentlyDisableTrigger()

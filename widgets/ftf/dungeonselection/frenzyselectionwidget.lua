@@ -2,8 +2,10 @@ local Widget = require("widgets/widget")
 local Text = require("widgets/text")
 local HotkeyWidget = require "widgets.hotkeywidget"
 local Image = require("widgets/image")
+local Panel = require("widgets/panel")
+local ExpandingTabGroup = require("widgets/expandingtabgroup")
 local ImageButton = require("widgets/imagebutton")
-local FrenzyLevelWidget = require("widgets/ftf/dungeonselection/frenzylevelwidget")
+local kstring = require "util.kstring"
 
 local easing = require"util.easing"
 
@@ -14,29 +16,29 @@ local FrenzySelectionWidget = Class(Widget, function(self)
 	self.bg = self:AddChild(Image("images/map_ftf/frenzy_panel_bg.tex"))
 		:SetName("Background")
 
-	-- Title
-	self.title_bg = self:AddChild(Image("images/map_ftf/panel_title_bg.tex"))
-		:SetName("Title background")
-	self.title = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT*1.25, "", UICOLORS.BACKGROUND_MID))
-		:SetName("Title")
-		:SetText("Frenzy Level")
-	self.prev_icon = self:AddChild(HotkeyWidget(Controls.Digital.MENU_TAB_PREV))
-		:SetOnlyShowForGamepad()
-		:SetMultColor(UICOLORS.SPEECH_BUTTON_TEXT)
-		:SetHiddenBoundingBox(true)
-		:SetScale(1.1)
-	self.next_icon = self:AddChild(HotkeyWidget(Controls.Digital.MENU_TAB_NEXT))
-		:SetOnlyShowForGamepad()
-		:SetMultColor(UICOLORS.SPEECH_BUTTON_TEXT)
-		:SetHiddenBoundingBox(true)
-		:SetScale(1.1)
+	-- Details container
+	self.details_container = self:AddChild(Widget())
+		:SetName("Details container")
 
-	-- Centre panel
-	self.centre_bg = self:AddChild(Image("images/map_ftf/frenzy_center_bg_simple.tex"))
-		:SetName("Centre background")
-		:SetPos(0, 30)
+	-- Frenzy level selector
+	self.tab_group_container = self:AddChild(Widget())
+		:SetName("Tab group container")
+		:SetScale(0.7)
+
+	self.tabs_background = self.tab_group_container:AddChild(Panel("images/ui_ftf_research/research_tabs_bg.tex"))
+		:SetName("Tabs background")
+		:SetNineSliceCoords(26, 0, 195, 150)
+		:SetMultColor(UICOLORS.LIGHT_BACKGROUNDS_MID)
+
+	self.tab_group = self.tab_group_container:AddChild(ExpandingTabGroup())
+		:SetName("Expanding tab group")
+		:SetTabOnClick(function(active_tab) self:SetSelectedLevel(active_tab.level) end)
+		:SetOnTabSizeChange(function() self:LayoutTabs() end)
 
 	-- Level description
+	self.description_bg = self:AddChild(Image("images/map_ftf/panel_title_bg.tex"))
+		:SetName("Description background")
+
 	self.level_description = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT, "", UICOLORS.LIGHT_TEXT_DARK))
 		:SetName("Level description")
 		:SetAutoSize(900)
@@ -50,20 +52,12 @@ local FrenzySelectionWidget = Class(Widget, function(self)
 
 	self.selected_level = 0
 
-	-- Progress bar
-	self.bar_base = self:AddChild(Widget("Bar Base"))
-	self.bar_max_width = 880
-	self.level_horizontal_overlap = 10
-	self.bar_level_widgets_container = self.bar_base:AddChild(Widget("Bar level widgets container"))
-
-	self.ascension_level_widgets = {}
 end)
 
 function FrenzySelectionWidget:SetPlayer(player)
 	dbassert(player)
 	self:SetOwningPlayer(player)
-	self.prev_icon:RefreshHotkeyIcon()
-	self.next_icon:RefreshHotkeyIcon()
+	self.tab_group:RefreshHotkeyIcon()
 	if self:ShouldShow() then
 		self:ShowUnlockedMode()
 	else
@@ -72,12 +66,6 @@ function FrenzySelectionWidget:SetPlayer(player)
 	end
 	self:Layout()
 	return self
-end
-
-function FrenzySelectionWidget:OnInputModeChanged(old_device_type, new_device_type)
-	-- This doesn't do anything... why is it here?
-	if not TheFrontEnd:IsRelativeNavigation() then
-	end
 end
 
 function FrenzySelectionWidget:ShouldShow()
@@ -99,13 +87,10 @@ end
 
 function FrenzySelectionWidget:ShowUnlockedMode()
 
-	self.title_bg:Show()
-	self.title:Show()
-	self.prev_icon:Show()
-	self.next_icon:Show()
-	self.centre_bg:Show()
+	self.tab_group_container:Show()
+	self.details_container:Show()
+	self.description_bg:Show()
 	self.level_description:Show()
-	self.bar_base:Show()
 	self.locked_info_label:Hide()
 
 	return self
@@ -114,13 +99,10 @@ end
 -- Just a label saying ascension is locked
 function FrenzySelectionWidget:ShowLockedMode()
 
-	self.title_bg:Hide()
-	self.title:Hide()
-	self.prev_icon:Hide()
-	self.next_icon:Hide()
-	self.centre_bg:Hide()
+	self.tab_group_container:Hide()
+	self.details_container:Hide()
+	self.description_bg:Hide()
 	self.level_description:Hide()
-	self.bar_base:Hide()
 	self.locked_info_label:Show()
 
 	return self
@@ -161,21 +143,19 @@ end
 function FrenzySelectionWidget:SetLocation(data)
 	local player = self:GetOwningPlayer()
 
-	-- Remove old widgets
-	self.bar_level_widgets_container:RemoveAllChildren()
-	self.ascension_level_widgets = {}
+	-- Remove old tabs
+	self.tab_group:RemoveAllTabs()
 
 	-- Get all data
 	local ascensionmanager = TheDungeon.progression.components.ascensionmanager
 	self.location_data = data
 	local num_ascensions = ascensionmanager.num_ascensions
-	local max_widget_width = self.bar_max_width/num_ascensions + self.level_horizontal_overlap
 
 	-- Data about the player viewing the screen
 	local unlocktracker = player.components.unlocktracker
 	local equipped_weapon_type = player.components.inventory:GetEquippedWeaponType()
 	local max_seen_level = unlocktracker:GetHighestSeenAscension()
-	local highest_personal_ascension_level = unlocktracker:GetCompletedAscensionLevel(self.location_data.id, equipped_weapon_type)
+	self.highest_personal_ascension_level = unlocktracker:GetCompletedAscensionLevel(self.location_data.id, equipped_weapon_type)
 
 	-- Data about the party
 	local highest_common_ascension_level, limiting_player = ascensionmanager:GetHighestCompletedLevelForParty(self.location_data.id)
@@ -189,23 +169,14 @@ function FrenzySelectionWidget:SetLocation(data)
 
 	-- this widget only displays the NORMAL frenzy levels. Don't go past that.
 	max_displayed_level = math.min(max_displayed_level, NORMAL_FRENZY_LEVELS)
+	max_seen_level = math.min(max_seen_level, NORMAL_FRENZY_LEVELS)
 
 	---------------------------------------------------------------------------------------
 	-- Add empty level widget for base-difficulty
-	local level_widget = self.bar_level_widgets_container:AddChild(FrenzyLevelWidget("images/map_ftf/frenzy_1.tex"))
-		:SetName("Level " .. 0)
-		:SetNavFocusable(false)
-		:SetAvailable(true)
-		:SetCompleted(highest_personal_ascension_level >= 0)
-		:RefreshColors()
-		:SetOnClickFn(function() self:SetSelectedLevel(0) end)
-		:SetBaseLevel(true)
+	local tab = self.tab_group:AddFrenzyTab("images/map_ftf/frenzy_level_0.tex", STRINGS.UI.DUNGEONSELECTIONSCREEN.FRENZY_WIDGET.BASE_DIFFICULTY_TITLE)
+	tab.level = 0
+	tab:SetCompleted(self.highest_personal_ascension_level >= 0)
 
-	if max_displayed_level > 0 then
-		level_widget:ShowConnector(max_widget_width)
-	end
-
-	self.ascension_level_widgets[0] = level_widget
 	---------------------------------------------------------------------------------------
 
 	---------------------------------------------------------------------------------------
@@ -213,22 +184,16 @@ function FrenzySelectionWidget:SetLocation(data)
 
 	for level, level_data in ipairs(ascensionmanager.ascension_data) do
 		-- Show only levels the player has seen
-		if level <= max_displayed_level then
+		if level <= max_allowed_level_for_party then
+			local frenzy_string = kstring.subfmt(STRINGS.UI.DUNGEONSELECTIONSCREEN.FRENZY_WIDGET.FRENZY_LEVEL_TITLE, { level = level })
+			tab = self.tab_group:AddFrenzyTab("images/map_ftf/frenzy_level_" .. level .. ".tex", frenzy_string)
+			tab.level = level
+			tab:SetCompleted(level <= self.highest_personal_ascension_level)
 
-			level_widget = self.bar_level_widgets_container:AddChild(FrenzyLevelWidget(level_data.icon))
-				:SetName("Level " .. level)
-				:SetNavFocusable(false)
-				:SetAvailable(level <= max_allowed_level_for_party)
-				:SetCompleted(level <= highest_personal_ascension_level)
-				:RefreshColors()
-				:SetOnClickFn(function() self:SetSelectedLevel(level) end)
-
-			-- Show a connector on every widget except last
-			if level < max_displayed_level then
-				level_widget:ShowConnector(max_widget_width)
-			end
-
-			self.ascension_level_widgets[level] = level_widget
+		-- elseif level <= NORMAL_FRENZY_LEVELS then -- Show locked ones
+		-- 	tab = self.tab_group:AddFrenzyTab("images/map_ftf/frenzy_locked.tex", "Frenzy Lvl " .. level)
+		-- 	tab:SetLocked(true)
+		-- 	tab.level = level
 		end
 	end
 
@@ -239,16 +204,22 @@ function FrenzySelectionWidget:SetLocation(data)
 	if max_seen_level > max_allowed_level_for_party then
 		local limiting_weapon_type = limiting_player.components.inventory:GetEquippedWeaponType()
 		local limited_level = highest_common_ascension_level >= 0 and highest_common_ascension_level or STRINGS.ASCENSIONS.NO_LEVEL_INFO
+		local args = {
+			weapon = STRINGS.ITEM_CATEGORIES[limiting_weapon_type],
+			highest_level = limited_level,
+			limiting_player = limiting_player:GetCustomUserName(),
+		}
 		if limiting_player == self:GetOwningPlayer() then
-			self.level_limit_string = string.format(STRINGS.ASCENSIONS.LEVEL_LIMIT_INFO_SELF, STRINGS.ITEM_CATEGORIES[limiting_weapon_type], limited_level)
+			self.level_limit_string = STRINGS.ASCENSIONS.LEVEL_LIMIT_INFO_SELF:subfmt(args)
 		else
-			self.level_limit_string = string.format(STRINGS.ASCENSIONS.LEVEL_LIMIT_INFO, limiting_player:GetCustomUserName(), STRINGS.ITEM_CATEGORIES[limiting_weapon_type], limited_level)
+			self.level_limit_string = STRINGS.ASCENSIONS.LEVEL_LIMIT_INFO:subfmt(args)
 		end
 	else
 		self.level_limit_string = ""
 	end
 
-	self:SetSelectedLevel(max_allowed_level_for_party)
+	self.tab_group:AddCycleIcons(65, 70)
+	self.tab_group:SelectTab(max_allowed_level_for_party + 1, true)
 
 	self:Layout()
 	return self
@@ -260,35 +231,58 @@ function FrenzySelectionWidget:SetSelectedLevel(level)
 	local max_allowed_level = ascensionmanager:GetMaxAllowedLevelForParty(self.location_data)
 	level = math.clamp(level, 0, max_allowed_level)
 
-	-- Set correct state on all levels
-	for k, level_widget in pairs(self.ascension_level_widgets) do
-		level_widget:SetActive(k <= level)
-			:RefreshColors()
-		if k == level then
-			self.selected_level_widget = level_widget
-		end
-	end
-
 	self.selected_level = level
+	self.tab_group:SelectTab(self.selected_level + 1, false)
 
-	local desc_text = STRINGS.ASCENSIONS.NORMAL
+	-- Update level details
+	self.details_container:RemoveAllChildren()
+
 	if level > 0 then
-		desc_text = ascensionmanager.ascension_data[level].stringkey
-	end
 
+		local left_details = self.details_container:AddChild(Widget("Left Container"))
+		local right_details = self.details_container:AddChild(Widget("Right Container"))
+		local detail_columns = { right_details, left_details }
 
-	local player = self:GetOwningPlayer()
-	if player then
-		-- Update title
-		if self.selected_level == 0 then
-			self.title:SetText(STRINGS.ASCENSIONS.NO_LEVEL_SIMPLE)
-		else
-			self.title:SetText(string.format(STRINGS.ASCENSIONS.LEVEL_SIMPLE, self.selected_level))
+		local active_mods = ascensionmanager.GetActiveModsPerLevel(level)
+
+		for id, str in ipairs(FRENZY_MODIFIERS:Ordered()) do
+			local column = id%2 + 1 -- returns 1 or 2 depending on if the mod_id is even or odd
+
+			local text = ""
+
+			if active_mods[id] then
+				text = ascensionmanager.GetModDescription(id, active_mods[id])
+			end
+
+			detail_columns[column]:AddChild(Text(FONTFACE.DEFAULT, 42))
+				:SetGlyphColor(UICOLORS.LIGHT_TEXT_DARK)
+				:SetText(text)
+				:LeftAlign()
+				:SetRegionSize(560, 70)
+		        :ShrinkToFitRegion(true)
+		        :LayoutBounds("below", "left")
 		end
-		-- Update level description, along with the player level-limit, if any
-		self.level_description:SetText(desc_text .. self.level_limit_string)
+
+		left_details:LayoutChildrenInColumn(0, "left")
+		right_details:LayoutChildrenInColumn(0, "left")
+
+		right_details:LayoutBounds("after", "top", left_details)
+	else
+		self.details_container:AddChild(Text(FONTFACE.DEFAULT, 42))
+			:SetGlyphColor(UICOLORS.LIGHT_TEXT_DARK)
+			:SetText(STRINGS.ASCENSIONS.NONE)
+			:LeftAlign()
 	end
 
+	-- Is this level completed?
+	local completed = self.selected_level <= self.highest_personal_ascension_level
+	if completed then
+		self.level_completed_string = STRINGS.ASCENSIONS.LEVEL_COMPLETED
+	else
+		self.level_completed_string = STRINGS.ASCENSIONS.LEVEL_AVAILABLE
+	end
+
+	self.level_description:SetText(self.level_completed_string .. "\n" .. self.level_limit_string)
 	ascensionmanager:StoreSelectedAscension(self.location_data.id, level)
 
 	if self.onSelectLevelFn then
@@ -322,37 +316,43 @@ function FrenzySelectionWidget:DeltaLevel(delta)
 		-- Not visible, then not interactable.
 		return
 	end
-	-- TODO(dbriscoe): POSTVS We should probably call Click on buttons directly
+	-- TODO(ui): POSTVS We should probably call Click on buttons directly
 	-- to get the same sound behaviour as mouse clicks, but that currently
 	-- doesn't play sound. Too big to change now.
 	TheFrontEnd:GetSound():PlaySound(self.controldown_sound)
 	self:SetSelectedLevel(self.selected_level + delta)
+end
 
-	self.selected_level_widget:ScaleTo(1.1, 1, 0.15, easing.outQuad)
+function FrenzySelectionWidget:LayoutTabs()
+	self.tab_group:Layout()
+	local tabs_w, tabs_h = self.tab_group:GetSize()
+	self.tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
+	self.tab_group:LayoutBounds("center", "center", self.tabs_background)
+	self.tab_group_container:LayoutBounds("center", "top", self.bg)
+		:Offset(0, -37)
+	return self
 end
 
 function FrenzySelectionWidget:Layout()
 
-	-- Layout title and its bg
-	local title_w, title_h = self.title:GetSize()
-	self.title_bg:SetSize(title_w + 80, title_h + 30)
-		:LayoutBounds("center", "top", self.bg)
-		:Offset(0, -45)
-	self.title:LayoutBounds("center", "center", self.title_bg)
-		:Offset(0, 5)
-	self.prev_icon:LayoutBounds("before", "bottom", self.title_bg)
-		:Offset(-15, 5)
-	self.next_icon:LayoutBounds("after", "bottom", self.title_bg)
-		:Offset(20, 5)
+	self:LayoutTabs()
 
-	-- Layout bar
-	self.bar_level_widgets_container:LayoutChildrenInRow(-self.level_horizontal_overlap)
-		:LayoutBounds("center", "center", self.bg)
-		:Offset(10, 20)
+	-- Layout details
+	self.details_container:LayoutChildrenInAutoSizeGrid(2, 30, 5)
+	self.details_container:LayoutBounds("center", "below", self.tab_group_container)
+		:Offset(0, -20)
 
 	-- Layout text description
-	self.level_description:LayoutBounds("left", "below", self.centre_bg)
-		:Offset(100, 0)
+	local description_w, description_h = self.level_description:GetSize()
+	self.description_bg:SetScale(1, 1)
+		:SetSize(description_w + 80, description_h + 30)
+		:LayoutBounds("center", "bottom", self.bg)
+		:Offset(0, 30)
+		:SetScale(1, -1)
+		:SetShown(self.level_description:HasText())
+	self.level_description:LayoutBounds("center", "center", self.description_bg)
+		:Offset(0, 0)
+		:SetShown(self.level_description:HasText())
 
 	return self
 end

@@ -59,7 +59,7 @@ local function BuildRunStats(worldmap)
 	return {
 		players_alive = alive_count,
 		players_total = total_count,
-		num_runs = TheSaveSystem.progress:GetValue("num_runs"),
+		num_runs = TheSaveSystem:GetActiveAboutSlot():GetValue("num_runs"),
 		dungeon_progress = worldmap.nav:GetProgressThroughDungeon(),
 		roomtype = room and room.roomtype,
 		biome_location = biome_location and biome_location.id,
@@ -70,7 +70,7 @@ local function BuildRunStats(worldmap)
 			-- TODO(dbriscoe): potions
 		},
 		team_species = lume.map(AllPlayers, GetPlayerSpecies),
-		join_code = ValidStringOrNil(TheNet:GetJoinCode()),
+		join_code = ValidStringOrNil(TheNet:GetJoinCode()),	-- This one uses the raw join code and ignores `streamer mode`, as it isn't exposed to the player. 
 	}
 end
 
@@ -117,7 +117,7 @@ function Metrics:RegisterDungeon(dungeon)
 			if player:IsLocal() then
 				-- Get actual device names to we can see what people are
 				-- playing with and what to support.
-				device_name = TheInput:GetDeviceName(player.components.playercontroller:_GetInputTuple())
+				device_name = TheInput:GetDeviceName(player.components.playercontroller:GetInputDevice())
 			end
 			table.insert(run.input_devices, device_name or "<invalid>")
 		end
@@ -223,6 +223,7 @@ local function BuildStartupContextTable()
 	t.owns_rotwood = TheSim:GetUserHasLicenseForApp(APPID.ROTWOOD)
 	-- The Steam UI language, not the in-game language. May return languages we don't support.
 	t.platform_preferred_language = TheSim:GetPreferredLanguage()
+	t.selected_language = TheGameSettings:Get("language.selected")
 
     --~ local modnames = KnownModIndex:GetModNames()
     --~ for i, name in ipairs(modnames) do

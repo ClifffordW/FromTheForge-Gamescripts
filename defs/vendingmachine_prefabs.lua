@@ -1,3 +1,5 @@
+local CurrencyType = require "currency.currency_type"
+
 local BORDERS_BUILD = "images/shop_anim_icon_borders.xml"
 
 -- TODO @chrisp #vending - copy/paste from global.lua...should be centralized somewhere
@@ -58,8 +60,10 @@ local vendingmachines =
 			inst:SetStateGraph("sg_healing_fountain")
 			local initialize_healing_fountain = function()
 				local healing_fountain = inst.components.vendingmachine
-				healing_fountain:Initialize("healing_fountain", "", "")
-				healing_fountain:InitializeUi()
+				healing_fountain:Initialize(true, {currency_type = CurrencyType.id.Health})
+				if TheNet:IsHost() then
+					healing_fountain:HostInitializeWare("healing_fountain", "", "")
+				end
 			end
 			if TheDungeon.HUD then
 				initialize_healing_fountain()

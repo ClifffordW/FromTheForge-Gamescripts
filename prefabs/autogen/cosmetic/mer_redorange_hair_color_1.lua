@@ -8,9 +8,5 @@ return {
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

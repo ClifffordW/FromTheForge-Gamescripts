@@ -1,5 +1,6 @@
 local SGCommon = require "stategraphs.sg_common"
 local Enum = require "util.enum"
+local ParticleSystemHelper = require "util.particlesystemhelper"
 
 local HeliState = Enum{ "ON", "OFF" }
 
@@ -45,8 +46,24 @@ local states =
 				[HeliState.s.ON] = "spin_loop",
 			}
 
+			if heli_state == HeliState.s.ON then
+				local fx_params =
+				{
+					name = "dust_fx",
+					particlefxname = "flying_machine_dust",
+					use_entity_facing = true,
+					ischild = true,
+				}
+
+			    ParticleSystemHelper.MakeEventSpawnParticles(inst, fx_params)
+			end
+
 			-- play idle anim depending on state
 			SGCommon.Fns.PlayAnimOnAllLayers(inst, state_to_anim[heli_state], true)
+		end,
+
+		onexit = function(inst)
+			ParticleSystemHelper.MakeEventStopParticles(inst, { name = "dust_fx" })
 		end,
 	},
 

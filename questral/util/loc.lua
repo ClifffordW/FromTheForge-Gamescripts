@@ -90,9 +90,10 @@ end
 -- tables. Makes life easier for writers because they don't need to update all
 -- references when renaming characters, powers, keywords, etc.
 --
--- Only call this function on raw English strings! Localized strings should
--- never contain {name.blah} so translators have full control over matching
--- gender and plurality.
+-- We call this function on English and translated strings! Localized strings
+-- contain {name.blah} to reduce translation overhead, but translators can
+-- replace it with the actual name to retain full control over matching gender
+-- and plurality.
 function loc.ReplaceNames(string_table, name_table_singular, name_table_plural, name_table_plurality)
     local fns = {}
 	fns.singular = function(key)
@@ -115,7 +116,7 @@ function loc.ReplaceNames(string_table, name_table_singular, name_table_plural, 
     for _,k in ipairs(lume.keys(fns)) do
         fns["upper_".. k] = function(key)
             local name = fns[k](key)
-            -- Safe to upper because this is transforming what will go out to translators.
+            -- TODO: no longer safe to upper because transforms translated strings.
             return name:upper()
         end
     end

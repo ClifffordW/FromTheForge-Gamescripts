@@ -10,4 +10,5 @@ return {
   },
   parallax_use_baseanim_for_idle=true,
   script="prop_destructible",
+  sound=true,
 }

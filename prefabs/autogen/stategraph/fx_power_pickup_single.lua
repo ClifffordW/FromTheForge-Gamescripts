@@ -3,44 +3,5 @@ return {
   __displayName="fx_power_pickup_single",
   isfinal=true,
   prefab={ "power_pickup_single",},
-  stategraphs={
-    sg_shopitem={
-      events={
-        despawn={
-          {
-            eventtype="spawnparticles",
-            frame=1,
-            param={ followsymbol="swap_fx", ischild=true, particlefxname="power_drop_generic",},
-          },
-        },
-        idle={
-          {
-            eventtype="spawnparticles",
-            frame=1,
-            param={
-              followsymbol="swap_fx",
-              offx=0.0,
-              offy=0.0,
-              offz=0.0,
-              particlefxname="power_drop_generic",
-              stopatexitstate=true,
-            },
-          },
-        },
-        spawn={
-          {
-            eventtype="spawnparticles",
-            frame=1,
-            param={
-              followsymbol="swap_fx",
-              ischild=true,
-              particlefxname="power_drop_generic",
-              render_in_front=true,
-              stopatexitstate=true,
-            },
-          },
-        },
-      },
-    },
-  },
+  stategraphs={ sg_shopitem={ events={ despawn={  }, idle={  }, spawn={  },},},},
 }

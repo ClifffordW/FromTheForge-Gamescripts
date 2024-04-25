@@ -99,8 +99,13 @@ function RotatingDrop:SetAnyInteract(bool)
 	self.any_interact = true
 end
 
+-- True if the specified player still has a drop in the world waiting for pickup.
 function RotatingDrop:PlayerHasDrop(player)
 	return self.any_interact or self.child_drops[player] ~= nil
+end
+
+function RotatingDrop:GetDropForPlayer(player)
+	return self.child_drops[player]
 end
 
 -- Returns a table of players --> drop for all players that are NOT in remainingPlayers 
@@ -125,11 +130,16 @@ end
 -- 	[p3] = "cool_drop",
 -- 	[p4] = "best_drop",
 -- }
+-- If no drops are provided, use BuildDrops to generate them.
 function RotatingDrop:SpawnDrops(drops)
+	if not drops then
+		drops = self:BuildDrops()
+	end
+
 	self:ClearDrops()
 
-	for player, prefab in pairs(drops) do
-		local drop = SpawnPrefab(prefab, self.inst)
+	for player, drop_def in pairs(drops) do
+		local drop = SpawnPrefab(drop_def.prefab, self.inst)
 		if drop then
 			drop:AddComponent("glue")
 			if not drop.components.cineactor then
@@ -146,9 +156,11 @@ function RotatingDrop:SpawnDrops(drops)
 			self.child_drops[player] = drop
 
 			if self.on_drop_spawned_fn then
-				self.on_drop_spawned_fn(player, drop)
+				self.on_drop_spawned_fn(player, drop, drop_def.count)
 			end
 
+			-- TODO @chrisp #drops - this isn't correct. The results will be different depending on which player 
+			-- specifies the relic drop.
 			if self.inst.components.powerdrop and self.inst.components.powerdrop:IsRelicDrop() then
 				-- Only spawn one crystal
 				-- TODO #powerdrop differentiate power crystals for different player counts
@@ -253,8 +265,7 @@ function RotatingDrop:PrepareToShowDrops()
 			playerutil.CountActivePlayers() >= math.min(playerCount, TheNet:GetNrPlayersOnRoomChange()) then
 			TheLog.ch.RotatingDrop:printf("Monitoring player count to spawn drops... complete.")
 			if self:GetDropCount() == 0 then
-				local drops = self:BuildDrops()
-				self:SpawnDrops(drops)
+				self:SpawnDrops()
 			end
 
 			local i = 0
@@ -311,10 +322,11 @@ function RotatingDrop:DebugDrawEntity(ui, panel, colors)
 		self:ConsumeAllDrops()
 	end
 	if ui:Button("PrepareToShowDrops") then
-		local powerdrop = self.inst.core_drop.components.souldrop ~= nil and self.inst.core_drop.components.souldrop or self.inst.core_drop.components.powerdrop
+		local powerdrop = self.inst.core_drop.components.souldrop
+			or self.inst.core_drop.components.powerdrop
 		powerdrop:PrepareToShowGem({
-  					appear_delay_ticks = TUNING.POWERS.DROP_SPAWN_INITIAL_DELAY_FRAMES,
-  				})
+			appear_delay_ticks = TUNING.POWERS.DROP_SPAWN_INITIAL_DELAY_FRAMES,
+		})
 		self:PrepareToShowDrops()
 	end
 end

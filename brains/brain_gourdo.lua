@@ -9,25 +9,24 @@ local healseed_tag = {"healingseed"}
 
 local function CanHeal(inst)
 	local x,z = inst.Transform:GetWorldXZ()
-	local possible_targets = FindTargetTagGroupEntitiesInRange(x, z, 30, inst.components.combat:GetFriendlyTargetTags())
-	local seeds = FindTargetTagGroupEntitiesInRange(x, z, 100, healseed_tag)
-	local ready_targets = 0
+	local possible_targets = FindTargetTagGroupEntitiesInRange(x, z, 60, table.appendarrays(inst.components.combat:GetFriendlyTargetTags(), healseed_tag))
+	local valid_targets = 0
 
-	-- Check to see if any other gourdos are currently creating a seed so we dont create more than needed
+	-- Check to see if any other gourdos are currently creating a seed or if one already exists so we dont create more than needed
+	-- If another seed exists we want a minimum time between seeds being created
 	for _, ent in pairs(possible_targets) do
-		if (ent ~= inst and not ent.sg:HasStateTag("castingseed")) then
-			ready_targets = ready_targets + 1
+		if (ent ~= inst) then
+			if (ent:HasTag("healingseed")) then
+				local cooldown = 16 - TheNet:GetNrPlayersOnRoomChange() -- slightly speed up timer based on number of players
+				inst.components.timer:StartTimer("buff_cd", cooldown, true)
+			elseif (not ent.sg:HasStateTag("castingseed")) then
+				valid_targets = valid_targets + 1
+			end
 		end
 	end
 
-	local seedcount = lume.count(seeds)
-	if (seedcount >= 1) then -- let the timer run only if there are no seeds
-		local cooldown = 16 - TheNet:GetNrPlayersOnRoomChange() -- slightly speed up timer based on number of players
-		inst.components.timer:StartTimer("buff_cd", cooldown, true)
-	end
-
 	return not inst.components.timer:HasTimer("buff_cd")
-		and ready_targets >= 1
+		and valid_targets >= 1
 		and not TheWorld.components.roomclear:IsRoomComplete() -- do not summon healing seeds after everything is dead, important for Charmed Gourdos
 end
 
@@ -40,7 +39,7 @@ local function DoHeal(inst)
 		for _, ent in pairs(possible_targets) do
 			if ent ~= nil and ent ~= inst and ent:IsValid() then
 				local health = ent.components.health:GetPercent()
-				if health < lowest_health then
+				if health <= lowest_health then
 					target = ent
 					lowest_health = health
 				end

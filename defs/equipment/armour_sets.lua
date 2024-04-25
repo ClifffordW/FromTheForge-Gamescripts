@@ -16,9 +16,13 @@ end
 
 local function ConstructPiece(name, build, rarity, data, slot)
 	local usage_data
-	if data.usage_data and data.usage_data.power_on_equip then
+
+	local tags = BuildTagsForSlot(slot, data.tags)
+	if data.usage_data and data.usage_data.power_on_equip and (not tags or tags and not Lume.find(tags, "no_power")) then
 		usage_data = shallowcopy(data.usage_data)
 		usage_data.power_on_equip = ("%s_%s"):format(usage_data.power_on_equip, slot):lower()
+	else
+		usage_data = {} -- can't be nil or it will try to use the base data.usage_data table that is passed in.
 	end
 
 	return Item.Construct(slot, name, build, Lume.merge(
@@ -33,7 +37,7 @@ local function ConstructPiece(name, build, rarity, data, slot)
 
 		-- Dependent data.
 		{
-			tags = BuildTagsForSlot(slot, data.tags),
+			tags = tags,
 			rarity = rarity,
 			usage_data = usage_data,
 
@@ -67,8 +71,8 @@ return {
 			},
 			tags = {
 				BASE = { "default_unlocked" },
-				[Slot.s.BODY] = { "starting_equipment" },
-				[Slot.s.WAIST] = { "starting_equipment" },
+				[Slot.s.BODY] = { "starting_equipment", "no_power" },
+				[Slot.s.WAIST] = { "starting_equipment", "no_power" },
 			},
 			crafting_data =
 			{
@@ -102,8 +106,8 @@ return {
 				power_on_equip = "equipment_blarmadillo",
 			},
 			hidden_symbols = {
-				[Slot.s.HEAD] = { "hair_front01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner",
-					"ear_k9_lft01", "ear_k9_lft01_inner" },
+				[Slot.s.HEAD] = { "hair_front01", "hair_tail01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner",
+					"ear_k9_lft01", "ear_k9_lft01_inner", "ear_rgt01", "ear_rgt01_inner", "ear_lft01", "ear_lft01_inner","earring_lft01", "earring_rgt01" },
 			},
 		}),
 	ConstructSet("yammo", "armor_yammo", ITEM_RARITY.s.EPIC,
@@ -218,7 +222,7 @@ return {
 			crafting_data =
 			{
 				monster_source = { "eyev" },
-				craftable_location = { "kanft_swamp" },
+				craftable_location = { "bandi_swamp" },
 			},
 			hidden_symbols = {
 				[Slot.s.HEAD] = { "hair_front01" },
@@ -240,8 +244,7 @@ return {
 				monster_source = { "bandicoot" },
 			},
 			hidden_symbols = {
-				[Slot.s.HEAD] = { "hair_front01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner",
-					"ear_k9_lft01", "ear_k9_lft01_inner" },
+				[Slot.s.HEAD] = { "hair_front01","hair_back01","hair_tail01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner","ear_k9_lft01", "ear_k9_lft01_inner","ear_rgt01", "ear_rgt01_inner", "ear_lft01", "ear_lft01_inner","earring_lft01","earring_rgt01" },
 			},
 		}),
 
@@ -292,10 +295,10 @@ return {
 			weight = Weight.EquipmentWeight.s.Light,
 		}),
 
-	ConstructSet("floracrane", "armor_floracrane", ITEM_RARITY.s.UNCOMMON,
+	ConstructSet("floracrane", "armor_floracrane", ITEM_RARITY.s.EPIC,
 		{
 			tags = {
-				BASE = { "hide" },
+				BASE = { },
 			},
 			usage_data = {
 				power_on_equip = "equipment_floracrane",
@@ -303,7 +306,7 @@ return {
 			crafting_data =
 			{
 				monster_source = { "floracrane" },
-				craftable_location = { "kanft_swamp" },
+				craftable_location = { "thatcher_swamp" },
 			},
 			hidden_symbols = {
 				[Slot.s.HEAD] = { "hair_front01" },
@@ -320,7 +323,7 @@ return {
 			crafting_data =
 			{
 				monster_source = { "mothball" },
-				craftable_location = { "kanft_swamp" },
+				craftable_location = { "bandi_swamp" },
 			},
 			hidden_symbols = {
 				[Slot.s.HEAD] = { "hair_front01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner",
@@ -337,7 +340,7 @@ return {
 			crafting_data =
 			{
 				monster_source = { "bulbug" },
-				craftable_location = { "kanft_swamp" },
+				craftable_location = { "bandi_swamp" },
 			},
 			hidden_symbols = {
 				[Slot.s.HEAD] = { "hair_front01" },
@@ -353,7 +356,7 @@ return {
 			crafting_data =
 			{
 				monster_source = { "groak" },
-				craftable_location = { "kanft_swamp" },
+				craftable_location = { "bandi_swamp" },
 			},
 
 			hidden_symbols = {
@@ -363,6 +366,50 @@ return {
 			weight = Weight.EquipmentWeight.s.Heavy,
 		})
 	,
+	ConstructSet("slowpoke", "armor_slowpoke", ITEM_RARITY.s.UNCOMMON,
+		{
+			usage_data = {
+				power_on_equip = "equipment_slowpoke",
+			},
+			crafting_data =
+			{
+				monster_source = { "slowpoke" },
+				craftable_location = { "thatcher_swamp" },
+			},
+			hidden_symbols = {
+				[Slot.s.HEAD] = { "hair_front01","hair_tail01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner",
+					"ear_k9_lft01", "ear_k9_lft01_inner" },
+			},
+			weight = Weight.EquipmentWeight.s.Heavy,
+		}),
+	ConstructSet("woworm", "armor_woworm", ITEM_RARITY.s.UNCOMMON,
+		{
+			usage_data = {
+				power_on_equip = "equipment_woworm",
+			},
+			crafting_data =
+			{
+				monster_source = { "woworm" },
+				craftable_location = { "thatcher_swamp" },
+			},
+			hidden_symbols = {
+				[Slot.s.HEAD] = { "hair_front01","hair_back01","hair_tail01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner","ear_k9_lft01", "ear_k9_lft01_inner","ear_rgt01", "ear_rgt01_inner", "ear_lft01", "ear_lft01_inner","earring_lft01","earring_rgt01" },
+			},
+			weight = Weight.EquipmentWeight.s.Heavy,
+		}),
+	ConstructSet("swarmy", "armor_swarmy", ITEM_RARITY.s.COMMON,
+		{
+			usage_data = {
+				power_on_equip = "equipment_swarmy",
+			},
+			crafting_data =
+			{
+				monster_source = { "swarmy" },
+				craftable_location = { "thatcher_swamp" },
+			},
+
+			weight = Weight.EquipmentWeight.s.Light,
+		}),
 	--[[
 ConstructSet("seeker", "armor_seeker", ITEM_RARITY.s.LEGENDARY,
 {
@@ -382,16 +429,11 @@ ConstructSet("seeker", "armor_seeker", ITEM_RARITY.s.LEGENDARY,
 			tags = { BASE = { "hide" }
 			},
 			hidden_symbols = {
-				[Slot.s.HEAD] = { "hair_front01", "hair01", "ear_rgt01", "ear_rgt01_inner", "ear_lft01", "ear_lft01_inner",
-					"horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner", "ear_k9_lft01",
-					"ear_k9_lft01_inner", "earring_lft01", "earring_rgt01" },
+				[Slot.s.HEAD] = { "hair_front01","hair","hair_back01","hair_tail01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner","ear_k9_lft01", "ear_k9_lft01_inner","ear_rgt01", "ear_rgt01_inner", "ear_lft01", "ear_lft01_inner","earring_lft01","earring_rgt01" },
 			},
 		}),
 
 	--~ ConstructSet("owlitzer",  "armor_owlitzer", { defend = low * 2,  weight = light * 0.5, }),
-
-	-- miker says basic isn't a complete set. Also, we don't give the full set to
-	-- the player so they have something to craft from the start.
 }
 
 --[[
@@ -404,6 +446,10 @@ woworm:
 [Slot.s.HEAD] = { "hair_front01", "hair01", "hair_tail01","ear_rgt01", "ear_rgt01_inner", "ear_lft01", "ear_lft01_inner",
 					"horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner", "ear_k9_lft01",
 					"ear_k9_lft01_inner", "earring_lft01", "earring_rgt01" },
+
+totolili:
+[Slot.s.HEAD] = { "hair_front01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner", "ear_k9_lft01",
+					"ear_k9_lft01_inner",  },
 
 totolili:
 [Slot.s.HEAD] = { "hair_front01", "horn_rgt01", "horn_lft01", "ear_k9_rgt01", "ear_k9_rgt01_inner", "ear_k9_lft01",

@@ -167,6 +167,11 @@ end
 
 function DebugNode:_RenderTable(ui, panel, t, indent)
 	AddDebugTableButton(ui, panel, t)
+	ui:SameLineWithSpace()
+	if ui:Button("View Inverted") then
+		panel:PushNode(panel:CreateDebugNode(lume.invert(self.t)))
+	end
+	ui:SetTooltipIfHovered("View the table passed into lume.invert() to filter values or see unique count.")
 
 	ui:Columns(2, "mycolumns3", false)
 	local mt = getmetatable(t)

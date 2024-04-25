@@ -72,12 +72,15 @@ function Button:SetControl(ctrl)
 	return self
 end
 
-function Button:OnControl(controls, down, device_type, trace, device_id)
-	if Button._base.OnControl(self, controls, down, device_type, trace, device_id) then return true end
+function Button:OnControl(controls, down, trace)
+	if Button._base.OnControl(self, controls, down, trace) then return true end
 
-	if not self:IsEnabled() or not self.focus then return false end
+	if not self:IsEnabled() or not self:HasFocus() then return false end
 
 	if self:IsSelected() and not self.AllowOnControlWhenSelected then return false end
+
+	local input_device = controls:GetDevice()
+	local device_type, device_id = input_device:unpack()
 
 	if controls:Has(self.control) then
 
@@ -168,11 +171,11 @@ function Button:OnGainFocus()
 
 	if self:IsEnabled() and not self.selected and TheFrontEnd:GetFadeLevel() <= 0 then
 		if self.text then self:_UpdateTextColour(self.textfocuscolour) end
-
-		if self.gainfocus_sound then
-			TheFrontEnd:GetSound():PlaySound(self.gainfocus_sound)
-		end
 	end
+end
+
+function Button:CanPlayFocusSounds()
+	return not self.selected and Button._base.CanPlayFocusSounds(self)
 end
 
 function Button:ResetPreClickPosition()
@@ -202,7 +205,7 @@ function Button:OnLoseFocus()
 end
 
 function Button:OnEnable()
-	if not self.focus and not self.selected then --Note(Peter):This causes the disabled font to remain on an enabled text button, if it has focus (EG: When you click on a button and the button is temporarily disabled). Why do we check the focus here?
+	if not self:HasFocus() and not self.selected then --Note(Peter):This causes the disabled font to remain on an enabled text button, if it has focus (EG: When you click on a button and the button is temporarily disabled). Why do we check the focus here?
 		self:_UpdateTextColour(self.textcolour)
 		self.text:SetFont(self.font)
 	end
@@ -249,13 +252,7 @@ end
 -- This is roughly equivalent to OnEnable
 function Button:OnUnselect()
 	if self:IsEnabled() then
-		if self.focus then
-			if self.text then
-				self:_UpdateTextColour(self.textfocuscolour[1],self.textfocuscolour[2],self.textfocuscolour[3],self.textfocuscolour[4])
-			end
-		else
-			self:LoseFocus()
-		end
+		self:RefreshFocus()
 	else
 		self:OnDisable()
 	end
@@ -423,7 +420,7 @@ function Button:SetTextColour(r,g,b,a)
 		self.textcolour = r
 	end
 
-	if self:IsEnabled() and not self.focus and not self.selected then
+	if self:IsEnabled() and not self:HasFocus() and not self.selected then
 		self:_UpdateTextColour(self.textcolour)
 	end
 	return self
@@ -436,7 +433,7 @@ function Button:SetTextFocusColour(r,g,b,a)
 		self.textfocuscolour = r
 	end
 
-	if self.focus and not self.selected then
+	if self:HasFocus() and not self.selected then
 		self:_UpdateTextColour(self.textfocuscolour)
 	end
 	return self
@@ -490,7 +487,7 @@ function Button:SetText(msg, dropShadow, dropShadowOffset)
 		self.text:SetText(msg)
 		self.text:Show()
 		if self:IsEnabled() then
-			self:_UpdateTextColour(self.selected and self.textselectedcolour or (self.focus and self.textfocuscolour or self.textcolour))
+			self:_UpdateTextColour(self.selected and self.textselectedcolour or (self:HasFocus() and self.textfocuscolour or self.textcolour))
 		else
 			self:_UpdateTextColour(self.textdisabledcolour)
 		end

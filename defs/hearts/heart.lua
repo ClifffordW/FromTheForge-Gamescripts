@@ -57,7 +57,7 @@ function Heart.AddHeart(slot, name, build, data)
 		heart_id = "konjur_heart_"..name, -- the id of the heart_def that relates to this power
 	}
 
-	-- TODO(jambell): re-enable tooltip validation?
+	-- TODO: re-enable tooltip validation?
 	-- dbassert(slotutil.ValidateAllTooltipsExist(def))
 
 	items[name] = def

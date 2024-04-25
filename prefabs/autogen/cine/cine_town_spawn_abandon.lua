@@ -2,17 +2,15 @@
 return {
   __displayName="cine_town_spawn_abandon",
   pause_role_sg={  },
-  scene_duration=90.0,
+  scene_duration=100.0,
   scene_init={  },
   subactors={  },
   timelines={
-    attachswipefx={  },
-    blurscreen={  },
     cameradist={
       { 0, 1, { eventtype="cameradist", param={ cut=true, dist=22.0, duration=1,},},},
       {
-        25,
-        80,
+        35,
+        90,
         {
           eventtype="cameradist",
           param={
@@ -39,12 +37,11 @@ return {
         },
       },
     },
-    cameraoffset={  },
     camerapitch={
       { 0, 1, { eventtype="camerapitch", param={ cut=true, duration=1, pitch=16.0,},},},
       {
-        37,
-        80,
+        47,
+        90,
         {
           eventtype="camerapitch",
           param={
@@ -85,8 +82,8 @@ return {
     },
     cameratargetend={
       {
-        25,
-        90,
+        35,
+        100,
         {
           apply_to_all_players=true,
           eventtype="cameratargetend",
@@ -115,10 +112,7 @@ return {
         },
       },
     },
-    cameratargetoverride={  },
-    detachswipefx={  },
-    disableplayinput={ { 0, 90.0, { eventtype="disableplayinput", param={  },},},},
-    facing={  },
+    disableplayinput={ { 0, 100.0, { eventtype="disableplayinput", param={  },},},},
     fade={
       {
         0,
@@ -126,11 +120,10 @@ return {
         { eventtype="fade", param={ duration=19, fade_in=true, fade_type="black",},},
       },
     },
-    gameevent={  },
     gotostate={
       {
         81,
-        90.0,
+        100.0,
         {
           apply_to_all_players=true,
           eventtype="gotostate",
@@ -139,14 +132,8 @@ return {
         },
       },
     },
-    letterbox={ { 0, 29, { eventtype="letterbox", param={ duration=29,},},},},
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
-    musicbossstart={  },
-    musicbossstop={  },
-    playcountedsound={  },
-    playfoleysound={  },
+    letterbox={ { 0, 47, { eventtype="letterbox", param={ duration=47,},},},},
+    musicstart={ { 90, 100.0, { eventtype="musicstart", is_unedited=true, param={  },},},},
     playsound={
       {
         0,
@@ -188,15 +175,14 @@ return {
         { eventtype="playsound", param={ duration=9, soundevent="Dirt_bodyfall",},},
       },
     },
-    playsound_window={  },
     pushanim={
       {
-        0,
+        1,
         18,
         {
           apply_to_all_players=true,
           eventtype="pushanim",
-          param={ anim="claw_blank", duration=18,},
+          param={ anim="claw_blank", duration=17,},
           target_role="players",
         },
       },
@@ -206,7 +192,7 @@ return {
         {
           apply_to_all_players=true,
           eventtype="pushanim",
-          param={ anim="claw_abandon_drop", duration=53,},
+          param={ anim="claw_abandon_drop", duration=53, interrupt=true, max_random_delay=4.0,},
           target_role="players",
         },
       },
@@ -221,7 +207,6 @@ return {
         },
       },
     },
-    runintoscene={  },
     setsheathed={
       {
         0,
@@ -234,18 +219,6 @@ return {
         },
       },
     },
-    setsoundparameter={  },
-    setvisible={  },
-    shakecamera={  },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
-    stopsound={  },
-    teleport={  },
-    titlecard={  },
-    uibosshealthbar={  },
     uihidehud={ { 0, 39, { eventtype="uihidehud", param={ duration=39,},},},},
   },
 }

@@ -119,10 +119,17 @@ function PowerDropManager:OnRoomComplete(data)
 
 	local worldmap = TheDungeon:GetDungeonMap()
 	local dungeonentrance = worldmap:IsCurrentRoomDungeonEntrance()
-	local seenpower = TheWorld:IsFlagUnlocked("wf_seen_room_bonus") -- FLAG
+	local any_player_has_had_power_before = false
+
+	for _, player_id in ipairs(TheNet:GetAllPlayerIDs()) do
+		if ThePlayerData:IsUnlocked(player_id, UNLOCKABLE_CATEGORIES.s.FLAG, "pf_has_taken_power") then
+			any_player_has_had_power_before = true
+			break
+		end
+	end
 
 	local should_spawn_power
-	should_spawn_power = ((dungeonentrance and seenpower)
+	should_spawn_power = ((dungeonentrance and any_player_has_had_power_before)
 		or data.enemy_highwater > 0)
 		and not worldmap:HasEnemyForCurrentRoom('boss')
 		and not self.spawned_reward
@@ -194,6 +201,7 @@ local function PickPowerDropSpawnPosition()
 end
 
 function PowerDropManager:PreparePowers()
+	TheSim:ProfilerPush("PowerDropManager:PreparePowers")
 	local worldmap = TheDungeon:GetDungeonMap()
 	local dungeonentrance = worldmap:IsCurrentRoomDungeonEntrance()
 	local reward = worldmap:GetRewardForCurrentRoom()
@@ -209,16 +217,18 @@ function PowerDropManager:PreparePowers()
 		self:PreparePowers_FabledShared()
 		self.shared_drop = true
 	end
+	TheSim:ProfilerPop()
 end
 
 function PowerDropManager:PreparePowers_Relic()
+	TheSim:ProfilerPush("PowerDropManager:PreparePowers_Relic")
 	local player_IDs = TheNet:GetPlayerIDsOnRoomChange()
 
 	local all_powers = {}
 	for _, playerID in ipairs(player_IDs) do
 		local playerGUID = TheNet:FindGUIDForPlayerID(playerID)
 		local player
-		if playerGUID then 
+		if playerGUID then
 			player = Ents[playerGUID]
 		end
 
@@ -237,9 +247,11 @@ function PowerDropManager:PreparePowers_Relic()
 	end
 
 	self.powers_data = all_powers
+	TheSim:ProfilerPop()
 end
 
 function PowerDropManager:PreparePowers_RelicShared()
+	TheSim:ProfilerPush("PowerDropManager:PreparePowers_RelicShared")
 	local player_IDs = TheNet:GetPlayerIDsOnRoomChange()
 	local double_spawner = self.rng:PickFromArray(player_IDs) -- one player will spawn two powers, so there are always num_players+1 powers. Which player idx should have two?
 
@@ -276,9 +288,11 @@ function PowerDropManager:PreparePowers_RelicShared()
 		end
 	end
 	self.powers_data = all_powers
+	TheSim:ProfilerPop()
 end
 
 function PowerDropManager:PreparePowers_FabledShared(power_drop_legend)
+	TheSim:ProfilerPush("PowerDropManager:PreparePowers_FabledShared")
 	local player_IDs = TheNet:GetPlayerIDsOnRoomChange()
 
 	-- Always spawn two fabled families.
@@ -300,7 +314,7 @@ function PowerDropManager:PreparePowers_FabledShared(power_drop_legend)
 	for i,power_family in ipairs(power_families) do
 		local playerGUID = TheNet:FindGUIDForPlayerID(player_IDs[1])
 		local fabled_spawning_player
-		if playerGUID then 
+		if playerGUID then
 			fabled_spawning_player = Ents[playerGUID]
 		end
 
@@ -328,7 +342,8 @@ function PowerDropManager:PreparePowers_FabledShared(power_drop_legend)
 		end
 
 		if spawning_player then
-			local power = self:GetNumRelics(spawning_player, 1, Power.Rarity.LEGENDARY)
+			local power_type = self.rng:WeightedChoice(TUNING.POWERS.FABLED_ROOM_NORMAL_CHANCE) -- Randomly pick an Epic or Legendary
+			local power = self:GetNumRelics(spawning_player, 1, Power.Rarity[power_type])
 			table.insert(all_powers[1], power[1])
 		end
 	end
@@ -352,10 +367,12 @@ function PowerDropManager:PreparePowers_FabledShared(power_drop_legend)
 	end
 
 	self.powers_data = all_powers
+	TheSim:ProfilerPop()
 	return power_families
 end
 
-function PowerDropManager:SpawnPowerItems(drop, position)
+function PowerDropManager:SpawnPowerItems(position)
+	TheSim:ProfilerPush("PowerDropManager:SpawnPowerItems")
 	local start_pos = position
 
 	local player_IDs = TheNet:GetPlayerIDsOnRoomChange()
@@ -365,11 +382,10 @@ function PowerDropManager:SpawnPowerItems(drop, position)
 		self:SpawnCircleOfPowers(self.powers_data[1], 1, 1, 1, start_pos, nil) -- Shared drop is all in one list, using PlayerID 1
 	else
 		-- Spawn individual powers grouped by player
-		local all_powers = {}
 		for i,playerID in ipairs(player_IDs) do
 			local playerGUID = TheNet:FindGUIDForPlayerID(playerID)
 			local player
-			if playerGUID then 
+			if playerGUID then
 				player = Ents[playerGUID]
 			end
 			if player then
@@ -379,6 +395,43 @@ function PowerDropManager:SpawnPowerItems(drop, position)
 	end
 
 	self.inst:StartUpdatingComponent(self)
+
+	TheSim:ProfilerPop()
+
+end
+
+function PowerDropManager:SpawnSpecificPowerItemsForPlayer(power_ids, player, position)
+	TheSim:ProfilerPush("PowerDropManager:SpawnSpecificPowerItemsForPlayer")
+
+
+	if player then
+		local playerID = player.Network:GetPlayerID()
+
+		local picks = {}
+		for i,id in ipairs(power_ids) do
+			local def = Power.FindPowerByName(id)
+			table.insert(picks, { name = id, slot = def.slot, def.rarity, lucky = false })
+		end
+
+		if not self.powers_data then
+			self.powers_data = {}
+		end
+
+		self.powers_data[playerID] = picks
+		self.spawned_poweritems[playerID] = {}
+		self.num_powers_to_start[playerID] = #power_ids
+		self.choices_allowed[playerID] = 1
+
+		local start_pos = position
+		self:SpawnCircleOfPowers(self.powers_data[playerID], playerID, 1, 1, start_pos, player, 2)
+	end
+
+	-- TODO @chrisp #power - this doesn't look right to me. If there was no player, nothing happened, and there is no
+	-- reason to start updating, right?
+	self.inst:StartUpdatingComponent(self)
+
+	TheSim:ProfilerPop()
+
 end
 
 local TEMP_SPAWNER_PER_PLAYER =
@@ -441,9 +494,17 @@ local radius_by_dropcount_shared =
 	6.5,
 }
 
-local USE_LOOTDROP_LOCATION = true
+function PowerDropManager:SpawnCircleOfPowers(powers, player_id, player_index, player_count, start_pos, assigned_player, radius_modifier)
+	-- print("--- POWERDROPMANAGER PRINT START ---")
+	-- print("Powers:")
+	-- dumptable(powers)
+	-- print("player_id:", player_id)
+	-- print("player_index:", player_index)
+	-- print("player_count:", player_count)
+	-- print("start_pos:", start_pos)
+	-- print("assigned_player:", assigned_player)
+	-- print("--- POWERDROPMANAGER PRINT END ---")
 
-function PowerDropManager:SpawnCircleOfPowers(powers, player_id, player_index, player_count, start_pos, assigned_player)
 	-- Store a table of power items associated with this player idx.
 	if not self.spawned_poweritems[player_id] then
 		self.spawned_poweritems[player_id] = {}
@@ -453,11 +514,11 @@ function PowerDropManager:SpawnCircleOfPowers(powers, player_id, player_index, p
 	local startangle_data = startangle_by_dropcount
 	local angle_per_spawn = 360 / #powers
 
-	local dungeonentrance = TheDungeon:GetDungeonMap():IsCurrentRoomDungeonEntrance()
-
 	for i, drop in ipairs(powers) do
-		local spawn_i = i - 1
 		local circle_radius = radius_data[#powers] or 8 -- Powers up to 5 are designed above -- so if we're using the default, we have a LOT of powers, so use a big radius.
+		if radius_modifier then
+			circle_radius = circle_radius + radius_modifier
+		end
 		local start_angle = (startangle_data[#powers] or 0) / #powers -- For lower power counts, we want to design the angle to create better shapes. Otherwise, we don't care.
 
 		local poweritem = SpawnPrefab("power_pickup_single", self.inst)
@@ -470,6 +531,8 @@ function PowerDropManager:SpawnCircleOfPowers(powers, player_id, player_index, p
 		if assigned_player then
 			poweritem.components.singlepickup:AssignToPlayer(assigned_player)
 		end
+
+		printf("> PowerDropManager Spawning [%s] for player [%s]", drop.name or "nil", assigned_player or "ALL")
 
 		poweritem.AnimState:SetScale(1.25, 1.25)
 
@@ -504,31 +567,69 @@ function PowerDropManager:SpawnCircleOfPowers(powers, player_id, player_index, p
 end
 
 function PowerDropManager:OnUpdate(dt)
-	if TheNet:IsHost() then
-		local keep_updating = false
+	local keep_updating = false
 
-		if self.shared_drop then
-			-- In this mode, all the powers are in index i=1. Not indexed by players!
+	if self.shared_drop then
+		-- In this mode, all the powers are in index i=1. Not indexed by players!
 
-			local player_IDs = TheNet:GetPlayerIDsOnRoomChange()
+		local player_IDs = TheNet:GetPlayerIDsOnRoomChange()
 
-			local all_powers = {}
-			for _, playerID in ipairs(player_IDs) do
-				local playerGUID = TheNet:FindGUIDForPlayerID(playerID)
-				local player
-				if playerGUID then 
-					player = Ents[playerGUID]
+		for _, playerID in ipairs(player_IDs) do
+			local playerGUID = TheNet:FindGUIDForPlayerID(playerID)
+			local player
+			if playerGUID then
+				player = Ents[playerGUID]
+			end
+
+			if player and player.components.powermanager then
+				if player.components.powermanager:CanPickUpPowerDrop() then
+					keep_updating = true
 				end
+			end
+		end
 
-				if player and player.components.powermanager then
-					if player.components.powermanager:CanPickUpPowerDrop() then
-						keep_updating = true
-					end
+		if not keep_updating then
+			for i,poweritem in ipairs(self.spawned_poweritems[1]) do
+				if poweritem ~= nil and poweritem:IsValid() then
+					-- Set them to be uninteractable to prevent last-minute interactions,
+					-- Then queue a removal. Don't remove them right away, because the one you chose should disappear first, then the others should follow.
+					poweritem.components.interactable:SetInteractCondition_Never()
+					poweritem:DoTaskInAnimFrames(12, function()
+						if poweritem ~= nil and poweritem:IsValid() and not poweritem.sg:HasStateTag("despawning") then
+							poweritem:PushEvent("despawn")
+						end
+					end)
+				end
+			end
+		end
+	else
+		-- Players are picking individually.
+
+		for playerid, player_items in pairs(self.spawned_poweritems) do
+
+			-- Loop through all the power items spawned for this player, and see if they still exist.
+			-- If not, it means they've been picked up: stop tracking them.
+
+			local remaining_poweritems = {}
+			for _, poweritem in ipairs(player_items) do
+				if poweritem ~= nil and poweritem:IsValid() and not poweritem.sg:HasStateTag("despawning") then
+					-- If we've picked one up, then it will be despawning -- at this point we should already consider it 'taken'
+					table.insert(remaining_poweritems, poweritem)
 				end
 			end
 
-			if not keep_updating then
-				for i,poweritem in ipairs(self.spawned_poweritems[1]) do
+			-- Then, see how many powers have been taken away.
+			local choices_made = self.num_powers_to_start[playerid] - #remaining_poweritems
+			local choices_allowed = self.choices_allowed[playerid]
+
+			-- Check to see if this player is still around. If not, then we'll clear out any remaining poweritems.
+			local playerGUID = TheNet:FindGUIDForPlayerID(playerid)
+			local player = Ents[playerGUID]
+			local player_exists = player ~= nil and player:IsValid()
+
+			-- If they've made enough choices already, then clear out all the remaining poweritems.
+			if choices_made >= choices_allowed or (not player_exists) then
+				for i, poweritem in ipairs(remaining_poweritems) do
 					if poweritem ~= nil and poweritem:IsValid() then
 						-- Set them to be uninteractable to prevent last-minute interactions,
 						-- Then queue a removal. Don't remove them right away, because the one you chose should disappear first, then the others should follow.
@@ -540,56 +641,15 @@ function PowerDropManager:OnUpdate(dt)
 						end)
 					end
 				end
-			end
-		else
-			-- Players are picking individually.
-
-			for playerid, player_items in pairs(self.spawned_poweritems) do
-
-				-- Loop through all the power items spawned for this player, and see if they still exist.
-				-- If not, it means they've been picked up: stop tracking them.
-
-				local remaining_poweritems = {}
-				for _, poweritem in ipairs(player_items) do
-					if poweritem ~= nil and poweritem:IsValid() and not poweritem.sg:HasStateTag("despawning") then
-						-- If we've picked one up, then it will be despawning -- at this point we should already consider it 'taken'
-						table.insert(remaining_poweritems, poweritem)
-					end
-				end
-
-				-- Then, see how many powers have been taken away.
-				local choices_made = self.num_powers_to_start[playerid] - #remaining_poweritems
-				local choices_allowed = self.choices_allowed[playerid]
-
-				-- Check to see if this player is still around. If not, then we'll clear out any remaining poweritems.
-				local playerGUID = TheNet:FindGUIDForPlayerID(playerid)
-				local player = Ents[playerGUID]
-				local player_exists = player ~= nil and player:IsValid()
-
-				-- If they've made enough choices already, then clear out all the remaining poweritems.
-				if choices_made >= choices_allowed or (not player_exists) then
-					for i, poweritem in ipairs(remaining_poweritems) do
-						if poweritem ~= nil and poweritem:IsValid() then
-							-- Set them to be uninteractable to prevent last-minute interactions,
-							-- Then queue a removal. Don't remove them right away, because the one you chose should disappear first, then the others should follow.
-							poweritem.components.interactable:SetInteractCondition_Never()
-							poweritem:DoTaskInAnimFrames(12, function()
-								if poweritem ~= nil and poweritem:IsValid() and not poweritem.sg:HasStateTag("despawning") then
-									poweritem:PushEvent("despawn")
-								end
-							end)
-						end
-					end
-				else
-					self.spawned_poweritems[playerid] = remaining_poweritems
-					keep_updating = true
-				end
+			else
+				self.spawned_poweritems[playerid] = remaining_poweritems
+				keep_updating = true
 			end
 		end
+	end
 
-		if not keep_updating then
-			self.inst:StopUpdatingComponent(self)
-		end
+	if not keep_updating then
+		self.inst:StopUpdatingComponent(self)
 	end
 end
 
@@ -699,6 +759,27 @@ function PowerDropManager:FilterByPlayerCount(powers)
 	end)
 end
 
+function PowerDropManager:FilterByAllRunCount(powers, player)
+	-- remove stuff that not everybody has done enough runs to see
+	return lume.filter(powers, function(def)
+		local all_players_enough_runs = true
+		for _, player in ipairs(AllPlayers) do
+			if player.components.progresstracker:GetValue("total_num_runs") < def.minimum_runs then
+				all_players_enough_runs = false
+				break
+			end
+		end
+		return all_players_enough_runs
+	end)
+end
+
+function PowerDropManager:FilterByRunCount(powers, player)
+	-- remove stuff that we haven't done enough runs to see
+	return lume.filter(powers, function(def)
+		return player.components.progresstracker:GetValue("total_num_runs") >= def.minimum_runs
+	end)
+end
+
 function PowerDropManager:FilterBySeen(powers, player)
 	return lume.filter(powers, function(def) return not TheDungeon.progression.components.powerroller:HasSeenPower(player, def) end)
 end
@@ -740,7 +821,7 @@ end
 function PowerDropManager:FilterByAnyEligible(powers)
 	-- if any player can get this power, show it to all players
 	return lume.filter(powers, function(def)
-		if not def.required_tags then
+		if not def.required_tags and not def.exclusive_tags then
 			return true
 		else
 			local any_eligible = false
@@ -848,6 +929,7 @@ function PowerDropManager:CollectFabledRelicDrops(player, family)
 
 	powers = self:FilterByCategory(powers, TEMP_FAMILY_TO_CATEGORY[family])
 	powers = self:FilterByEligible(powers, player)
+	powers = self:FilterByRunCount(powers, player)
 	powers = self:FilterByPlayerCount(powers)
 	return powers
 end
@@ -889,6 +971,7 @@ function PowerDropManager:CollectRelicDrops(player)
 	powers = self:FilterBySeen(powers, player)
 	-- powers = self:FilterByAnyEligible(powers)
 	powers = self:FilterByEligible(powers, player)
+	powers = self:FilterByRunCount(powers, player)
 	powers = self:FilterByPlayerCount(powers)
 	TheLog.ch.PowerDropManager:printf("eligible powers before unlocked: %d", #powers)
 	powers = self:FilterByUnlocked(powers, player)
@@ -899,6 +982,9 @@ end
 function PowerDropManager:GetNumRelics(player, num, forced_rarity)
 	-- TheLog.ch.PowerDropManager:printf("PowerDropManager:GetNumRelics(%s, %s, %s)", player, num, forced_rarity)
 	local options = self:CollectRelicDrops(player)
+	if not forced_rarity and TheSaveSystem.cheats:GetValue("force_drop_powers") then
+		forced_rarity = Power.Rarities.s.LEGENDARY
+	end
 	num = math.min(#options, num)
 	TheLog.ch.PowerDropManager:printf("GetNumRelics num=%d options#=%d", num, #options)
 	local picks = {}
@@ -927,6 +1013,7 @@ function PowerDropManager:CollectSkillDrops(player)
 	powers = self:FilterBySeen(powers, player)
 	-- powers = self:FilterByAnyEligible(powers)
 	powers = self:FilterByEligible(powers, player)
+	powers = self:FilterByRunCount(powers, player)
 	powers = self:FilterByPlayerCount(powers)
 	powers = self:FilterByUnlocked(powers, player)
 	return powers
@@ -1019,6 +1106,14 @@ function PowerDropManager:_BuildMarketPowerTable()
 			rarity_market = self:FilterByDroppable(rarity_market)
 			rarity_market = self:FilterByAnyEligible(rarity_market)
 			rarity_market = self:FilterByPlayerCount(rarity_market)
+			rarity_market = self:FilterByAllRunCount(rarity_market)
+
+			-- TODO @chrisp #powers - this'd prevent fabled relics from all getting filtered out, but doesn't obey the
+			-- notion of "families"
+			-- We don't require fabled relics to be unlocked.
+			-- if power_type ~= Power.Types.FABLED_RELIC then
+			-- 	rarity_market = self:FilterByAnyUnlocked(rarity_market)
+			-- end
 			rarity_market = self:FilterByAnyUnlocked(rarity_market)
 
 			-- Map to names.

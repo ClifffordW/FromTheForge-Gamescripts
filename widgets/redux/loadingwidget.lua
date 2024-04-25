@@ -63,7 +63,7 @@ function LoadingWidget:UpdateVisual(dt)
 	end
 	self.loading_widget:SetGlyphColor(243/255, 244/255, 243/255, level)
 
-	-- TODO(dbriscoe): Would be better to make loads hold the last frame so
+	-- TODO(ui): Would be better to make loads hold the last frame so
 	-- we can have a clean transition. Or remove world transitions between
 	-- dungeon rooms.
 	-- Black to match colour before we draw.

@@ -33,11 +33,10 @@ local function TrySpawnNPCs(inst)
 			TheLog.ch.Quest:print("Failed to find npc to spawn.")
 			return
 		end
-
 		-- printf("SpawnNpcFromQuests: %s/ %s", best_quest, npc_actor)
-		if npc_actor.is_reservation and not inst.components.npchome:HasAnyNpcs() then
+		if npc_actor.is_reservation and not inst.components.npchome:GetNPC() then
 			local ent = npc_actor:SpawnReservation()
-			inst.components.npchome:AddNpc(ent)
+			inst.components.npchome:SetAsHomeForNPC(ent)
 		end
 	end
 	-- end
@@ -47,7 +46,7 @@ local function SpawnNpcFromQuests(inst)
 	if not TheNet:IsHost() then
 		return
 	end
-	-- HACK(dbriscoe): Delay to ensure quest system has loaded. Do this from
+	-- HACK(quest): Delay to ensure quest system has loaded. Do this from
 	-- with a master quest? On QuestCentral?
 	inst:DoTaskInTime(0.1, TrySpawnNPCs)
 end

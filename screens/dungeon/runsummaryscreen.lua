@@ -1,6 +1,7 @@
 local Screen = require "widgets.screen"
 local Widget = require "widgets.widget"
-local PlayerDungeonSummary = require "widgets.ftf.playerdungeonsummary"
+local PlayerDungeonSummary = require "widgets.ftf.newplayerdungeonsummary"
+local HuntProgressWidget = require "widgets/ftf/accoladewidgets/huntprogresswidget"
 local templates = require "widgets.ftf.templates"
 local fmodtable = require "defs.sound.fmodtable"
 local Equipment = require("defs.equipment")
@@ -8,10 +9,16 @@ local lume = require "util.lume"
 local iterator = require "util.iterator"
 local Consumable = require("defs.consumable")
 local MetaProgress = require("defs.metaprogression")
+local Mastery = require "defs.mastery.mastery"
 
 local RunSummaryScreen =  Class(Screen, function(self, data)
 	Screen._ctor(self, "RunSummaryScreen")
-	self:SetAudioSnapshotOverride(fmodtable.Event.PartialOverlay_LP)
+
+	-- Required to load the decoration icons for the reward tooltip
+	TheSim:LoadPrefabs({ GroupPrefab("deps_ui_decor") })
+	self.inst:ListenForEvent("onremove", function() TheSim:UnloadPrefabs({ GroupPrefab("deps_ui_decor") }) end)
+
+	self:SetAudioCategory(Screen.AudioCategory.s.PartialOverlay)
 	self:PushAudioParameterWhileOpen(fmodtable.GlobalParameter.g_isRunSummaryScreen)
 
 	self.data = data
@@ -34,7 +41,13 @@ local RunSummaryScreen =  Class(Screen, function(self, data)
 
     self.root = self:AddChild(Widget())
 
+	self.progress_widget = self.root:AddChild(HuntProgressWidget())
+		:LayoutBounds("center", "bottom", self)
+		:Offset(0, -80)
+		:Hide()
+
 	self.continue_btn = self.root:AddChild(templates.Button(STRINGS.UI.HUD.CONTINUE))
+		:SetSize(BUTTON_W * 1.1, BUTTON_H) -- fit "waiting for players"
 		:SetOnClick(function() self:OnClickContinue() end)
 		:SetScale(0.95)
 		:SetNormalScale(0.95)
@@ -81,8 +94,6 @@ local RunSummaryScreen =  Class(Screen, function(self, data)
 	-- before they are shown on screen. The below snapshot suppresses them
 	--TheAudio:StartFMODSnapshot(fmodtable.Snapshot.Mute_EndOfRun_Meters)
 
-	self:EnableFocusBracketsForGamepad()
-
 	self.default_focus = self.continue_btn
 end)
 
@@ -105,16 +116,21 @@ end
 
 function RunSummaryScreen:OnClickContinue()
 	if not self.showing_summary then
+		TheFrontEnd:GetSound():KillAutoStopSounds() -- kill lingering meter sounds from hunt progress or XP or masteries
 		-- Advance to summary
+		self.progress_widget:Hide()
 		self.showing_summary = true
 		self.continue_btn:Disable()
 		self.continue_btn:SetText(STRINGS.UI.HUD.TO_TOWN)
-		self.continue_btn:SetControlDownSound(fmodtable.Event.ui_input_up_confirm_save)
 
 		-- TODO: each panel should have a "continue" button ---- iterate through all local players, for now
 		for i,player in ipairs(self.players) do
 			if player:IsLocal() then
 				self.requested_panel_states[i] = "SUMMARY"
+			end
+			
+			if player:IsPickingCharacter() then
+				self.requested_panel_states[i] = "DONE"
 			end
 		end
 	else
@@ -124,14 +140,14 @@ function RunSummaryScreen:OnClickContinue()
 		end
 		self.continue_btn:Disable()
 
-		local players = TheNet:GetLocalPlayerList()
-		for i, player in ipairs(players) do
+		for i, player in ipairs(TheNet:GetLocalPlayerList()) do
 			self.requested_panel_states[player+1] = "DONE" -- Player is the Player ID, which starts at 0
 		end
 
 		-- Use an updater that calls CloseScreen when all players are done
 		self:RunUpdater(
 			Updater.Series({
+				Updater.Do(function() TheFrontEnd:GetSound():KillAutoStopSounds() end), -- kill remaining mastery meter sounds
 				Updater.Wait(0.85),  -- Wait a bit to let the panels furl fully back up.
 				Updater.Do(function() self:SendLocalPlayersDone() end),
 				Updater.While(function() return not TheNet:AreAllPlayersDone() end),
@@ -143,16 +159,14 @@ end
 function RunSummaryScreen:SendLocalPlayersDone()
 	-- Currently there is just one continue button for all local players.
 	-- If this ever changes, each player can be individually marked as 'complete'
-	local players = TheNet:GetLocalPlayerList()
-
-	for _, player in ipairs(players) do
+	for _, player in ipairs(TheNet:GetLocalPlayerList()) do
 		TheNet:SetPlayerDone(player, 1)	-- 1 is just a value. Ignored.
 	end
 end
 
 function RunSummaryScreen:CloseScreen()
-	self:_StopAudio()
 	TheFrontEnd:PopScreen(self)
+	TheWorld:PushEvent("run_summary_flow", false)
 	TheWorld:PushEvent("end_run_sequence", not self.is_defeat)
 end
 
@@ -161,6 +175,8 @@ function RunSummaryScreen:_ShowRequestedPage(playernumber)
 
 	if requested_page == "SUMMARY" then
 		self:_ShowSummary(playernumber)
+	elseif requested_page == "PROGRESS" then
+		self:_ShowProgress(playernumber)
 	elseif requested_page == "REWARDS" then
 		self:_ShowRewards(playernumber)
 	elseif requested_page == "LOADING" then
@@ -171,13 +187,36 @@ function RunSummaryScreen:_ShowRequestedPage(playernumber)
 end
 
 function RunSummaryScreen:_ShowLoading(playernumber)
-	local sequence = Updater.Parallel()
-
 	self.current_panel_states[playernumber] = "LOADING"
 
 	local panel = self.player_panels_container.children[playernumber]
 	panel:SetMultColorAlpha(1)
 	panel:PrepareToAnimate()
+end
+
+function RunSummaryScreen:_ShowProgress(playernumber)
+	self.current_panel_states[playernumber] = "PROGRESS"
+
+	self:RunUpdater(Updater.Series{
+		Updater.Do( function() 
+			--no longer loading, but waiting for the progress to finish
+			for i, player in ipairs(self.players) do
+				local panel = self.player_panels_container.children[i]
+				panel:HideLoading()
+			end
+			self.progress_widget:Show()
+		end),
+		Updater.While( function() 
+			return self.progress_widget:IsAnimationComplete() == false 
+		end ),
+		Updater.Do( function() 
+			for i,player in ipairs(self.players) do
+				if player:IsLocal() then
+					self.requested_panel_states[i] = "REWARDS"
+				end
+			end
+		end)
+	})
 end
 
 -- Sequentially show the panels switching to rewards
@@ -197,20 +236,6 @@ function RunSummaryScreen:_ShowRewards(playernumber)
 		end)
 	})
 
-	-- TODO OLD: sequence them in with a delay. Getting working for networking now, bring back later if can
-	-- for k,v in ipairs(self.player_panels_container.children) do
-	-- 	v:SetMultColorAlpha(0)
-	-- 	v:PrepareToAnimate()
-	-- 	sequence:Add(Updater.Series{
-	-- 		Updater.Wait(current_delay),
-	-- 		Updater.Do(function()
-	-- 			v:SetMultColorAlpha(1)
-	-- 			v:AnimateInRewards()
-	-- 		end)
-	-- 	})
-	-- 	current_delay = current_delay + delay_per_panel
-	-- end
-
 	self:RunUpdater(Updater.Series{
 		sequence,
 		Updater.Wait(.5),
@@ -227,6 +252,7 @@ function RunSummaryScreen:_ShowSummary(playernumber)
 	local current_delay = 0
 
 	self.current_panel_states[playernumber] = "SUMMARY"
+	self.progress_widget:Hide()
 
 	local panel = self.player_panels_container.children[playernumber]
 	sequence:Add(Updater.Series{
@@ -263,12 +289,6 @@ function RunSummaryScreen:_ShowDone(playernumber)
 	panel:AnimateOutDone()
 end
 
-function RunSummaryScreen:_StopAudio()
-	if self.is_defeat then
-		TheWorld.components.ambientaudio:SetEveryoneDead(false)
-	end
-end
-
 function RunSummaryScreen:_CollectUIData(player, num)
 	local display_data = {}
 	local dungeon_data = player.components.dungeontracker
@@ -301,7 +321,7 @@ function RunSummaryScreen:_CollectUIData(player, num)
 	---------- RefreshPuppet() ----------
 	-- Already synced, so we don't need to display over the network.
 	-- display_data.puppet = {}
-	-- display_data.puppet.character_data = player.components.charactercreator:OnSave()
+	-- display_data.puppet.character_data = player.components.charactercreator:SaveToTable()
 	-- display_data.puppet.inventory_data = player.components.inventory:OnSave()
 
 	---------- RefreshStats() ----------
@@ -336,17 +356,15 @@ function RunSummaryScreen:_CollectUIData(player, num)
 	-- Deaths
 	display_data.stats.total_deaths = dungeon_data:GetValue("total_deaths") or 0
 
-	if reward_data then
-		-- Run time
-		local duration_millis = reward_data.run_time or 0
-		local show_hours = false
-		display_data.stats.duration_millis = duration_millis
-		display_data.stats.duration_show_hours = show_hours
+	-- Run time
+	local duration_millis = reward_data and reward_data.run_time or 0
+	local show_hours = false
+	display_data.stats.duration_millis = duration_millis
+	display_data.stats.duration_show_hours = show_hours
 
-		-- Run completion amount
-		local rooms_discovered = reward_data.rooms_discovered or 0
-		display_data.stats.rooms_discovered = rooms_discovered
-	end
+	-- Run completion amount
+	local rooms_discovered = reward_data and reward_data.rooms_discovered or 0
+	display_data.stats.rooms_discovered = rooms_discovered
 
 
 	---------- RefreshBuild() ----------
@@ -356,7 +374,7 @@ function RunSummaryScreen:_CollectUIData(player, num)
 	---------- RefreshMetaProgress() ----------
 
 	if reward_data then
-		local def = MetaProgress.FindProgressByName(TheDungeon:GetDungeonMap().data.region_id)
+		local def = MetaProgress.FindProgressByName(TheDungeon:GetDungeonMap().data.location_id)
 		display_data.biome_exploration = {}
 
 		local meta_reward = reward_data.biome_exploration.meta_reward
@@ -368,6 +386,12 @@ function RunSummaryScreen:_CollectUIData(player, num)
 		-- Instead, we can tell if you leveled & what level you were, then get the reward from that.
 
 		display_data.biome_exploration.meta_reward_log = reward_data.biome_exploration.meta_reward_log
+	end
+
+	---------- RefreshMasteries() ----------
+	display_data.masteries = {}
+	for name, tbl in pairs(dungeon_data:GetValue("mastery_progressed")) do
+		table.insert(display_data.masteries, { name = name, starting_progress = tbl.starting_progress, current_progress = tbl.current_progress} )
 	end
 
 	---------- RefreshLoot() ----------
@@ -393,7 +417,7 @@ function RunSummaryScreen:_CollectUIData(player, num)
 	local page = self.requested_panel_states[num]
 
 	if page == "LOADING" then
-		display_data.dynamic.requested_page = "REWARDS"
+		display_data.dynamic.requested_page = "PROGRESS"
 	else
 		display_data.dynamic.requested_page = page
 	end
@@ -428,6 +452,7 @@ function RunSummaryScreen:OnUpdate(dt)
 
 			local display_data = {} -- Send an empty table in case of error, and make sure that the summarywidget can handle nil data
 			local islocal = player:IsLocal()
+			local is_picking_character = player:IsPickingCharacter()
 			if player:IsLocal() then
 				display_data = self:_CollectUIData(player, i)
 				TheNet:SetPlayerUIData(playerID, display_data)
@@ -447,6 +472,12 @@ function RunSummaryScreen:OnUpdate(dt)
 				self.requested_panel_states[i] = "LOADING"
 			end
 
+			if is_picking_character and self.requested_panel_states[i] ~= "DONE" then
+				self.requested_panel_states[i] = "DONE"
+				--self.continue_btn:Hide()
+				TheNet:SetPlayerDone(playerID, 1)
+			end
+			
 			local showing_correct_page = self.requested_panel_states[i] == self.current_panel_states[i]
 			if not showing_correct_page then
 				self:_ShowRequestedPage(i)
@@ -472,21 +503,20 @@ function RunSummaryScreen:Exit()
 	end
 end
 
-function RunSummaryScreen:OnBecomeActive()
-	self._base.OnBecomeActive(self)
-	if self.is_defeat then
-		TheWorld.components.ambientaudio:SetEveryoneDead(true)
-	end
+function RunSummaryScreen:OnOpen()
+	self._base.OnOpen(self)
+	TheWorld:PushEvent("run_summary_flow", true)
 
 	self:AnimateIn()
 	TheDungeon.HUD:AnimateOut()
 end
 
-function RunSummaryScreen:OnBecomeInactive()
-	self._base.OnBecomeInactive(self)
-	-- Debug Flow: If you cheat health on this screen, restore previous state.
-	self:_StopAudio()
-	TheDungeon.HUD:AnimateIn()
+function RunSummaryScreen:OnClose()
+	self._base.OnClose(self)
+	if TheDungeon.HUD then
+		-- Debug Flow: If you cheat health on this screen, restore previous state.
+		TheDungeon.HUD:AnimateIn()
+	end
 end
 
 function RunSummaryScreen:AnimateIn()
@@ -504,30 +534,83 @@ function RunSummaryScreen:AnimateIn()
 		Updater.Wait(0.66),
 		Updater.Do(function()
 			self.player_panels_container:Show()
-			-- Restore focus we lost from hiding.
 
 			self.waitingtostart = false
 
-			self.default_focus:SetFocus()
+			-- Restore focus we lost from hiding.
+			self:SetDefaultFocus()
+			self:EnableFocusBracketsForGamepad()
+
 			self:StartUpdating()
 		end)
 	})
 	return self
 end
 
-local function _FakeRunData(player)
-	local loot_prefabs = {
-		"drop_cabbageroll_skin",
-		"drop_cabbageroll_skin",
-		"drop_blarmadillo_hide",
-		"drop_blarmadillo_hide",
-		"drop_treemon_arm",
-		"drop_zucco_skin",
-	}
+local fake_data = {
+	{
+		loot_prefabs = {
+			"drop_cabbageroll_skin",
+			"drop_cabbageroll_skin",
+			"drop_blarmadillo_hide",
+			"drop_blarmadillo_hide",
+			"drop_treemon_arm",
+			"drop_zucco_skin",
+		},		
 
-	for i, loot in ipairs(loot_prefabs) do
+		masteries = 
+		{
+			{ "hammer_air_spin", 2 },
+			{ "hammer_counterattack", 10 },
+			{ "hammer_heavy_slam", 5 },
+		}
+	},
+	{
+		loot_prefabs = {
+			"drop_treemon_arm",
+			"drop_zucco_skin",
+		},		
+		masteries = 
+		{
+			{ "hammer_air_spin", 20 },
+			{ "hammer_counterattack", 2 },
+			{ "hammer_heavy_slam", 5 }
+		}
+	},
+	{
+		loot_prefabs = {
+			"drop_cabbageroll_skin",
+			"drop_cabbageroll_skin",
+			"drop_blarmadillo_hide",
+			"drop_blarmadillo_hide",
+			"drop_treemon_arm",
+			"drop_zucco_skin",
+		},		
+	},
+	{
+		masteries = 
+		{
+			{ "hammer_air_spin", 20 },
+			{ "hammer_heavy_slam", 5 }
+		}
+	}
+}
+
+local function _FakeRunData(player, player_num)
+	local data = fake_data[player_num]
+
+	for i, loot in ipairs(data.loot_prefabs or {}) do
 		local ent = c_spawn(loot)
 		player.components.lootvacuum:CollectLoot(ent)
+	end
+
+	for i, v in ipairs(data.masteries or {}) do 
+		local mastery_inst = player.components.masterymanager:GetMastery(Mastery.Items.WEAPON_MASTERY[v[1]])
+		if mastery_inst == nil then
+			player.components.masterymanager:AddMasteryByDef(Mastery.Items.WEAPON_MASTERY[v[1]])
+			mastery_inst = player.components.masterymanager:GetMastery(Mastery.Items.WEAPON_MASTERY[v[1]])
+		end
+		mastery_inst:DeltaProgress(v[2])
 	end
 
 	local powers = {
@@ -540,6 +623,45 @@ local function _FakeRunData(player)
 		"pwr_sanguine_power",
 		"pwr_feedback_loop",
 		"pwr_lasting_power",
+		"pwr_optimism",
+		"pwr_streaking",
+	}
+
+	for i, power in ipairs(powers) do
+		c_power(power)
+	end
+end
+
+local function _FakeRunDataForAudio(player, player_num)
+	player.components.masterymanager:DEBUG_ResetMasteries()
+	local data = fake_data[player_num]
+
+	for i, loot in ipairs(data.loot_prefabs or {}) do
+		local ent = c_spawn(loot)
+		player.components.lootvacuum:CollectLoot(ent)
+	end
+
+	for i, v in ipairs(data.masteries or {}) do
+		local mastery_inst = player.components.masterymanager:GetMastery(Mastery.Items.WEAPON_MASTERY[v[1]])
+		if mastery_inst == nil then
+			player.components.masterymanager:AddMasteryByDef(Mastery.Items.WEAPON_MASTERY[v[1]])
+			mastery_inst = player.components.masterymanager:GetMastery(Mastery.Items.WEAPON_MASTERY[v[1]])
+		end
+		mastery_inst:DeltaProgress(math.random(1, 100))
+	end
+
+	local powers = {
+		"pwr_sting_like_a_bee",
+		"pwr_advantage",
+		"pwr_salted_wounds",
+		"pwr_heal_on_crit",
+		"pwr_crit_knockdown",
+		"pwr_konjur_on_crit",
+		"pwr_sanguine_power",
+		"pwr_feedback_loop",
+		"pwr_lasting_power",
+		"pwr_optimism",
+		"pwr_streaking",
 	}
 
 	for i, power in ipairs(powers) do
@@ -548,8 +670,14 @@ local function _FakeRunData(player)
 end
 
 function RunSummaryScreen.DebugConstructScreen(cls, player)
-	_FakeRunData(player)
-	local run_data = TheDungeon.progression.components.runmanager:GetRunData(1)
+	local i = 1
+	for _,player in ipairs(TheNet:GetAllPlayers()) do
+		if player:IsLocal() then
+			_FakeRunData(player, i)
+			i = i + 1
+		end
+	end
+	local run_data = TheDungeon.progression.components.runmanager:ApplyRunData(1)
 	return RunSummaryScreen(run_data)
 end
 

@@ -7,7 +7,6 @@ return {
   scene_duration=175.0,
   scene_init={  },
   timelines={
-    attachswipefx={  },
     blurscreen={
       {
         32,
@@ -42,11 +41,6 @@ return {
         },
       },
     },
-    cameradist={  },
-    cameraoffset={  },
-    camerapitch={  },
-    cameratargetbegin={  },
-    cameratargetend={  },
     cameratargetoverride={
       {
         0,
@@ -57,7 +51,6 @@ return {
         },
       },
     },
-    detachswipefx={  },
     disableplayinput={ { 0, 154, { eventtype="disableplayinput", param={ duration=154,},},},},
     facing={
       {
@@ -70,8 +63,6 @@ return {
         },
       },
     },
-    fade={  },
-    gameevent={  },
     gotostate={
       {
         30,
@@ -93,21 +84,6 @@ return {
       },
     },
     letterbox={ { 0, 154, { eventtype="letterbox", param={ duration=154,},},},},
-    levelmusicstop={
-      {
-        0,
-        0,
-        {
-          eventtype="levelmusicstop",
-          is_unedited=true,
-          param={ duration=0,},
-          target_role="lead",
-        },
-      },
-    },
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
     musicbossstart={
       {
         170,
@@ -118,10 +94,6 @@ return {
         },
       },
     },
-    musicbossstop={  },
-    pausesg={  },
-    playcountedsound={  },
-    playfoleysound={  },
     playsound={
       {
         0,
@@ -136,11 +108,7 @@ return {
         175,
         {
           eventtype="playsound",
-          param={
-            autostop=true,
-            soundevent="Snapshot_BossIntro_LP",
-            stopatexitstate=true,
-          },
+          param={ autostop=true, soundevent="Snapshot_BossIntro_LP", stopatexitstate=true,},
           target_role="lead",
         },
       },
@@ -158,12 +126,6 @@ return {
         },
       },
     },
-    playsound_window={  },
-    pushanim={  },
-    runintoscene={  },
-    setsheathed={  },
-    setsoundparameter={  },
-    setvisible={  },
     shakecamera={
       {
         31,
@@ -198,25 +160,17 @@ return {
         },
       },
     },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
-    stopsound={  },
-    teleport={  },
     titlecard={
       {
         30,
         141,
         {
           eventtype="titlecard",
-          param={ duration=111, titlekey="yammo_elite",},
+          param={ duration=111, titlekey="yammo_miniboss",},
           target_role="lead",
         },
       },
     },
-    uibosshealthbar={  },
     uihidehud={ { 0, 155, { eventtype="uihidehud", param={ duration=155,},},},},
   },
 }

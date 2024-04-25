@@ -46,6 +46,19 @@ function QuestralActor:FillReservation(inst)
     if inst == self.inst then
         -- Already filled reservation with the same entity. Don't need to rerun.
         return
+    elseif not inst:IsValid() then
+        TheLog.ch.Quest:printf("Warning: FillReservation on [%s] called with invalid entity=[%s].  Ignoring...\n%s", self, inst, debugstack())
+        return
+    elseif TheWorld and TheWorld.is_destroying then
+        TheLog.ch.Quest:printf("Warning: FillReservation on [%s] called while destroying world.  Ignoring...\n%s", self, debugstack())
+        return
+    end
+
+    -- fallback to cover when we don't know why this happens
+    if self.inst and not self.inst:IsValid() then
+        TheLog.ch.Quest:printf("Warning: FillReservation on [%s] has invalid self.inst=[%s] for unknown reason.  Force resetting...\n%s", self, self.inst, debugstack())
+        self.inst = nil
+        self.is_reservation = true
     end
 
     if not self.is_reservation then
@@ -60,6 +73,7 @@ function QuestralActor:FillReservation(inst)
     self.is_reservation = false
 
     self._ononremove = function(source)
+        TheLog.ch.QuestSpam:printf("Removing reservation for self.inst=[%s]\n%s", self.inst,debugstack())
         self.inst = nil
         self.is_reservation = true
     end
@@ -81,10 +95,6 @@ end
 function QuestralActor:FillOutQuipTags(tag_dict)
     if self.tags then
         self.tags:FillDict(tag_dict)
-    end
-
-    if self.STATIC_TAGS then
-        self.STATIC_TAGS:FillDict(tag_dict)
     end
 
     for k, quest in ipairs(self:GetQuests()) do

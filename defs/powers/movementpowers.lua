@@ -658,6 +658,59 @@ Power.AddMovementPower("player_wind_gust",
 	end,
 })
 
+Power.AddMovementPower("player_groak_suck",
+{
+	power_category = Power.Categories.ALL,
+	selectable = false,
+	clear_on_new_room = true,
+	has_sources = true,
+
+	tuning =
+	{
+		[Power.Rarity.COMMON] = { speed = 25 },
+	},
+
+	event_triggers =
+	{
+		["aura_source_added"] = function(pow, inst, source)
+			SpawnMoveForceFX(inst, pow)
+		end,
+		["aura_source_removed"] = function(pow, inst, source)
+			inst.components.pushforce:RemovePushForce(pow.def.name, source)
+			RemoveMoveForceFX(inst, pow)
+		end,
+	},
+
+	on_update_fn = function(pow, inst, dt)
+		if not inst.components.pushforce or not pow.mem.sources then
+			return
+		end
+
+		-- Apply movement forces towards sources (should be only one)
+		for _, source in pairs(pow.mem.sources) do
+			if CheckPushSourceValid(pow, inst, source) then
+				-- SOURCE IS ALWAYS LOCAL, so we can use their position.
+				-- We spawn a local dummy prefab on all machines to control this.
+				local pos = source:GetPosition()
+
+				local size = 1 --source.Physics:GetSize() -- Need to account for swallower size when calculating distances & offsets.
+
+				local source_dir = (pos - inst:GetPosition()):normalized()
+
+				local pullspeed_modifier = 1
+				local pullspeed = pow.persistdata:GetVar("speed") * pullspeed_modifier
+
+				local source_x, source_z = source.Transform:GetWorldXZ()
+				local dist_mult = GetPushDistanceMultiplier(inst, source_x, source_z, (15 * size) ^ 2) -- max distance of the player suck is 10units, but we want less fall-off
+
+				inst.components.pushforce:AddPushForce(pow.def.name, source, source_dir * pullspeed * dist_mult, true)
+			end
+		end
+	end,
+
+	on_remove_fn = CleanupMovementPower,
+})
+
 Power.AddMovementPower("push", -- moves you away from a target
 {
 	power_category = Power.Categories.ALL,

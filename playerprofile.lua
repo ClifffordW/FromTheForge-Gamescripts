@@ -40,7 +40,6 @@ local PlayerProfile = Class(function(self)
         self.persistdata.wathgrithrfont = true
         self.persistdata.screenshake = true
         self.persistdata.warneddifficultyrog = false
-        self.persistdata.controller_popup = false
         self.persistdata.warn_mods_enabled = true
         self.persistdata.texture_streaming = true
     end
@@ -71,7 +70,6 @@ function PlayerProfile:Reset()
         self.persistdata.wathgrithrfont = true
         self.persistdata.screenshake = true
         self.persistdata.warneddifficultyrog = false
-        self.persistdata.controller_popup = false
         self.persistdata.warn_mods_enabled = true
         self.persistdata.texture_streaming = true
     end
@@ -104,7 +102,6 @@ function PlayerProfile:SoftReset()
         self.persistdata.wathgrithrfont = true
         self.persistdata.screenshake = true
         self.persistdata.warneddifficultyrog = false
-        self.persistdata.controller_popup = false
         self.persistdata.warn_mods_enabled = true
     end
     -- and apply these values
@@ -1073,26 +1070,6 @@ function PlayerProfile:ShowedDisplayAdjustmentPopup()
 	self.dirty = true
 end
 
-function PlayerProfile:SawControllerPopup()
-    local sawPopup
- 	if USE_SETTINGS_FILE then
-		sawPopup = (TheSim:GetSetting("misc", "controller_popup") == "true")
-	else
-		sawPopup = GetValueOrDefault(self.persistdata.controller_popup, false)
-	end
-
-	return sawPopup
-end
-
-function PlayerProfile:ShowedControllerPopup()
- 	if USE_SETTINGS_FILE then
-		TheSim:SetSetting("misc", "controller_popup", tostring(true))
-	else
-		self:SetValue("controller_popup", true)
-		self.dirty = true
-	end
-end
-
 function PlayerProfile:ShouldWarnModsEnabled()
     if USE_SETTINGS_FILE then
  		if TheSim:GetSetting("misc", "warn_mods_enabled") ~= nil then
@@ -1237,21 +1214,6 @@ function PlayerProfile:SetCrowGameHighScore(score, score_version)
     self:Save()
 end
 
-
--- See gamecontent.lua instead: player.components.questcentral.gamecontent:SetLanguage()
-function PlayerProfile:GetLanguageID()
-	if self:GetValue("language_id") ~= nil then
-		return self:GetValue("language_id")
-	else
-		local LANGUAGE = require "languages.langs"
-		return LANGUAGE.ENGLISH
-	end
-end
-function PlayerProfile:SetLanguageID(language_id, cb)
-	self:SetValue("language_id", language_id)
-	self.dirty = true
-    self:Save(cb)
-end
 
 function PlayerProfile:GetFeedbackName()
 	if self:GetValue("feedback_name") ~= nil then

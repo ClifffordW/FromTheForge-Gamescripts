@@ -6,4 +6,5 @@ return {
   parallax={ { anim="front", shadow=true,}, { anim="back", dist=0.15, shadow=true,},},
   parallax_use_baseanim_for_idle=true,
   script="prop_destructible",
+  sound=true,
 }

@@ -1,4 +1,5 @@
 local Mastery = require "defs.masteries"
+local MasteryPath = require"defs.mastery.masterypath"
 local itemforge = require "defs.itemforge"
 
 local iterator = require "util.iterator"
@@ -10,8 +11,8 @@ local function create_default_data()
 	local data =
 	{
 		masteries = {
-			-- a list of all the powers the player currently has
-			-- slot = { ["power_name"] = power_def, ... },
+			-- a list of all the masteries the player currently has
+			-- slot = { ["mastery_name"] = mastery_def, ... },
 		},
 
 		acquire_index = 0,
@@ -55,6 +56,16 @@ function MasteryManager:OnLoad(data)
 		for _,slot in pairs(mastery_data.masteries) do
 			itemforge.ConvertToListOfRuntimeItems(slot)
 		end
+
+		-- Keeps older saves that didn't have rarities saved into their masteries working.
+		for _,slot in pairs(mastery_data.masteries) do
+			for k, v in pairs(slot) do
+				if not v:GetRarity() then
+					v:SetRarity(ITEM_RARITY.s.COMMON)
+				end
+			end
+		end
+
 		self.data = mastery_data
 	end
 
@@ -66,9 +77,19 @@ function MasteryManager:OnLoad(data)
 			table.insert(masteries, self:_InitMastery(mastery))
 		end
 	end
-	for _,pow in ipairs(masteries) do
-		self:_RegisterMastery(pow)
+	for _, mastery in ipairs(masteries) do
+		self:_RegisterMastery(mastery)
 	end
+
+	-- Always make sure the player has this mastery, even from their first run.
+	-- This is not part of 'default masteries' because those don't get delivered until the player speaks to Toot.
+	-- This should be active from starting the game, in case they kill megatreemon on run 1.
+
+	if not self:GetMasteryByName("megatreemon_kill") then
+		self:AddMasteryByName("megatreemon_kill")
+	end
+
+	self:EvaluatePaths()
 
 	self:RefreshTags()
 end
@@ -89,7 +110,11 @@ function MasteryManager:_InitMastery(mastery)
 end
 
 function MasteryManager:_RegisterMastery(mastery)
-	self:SetUpEventTriggers(mastery)
+
+	--set up event triggers if the mastery is not yet complete
+	if not mastery:IsComplete() then
+		self:SetUpEventTriggers(mastery)
+	end
 
 	if mastery.def.on_add_fn then
 		mastery.def.on_add_fn(mastery, self.inst)
@@ -98,15 +123,26 @@ function MasteryManager:_RegisterMastery(mastery)
 	if mastery.def.on_update_fn then
 		self:AddUpdateMastery(mastery)
 	end
+
+	-- Check to make sure they have all the masteries unlocked that they should. In case we add any new "next steps" after they already claimed it.
+	if mastery.persistdata.claimed and mastery.def.next_step then
+		for _,next_step in ipairs(mastery.def.next_step) do
+			local def = Mastery.FindMasteryByName(next_step)
+			if not self:GetMastery(def) then
+				TheLog.ch.MasteryManager:printf("Found new next_step mastery for [%s]: %s. Adding it now.", mastery.def.name, def.name)
+				self:AddMasteryByDef(def, true)
+			end
+		end
+	end
 end
 
 function MasteryManager:CreateMastery(def)
 	-- for instances where a mastery creates another mastery
-	local mastery = itemforge.CreateEquipment(def.slot, def)
+	local mastery = itemforge.CreateMastery(def)
 	return mastery
 end
 
-function MasteryManager:AddMastery(mastery)
+function MasteryManager:AddMastery(mastery, silent)
 	local mastery_def = mastery:GetDef()
 
 	if mastery_def.prerequisite_fn ~= nil and not mastery_def.prerequisite_fn(self.inst) then
@@ -135,8 +171,11 @@ function MasteryManager:AddMastery(mastery)
 		self:RefreshTags()
 	end
 
-	self:OnActivateMastery(mst)
+	if silent ~= true then
+		self:OnActivateMastery(mst)
+	end
 
+	--don't notify others if silent is on
 	self.inst:PushEvent("add_mastery", mst)
 end
 
@@ -173,35 +212,35 @@ function MasteryManager:AddMasteryByName(name)
 	self:AddMasteryByDef(def)
 end
 
-function MasteryManager:AddMasteryByDef(def)
+function MasteryManager:AddMasteryByDef(def, silent)
 	local mastery = self:CreateMastery(def)
-	self:AddMastery(mastery)
+	self:AddMastery(mastery, silent)
 end
 
-function MasteryManager:SetUpEventTriggers(pow)
-	if next(pow.def.event_triggers) then
-		if self.event_triggers[pow.def.name] ~= nil then
-			assert(nil, "Tried to set up event triggers for a power that already has them!")
+function MasteryManager:SetUpEventTriggers(mastery)
+	if next(mastery.def.event_triggers) then
+		if self.event_triggers[mastery.def.name] ~= nil then
+			assert(nil, "Tried to set up event triggers for a mastery that already has them!")
 		end
-		self.event_triggers[pow.def.name] = {}
-		local triggers = self.event_triggers[pow.def.name]
-		for event, fn in pairs(pow.def.event_triggers) do
-			local listener_fn = function(inst, ...) fn(pow, inst, ...) end
+		self.event_triggers[mastery.def.name] = {}
+		local triggers = self.event_triggers[mastery.def.name]
+		for event, fn in pairs(mastery.def.event_triggers) do
+			local listener_fn = function(inst, ...) fn(mastery, inst, ...) end
 			triggers[event] = listener_fn
 			self.inst:ListenForEvent(event, listener_fn)
 		end
 	end
 
-	if next(pow.def.remote_event_triggers) then
-		if self.remote_event_triggers[pow.def.name] ~= nil then
-			assert(nil, "Tried to set up remote event triggers for a power that already has them!")
+	if next(mastery.def.remote_event_triggers) then
+		if self.remote_event_triggers[mastery.def.name] ~= nil then
+			assert(nil, "Tried to set up remote event triggers for a mastery that already has them!")
 		end
 
-		self.remote_event_triggers[pow.def.name] = {}
-		local triggers = self.remote_event_triggers[pow.def.name]
-		for event, data in pairs(pow.def.remote_event_triggers) do
+		self.remote_event_triggers[mastery.def.name] = {}
+		local triggers = self.remote_event_triggers[mastery.def.name]
+		for event, data in pairs(mastery.def.remote_event_triggers) do
 			local source = data.source()
-			local listener_fn = function(source, ...) data.fn(pow, self.inst, source, ...) end
+			local listener_fn = function(source, ...) data.fn(mastery, self.inst, source, ...) end
 			triggers[event] = { fn = listener_fn, source = source }
 			self.inst:ListenForEvent(event, listener_fn, source)
 			-- printf("Set Up Event Trigger: %s on %s", event, source)
@@ -209,30 +248,30 @@ function MasteryManager:SetUpEventTriggers(pow)
 	end
 end
 
-function MasteryManager:RemoveEventTriggers(pow)
-	if next(pow.def.event_triggers) then
-		local triggers = self.event_triggers[pow.def.name]
+function MasteryManager:RemoveEventTriggers(mastery)
+	if next(mastery.def.event_triggers) then
+		local triggers = self.event_triggers[mastery.def.name]
 		if triggers then
 			for event, fn in pairs(triggers) do
 				self.inst:RemoveEventCallback(event, fn)
 			end
 		end
-		self.event_triggers[pow.def.name] = nil
+		self.event_triggers[mastery.def.name] = nil
 	end
 
-	if next(pow.def.remote_event_triggers) then
-		local triggers = self.remote_event_triggers[pow.def.name]
+	if next(mastery.def.remote_event_triggers) then
+		local triggers = self.remote_event_triggers[mastery.def.name]
 		if triggers then
 			for event, data in pairs(triggers) do
 				self.inst:RemoveEventCallback(event, data.fn, data.source)
 			end
 		end
-		self.remote_event_triggers[pow.def.name] = nil
+		self.remote_event_triggers[mastery.def.name] = nil
 	end
 end
 
-function MasteryManager:AddUpdateMastery(pow)
-	self.update_masteries[pow] = pow.def
+function MasteryManager:AddUpdateMastery(mastery)
+	self.update_masteries[mastery] = mastery.def
 	self.inst:StartUpdatingComponent(self)
 end
 
@@ -243,16 +282,22 @@ function MasteryManager:OnUpdate(dt)
 	end
 
 	if self.inst:IsLocal() then
-		for pow, mastery_def in pairs(self.update_masteries) do
-			mastery_def.on_update_fn(pow, self.inst, dt)
+		for mastery, mastery_def in pairs(self.update_masteries) do
+			mastery_def.on_update_fn(mastery, self.inst, dt)
 		end
+	end
+end
+
+function MasteryManager:EvaluatePaths()
+	if self.inst:IsFlagUnlocked("pf_unlocked_masteries") then
+		MasteryPath.EvaluatePaths(self.inst)
 	end
 end
 
 function MasteryManager:RefreshTags()
 	for _, slot in pairs(self.data.masteries) do
-		for _, power in pairs(slot) do
-			local mastery_def = power:GetDef()
+		for _, mastery in pairs(slot) do
+			local mastery_def = mastery:GetDef()
 			if #mastery_def.tags > 0 then
 				for i, tag in ipairs(mastery_def.tags) do
 					self.inst:AddTag(tag)
@@ -262,21 +307,23 @@ function MasteryManager:RefreshTags()
 	end
 end
 
-function MasteryManager:_NotifyMastery(mastery_instance, time)
+function MasteryManager:_NotifyMastery(mastery_instance, time, is_past_threshold)
+
 	time = time or 2
 	TheDungeon.HUD:MakePopMasteryProgress({
 		target = self.inst,
 		mastery = mastery_instance,
 		fade_time = time,
-		y_offset = 450
+		y_offset = -170,
+		is_past_threshold = is_past_threshold
 	}, mastery_instance)
 end
 
 ---------------------------------------------------------------------
 
-function MasteryManager:GetMasteryByName(power)
-	if self.masteries[power] ~= nil then
-		return self.masteries[power]
+function MasteryManager:GetMasteryByName(mastery_name)
+	if self.masteries[mastery_name] ~= nil then
+		return self.masteries[mastery_name]
 	else
 		return nil
 	end
@@ -295,32 +342,49 @@ function MasteryManager:GetMastery(def)
 end
 
 function MasteryManager:OnActivateMastery(mst)
-	self:_NotifyMastery(mst, 5)
+	-- if mst:GetDef().default_unlocked then return end
+
+	-- don't notify about new masteries until we hammer out pres/ when it is activated.
+	if not mst:IsNew() then 
+		self:_NotifyMastery(mst, 5)
+	end
 end
 
 function MasteryManager:OnProgressUpdated(mst)
 	local progress = mst:GetProgressPercent()
 
+	local is_past_threshold = false
 	for _,threshold_data in ipairs(mst.persistdata.update_thresholds) do
-		local threshold = threshold_data.threshold
-		local already_updated = threshold_data.updated
-
-		if progress >= threshold and not already_updated then
-			self:_NotifyMastery(mst, 2)
+		if progress >= threshold_data.threshold and not threshold_data.updated then
+			--mark this threshold as passed
 			threshold_data.updated = true
+			is_past_threshold = true
 		end
 	end
+
+	--if past threshold, use large notification
+	self:_NotifyMastery(mst, 2, is_past_threshold)
 end
 
 function MasteryManager:OnCompleteMastery(mst)
-	mst.complete = true
+	self:RemoveEventTriggers(mst)
 	self:_NotifyMastery(mst, 3.5)
-	self:CreateNextMastery(mst)
+	TheWorld:PushEvent("refresh_markers", {player = self.inst})
 end
 
 function MasteryManager:CreateNextMastery(mst)
-	if mst:GetDef().next_step then
-		self:AddMasteryByName(mst:GetDef().next_step)
+	local new_masteries = mst:GetDef().next_step
+
+	if new_masteries then
+		for i,mastery in ipairs(new_masteries) do
+			if mastery then
+				if self:GetMasteryByName(mastery) ~= nil then
+					print(string.format("WARNING: Already have mastery %s unlocked, moving on...", mastery))
+				else
+					self:AddMasteryByName(mastery)
+				end
+			end
+		end
 	end
 end
 
@@ -342,8 +406,6 @@ local function _build_debug_progress_bar(progress)
 end
 
 function MasteryManager:DebugDrawEntity(ui, panel, colors)
-	-- Use data.powers so it's ordered by slots.
-
 	if ui:Button("Give All Masteries") then
 		for slot, masteries in pairs(Mastery.Items) do
 			for name, def in pairs(masteries) do
@@ -473,9 +535,9 @@ function MasteryManager:DEBUG_ResetMasteries()
 		end
 	end
 
-	assert(not next(self.event_triggers), "Player Powers data is reset but self.event_triggers is not empty.")
-	assert(not next(self.remote_event_triggers), "Player Powers data is reset but self.remote_event_triggers is not empty.")
-	assert(not next(self.update_masteries), "Player Powers data is reset but self.update_powers is not empty.")
+	assert(not next(self.event_triggers), "Mastery data is reset but self.event_triggers is not empty.")
+	assert(not next(self.remote_event_triggers), "Mastery data is reset but self.remote_event_triggers is not empty.")
+	assert(not next(self.update_masteries), "Mastery data is reset but self.update_masteries is not empty.")
 
 	self.data = create_default_data()
 end

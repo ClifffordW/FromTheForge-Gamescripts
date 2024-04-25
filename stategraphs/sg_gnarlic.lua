@@ -8,6 +8,13 @@ local POKE_SPEED_ELITE = 9
 local POKE_LENGTH_FRAMES_ELITE = 8
 local POKE_DECEL_PERCENT = 0.25
 
+local function CalcPokeSpeed(inst)
+	return inst:HasTag("elite") and POKE_SPEED_ELITE or POKE_SPEED
+end
+local function CalcPokeFrames(inst)
+	return inst:HasTag("elite") and POKE_LENGTH_FRAMES_ELITE or POKE_LENGTH_FRAMES
+end
+
 local function OnPierceHitboxTriggered(inst, data)
 	local hit = SGCommon.Events.OnHitboxTriggered(inst, data, {
 		attackdata_id = "pierce",
@@ -81,8 +88,8 @@ local states =
 		onenter = function(inst, target)
 			inst.AnimState:PlayAnimation("poke_run_pre")
 			inst.sg.statemem.target = target
-			inst.sg.mem.poke_speed = inst:HasTag("elite") and POKE_SPEED_ELITE or POKE_SPEED
-			inst.sg.mem.poke_length = inst:HasTag("elite") and POKE_LENGTH_FRAMES_ELITE or POKE_LENGTH_FRAMES
+			inst.sg.mem.poke_speed = CalcPokeSpeed(inst)
+			inst.sg.mem.poke_length = CalcPokeFrames(inst)
 			inst.components.hitbox:StartRepeatTargetDelay()
 		end,
 
@@ -244,11 +251,15 @@ local states =
 				SGCommon.Fns.SetMotorVelScaled(inst, 2.5)
 			end),
 			FrameEvent(3, function(inst)
-				inst.sg:AddStateTag("airborne")
+				inst.sg:AddStateTag("airborne_high")
 				inst.Physics:StartPassingThroughObjects()
 			end),
 			FrameEvent(14, function(inst)
 				SGCommon.Fns.SetMotorVelScaled(inst, 1.5)
+			end),
+			FrameEvent(19, function(inst)
+				inst.sg:RemoveStateTag("airborne_high")
+				inst.sg:AddStateTag("airborne")
 			end),
 			FrameEvent(21, function(inst)
 				inst.components.hitbox:PushCircle(0, 0, 2.5, HitPriority.MOB_DEFAULT)
@@ -302,7 +313,7 @@ SGCommon.States.AddAttackHold(states, "poke", { loop_anim = true })
 SGCommon.States.AddAttackPre(states, "elite_slam",
 {
 	onenter_fn = function(inst)
-		inst.sg.mem.poke_speed = inst:HasTag("elite") and POKE_SPEED_ELITE or POKE_SPEED -- set again here incase the gnarlic migrates
+		inst.sg.mem.poke_speed = CalcPokeSpeed(inst)
 	end,
 	timeline =
 	{

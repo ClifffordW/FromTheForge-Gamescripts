@@ -2,7 +2,7 @@
 return {
   __displayName="david_bosstop1",
   boss_position="TopRight",
-  length=17.0,
+  length=18.0,
   path={
     { anim="x5y4", sign=-1,},
     { anim="x4y1",},
@@ -21,5 +21,6 @@ return {
     { anim="x4y2",},
     { anim="x4y3", sign=-1,},
     { anim="x4y0",},
+    { anim="x5y4",},
   },
 }

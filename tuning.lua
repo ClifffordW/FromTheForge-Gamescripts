@@ -71,17 +71,17 @@ Strict.strictify(ENEMY_MODIFIER_DEFAULTS)
 -- NOTE @chrisp #meta - If you add a dungeon tier row here, you probably want to add corresponding rows to
 -- WeaponILvlModifierSource and ArmourILvlModifierSource to balance game-play.
 local DungeonTierModifierSource = {
-	{ [EnemyModifierNames.s.HealthMult] = 0.0, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.0 }, --Treemon Forest
-	{ [EnemyModifierNames.s.HealthMult] = 0.1, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.1 }, --Owlitzer Forest
-	{ [EnemyModifierNames.s.HealthMult] = 0.2, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.2 }, --Bandicoot Swamp
-	{ [EnemyModifierNames.s.HealthMult] = 0.4, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.4 }, --Thatcher Swamp
-	{ [EnemyModifierNames.s.HealthMult] = 0.6, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.6 },
-	{ [EnemyModifierNames.s.HealthMult] = 0.8, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.8 },
-	{ [EnemyModifierNames.s.HealthMult] = 1.0, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.0 },
-	{ [EnemyModifierNames.s.HealthMult] = 1.2, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.2 },
-	{ [EnemyModifierNames.s.HealthMult] = 1.4, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.4 },
-	{ [EnemyModifierNames.s.HealthMult] = 1.6, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.6 },
-	{ [EnemyModifierNames.s.HealthMult] = 1.8, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.8 },
+	{ [EnemyModifierNames.s.HealthMult] = 0.0, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.15 }, --Treemon Forest
+	{ [EnemyModifierNames.s.HealthMult] = 0.33, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.33 }, --Owlitzer Forest
+	{ [EnemyModifierNames.s.HealthMult] = 0.66, [EnemyModifierNames.s.DungeonTierDamageMult] = 0.66 }, --Bandicoot Swamp
+	{ [EnemyModifierNames.s.HealthMult] = 1.00, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.00 }, --Thatcher Swamp
+	{ [EnemyModifierNames.s.HealthMult] = 1.33, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.33 },
+	{ [EnemyModifierNames.s.HealthMult] = 1.66, [EnemyModifierNames.s.DungeonTierDamageMult] = 1.66 },
+	{ [EnemyModifierNames.s.HealthMult] = 2.00, [EnemyModifierNames.s.DungeonTierDamageMult] = 2.00 },
+	{ [EnemyModifierNames.s.HealthMult] = 2.33, [EnemyModifierNames.s.DungeonTierDamageMult] = 2.33 },
+	{ [EnemyModifierNames.s.HealthMult] = 2.66, [EnemyModifierNames.s.DungeonTierDamageMult] = 2.66 },
+	{ [EnemyModifierNames.s.HealthMult] = 3.00, [EnemyModifierNames.s.DungeonTierDamageMult] = 3.00 },
+	{ [EnemyModifierNames.s.HealthMult] = 3.33, [EnemyModifierNames.s.DungeonTierDamageMult] = 3.33 },
 }
 Strict.strictify(DungeonTierModifierSource)
 
@@ -97,11 +97,15 @@ local AscensionModifierSource = {
 	{ -- Ascension 1
 		-- Basic Health/Damage Modifiers:
 		-- Elites are already being added in this, so we don't need to change these values too much to add more difficulty and health-loss due to attrition while moving room to room.
+		-- We also do not want to scare players away from frenzies, so keep this a bit softer.
+
+		-- Equipment for UpgradeLevel1, or the next dungeon == +0.33
+		[EnemyModifierNames.s.BasicHealthMult] = 0.2,
+		[EnemyModifierNames.s.DungeonTierDamageMult] = 0.2,
+
 		-- However, since there is only one Boss and only one Miniboss, we can increase them a bit more so this change is more noticeable.
-		[EnemyModifierNames.s.BasicHealthMult] = 0.10,
-		[EnemyModifierNames.s.BossHealthMult] = 0.25,
-		[EnemyModifierNames.s.MinibossHealthMult] = 0.15,
-		[EnemyModifierNames.s.DungeonTierDamageMult] = 0.1, -- A bit damage dealt by enemies across the board, not as much as moving from D1 -> D2 though.
+		[EnemyModifierNames.s.BossHealthMult] = 0.35,
+		[EnemyModifierNames.s.MinibossHealthMult] = 0.8, -- The miniboss fight is typically simpler, so let's give them a lot more health to let the encounter be juicier. Make sure the encounter feels like a "miniboss fight" and not just a "pretty hard mob"
 
 		[EnemyModifierNames.s.InitialCooldownMult] = -0.25,
 
@@ -110,12 +114,12 @@ local AscensionModifierSource = {
 	},
 
 	{ -- Ascension 2
-		-- Basic Health/Damage Modifiers increase.
-		-- Have a bigger jump than general. Now we want a bigger difficulty jump so the player feels like they should be clearing the next Dungeon first.
-		[EnemyModifierNames.s.BasicHealthMult] = 0.25,
-		[EnemyModifierNames.s.BossHealthMult] = 0.25,
-		[EnemyModifierNames.s.MinibossHealthMult] = 0.25,
-		[EnemyModifierNames.s.DungeonTierDamageMult] = 0.30,
+		-- Equipment for UpgradeLevel2, or two dungeons from now == +0.66. Push "damage dealt" a bit farther.
+		[EnemyModifierNames.s.BasicHealthMult] = 0.25, -- add last Ascension,  0.45 total
+		[EnemyModifierNames.s.DungeonTierDamageMult] = 0.35, -- add last Ascension,  0.55 total
+
+		[EnemyModifierNames.s.BossHealthMult] = 0.5,
+		[EnemyModifierNames.s.MinibossHealthMult] = 0.8,
 
 		-- Star of the show: Introduce cooldown modifiers -- make all mobs more aggressive. This should be noticeable.
 		[EnemyModifierNames.s.CooldownMult] = -0.4,
@@ -134,12 +138,13 @@ local AscensionModifierSource = {
 
 	-- NOV2023: This is currently our "final ascension", so make this a bit chunkier for now to provide a difficult goal for skilled players.
 	{ -- Ascension 3
-		-- Basic Health/Damage Modifiers increase.
-		-- Continue a steady increase over the previous ascension. This isn't a "star of the show" of this ascension.
-		[EnemyModifierNames.s.BasicHealthMult] = 0.25,
-		[EnemyModifierNames.s.BossHealthMult] = 0.35,
-		[EnemyModifierNames.s.MinibossHealthMult] = 0.35,
-		[EnemyModifierNames.s.DungeonTierDamageMult] = 0.30,
+		-- Equipment for UpgradeLevel2, or two dungeons from now == +0.66.
+		-- Using equipment 3 dungeons from now would be +1.0.
+		[EnemyModifierNames.s.BasicHealthMult] = 0.35, -- add last Ascension, 0.8 total
+		[EnemyModifierNames.s.DungeonTierDamageMult] = 0.45, -- add last Ascension, 1.0 total
+
+		[EnemyModifierNames.s.BossHealthMult] = 0.5,
+		[EnemyModifierNames.s.MinibossHealthMult] = 0.8,
 
 		-- Continue adjusting cooldowns by a small amount. Not as noticeable, subtle silent shift.
 		-- By this point, initial cooldowns are 0.
@@ -188,7 +193,7 @@ local ENEMY_MULTIPLAYER_MODS =
 		{},
 		{ [EnemyModifierNames.s.SpawnCountMult] = 0.25, [EnemyModifierNames.s.StationarySpawnCountMult] = 0.25 },
 		{ [EnemyModifierNames.s.SpawnCountMult] = 0.50, [EnemyModifierNames.s.StationarySpawnCountMult] = 0.50 },
-		{ [EnemyModifierNames.s.SpawnCountMult] = 0.75, [EnemyModifierNames.s.StationarySpawnCountMult] = 0.75 },
+		{ [EnemyModifierNames.s.SpawnCountMult] = 0.50, [EnemyModifierNames.s.StationarySpawnCountMult] = 0.50, [EnemyModifierNames.s.HealthMult] = 0.25 }, -- Be careful spawning too many mobs, since this will get out of hand.
 	},
 
 	MINOR = {
@@ -219,15 +224,52 @@ local ENEMY_MULTIPLAYER_MODS =
 		{ [EnemyModifierNames.s.HealthMult] = 2.25, [EnemyModifierNames.s.SpawnCountMult] = 0.50, [EnemyModifierNames.s.StationarySpawnCountMult] = 0.50 },
 	},
 
-	-- By setting Health multipliers here rather than BossHealth, we allow this ENEMY_MULTIPLAYER_MODS.BOSS tuning
+	MINIBOSS = {
+		{ [EnemyModifierNames.s.HealthMult] = 0.0 },
+		{ [EnemyModifierNames.s.HealthMult] = 2.0 },
+		{ [EnemyModifierNames.s.HealthMult] = 3.0 },
+		{ [EnemyModifierNames.s.HealthMult] = 4.0 },
+	},
+
+	-- By setting Health multipliers here rather than BossHealth, we allow this BOSS tuning
 	-- table to be used by non-Boss enemies (for better or worse).
 	BOSS = {
 		{ [EnemyModifierNames.s.HealthMult] = 0.00 },
-		{ [EnemyModifierNames.s.HealthMult] = 0.50 },
-		{ [EnemyModifierNames.s.HealthMult] = 1.00 },
-		{ [EnemyModifierNames.s.HealthMult] = 1.25 },
-	}
+		{ [EnemyModifierNames.s.HealthMult] = 1.5  },
+		{ [EnemyModifierNames.s.HealthMult] = 2.0  },
+		{ [EnemyModifierNames.s.HealthMult] = 2.5  },
+	},
 }
+
+local ASCENSION_ALLOWABLE_ELITES =
+{
+	-- Ascension 1, only allow small mobs to be elite.
+	{ "BASIC", "SWARM" },
+
+	-- Ascension 2, let some bigger mobs become elite.
+	{ "MINOR" },
+
+	-- Ascension 3, let MAJORs become elites, which will allow the miniboss to spawn.
+	{ "MAJOR" },
+}
+
+-- Verify that all of our types are elite-able, in case we add more types.
+for type,_ in pairs(ENEMY_MULTIPLAYER_MODS) do
+	-- Don't worry about elites or boss
+	if type ~= "ELITE" and type ~= "BOSS" and type ~= "MINIBOSS" then
+
+		local found = false
+
+		for _, tbl in ipairs(ASCENSION_ALLOWABLE_ELITES) do
+			if Lume.find(tbl, type) then
+				found = true
+				break
+			end
+		end
+
+		assert(found, string.format("[%s] is not found in ASCENSION_ALLOWABLE_ELITES. If you add a new type to ENEMY_MULTIPLAYER_MODS, please ask about where to slot it into ascensions!", type))
+	end
+end
 
 -- Item levels are closely related to dungeon tiers. Items found in a dungeon will have item levels equal to, or
 -- slightly greater than, the dungeon tier.
@@ -262,25 +304,32 @@ Strict.strictify(PLAYER_MODIFIER_DEFAULTS)
 -- Note: Right now, WeaponMultiplier.s.DamageMult here is matched to EnemyModifiers.s.HealthMult in DungeonTierModifiers.
 local WeaponILvlModifierSource = {
 	-- These damage values also get modified by WeaponWeightModifierSource and WeaponRarityModifierSource below.
+
+	-- The number below represents a Normal weapon, "balanced" relative to the dungeon's Mob HealthMult.
 	-- A Light weapon will be slightly below "balanced", and a Heavy weapon will be slightly above "balanced".
-	{ [PlayerModifierNames.s.DamageMult] = 0.05 }, -- TREEMON FOREST -- If the first dungeon is 0.0, then it will provide no damage boost.
-	{ [PlayerModifierNames.s.DamageMult] = 0.1 },  -- OWLITZER FOREST
-	{ [PlayerModifierNames.s.DamageMult] = 0.2 },  -- BANDICOOT SWAMP
-	{ [PlayerModifierNames.s.DamageMult] = 0.4 },
-	{ [PlayerModifierNames.s.DamageMult] = 0.6 },
-	{ [PlayerModifierNames.s.DamageMult] = 0.8 },
-	{ [PlayerModifierNames.s.DamageMult] = 1.0 },
-	{ [PlayerModifierNames.s.DamageMult] = 1.2 },
-	{ [PlayerModifierNames.s.DamageMult] = 1.4 },
-	{ [PlayerModifierNames.s.DamageMult] = 1.6 },
-	{ [PlayerModifierNames.s.DamageMult] = 1.8 },
+
+	-- If those numbers are equal, then the weapon for that dungeon will exactly keep pace with the mob scaling.
+
+	-- TUNING INTENTION: Always be slightly behind the curve by roughly how much HEAVY armour gives.
+	{ [PlayerModifierNames.s.DamageMult] = 0.15 }, 	-- First dungeon will have 0.00 bonus in health, so this is just purely an improvement, not catch-up.
+													-- That relationship changes now:
+	{ [PlayerModifierNames.s.DamageMult] = 0.28 }, 	-- 0.33    Owlitzer
+	{ [PlayerModifierNames.s.DamageMult] = 0.60 }, 	-- 0.66   Bandicoot
+	{ [PlayerModifierNames.s.DamageMult] = 0.95 },	-- 1.00    Thatcher
+	{ [PlayerModifierNames.s.DamageMult] = 1.28 }, 	-- 1.33
+	{ [PlayerModifierNames.s.DamageMult] = 1.60 }, 	-- 1.66
+	{ [PlayerModifierNames.s.DamageMult] = 1.95 }, 	-- 2.00
+	{ [PlayerModifierNames.s.DamageMult] = 1.28 }, 	-- 2.33
+	{ [PlayerModifierNames.s.DamageMult] = 2.60 }, 	-- 2.66
+	{ [PlayerModifierNames.s.DamageMult] = 2.95 }, 	-- 3.00
+	{ [PlayerModifierNames.s.DamageMult] = 2.28 }, 	-- 3.33
 }
 
 local WeaponWeightModifierSource = {
 	-- Light Weapons do slightly less damage, Heavy Weapons do slightly more damage.
 	[Weight.EquipmentWeight.s.Light] =
 	{
-		[PlayerModifierNames.s.DamageMult] = -0.025,
+		[PlayerModifierNames.s.DamageMult] = -0.05
 	},
 	[Weight.EquipmentWeight.s.Normal] =
 	{
@@ -288,14 +337,14 @@ local WeaponWeightModifierSource = {
 	},
 	[Weight.EquipmentWeight.s.Heavy] =
 	{
-		[PlayerModifierNames.s.DamageMult] = 0.025,
+		[PlayerModifierNames.s.DamageMult] = 0.05,
 	},
 }
 local WeaponRarityModifierSource = {
 	-- Rarity of the weapon slightly affects the damage output.
 	[ITEM_RARITY.s.COMMON] =
 	{
-		[PlayerModifierNames.s.DamageMult] = -0.05,
+		[PlayerModifierNames.s.DamageMult] = -0.15, -- MAKE THIS MATCH ILVL=1's DAMAGEMULT
 	},
 	[ITEM_RARITY.s.UNCOMMON] =
 	{
@@ -305,6 +354,7 @@ local WeaponRarityModifierSource = {
 	{
 		[PlayerModifierNames.s.DamageMult] = 0.05,
 	},
+	-- These don't exist yet:
 	[ITEM_RARITY.s.LEGENDARY] =
 	{
 		[PlayerModifierNames.s.DamageMult] = 0.1,
@@ -325,17 +375,21 @@ local ArmourILvlModifierSource = {
 	-- A full set of Normal Armour of a given dungeon should result in this damage reduction, which is tuned in relation to the enemy's damage increase.
 	-- A full set of Light Armour will be slightly below this, and a full set of Heavy Armour will be slightly above this.
 	-- In addition, there are 3 tiers of Rarity within a dungeon: Common, Uncommon, and Epic. This will further adjust.
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.05 }, -- If the first dungeon is 0.0, then it will provide no armour boost.
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.1 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.2 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.4 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.6 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.8 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.0 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.2 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.4 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.6 },
-	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.8 },
+
+	-- TUNING INTENTION: Always be slightly behind the curve by roughly how much HEAVY weapon gives.
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.15 },  -- First dungeon we start under the curve with 0.0 damage reduction, while they have 0.15 damage. Buying this lets you catch up and even out.
+
+																		-- That relationship changes now:
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.28 },  -- 0.33   Owlitzer
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.60 },  -- 0.66   Bandicoot
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.95 },  -- 1.00   Thatcher
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.28 },  -- 1.33
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.60 },  -- 1.66
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.95 },  -- 2.00
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 1.28 },  -- 2.33
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 2.60 },  -- 2.66
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 2.95 },  -- 3.00
+	{ [PlayerModifierNames.s.DungeonTierDamageReductionMult] = 2.28 },   -- 3.33
 }
 
 local ArmourWeightModifierSource = {
@@ -349,7 +403,7 @@ local ArmourWeightModifierSource = {
 	},
 	[Weight.EquipmentWeight.s.Heavy] =
 	{
-		[PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.3,
+		[PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.15,
 	},
 }
 
@@ -357,7 +411,7 @@ local ArmourRarityModifierSource = {
 	-- Rarity of the armour slightly affects the damage reduction.
 	[ITEM_RARITY.s.COMMON] =
 	{
-		[PlayerModifierNames.s.DungeonTierDamageReductionMult] = -0.05,
+		[PlayerModifierNames.s.DungeonTierDamageReductionMult] = -0.15, -- Just to undo the first ilvl amount
 	},
 	[ITEM_RARITY.s.UNCOMMON] =
 	{
@@ -365,7 +419,7 @@ local ArmourRarityModifierSource = {
 	},
 	[ITEM_RARITY.s.EPIC] =
 	{
-		[PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.05,
+		[PlayerModifierNames.s.DungeonTierDamageReductionMult] = 0.1,
 	},
 	[ITEM_RARITY.s.LEGENDARY] =
 	{
@@ -400,6 +454,13 @@ local elite_vision_tuning =
 	share_not_target_tags = { "INLIMBO" },
 }
 
+local HitStunPressureFrames =
+{
+	LOW = 30,
+	MEDIUM = 50,
+	HIGH = 70,
+}
+
 local function GetLastPlayerCount()
 	return TheDungeon:GetDungeonMap():GetLastPlayerCount() or 1
 end
@@ -427,7 +488,7 @@ end
 
 local function BuildTuning()
     local Tuning = {
-		-- victorc: 60Hz, hit shudder was expressed in ticks, is now anim frames
+		-- 60Hz, hit shudder was expressed in ticks, is now anim frames
         HITSHUDDER_AMOUNT_LIGHT = 6,
         HITSHUDDER_AMOUNT_MEDIUM = 8,
         HITSHUDDER_AMOUNT_HEAVY = 12,
@@ -457,6 +518,7 @@ local function BuildTuning()
 
         REVIVE_TIME = 2,
         REVIVE_HEALTH_PERCENT = 0.4,
+        REVIVE_HEALTH_DONATION_ASCENSION_LEVEL = 2,
 
         ENEMY_FRIENDLY_FIRE_DAMAGE_MULTIPLIER = 1/3, -- When an enemy deals damage to another enemy how much should the damage be affected?
 
@@ -583,22 +645,6 @@ local function BuildTuning()
 								   -- Also consider the amount a potion costs, currently 75K. Should one relic skip == a free potion? Skipping power should be "damn, I should have gone for Konjur Reward!" not rewarding itself
 		KONJUR_ON_SKIP_POWER_FABLED = 100, -- comparable reward here is a Hard Konjur Reward, which is currently tuned as 130-170. Be less than that.
 
-		LOOT =
-		{
-			--[[
-			Legacy tuning, before we moved to a system of "chunkier" loot
-			DROP_CHANCE = -- drop weights
-			{
-				-- total = 100, as long as that is true these are also % chances
-			    [ITEM_RARITY.s.COMMON] = 60,-- 40,
-			    [ITEM_RARITY.s.UNCOMMON] = 25,--30,
-			    [ITEM_RARITY.s.RARE] = 10, --20,
-			    [ITEM_RARITY.s.EPIC] = 4,-- 9,
-			    [ITEM_RARITY.s.LEGENDARY] = 1,
-			},
-			--]]
-		},
-
         POWERS =
         {
 			DROP_SPAWN_INITIAL_DELAY_FRAMES = 1 * SECONDS, -- After the last enemy is killed in a room, how long should we wait before spawning the power drop? Give the player some time to process the final kill.
@@ -636,10 +682,20 @@ local function BuildTuning()
 				COMMON = 75, -- Common to Epic
 				EPIC = 150, -- Epic to Legendary
 			},
+
+			FABLED_ROOM_NORMAL_CHANCE = -- when spawning the Normal Relic within a fabled power room, what chance of Epic and Legendary should there be? This number stays static, does not adjust over time.
+			{
+				EPIC = 50,
+				COMMON = 30,
+				LEGENDARY = 20,
+			},
         },
 
         GEAR =
         {
+        	MINIMUM_DUNGEONTIER_DAMAGE_MULT = 0.5, -- When combining the Extra Damage that a mob wants to do based on its DungeonTier+AscensionLevel, with the Damage Reduction that an Armour wants to apply based on its DungeonTier+UpgradeLevel, what is the lowest multiplier we allow?
+        										   -- If this == 0, then it means players can equip enough armor that they reduce incoming damage to 0.
+
 			STAT_ALLOCATION_PER_SLOT =
 			{
 				-- When we tune armour sets, we want to tune for how much the entire set should give you.
@@ -651,18 +707,6 @@ local function BuildTuning()
 
 			WEAPONS =
 	        {
-				DAMAGE_PER_ILVL = 2,
-				DAMAGE_RARITY_MULTIPLIERS =
-				{
-					-- If we are ilvl 10, our base damage bonus is 15*10 = 50.
-					-- Based on rarity, modify that further:
-					[ITEM_RARITY.s.COMMON] = 0,
-					[ITEM_RARITY.s.UNCOMMON] = 1,
-					[ITEM_RARITY.s.EPIC] = 1.25,
-					[ITEM_RARITY.s.LEGENDARY] = 1.5,
-					[ITEM_RARITY.s.TITAN] = 1.75,
-				},
-
 				BASE_FOCUS_DAMAGE_MULT = 1,
 				BASE_CRIT_DAMAGE_MULT = 2,
 
@@ -682,6 +726,26 @@ local function BuildTuning()
 					BASE_CRIT = 0.01,
 					ROLL_VELOCITY = 11,
 					AMMO = 6,
+					DEFAULT_FOCUS_SEQUENCE =
+					{
+						-- Of a given clip, which shots are FOCUS shots and which are NORMAL shots?
+						[1] = true,
+						[2] = true,
+						[3] = true,
+						[4] = false,
+						[5] = false,
+						[6] = false,
+					},
+					DEFAULT_MORTAR_FOCUS_SEQUENCE =
+					{
+						-- When doing a Mortar with X ammo remaining, at what point does it become focus?
+						[1] = true,
+						[2] = true,
+						[3] = true,
+						[4] = false,
+						[5] = false,
+						[6] = false,
+					},
 				},
 				SHOTPUT =
 				{
@@ -700,26 +764,12 @@ local function BuildTuning()
 						HEAVY = 2.5,
 					},
 					AMMO = 2,
+					REBOUND_HITBOX_RADIUS = 2,
 				},
 				CLEAVER =
 				{
 					BASE_DAMAGE = 100,
 					BASE_CRIT = 0.05,
-				},
-	        },
-
-	        ARMOUR =
-	        {
-				ARMOUR_PER_ILVL = 0.01, --1% damage reduction per ilvl
-				ARMOUR_MULTIPLIERS =
-				{
-					-- If we are ilvl 10, our base Armour is 10*50 = 500.
-					-- Based on rarity, modify that further:
-					[ITEM_RARITY.s.COMMON] = 0.75,
-					[ITEM_RARITY.s.UNCOMMON] = 1,
-					[ITEM_RARITY.s.EPIC] = 1.25,
-					[ITEM_RARITY.s.LEGENDARY] = 1.5,
-					[ITEM_RARITY.s.TITAN] = 1.75,
 				},
 	        },
         },
@@ -809,7 +859,7 @@ local function BuildTuning()
 					trap_spores_confused =
 					{
 						power = "confused",
-						stacks = 1,
+						stacks = 4,
 						burst_fx = "fx_spores_confused_all",
 						target_fx = "spore_hit_confused"
 					},
@@ -842,9 +892,25 @@ local function BuildTuning()
 
 			trap_acid = {
 				BASE_DAMAGE = 30,
-				TICKS_BETWEEN_PROCS = 45,
+				TOXICITY_STACKS_PER_TICK = 10 + 32, -- Damage is dealt at 1000 stacks, account for the decay which is 10 every tick (1000 / (stacks - decay)) * 0.016
+				KNOCKDOWN_STACKS_MULT = 1.5, -- Multiply amount of stacks per tick if lying in the acid
 				AURA_APPLYER = true,
-				DAMAGE_TO_MOBS_MULTIPLIER = 1/3,
+				MOB_PERCENT_DAMAGE = 0.06,
+				MOB_MAX_DAMAGE = 70
+			},
+
+			-- Permanent acid spawned in the Thatcher room
+			trap_acid_stage = {
+				BASE_DAMAGE = 30,
+				TOXICITY_STACKS_PER_TICK = 10 + 32, -- Damage is dealt at 1000 stacks, account for the decay which is 10 every tick (1000 / (stacks - decay)) * 0.016
+				KNOCKDOWN_STACKS_MULT = 1.5, -- Multiply amount of stacks per tick if lying in the acid
+				AURA_APPLYER = true,
+				MOB_PERCENT_DAMAGE = 0.06,
+				MOB_MAX_DAMAGE = 70
+			},
+
+			trap_acidgeyser = {
+				BASE_DAMAGE = 0,
 			},
 
 			trap_windtotem = {
@@ -874,13 +940,13 @@ local function BuildTuning()
 			{
 				BASE_DAMAGE = 400,
 				HEALTH = 200,
-				fx = { "stalag", "konjur" },
+				fx = { "hit_stalag", "hit_konjur" },
 			},
 
 			swamp_stalagmite =
 			{
 				HEALTH = 200,
-				fx = { "stalag", "konjur" },
+				fx = { "hit_stalag", "hit_konjur" },
 			},
 
 			trap_stalactite = {
@@ -901,7 +967,7 @@ local function BuildTuning()
 
 		player = {
 			run_speed = PLAYER_MOVE_SPEED_MOD * 8,
-			attack_angle_clamp = 30, -- When the player moves forward during attacking, what angle should we clamp to?
+			attack_angle_clamp = 60, -- When the player moves forward during attacking, what angle should we clamp to?
 			attack_angle_zero_deadzone = 20,  -- When the player attacks more-or-less directly in front of itself (relative to the waist), below what angle should we just clamp to 0?
 
 			extra_controlqueueticks_on_hitstop_mult = 3, -- When the player has hitstop applied to them, modify their controlqueueticks by the amount of hitstop multiplied by this number.
@@ -919,7 +985,7 @@ local function BuildTuning()
 					potion = 5,
 					powerupgrade = 5,
 					wanderer = 60, --bank choice: when the other types are not rolled, they get increased chance to roll next time. that % comes from this choice
-					-- ranger = 35, -- JAMBELL: Original tuning was 35, disabling for Early Access.
+					-- ranger = 35, -- Original tuning was 35, disabling for Early Access.
 				},
 
 				CHANCE_INCREASE = -- when these types are not rolled, how much more likely should seeing one of them become next roll? measured in %
@@ -955,16 +1021,19 @@ local function BuildTuning()
 
         ----- Monsters
 
+        ENEMY_MIN_STARTUP_FRAMES_AFTER_INTERRUPTION = 15, -- After an enemy's attack gets interrupted during its "hold" state, what is the minimum amount of frames for them to get back to their attack?
+        												  -- If this is set to 0, it means if an enemy was interrupted with 2f left in their startup, they will return to their attack with 2f startup total.
+        												  -- This feels really unfair! So let's set a speed limit.
+        												  -- If this is too HIGH, it becomes easy to stun-lock enemies. Set this conservatively.
+
         ----- Starting Forest
 		cabbageroll_elite = {
-			loot_value = 1/3,
 			health = 450,
 			base_damage = 135,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		cabbageroll = {
-			loot_value = 1/40,
 			health = 300,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -976,7 +1045,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -988,25 +1057,23 @@ local function BuildTuning()
 		cabbagerolls2 =
 		{
 			health = 600,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 		},
 
 		-- dummy tuning table, used only for the encounter debugger
 		cabbagerolls =
 		{
 			health = 900,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 		},
 
 		blarmadillo_elite = {
-			loot_value = 1/3,
 			health = 750,
 			base_damage = 135,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		blarmadillo = {
-			loot_value = 1/12,
 			health = 500,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -1017,7 +1084,7 @@ local function BuildTuning()
 				scale = 0.2,
 				centered = true,
 			},
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			steeringlimit = 360,
 			charm_colors = {
 				color_add = { 28/255, 0/255, 38/255, 1 },
@@ -1032,14 +1099,12 @@ local function BuildTuning()
 		},
 
 		shellsquid_elite = {
-			loot_value = 1.50,
 			health = 750,
 			base_damage = 135,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		shellsquid = {
-			loot_value = 0.50,
 			health = 500,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -1073,20 +1138,26 @@ local function BuildTuning()
 			},
 		},
 
+		yammo_miniboss = {
+			health = 3250,
+			base_damage = 230,
+			vision = elite_vision_tuning,
+			charge_speed = MONSTER_MOVE_SPEED_MOD * 6.66,
+			multiplayer_mods = "MINIBOSS",
+		},
+
 		yammo_elite = {
-			loot_value = 1,
 			health = 2250,
 			base_damage = 230,
 			vision = elite_vision_tuning,
 			charge_speed = MONSTER_MOVE_SPEED_MOD * 6.66,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		yammo = {
-			loot_value = 1/3,
 			health = 1500,
 			base_damage = 200,
-			hitstun_pressure_frames = 90,
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 2.75,
 			speedmult = {
@@ -1095,7 +1166,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 220/255, 169/255, 255/255, 1 },
@@ -1109,17 +1180,16 @@ local function BuildTuning()
 		},
 
 		zucco_elite = {
-			loot_value = 1,
 			health = 1500,
 			base_damage = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		zucco = {
-			loot_value = 1/3,
+			forced_loot_priority = true,
 			health = 1250, -- Because Zucco attacks relentlessly and doesn't try to avoid damage, if he has too low of health he'll just die. Make sure he has enough health to get a full attack chain or two off, while under pressure.
 			base_damage = 135,
-			hitstun_pressure_frames = 60,
+			hitstun_pressure_frames = HitStunPressureFrames.MEDIUM,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 6.75,
 			run_speed = MONSTER_MOVE_SPEED_MOD * 6.0,
@@ -1129,7 +1199,7 @@ local function BuildTuning()
 				scale = 0.2,
 				centered = false,
 			},
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1143,32 +1213,44 @@ local function BuildTuning()
 			},
 		},
 
+		gourdo_miniboss = {
+			health = 3000,
+			base_damage = 200,
+			butt_slam_pst_knockdown_seconds = 2,
+			healing_seed = {
+				health = 520,
+				heal_amount = 350,
+				heal_radius = 80,
+				heal_period = 2.7,
+			},
+			vision = elite_vision_tuning,
+			multiplayer_mods = "MINIBOSS",
+		},
+
 		gourdo_elite = {
-			loot_value = 1/2,
 			health = 2500,
 			base_damage = 200,
 			butt_slam_pst_knockdown_seconds = 2,
 			healing_seed = {
-				health = 350,
+				health = 520,
 				heal_amount = 350,
 				heal_radius = 80,
-				heal_period = 3.6,
+				heal_period = 2.7,
 			},
 			vision = elite_vision_tuning,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		gourdo = {
-			loot_value = 1/3,
 			health = 1700,
 			base_damage = 160,
-			hitstun_pressure_frames = 90,
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			butt_slam_pst_knockdown_seconds = 2,
 			healing_seed = {
-				health = 300,
-				heal_amount = 150,
-				heal_radius = 10,
-				heal_period = 2.5,
+				health = 420,
+				heal_amount = 200,
+				heal_radius = 11,
+				heal_period = 2.2,
 			},
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 2.6,
@@ -1177,7 +1259,7 @@ local function BuildTuning()
 				scale = 0.2,
 				centered = false,
 			},
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			steeringlimit = 180,
 			charm_colors = {
 				color_add = { 28/255, 0/255, 88/255, 1 },
@@ -1207,26 +1289,24 @@ local function BuildTuning()
 		},
 
 		eyev_elite = {
-			loot_value = 1,
 			health = 1200,
 			base_damage = 90,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		eyev =
 		{
-			loot_value = 0.5,
 			health = 750,
 			base_damage = 60,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 5.5,
-			hitstun_pressure_frames = 32,
+			hitstun_pressure_frames = HitStunPressureFrames.LOW,
 			speedmult = {
 				steps = 4,
 				scale = 0.2,
 				centered = false,
 			},
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			steeringlimit = 720,
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
@@ -1236,18 +1316,16 @@ local function BuildTuning()
 		},
 
 		treemon_elite = {
-			loot_value = 1/3,
 			health = 900,
 			base_damage = 100,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		treemon = {
-			loot_value = 1/12,
 			base_damage = 50,
 			health = 450,
 			stationary = true,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			vision = default_vision_tuning,
 			charm_colors = {
 				color_add = { 28/255, 0/255, 88/255, 1 },
@@ -1262,15 +1340,13 @@ local function BuildTuning()
 		},
 
 		gnarlic_elite = {
-			loot_value = 1,
 			health = 600,
 			base_damage = 140,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		gnarlic =
 		{
-			loot_value = 1/40,
 			health = 200,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -1282,7 +1358,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1291,14 +1367,12 @@ local function BuildTuning()
 		},
 
 		beets_elite = {
-			loot_value = 1/3,
 			health = 600,
 			base_damage = 150,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 		beets =
 		{
-			loot_value = 1/40,
 			health = 200,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -1310,7 +1384,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1319,18 +1393,16 @@ local function BuildTuning()
 		},
 
 		windmon_elite = {
-			loot_value = 1/3,
 			health = 800,
 			base_damage = 80,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		windmon = {
-			loot_value = 1/12,
 			base_damage = 40,
 			health = 450,
 			stationary = true,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			vision = default_vision_tuning,
 			charm_colors = {
 				color_add = { 28/255, 0/255, 88/255, 1 },
@@ -1346,16 +1418,14 @@ local function BuildTuning()
 
 		----- Swamp
 		mothball_elite = {
-			loot_value = 1/5,
 			health = 750, -- Although this is a mothball, this is likely the single elite in the room. It should still be meaningful. Be wary of tuning too low!
 			base_damage = 70,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 3.5,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		mothball =
 		{
-			loot_value = 1/180,
 			health =  100, -- Make sure when changing this, that it is still easy and satisfying to mow through collections of mothballs. Too much health means they aren't easy to mow through! I should be able to Spear Drill through and kill them.
 			base_damage = 35,
 			vision = default_vision_tuning,
@@ -1366,7 +1436,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.SWARM,
+			multiplayer_mods = "SWARM",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1375,17 +1445,15 @@ local function BuildTuning()
 		},
 
 		mothball_teen_elite = {
-			loot_value = 1,
 			health = 1200,
 			base_damage = 75,
 			escape_speed = 15,
 			escape_time = 2,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		mothball_teen =
 		{
-			loot_value = 1/5,
 			health = 750,
 			base_damage = 50,
 			vision = default_vision_tuning,
@@ -1396,7 +1464,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1435,7 +1503,6 @@ local function BuildTuning()
 
 		mothball_spawner =
 		{
-			loot_value = 1/5,
 			health = 1000,
 			base_damage = 50,
 			vision = default_vision_tuning,
@@ -1444,7 +1511,7 @@ local function BuildTuning()
 				scale = 0.2,
 				centered = false,
 			},
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1453,19 +1520,17 @@ local function BuildTuning()
 		},
 
 		sporemon_elite = {
-			loot_value = 1/3,
 			health = 1300,
 			base_damage = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 			stationary = true,
 		},
 
 		sporemon = {
-			loot_value = 1/12,
 			base_damage = 100,
 			health = 800,
 			stationary = true,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			vision = default_vision_tuning,
 			charm_colors = {
 				color_add = { 28/255, 0/255, 88/255, 1 },
@@ -1480,28 +1545,26 @@ local function BuildTuning()
 		},
 
 		mossquito_elite = {
-			loot_value = 1/3,
 			health = 600,
 			base_damage = 120,
-			walk_speed = MONSTER_MOVE_SPEED_MOD * 3,
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 6,
 			spray_interval = 13,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		mossquito = {
-			loot_value = 1/40,
 			health = 450,
 			base_damage = 90,
 			vision = default_vision_tuning,
 			roll_animframes = 20,
-			walk_speed = MONSTER_MOVE_SPEED_MOD * 2,
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 10,
 			speedmult = {
 				steps = 6,
 				scale = 0.3,
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1511,15 +1574,13 @@ local function BuildTuning()
 		},
 
 		battoad_elite = {
-			loot_value = 1/3,
 			health = 1100,
 			base_damage = 100,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		battoad =
 		{
-			loot_value = 1/4,
 			health = 750,
 			base_damage = 75,
 			vision = default_vision_tuning,
@@ -1532,7 +1593,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1548,15 +1609,14 @@ local function BuildTuning()
 		bulbug_elite = {
 			health = 1250 * 1.5,
 			base_damage = 50 * 2,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		bulbug =
 		{
-			loot_value = 1,
 			health = 1250,
 			base_damage = 50,
-			hitstun_pressure_frames = 60,
+			hitstun_pressure_frames = HitStunPressureFrames.MEDIUM,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 6,
 			speedmult = {
@@ -1565,7 +1625,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1578,21 +1638,28 @@ local function BuildTuning()
 			},
 		},
 
-		floracrane_elite = {
-			health = 2250, -- tune relative to Yammo Elite
+		floracrane_miniboss = {
+			health = 3250,
 			base_damage = 180,
 			bird_kick_move_speed = 3,
 			vision = elite_vision_tuning,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "MINIBOSS",
+		},
+
+		floracrane_elite = {
+			health = 2800, -- tune relative to Yammo Elite
+			base_damage = 180,
+			bird_kick_move_speed = 3,
+			vision = elite_vision_tuning,
+			multiplayer_mods = "ELITE",
 		},
 
 		floracrane =
 		{
-			loot_value = 1,
 			health = 1750,
 			base_damage = 130,
 			bird_kick_move_speed = 1.5,
-			hitstun_pressure_frames = 80,
+			hitstun_pressure_frames = HitStunPressureFrames.MEDIUM,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 4.5,
 			speedmult = {
@@ -1601,7 +1668,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			charm_colors = {
 				color_add = { 38/255, 0/255, 68/255, 1 },
 				color_mult = { 255/255, 145/255, 255/255, 1 },
@@ -1609,19 +1676,26 @@ local function BuildTuning()
 			},
 		},
 
+		groak_miniboss = {
+			health = 3250,
+			base_damage = 80 * 1.5,
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 3,
+			vision = elite_vision_tuning,
+			multiplayer_mods = "MINIBOSS",
+		},
+
 		groak_elite = {
 			health = 2000* 1.5,
 			base_damage = 80 * 1.5,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 3,
 			vision = elite_vision_tuning,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		groak = {
-			loot_value = 1,
 			health = 2000,
 			base_damage = 80,
-			hitstun_pressure_frames = 90,
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 3,
 			speedmult = {
@@ -1630,7 +1704,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 220/255, 169/255, 255/255, 1 },
@@ -1639,18 +1713,16 @@ local function BuildTuning()
 		},
 
 		slowpoke_elite = {
-			loot_value = 1/3,
 			health = 800 * 1.5,
 			base_damage = 110 * 2,
 			num_slams = 3,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		slowpoke = {
-			loot_value = 1/20,
 			health = 800,
 			base_damage = 110,
-			hitstun_pressure_frames = 90,
+			hitstun_pressure_frames = HitStunPressureFrames.MEDIUM,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 2,
 			speedmult = {
@@ -1659,7 +1731,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 90,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 220/255, 169/255, 255/255, 1 },
@@ -1667,19 +1739,24 @@ local function BuildTuning()
 			},
 		},
 
+		swarmy_elite = {
+			health = 750,
+			base_damage = 160,
+			multiplayer_mods = "ELITE",
+		},
+
 		swarmy = {
-			loot_value = 1/20,
 			health = 400,
 			base_damage = 90,
 			vision = default_vision_tuning,
-			walk_speed = MONSTER_MOVE_SPEED_MOD * 3.5,
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 4,
 			speedmult = {
 				steps = 6,
 				scale = 0.3,
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1689,23 +1766,25 @@ local function BuildTuning()
 
 		woworm_elite = {
 			health = 900,
-			base_damage = 220,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			shell_health = 2000, -- This does not get scaled by dungeon health modifiers.
+			base_damage = 140,
+			multiplayer_mods = "ELITE",
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 1.7,
 		},
 
 		woworm = {
-			loot_value = 1/20,
 			health = 500,
+			shell_health = 1300, -- This does not get scaled by dungeon health modifiers. Woworm, at time of writing, has 1000 health in Dungeon4.
 			base_damage = 110,
 			vision = default_vision_tuning,
-			walk_speed = MONSTER_MOVE_SPEED_MOD * 2.2,
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 2,
 			speedmult = {
 				steps = 6,
 				scale = 0.3,
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1714,14 +1793,12 @@ local function BuildTuning()
 		},
 
 		totolili_elite = {
-			loot_value = 1/3,
 			health = 1200,
 			base_damage = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		totolili = {
-			loot_value = 1/6,
 			health = 600,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -1732,7 +1809,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MINOR,
+			multiplayer_mods = "MINOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1742,7 +1819,6 @@ local function BuildTuning()
 
 		----- Ice Biome
 		warmy = {
-			loot_value = 1, --FIX ME
 			health = 600, -- FIX ME
 			base_damage = 90, -- FIX ME
 			vision = default_vision_tuning,
@@ -1753,7 +1829,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1764,11 +1840,10 @@ local function BuildTuning()
 		bunippy_elite = {
 			health = 800,
 			base_damage = 150,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 		bunippy =
 		{
-			loot_value = 1/60,
 			health = 400,
 			base_damage = 90,
 			vision = default_vision_tuning,
@@ -1779,7 +1854,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1788,14 +1863,13 @@ local function BuildTuning()
 		},
 
 		meowl_elite = {
-			health = 1000,
+			health = 1350,
 			base_damage = 200,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 		meowl =
 		{
-			loot_value = 1/60,
-			health = 500,
+			health = 750,
 			base_damage = 100,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 4,
@@ -1805,7 +1879,7 @@ local function BuildTuning()
 				centered = true,
 			},
 			steeringlimit = 720,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BASIC,
+			multiplayer_mods = "BASIC",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 255/255, 160/255, 255/255, 1 },
@@ -1814,27 +1888,25 @@ local function BuildTuning()
 		},
 
 		antleer_elite = {
-			loot_value = 1,
 			health = 1400,
 			base_damage = 200,
 			vision = elite_vision_tuning,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		antleer = {
-			loot_value = 1,
 			health = 800,
 			base_damage = 140,
-			hitstun_pressure_frames = 60,
+			hitstun_pressure_frames = HitStunPressureFrames.MEDIUM,
 			vision = default_vision_tuning,
-			walk_speed = MONSTER_MOVE_SPEED_MOD * 3,
+			walk_speed = MONSTER_MOVE_SPEED_MOD * 2,
 			speedmult = {
 				steps = 4,
 				scale = 0.2,
 				centered = false,
 			},
 			steeringlimit = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 220/255, 169/255, 255/255, 1 },
@@ -1847,19 +1919,24 @@ local function BuildTuning()
 			},
 		},
 
+		crystroll_miniboss = {
+			health = 3250,
+			base_damage = 240,
+			vision = elite_vision_tuning,
+			multiplayer_mods = "MINIBOSS",
+		},
+
 		crystroll_elite = {
-			loot_value = 1,
 			health = 2400,
 			base_damage = 240,
 			vision = elite_vision_tuning,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.ELITE,
+			multiplayer_mods = "ELITE",
 		},
 
 		crystroll = {
-			loot_value = 1,
 			health = 1600,
 			base_damage = 200,
-			hitstun_pressure_frames = 60,
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			vision = default_vision_tuning,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 2,
 			speedmult = {
@@ -1868,7 +1945,7 @@ local function BuildTuning()
 				centered = false,
 			},
 			steeringlimit = 180,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.MAJOR,
+			multiplayer_mods = "MAJOR",
 			charm_colors = {
 				color_add = { 28/255, 0/255, 58/255, 1 },
 				color_mult = { 220/255, 169/255, 255/255, 1 },
@@ -1884,9 +1961,9 @@ local function BuildTuning()
 		----- Bosses
 
 		bandicoot = {
-			loot_value = 3,
 			base_damage = 200,
 			health = 17000,
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 6,
 			run_speed = MONSTER_MOVE_SPEED_MOD * 9,
 			steeringlimit = 360,
@@ -1900,7 +1977,7 @@ local function BuildTuning()
 				share_target_tags = { "mob" },
 				share_not_target_tags = { "INLIMBO" },
 			},
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BOSS,
+			multiplayer_mods = "BOSS",
 			num_clones_normal =
 			{
 				1, -- +real bandicoot = 2 monsters on battlefield (for 1 player)
@@ -1932,13 +2009,13 @@ local function BuildTuning()
 		},
 
 		bandicoot_clone = {
-			loot_value = 0,
 			base_damage = 1,
 			health = 1000,
+			hitstun_pressure_frames = HitStunPressureFrames.MEDIUM,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 6,
 			run_speed = MONSTER_MOVE_SPEED_MOD * 9,
 			steeringlimit = 360,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BOSS,
+			multiplayer_mods = "BOSS",
 			vision = {
 				retarget_period = 1,
 				aggro_range = 15,
@@ -1953,16 +2030,16 @@ local function BuildTuning()
 		},
 
 		thatcher = {
-			loot_value = 2,
 			base_damage = 200,
 			health = 15000,
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 8,
 			run_speed = MONSTER_MOVE_SPEED_MOD * 8,
 			steeringlimit = 360, -- TODO: untuned
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BOSS,
+			multiplayer_mods = "BOSS",
 			vision = {
 				retarget_period = 1,
-				aggro_range = 15,
+				aggro_range = 30,
 				retarget_range = 55,
 				too_near_switch_target = 25,
 				too_far_retarget = 10000,
@@ -1973,11 +2050,11 @@ local function BuildTuning()
 		},
 
 		megatreemon = {
-			loot_value = 3,
 			base_damage = 270,
 			health = 15000,
 			stationary = true,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BOSS,
+			multiplayer_mods = "BOSS",
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 
 			vision = {
 				retarget_period = 1,
@@ -1992,13 +2069,12 @@ local function BuildTuning()
 		},
 
 		owlitzer = {
-			loot_value = 2,
 			base_damage = 180,
 			health = 16000,
 			walk_speed = MONSTER_MOVE_SPEED_MOD * 12,
 			steeringlimit = 360,
-			multiplayer_mods = ENEMY_MULTIPLAYER_MODS.BOSS,
-			hitstun_pressure_frames = 120,
+			multiplayer_mods = "BOSS",
+			hitstun_pressure_frames = HitStunPressureFrames.HIGH,
 			vision = {
 				retarget_period = 1,
 				aggro_range = 15,
@@ -2054,44 +2130,90 @@ local function BuildTuning()
 		BIOME_EXPLORATION =
 		{
 			BASE = 150,
-			MINIBOSS = 25,
-			BOSS = 50,
+			MINIBOSS = 75,
+			BOSS = 200,
+			CORESTONE_REWARD = 3,
+			FRENZY_LEVEL_MODIFIER = 0.1, -- 10% exp per frenzy level
+
+			-- EXP for full clear
+			-- F0 425
+			-- F1 468
+			-- F2 510
+			-- F3 553
 		},
+
+		BIOME_LEVEL_EXPERIENCE =
+		{
+			400,
+			450,
+			500,
+			550,
+			600,
+			650,
+		},
+
+		BIOME_LEVEL_EXPERIENCE_GROWN = 0.1,
 
 		-- Crafting
 
 		CRAFTING =
 		{
+			-- first time constructing decor reward, in corestones
+			CONSTRUCTABLE_RARITY_TO_BOUNTY =
+			{
+				[ITEM_RARITY.s.COMMON] = 1,
+			    [ITEM_RARITY.s.UNCOMMON] = 2,
+			    [ITEM_RARITY.s.EPIC] = 5,
+			    [ITEM_RARITY.s.LEGENDARY] = 10,
+			},
+
+			--base upgrade cost for items
+			UPGRADE_COSTS =
+			{
+				HEAD = 2,
+				BODY = 4,
+				WAIST = 2,
+				WEAPON = 4,
+			},
+
+			--rarer items cost more
+			RARITY_UPGRADE_MODIFIER =
+			{
+				[ITEM_RARITY.s.COMMON] = 1,
+				[ITEM_RARITY.s.UNCOMMON] = 1.5,
+				[ITEM_RARITY.s.EPIC] = 2.5,
+			},
+
 			--recipes
 			ARMOUR_UPGRADE_PATH =
 			{
 				[ITEM_RARITY.s.COMMON] =
 				{
 					{ -- 2
-						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 3 },
+						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON },
 					},
 					{ -- 3
-						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 3 },
+						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.EPIC },
 					},
 				},
 
 				[ITEM_RARITY.s.UNCOMMON] =
 				{
 					{ -- 2
-						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 3 },
+						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON },
 					},
 					{ -- 3
-						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 6 },
+						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.EPIC },
 					},
 				},
 
 				[ITEM_RARITY.s.EPIC] =
 				{
 					{ -- 2
-						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 3 },
+						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON },
 					},
 					{ -- 3
-						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 6 },
+						{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.EPIC },
 					},
 				},
 			},
@@ -2134,83 +2256,134 @@ local function BuildTuning()
 
 			WEAPON =
 			{
-				[ITEM_RARITY.s.COMMON] =
-				{
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.COMMON, a = 1 },
-				},
-
-				[ITEM_RARITY.s.UNCOMMON] = {
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.UNCOMMON, a = 1 },
-					{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 3 },
-				},
-
-				[ITEM_RARITY.s.EPIC] =
-				{
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.LEGENDARY, a = 1 },
-					{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.EPIC, a = 3 },
-				},
-
-				[ITEM_RARITY.s.LEGENDARY] =
-				{
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.LEGENDARY, a = 1 },
-					{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.LEGENDARY, a = 3 },
-				},
+				UPGRADE_PATH = true,
 			},
 
 			ARMOUR_MEDIUM =
 			{
 				UPGRADE_PATH = true,
-				[ITEM_RARITY.s.COMMON] =
-				{
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.UNCOMMON, a = 1 },
-				},
-
-				[ITEM_RARITY.s.UNCOMMON] = {
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.UNCOMMON, a = 1 },
-					{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.UNCOMMON, a = 1 },
-				},
-
-				[ITEM_RARITY.s.EPIC] =
-				{
-					{ t = INGREDIENTS.s.CURRENCY, r = ITEM_RARITY.s.UNCOMMON, a = 1 },
-					{ t = INGREDIENTS.s.MONSTER, r = ITEM_RARITY.s.EPIC, a = 1 },
-				},
 			},
 		},
 
-		-- From DST
-        MAX_SERVER_SIZE = 6,
-        DEMO_TIME = 1020,
-        TOTAL_DAY_TIME = 480,
-        WILSON_RUN_SPEED = 6,
-        BEEFALO_RUN_SPEED = {
-			DEFAULT = 7,
+		--jcheng: chance of any room having loot drop
+		--  every time you enter a room, draw one of these numbers from a grabbag
+		--	if you are past the miniboess, draw twice
+		LOOT_REWARD_CHANCE = { 0, 0, 0, 0, 0, 0, 1, 1, 1, 2 },
+
+		-- per frenzy, draw one of these numbers from a grabbag to see how much loot
+		BOSS_LOOT_VALUE =
+		{
+			-- 2 + FrenzyLevel
+			{ 2 },			--F0
+			{ 3 },			--F1
+			{ 4 },			--F2
+			{ 5 },			--F3
 		},
-        STARTING_TEMP = 35,
-        OVERHEAT_TEMP = 70,
-        BEARDLING_SANITY = .4,
-        MIN_INDICATOR_RANGE = 20,
-        MAX_INDICATOR_RANGE = 50,
-		GAMEMODE_STARTING_ITEMS = {},
-        VOTE_KICK_TIME = 10 * 60, --10min
-        DICE_ROLL_COOLDOWN = 30,
-        WINTERS_FEAST_TREE_DECOR_LOOT = {},
+		MINIBOSS_LOOT_VALUE =
+		{
+			-- Since this is half the effort as a boss, give less.
+			-- 1 + (FrenzyLevel/2)
+			{ 1 }, 			--F0 (1 + 0)
+			{ 1, 2 },		--F1 (1 + 0.5)
+			{ 2 },			--F2 (1 + 1)
+			{ 2, 3 },		--F3 (1 + 1.5)
+		},
+
+		--jcheng: change the weight of items you get
+		--  you are more likely to get loot useful for upgrades than for building decor
+		LOOT_WEIGHTS =
+		{
+			EXCESS_LOOT_MULT = 0.25, -- If you have over EXCESS_LOOT_THRESHOLD amount of an ing, mult the weight by this value
+			BASE_ILVL_MULT = 0.25, -- Multiply loot weight by 1 + this (per base ilvl). IE: ilvl 5 has 50% additional weight
+			EQUIPPED_GEAR = 1.1,
+			HELD_GEAR = 1,
+			DECOR = 1
+		},
+
+		CORESTONE_REWARD_MODIFIER =
+		{
+			--change how many corestones you receive from corestone rooms based on current difficulty
+			[1] = { 1 },
+			[2] = { 1, 1, 2, 2 },
+			[3] = { 2, 2, 2, 2, 2, 2, 2, 2, 3, 3 },
+			[4] = { 2, 2, 2, 3, 3, 3, 4 },
+			[5] = { 3, 3, 3, 3, 3, 3, 4, 4 },
+			[6] = { 3, 3, 3, 4, 4, 4, 5 },
+			[7] = { 4, 4, 4, 4, 4, 5 },
+		},
+
+		--how much things cost in the market
+		MARKET_ITEM_COSTS =
+		{
+			--base cost for items
+			EQUIPMENT_COSTS =
+			{
+				HEAD = 1,
+				BODY = 2,
+				WAIST = 1,
+				WEAPON = 4,
+			},
+
+			--harder dungeons have more expensive equipment
+			DUNGEON_MODIFIER =
+			{
+				[1] = 1,
+				[2] = 1.5,
+				[3] = 2.5,
+				[4] = 3.5,
+				[5] = 5, -- not implemented
+				[6] = 6, -- not implemented
+			},
+
+			--rarer items cost more
+			RARITY_MODIFIER =
+			{
+				[ITEM_RARITY.s.COMMON] = 1,
+				[ITEM_RARITY.s.UNCOMMON] = 1.5,
+				[ITEM_RARITY.s.EPIC] = 2.5,
+			}
+		},
+
+		MASTERIES =
+		{
+			CORESTONE_REWARDS =
+			{
+				[MASTERY_DIFFICULY.s.EASY] = 1,
+				[MASTERY_DIFFICULY.s.MEDIUM] = 2,
+				[MASTERY_DIFFICULY.s.HARD] = 4,
+			}
+		},
+
+		DECOR_COSTS =
+		{
+			PLUSHIE =
+			{
+				[DECOR_PLUSHIE_SIZE.s.SMALL] = 4,
+				[DECOR_PLUSHIE_SIZE.s.MEDIUM] = 6,
+				[DECOR_PLUSHIE_SIZE.s.LARGE] = 8,
+			},
+
+			BOSSSTATUE = 12,
+
+			BY_RARITY =
+			{
+				[ITEM_RARITY.s.COMMON] = 1,
+				[ITEM_RARITY.s.UNCOMMON] = 2,
+				[ITEM_RARITY.s.EPIC] = 3,
+			}
+
+		},
+
     }
 
-	--- Returns a table of resolved EnemyModifiers keyed by EnemyModifiers.s.
-	--- If enemy_prefab is not nil, also merge in modifiers based on enemy category.
-	function Tuning:GetEnemyModifiers(enemy_prefab)
+	function Tuning:GetEnemyModifiersAtAscensionAndTier(enemy_prefab, ascension, dungeon_tier)
 		-- Remember that ascension level starts at 0. Ascension 0 is NOT represented in AscensionMultipliers.
 		-- Merge all ascension multipliers up to the current ascension level.
-		local ascension = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
 		local ascension_modifiers = {}
 		for i = 1, ascension do
 			table.insert(ascension_modifiers, AscensionModifierSource[i])
 		end
 
-		local dungeon_tier = TheSceneGen
-			and TheSceneGen.components.scenegen:GetTier()
-			or 1
 		local dungeon = DungeonTierModifierSource[dungeon_tier]
 
 		local multiplayer = {}
@@ -2222,9 +2395,11 @@ local function BuildTuning()
 			if enemy_tuning and not enemy_tuning.multiplayer_mods then
 				TheLog.ch.Tuning:printf("No multiplayer_mods found in tuning table for enemy [%s]", enemy_prefab)
 			end
-			local multiplayer_mods = enemy_tuning
+			local multiplayer_mods_id = enemy_tuning
 				and enemy_tuning.multiplayer_mods
-				or ENEMY_MULTIPLAYER_MODS.BASIC
+				or "BASIC"
+
+			local multiplayer_mods = ENEMY_MULTIPLAYER_MODS[multiplayer_mods_id]
 			multiplayer = multiplayer_mods[GetLastPlayerCount()]
 		end
 
@@ -2237,12 +2412,24 @@ local function BuildTuning()
 		)
 	end
 
+	--- Returns a table of resolved EnemyModifiers keyed by EnemyModifiers.s.
+	--- Uses the AscensionManager's current level for ascension and the curren dungeon for dungeon tier.
+	--- If enemy_prefab is not nil, also merge in modifiers based on enemy category.
+	function Tuning:GetEnemyModifiers(enemy_prefab)
+		local ascension = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+
+		local dungeon_tier = TheSceneGen
+			and TheSceneGen.components.scenegen:GetTier()
+			or 1
+
+		return self:GetEnemyModifiersAtAscensionAndTier(enemy_prefab, ascension, dungeon_tier)
+	end
+
 	-- Resolved PlayerModifiers for the specified weapon, keyed by PlayerModifier.s.
-	function Tuning:GetWeaponModifiers(weapon_type, ilvl, weight, rarity)
+	function Tuning:GetWeaponModifiers(ilvl, weight, rarity)
 		return ResolveModifiers(
 			PlayerModifierNames:Ordered(),
 			PLAYER_MODIFIER_DEFAULTS,
-			self.GEAR.WEAPONS[weapon_type],
 			WeaponILvlModifierSource[ilvl],
 			WeaponWeightModifierSource[weight],
 			WeaponRarityModifierSource[rarity]
@@ -2254,16 +2441,39 @@ local function BuildTuning()
 		return ResolveModifiers(
 			PlayerModifierNames:Ordered(),
 			PLAYER_MODIFIER_DEFAULTS,
-			self.GEAR.ARMOUR,
 			ArmourILvlModifierSource[ilvl],
 			ArmourWeightModifierSource[weight],
 			ArmourRarityModifierSource[rarity]
 		)
 	end
 
+	function Tuning:GetTrapModifiers()
+		-- TODO @chrisp #traps - for now we are just using EnemyModifiers for traps
+		-- we may want trap-specific (or trap_type-specific) tuning
+		return self:GetEnemyModifiers()
+	end
+
+	function Tuning:GetEligibleEliteCategories(ascension)
+		local eligible = {}
+		for i=1,ascension do
+			table.appendarrays(eligible, ASCENSION_ALLOWABLE_ELITES[i])
+		end
+		return eligible
+	end
+
 	return Tuning
 end
 
+--[[
+local WeaponRarityModifierSource = {
+	-- Rarity of the weapon slightly affects the damage output.
+	[ITEM_RARITY.s.COMMON] =
+	{
+]]
+
+-- Assert some tuning relationships.
 assert(#DungeonTierModifierSource == #ArmourILvlModifierSource and #DungeonTierModifierSource == #WeaponILvlModifierSource, "Please make sure that the number of DungeonTierModifiers, ArmourILvlModifier, and WeaponILvlModifierSource match! These are meant to be form one relationship.")
+assert(WeaponRarityModifierSource[ITEM_RARITY.s.COMMON][PlayerModifierNames.s.DamageMult] == WeaponILvlModifierSource[1][PlayerModifierNames.s.DamageMult] * -1, "The negative value of COMMON weapons needs to match the positive value of the first ilvl's buff. This is so our first Basic weapon has the intended tuning.")
+assert(ArmourRarityModifierSource[ITEM_RARITY.s.COMMON][PlayerModifierNames.s.DungeonTierDamageReductionMult] == ArmourILvlModifierSource[1][PlayerModifierNames.s.DungeonTierDamageReductionMult] * -1, "The negative value of COMMON armor needs to match the positive value of the first ilvl's buff. This is so our first Basic gear has the intended tuning.")
 
 return BuildTuning

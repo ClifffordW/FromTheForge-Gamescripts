@@ -25,7 +25,7 @@ local PowerDetailsButton = Class(ImageButton, function(self, owner, power)
 	self:SetSize(self.width, self.height)
 
     -- Setup default scale
-    self.focus_scale =  {1.05, 1.05, 1.05} -- TODO(jambell): on focus, make self.icon bigger, without making self.shadow bigger
+    self.focus_scale =  {1.05, 1.05, 1.05} -- TODO: on focus, make self.icon bigger, without making self.shadow bigger
     self.normal_scale = {1, 1, 1}
 
     -- Set default flags
@@ -73,7 +73,7 @@ function PowerDetailsButton:SetPower(power)
 		self.description:SetText(Power.GetDescForPower(self.power))
 
 		local icon_offset
-		-- JAMBELL: has to differ per icon type, because of how big Legendary Frames are
+		-- NOTE: has to differ per icon type, because of how big Legendary Frames are
 		if self.power.rarity == "LEGENDARY" then
 			icon_offset = 255
 		elseif self.power.rarity == "EPIC" then

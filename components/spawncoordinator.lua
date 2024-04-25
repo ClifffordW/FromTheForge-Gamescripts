@@ -10,6 +10,7 @@ local prop_data = require("prefabs.prop_autogen_data")
 local monstertiers = require "defs.monstertiers"
 local monsterutil = require("util.monsterutil")
 local SceneGen = require "components.scenegen"
+local Vec2 = require "math.modules.vec2"
 
 require "class"
 require "util"
@@ -30,6 +31,7 @@ local SpawnCoordinator = Class(function(self, inst)
 		is_room_complete = true,
 	}
 
+	self.sole_occupants = {}
 	self.spawners = {}
 	self.stationary_spawners = {}
 	self.trap_locations = {}
@@ -113,12 +115,6 @@ end
 
 function SpawnCoordinator:OnStartRoom()
 	self:_PrepareForSpawn()
-	-- Delay to ensure we're not still in StartRoom.
-	self.inst:DoTaskInTime(0, function(inst_)
-		-- SpawnCoordinator is ready to do spawning (and may have already
-		-- spawned some things).
-		self.inst:PushEvent("spawncoordinator_ready")
-	end)
 end
 
 function SpawnCoordinator:_RemoveFromScene(ent)
@@ -186,7 +182,7 @@ function SpawnCoordinator:_PrepareForSpawn()
 			if ALLOW_SIMRESET_BETWEEN_ROOMS then
 				assert(#AllPlayers == 0, "Expected players to spawn *after* world.")
 			else
-				-- TODO: networking2022, nosimreset - allow remote players to linger for now
+				-- nosimreset - allow remote players to linger
 				for _i,player in ipairs(AllPlayers) do
 					if player:IsLocal() then
 						assert(false, "Why are there local players still around?")
@@ -195,6 +191,7 @@ function SpawnCoordinator:_PrepareForSpawn()
 				end
 			end
 		end
+		self:DoEnforceSoleOccupancy()
 		return
 	end
 
@@ -210,9 +207,7 @@ function SpawnCoordinator:_PrepareForSpawn()
 	table.sort(self.spawners, EntityScript.OrderByXZDistanceFromOrigin)
 	-- sort traps, destructible props?
 
-	if TheNet:IsHost() then
-		self.thread = self.inst.components.cororun:StartCoroutine(SpawnCoordinator._Spawn_coro, self)
-	end
+	self:StartCoroutine()
 end
 
 function SpawnCoordinator:_OnPlayerActivated()
@@ -293,9 +288,38 @@ function SpawnCoordinator:StartCustomEncounter(encounter)
 	local last_count = TheDungeon:GetDungeonMap():GetLastPlayerCount() or -1
 	TheLog.ch.Spawn:printf("Starting custom encounter [%s] with last player count %i.", encounter, last_count)
 
-	if TheNet:IsHost() then
-		self.thread = self.inst.components.cororun:StartCoroutine(SpawnCoordinator._Spawn_coro, self)
+	self:StartCoroutine()
+end
+
+function SpawnCoordinator:StartCoroutine()
+	if not TheNet:IsHost() then
+		return
 	end
+	self.thread = self.inst.components.cororun:StartCoroutine(SpawnCoordinator._Spawn_coro, self)
+	TheLog.ch.Spawn:print("SpawnCoordinator:StartCoroutine(): coro has been started...")
+	-- Delay to ensure we're not still in StartRoom.
+	self.inst:DoTaskInTicks(1, function(inst_)
+		-- SpawnCoordinator is ready to do spawning (and may have already
+		-- spawned some things).
+
+	end)
+	self.inst:DoTaskInTicks(2, function(inst_)
+		self.inst:PushEvent("first_wave_spawned")
+	end)
+	self:DoEnforceSoleOccupancy()
+end
+
+function SpawnCoordinator:DoEnforceSoleOccupancy()
+	self.inst:DoTaskInTicks(2, function(inst_)
+		if TheNet:IsGameTypeLocal() then
+			SpawnCoordinator.EnforceSoleOccupancy(self.sole_occupants)
+		else
+			if TheNet:IsHost() then
+				SpawnCoordinator.EnforceSoleOccupancy(self.sole_occupants)
+			end
+			TheNet:SetSoleOccupantCircles(self.sole_occupants)
+		end
+	end)
 end
 
 function SpawnCoordinator:_OnRoomCleared(world, data)
@@ -316,7 +340,7 @@ function SpawnCoordinator:_Spawn_coro()
 	self.data.is_last_wave = true
 	if self.inst.components.roomclear:GetEnemyCount() == 0 then
 		-- Don't assert since it can occur when using d_clearwave on a single
-		-- wave encounter. However, we don't ever want to enter this state.
+		-- wave encounter. However, we don't ever want to enter this state.(
 		TheLog.ch.Spawn:print("WARN: Don't call WaitForEnemyCount at the end of an encounter or we can't properly clean up room state.")
 		self:_OnRoomCleared(TheWorld, self.last_clear_data)
 	end
@@ -436,6 +460,76 @@ function SpawnCoordinator:SetupValidSpawnerList(spawner_list, spawn_area_data)
 	return valid_spawners
 end
 
+-- Claim sole occupancy of the space in which the entity is located. That is, destroy all
+-- other occupants.
+function SpawnCoordinator:ClaimSoleOccupancy(entity, radius)
+	local x, y = entity.Transform:GetWorldXZ()
+	table.insert(self.sole_occupants, {
+		center = { x = x, y = y },
+		radius = radius or 2
+	})
+end
+
+function SpawnCoordinator.EnforceSoleOccupancy(sole_occupants)
+	for _, sole_occupant in ipairs(sole_occupants) do
+		local decor_props_to_destroy = TheSim:FindEntitiesXZ(
+			sole_occupant.center.x,
+			sole_occupant.center.y,
+			sole_occupant.radius,
+			{DecorTags[DecorLayer.id.Ground]},
+			{SceneGen.ROOM_PARTICLE_SYSTEM_TAG}
+		)
+		for _, entity in pairs(decor_props_to_destroy) do
+			entity:Remove()
+		end
+	end
+end
+
+local distribute_loot = function(wave_count, entities, rng)
+	--get lootdropper info, and mark an enemy to drop loot, if eligible
+	local player = GetFirstLocalPlayer()
+	if player then
+		local loot_count = player.components.lootdropmanager:GetLootCount(wave_count)
+		if loot_count > 0 then
+
+			--go through the entities and add weights
+			local weights = {}
+			for i, ent in ipairs(entities) do
+				--more probability to creatures with priority
+				weights[ent.prefab] = ent.components.lootdropper:HasPriority() and 10 or 1
+
+				--more probability on items that you need
+				local loot_tags = ent.components.lootdropper.loot_drop_tags
+				local possible_loot = player.components.lootdropmanager:CollectPossibleLootDrops(loot_tags)
+				local weight_mod = 0
+				for _, drop_def in ipairs(possible_loot) do
+					weight_mod = math.max(weight_mod, TheDungeon.components.lootweights:GetLootWeight(drop_def.name))
+				end
+
+				if weight_mod == 0 then
+					--no use for this loot, don't drop
+					weights[ent.prefab] = nil
+				else
+					--there is a use for this loot, let's multiply by the weight
+					weights[ent.prefab] = weights[ent.prefab] * weight_mod
+				end
+			end
+
+			for i = 1, loot_count do
+				--distribute the loot against the weighted choices
+				local choice = rng:WeightedChoice(weights)
+
+				for i, ent in ipairs(entities) do
+					if ent.prefab == choice then
+						ent.components.lootdropper:SetLootDropperValue(1)
+						break
+					end
+				end
+			end
+		end
+	end
+end
+
 -- We don't spawn more enemies than locations.
 function SpawnCoordinator:SpawnStationaryEnemies(wave, data)
 	dbassert(not self.has_spawned_any_waves, "Call SpawnStationaryEnemies *before* SpawnWave or SpawnAdaptiveWave so they exist on level reveal instead of popping into existence.")
@@ -446,8 +540,11 @@ function SpawnCoordinator:SpawnStationaryEnemies(wave, data)
 
 	assert(#valid_spawners > 0, "Must have spawners or we'll loop forever.")
 
+	self.wave_count = self.wave_count and self.wave_count + 1 or 1
+
 	local enemy_idx = 1
 
+	local ents = {}
 	for i, enemy in ipairs(enemies_to_spawn) do
 		if not enemies_to_spawn[enemy_idx] then
 			break
@@ -460,11 +557,15 @@ function SpawnCoordinator:SpawnStationaryEnemies(wave, data)
 		enemy = self:_MakeEnemyElite(enemy)
 
 		local ent = valid_spawners[1]:SpawnStationaryEnemy(enemy)
-		SceneGen.ClaimSoleOccupancy(ent)
+		self:ClaimSoleOccupancy(ent)
 		table.remove(valid_spawners, 1) -- this spawner is now used up, so remove it from the list of valid spawners
+
+		table.insert(ents, ent)
 
 		enemy_idx = enemy_idx + 1
 	end
+
+	distribute_loot(self.wave_count, ents, self.rng)
 
 	-- end
 	self.data.total_stationary_enemy_count = enemy_idx - 1
@@ -491,7 +592,7 @@ function SpawnCoordinator:SpawnTraps(wave)
 		local spawned = false
 		local trap_prop = prop_data[trap]
 		for spawner_index, spawner in ipairs(valid_spawners) do
-			if spawner.trap_types then --JAMBELLTRAP should I assert here? trying to check a spawner which is not configured.
+			if spawner.trap_types then
 				for key, _ in pairs(spawner.trap_types) do
 					-- if the spawner supports this trap, spawn a trap there and remove it from the valid spawners list
 					if trap_prop
@@ -499,7 +600,7 @@ function SpawnCoordinator:SpawnTraps(wave)
 						and key == trap_prop.script_args.trap_type
 					then
 						local ent = spawner.spawner_ent:SpawnTrap(traps_to_spawn[trap_idx])
-						SceneGen.ClaimSoleOccupancy(ent)
+						self:ClaimSoleOccupancy(ent)
 						self.initial_scenario_entities[ent] = trap_index
 						table.remove(valid_spawners, spawner_index) -- this spawner is now used up, so remove it from the list of valid spawners
 						spawned = true
@@ -522,7 +623,7 @@ end
 function SpawnCoordinator:SpawnPropDestructibles(max_amount, force_max)
 	dbassert(not self.has_spawned_any_waves, "Call SpawnPropDestructibles *before* SpawnWave or SpawnAdaptiveWave so they exist on level reveal instead of popping into existence.")
 	local valid_spawners = self.rng:ShuffleCopy(self.propdestructible_locations)
-	local props_to_spawn = force_max and max_amount or self.rng:Integer(0,max_amount) --JAMBELL maybe do random calculation outside of this function?
+	local props_to_spawn = force_max and max_amount or self.rng:Integer(0,max_amount) -- maybe do random calculation outside of this function?
 	local prop_idx = 1
 
 	TheLog.ch.Spawn:print("SpawnPropDestructibles count", props_to_spawn)
@@ -556,7 +657,7 @@ function SpawnCoordinator:SpawnPropDestructibles(max_amount, force_max)
 			end
 
 			local ent = spawner.spawner_ent:SpawnPropDestructible(prop)
-			SceneGen.ClaimSoleOccupancy(ent)
+			self:ClaimSoleOccupancy(ent)
 			self.initial_scenario_entities[ent] = i
 			table.remove(valid_spawners,count) -- this spawner is now used up, so remove it from the list of valid spawners
 			spawned = true
@@ -588,6 +689,8 @@ function SpawnCoordinator:SpawnMiniboss(wave, delay_between_spawns, data)
 		delay_between_spawns = 0
 	end
 
+	self.wave_count = self.wave_count and self.wave_count + 1 or 1
+
 	--~ TheLog.ch.Spawn:printf("Spawning miniboss: %s", table.inspect(wave, { process = table.inspect.processes.skip_mt, }))
 
 	local valid_spawners = self:SetupValidSpawnerList(self.spawners, data)
@@ -606,7 +709,6 @@ function SpawnCoordinator:SpawnMiniboss(wave, delay_between_spawns, data)
 		local ent = self:_SpawnPrefabNow(enemy)
 		if ent then
 			table.insert(enemy_entities, ent)
-			monsterutil.MakeMiniboss(ent)
 			self:_RemoveFromScene(ent)
 		end
 	end
@@ -713,6 +815,8 @@ function SpawnCoordinator:SpawnWave(wave, delay_between_spawns, delay_between_re
 		delay_between_reuse = 0
 	end
 
+	self.wave_count = self.wave_count and self.wave_count + 1 or 1
+
 	--~ TheLog.ch.Spawn:printf("Spawning wave: %s", table.inspect(wave, { process = table.inspect.processes.skip_mt, }))
 
 	local valid_spawners = self:SetupValidSpawnerList(self.spawners, data)
@@ -723,7 +827,11 @@ function SpawnCoordinator:SpawnWave(wave, delay_between_spawns, delay_between_re
 	if (refill_wave) then
 		local current_enemies = self.inst.components.roomclear:GetEnemies()
 		for enemy in pairs(current_enemies) do
-			lume.remove(enemies, enemy.prefab)
+			local basic_prefab = enemy.prefab
+			if (enemy:HasTag("elite")) then
+				basic_prefab = string.gsub(enemy.prefab, "_elite", "")
+			end
+			lume.remove(enemies, basic_prefab)
 		end
 	end
 
@@ -798,6 +906,8 @@ function SpawnCoordinator:SpawnWave(wave, delay_between_spawns, delay_between_re
 			self:WaitForSeconds(tell_time)
 		end
 
+		distribute_loot(self.wave_count, enemy_entities, self.rng)
+
 		local spawners = lume.keys(spawner_enemy_pairs)
 		table.sort(spawners, EntityScript.OrderByXZDistanceFromOrigin)
 		for _i, spawner in ipairs(spawners) do
@@ -819,6 +929,7 @@ function SpawnCoordinator:SpawnWave(wave, delay_between_spawns, delay_between_re
 		for i = #to_remove, 1, -1 do
 			table.remove(enemy_entities, to_remove[i])
 		end
+
 		-- WARN: This delay means the room could be cleared before the next
 		-- part of this wave spawns.
 		self:WaitForSeconds(delay_between_reuse)
@@ -915,9 +1026,9 @@ function SpawnCoordinator:_MakeEnemyElite(enemy)
 	local elite_max = self:_GetEliteMaxFromProgress(progress)
 	local elite_chance = TUNING:GetEnemyModifiers(enemy).EliteChance
 
-	if elite_chance > 0 and self.elite_current < elite_max then
-		-- jambell: Possible alternative implementation: every enemy has an "elite value" tuned per creature, and an encounter rolls an "elite budget" which scales up on Dungeon Progress, or gets modified by ascension/powers/etc
-		-- 			When we spawn an elite version of a mob, spend some of that elite budget.
+	local eligible_type = self:_IsEnemyTypeEligibleElite(enemy)
+
+	if elite_chance > 0 and self.elite_current < elite_max and eligible_type then
 
 		local roll = self.rng:Float(1)
 		local to_beat = is_first_wave and elite_chance * .25 or elite_chance -- Less likely to spawn elites in the first wave
@@ -945,6 +1056,34 @@ function SpawnCoordinator:_GetEliteMaxFromProgress(progress)
 		end
 	end
 	error("elite_counts should handle progress values from 0 to 1. Unhandled progress: ".. progress)
+end
+
+function SpawnCoordinator:_IsEnemyTypeEligibleElite(enemy)
+	local ascension = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+	local eligible_elites = TUNING:GetEligibleEliteCategories(ascension)
+
+	local is_eligible = false
+	if TUNING[enemy] and TUNING[enemy].multiplayer_mods then
+		if table.contains(eligible_elites, TUNING[enemy].multiplayer_mods) then
+			is_eligible = true
+		end
+	end
+
+	return is_eligible
+end
+
+function SpawnCoordinator:_GetChanceModifierForEliteType(enemy)
+	local ascension = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()
+	local eligible_elites = TUNING:GetEligibleEliteCategories(ascension)
+
+	local is_eligible = false
+	if TUNING[enemy] and TUNING[enemy].multiplayer_mods then
+		if table.contains(eligible_elites, TUNING[enemy].multiplayer_mods) then
+			is_eligible = true
+		end
+	end
+
+	return is_eligible
 end
 
 function SpawnCoordinator:_GetAdaptiveWaveForBiome(biome_location)
@@ -1054,6 +1193,12 @@ function SpawnCoordinator:WaitForRoomClear()
 	assert(self.thread:IsRunning())
 	while not self.inst.components.roomclear:IsClearOfEnemies() do
 		coroutine.yield()
+	end
+end
+
+function SpawnCoordinator:CleanUpRemainingEnemies()
+	if TheWorld then
+		TheWorld.components.roomclear:CleanUpRemainingEnemies()
 	end
 end
 

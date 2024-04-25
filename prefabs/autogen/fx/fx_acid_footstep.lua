@@ -11,4 +11,5 @@ return {
   scalex=0.80000001192093,
   scaley=0.80000001192093,
   sortorder=-3,
+  soundevent="AAAA_default_event",
 }

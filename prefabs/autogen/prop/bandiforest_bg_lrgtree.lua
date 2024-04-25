@@ -4,7 +4,17 @@ return {
   fade={ bottom=-3.88, top=1.24,},
   group="swamp_props",
   layer="auto",
-  parallax={ { anim="front", dist=-0.25,}, { anim="mid",}, { anim="back", dist=1.0,},},
+  parallax={
+    { anim="front", autosortlayer="above", dist=-0.25,},
+    { anim="mid_above", autosortlayer="above",},
+    { anim="back", autosortlayer="above", dist=1.0,},
+    {
+      anim="mid_below",
+      autosortlayer="below",
+      dist=9.9999997473788e-05,
+      underground=true,
+    },
+  },
   proptype=1,
   randomize=true,
   variations=4,

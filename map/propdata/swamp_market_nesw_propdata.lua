@@ -49,7 +49,7 @@ return {
   dummy_bandicoot={ { x=12.0, z=-2.0,}, { x=10.0,},},
   marketroom_flag={ { x=-5.5, z=11.5,}, { x=12.5, z=-13.5,},},
   marketroom_hangings={ { x=-17.5, z=12.5,}, { x=-21.5, z=12.5,}, { x=-1.5, z=12.5,},},
-  marketroom_jamball_cart={ { flip=true, x=-0.5, z=9.5,},},
+  marketroom_jamball_cart={ { flip=true, x=0.5, z=10.5,},},
   marketroom_lamp={
     { x=-30.5, z=-9.5,},
     { x=-30.5, z=-2.5,},
@@ -70,7 +70,7 @@ return {
     { variation=4, x=-29.61, z=6.23,},
     { flip=true, variation=2, x=-24.86, z=10.86,},
   },
-  marketroom_rug_big={ { flip=true, r=45.0, x=3.5, z=5.5,},},
+  marketroom_rug_big={ { flip=true, x=4, z=6,}, { flip=true, x=-1, z=6,},},
   marketroom_rug_magpie={
     { color_variant={ brightness=-19.0, hue=0, saturation=-17.0,}, x=-21.5, z=-8.5,},
     {
@@ -91,11 +91,11 @@ return {
     { x=-3.5, z=12.5,},
     { x=0.5, z=12.5,},
     { x=-32.5, z=-17.5,},
-    { x=6.5, z=7.5,},
+    { x=6.5, z=9.5,},
     { x=-33.5, z=3.5,},
     { x=12.5, z=4.5,},
   },
-  marketroom_tool_box={ { flip=true, x=-4.0, z=6.5,},},
+  marketroom_tool_box={ { flip=true, x=-4, z=6.5,},},
   spawner_npc_dungeon={ { x=-23.0, z=-9.0,},},
   spawner_waredispenser={
     { script_args={ index=1, market="Meta",}, x=-24.5, z=4.5,},
@@ -106,7 +106,8 @@ return {
     { script_args={ index=3.0, market="Run",}, x=-14.5, z=-13.5,},
     { script_args={ index=4.0, market="Run",}, x=-2.5, z=-10.5,},
     { script_args={ index=5.0, market="Run",}, x=-10.5, z=-10.5,},
-    { script_args={ index=4.0, market="Meta",}, x=3.5, z=5.5,},
+    { script_args={ index=4.0, market="Meta",}, x=4, z=6,},
+    { script_args={ index=4.0, market="Meta",}, x=-1, z=6,},
   },
   town_floor_path_lrg={
     {
@@ -261,6 +262,19 @@ return {
       variation=4,
       x=-18.5,
       z=1.5,
+    },
+    {
+      color_variant={ brightness=0, hue=172, saturation=-19,},
+      flip=true,
+      variation=3,
+      x=2.5,
+      z=3.5,
+    },
+    {
+      color_variant={ brightness=0, hue=172, saturation=-19,},
+      variation=2,
+      x=3.5,
+      z=4.5,
     },
   },
 }

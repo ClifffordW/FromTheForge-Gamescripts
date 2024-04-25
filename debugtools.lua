@@ -1,4 +1,5 @@
 table.inspect = require("inspect")   -- add table pretty printer that understands recursive tables
+local lume = require("util.lume")
 
 local getinfo = debug.getinfo
 local max = math.max
@@ -191,6 +192,30 @@ function tabletodictstring(obj, fn)
 	s = s.." }"
 	return s
 end
+
+-- copy/paste/modify of tabletodictstring except string is (hopefully) deterministic
+function tabletoordereddictstring(obj, fn)
+	if obj == nil then
+		return "{ }"
+	end
+	local s = "{ "
+	local first = true
+
+	local ordered_keys = lume.sort(lume.keys(obj))
+	for _i,k in ipairs(ordered_keys) do
+		local v = obj[k]
+		if not first then 
+			s = s..", "
+		else
+			first = false
+		end
+		if fn then k,v = fn(k,v) end
+		s = s..tostring(k).."="..tostring(v)
+	end
+	s = s.." }"
+	return s
+end
+
 function tabletoliststring(obj, fn)
 	if obj == nil then
 		return "[ ]"

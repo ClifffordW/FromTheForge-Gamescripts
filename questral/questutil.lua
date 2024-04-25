@@ -1,6 +1,5 @@
 local krandom = require "util.krandom"
 
-
 local QuestUtil = {}
 
 function QuestUtil.IsAgentValidForQuest(agent, quest)
@@ -42,6 +41,5 @@ function QuestUtil.PickCastAgent(quest, agent_list, score_fn)
         return krandom.PickFromArray(best)
     end
 end
-
 
 return QuestUtil

@@ -39,8 +39,8 @@ function PeriodicSpawner:DoSpawn(prefab, angle)
 		spawn.components.powermanager:CopyPowersFrom(self.inst)
 	end
 
-	if self.inst:HasTag("playerminion") and self.inst.summoner then
-		monsterutil.CharmMonster(spawn, self.inst.summoner)
+	if self.inst:HasTag("playerminion") then -- This is for when a mothball spawner is charmed, and will then spawn charmed mothballs
+		monsterutil.CharmMonster(spawn)
 	else
 		if spawn.components.combat then
 			spawn.components.combat:SetTarget(spawn:GetClosestEntityByTagInRange(100, spawn.components.combat:GetTargetTags(), true))

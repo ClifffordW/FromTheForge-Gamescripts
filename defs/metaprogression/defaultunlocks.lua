@@ -1,5 +1,5 @@
 local MetaProgress = require "defs.metaprogression.metaprogress"
-
+local Constructable = require "defs.constructable"
 local Power = require"defs.powers"
 local Consumable = require"defs.consumable"
 
@@ -52,11 +52,11 @@ local function BuildDefaultUnlocksTable()
 
 	-- Epics
 	table.insert(unlocks, MetaProgress.RewardGroup("epic_powers", {
-		MetaProgress.Reward(Power, Power.Slots.PLAYER, "iron_brew"),
-		MetaProgress.Reward(Power, Power.Slots.PLAYER, "heal_on_quick_rise"), -- JAMBELL: CONSIDER LOCKING
-		MetaProgress.Reward(Power, Power.Slots.PLAYER, "sanguine_power"), --crit
+		MetaProgress.Reward(Power, Power.Slots.PLAYER, "iron_brew"), 		  -- minimum completed runs = 1
+		MetaProgress.Reward(Power, Power.Slots.PLAYER, "heal_on_quick_rise"),
+		MetaProgress.Reward(Power, Power.Slots.PLAYER, "sanguine_power"),
 		MetaProgress.Reward(Power, Power.Slots.PLAYER, "bomb_on_dodge"),
-		MetaProgress.Reward(Power, Power.Slots.PLAYER, "mulligan"),
+		MetaProgress.Reward(Power, Power.Slots.PLAYER, "mulligan"),			  -- minimum completed runs = 1
 		MetaProgress.Reward(Power, Power.Slots.PLAYER, "berserk"),
 	}))
 
@@ -64,10 +64,9 @@ local function BuildDefaultUnlocksTable()
 	table.insert(unlocks, MetaProgress.RewardGroup("legendary_powers", {
 		MetaProgress.Reward(Power, Power.Slots.PLAYER, "volatile_weaponry"),
 		MetaProgress.Reward(Power, Power.Slots.PLAYER, "wrecking_ball"),
-		MetaProgress.Reward(Power, Power.Slots.PLAYER, "max_health_and_heal"),
+		MetaProgress.Reward(Power, Power.Slots.PLAYER, "max_health_and_heal"), -- minimum completed runs = 1
 		MetaProgress.Reward(Power, Power.Slots.PLAYER, "pump_and_dump"),
 		MetaProgress.Reward(Power, Power.Slots.PLAYER, "introverted"),
-		MetaProgress.Reward(Power, Power.Slots.PLAYER, "free_upgrade"),
 	}))
 
 	-- TEMP: These are powers based on specific skills, and will only drop if you have that Skill.
@@ -91,7 +90,12 @@ local function BuildDefaultUnlocksTable()
 		MetaProgress.Reward(Power, Power.Slots.SKILL, "parry"),
 	}))
 
-	-- TODO: validate all droppable powers are unlockable
+	table.insert(unlocks, MetaProgress.RewardGroup("basic_decor", {
+		MetaProgress.Reward(Constructable, Constructable.Slots.DECOR, "town_flower_bush"),
+		MetaProgress.Reward(Constructable, Constructable.Slots.DECOR, "town_flower_violet"),
+		MetaProgress.Reward(Constructable, Constructable.Slots.DECOR, "town_shrub"),
+		MetaProgress.Reward(Constructable, Constructable.Slots.STRUCTURES, "street_lamp"),
+	}))
 
 	return unlocks
 end

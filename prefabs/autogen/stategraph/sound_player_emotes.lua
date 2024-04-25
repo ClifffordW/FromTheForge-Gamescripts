@@ -13,36 +13,91 @@ return {
           { eventtype="stopsound", frame=15, param={ name="smooch",},},
         },
         emote_bandicoot_snicker={
-          { eventtype="playsound", frame=1, param={ soundevent="Emote_Bandicoot_Snicker",},},
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ sound_max_count=1.0, soundevent="Emote_Bandicoot_Snicker",},
+          },
         },
         emote_bonion_call={
           {
             eventtype="playsound",
             frame=1,
-            param={ soundevent="Emote_Bonion_Call_Cabbageroll",},
+            param={ sound_max_count=1.0, soundevent="Emote_Bonion_Call_Cabbageroll",},
           },
         },
-        emote_cannon_twirl={ { eventtype="playsound", frame=1, param={ soundevent="Emote_Cannon",},},},
-        emote_gourdo_face_bash={
-          { eventtype="playsound", frame=1, param={ soundevent="Emote_Gourdo_Face_Bash",},},
+        emote_cannon_twirl={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ sound_max_count=1.0, soundevent="Emote_Cannon",},
+          },
         },
-        emote_hammer_twirl={ { eventtype="playsound", frame=1, param={ soundevent="Emote_Hammer",},},},
+        emote_gourdo_face_bash={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ sound_max_count=1.0, soundevent="Emote_Gourdo_Face_Bash",},
+          },
+        },
+        emote_hammer_twirl={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ sound_max_count=1.0, soundevent="Emote_Hammer",},
+          },
+        },
         emote_ogre_charged_jump={
           { eventtype="stopsound", frame=35, param={ name="ogre_dash",},},
           { eventtype="stopsound", frame=62, param={ name="inhale",},},
           { eventtype="stopsound", frame=67, param={ name="exhale",},},
         },
         emote_polearm_twirl={
-          { eventtype="playsound", frame=1, param={ soundevent="Emote_Pole_Arm",},},
-          { eventtype="playsound", frame=73, param={ soundevent="Polearm_Sheathe",},},
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ sound_max_count=1.0, soundevent="Emote_Pole_Arm",},
+          },
+          {
+            eventtype="playsound",
+            frame=73,
+            param={ sound_max_count=1.0, soundevent="Polearm_Sheathe",},
+          },
         },
+        emote_shotput_twirl={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ soundevent="Emote_shotput", stopatexitstate=true,},
+          },
+        },
+        emote_shoulder_look={
+          { eventtype="playsound", frame=22, param={ soundevent="Emote_ding",},},
+          { eventtype="stopsound", frame=20, param={ name="Emote_shotput",},},
+          { eventtype="playfoleysound", frame=43, param={ soundtag="Footstep",},},
+          { eventtype="playfoleysound", frame=45, param={ soundtag="Footstep",},},
+          {
+            eventtype="playsound",
+            frame=1,
+            param={
+              name="Emote_shotput",
+              soundevent="Emote_shotput",
+              stopatexitstate=true,
+              volume=47.0,
+            },
+          },
+        },
+        emote_totolili_wiggles={
+          { eventtype="stopsound", frame=71, param={ name="lili",},},
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ autostop=true, name="lili", soundevent="Emote_totolili", stopatexitstate=true,},
+          },
+        },
+        idle={  },
       },
       sg_events={
-        {
-          eventtype="playsound",
-          name="sfx-cheer",
-          param={ sound_max_count=2.0, soundevent="Emote_VO_fistPump",},
-        },
         {
           eventtype="playsound",
           name="sfx-mvmt_sm",
@@ -101,11 +156,6 @@ return {
         },
         {
           eventtype="playsound",
-          name="sfx-shout",
-          param={ sound_max_count=1.0, soundevent="Emote_VO_shout",},
-        },
-        {
-          eventtype="playsound",
           name="sfx-pant_inhale",
           param={ name="inhale", sound_max_count=1.0, soundevent="Emote_VO_pant_inhale",},
         },
@@ -115,14 +165,60 @@ return {
           param={ name="exhale", sound_max_count=1.0, soundevent="Emote_VO_pant_exhale",},
         },
         {
+          eventtype="playsound",
+          name="sfx-cheer_01",
+          param={ sound_max_count=2.0, soundevent="Emote_VO_fistPump_01",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-cheer_02",
+          param={ sound_max_count=2.0, soundevent="Emote_VO_fistPump_02",},
+        },
+        {
           eventtype="playcountedsound",
           name="sfx-ogre_dash",
-          param={ name="ogre_dash", soundevent="Emote_Ogre_dash",},
+          param={ maxcount=3.0, soundevent="Emote_Ogre_dash_01",},
         },
         {
           eventtype="playsound",
           name="sfx-whistle",
-          param={ sound_max_count=1.0, soundevent="Emote_Whistle",},
+          param={ sound_max_count=1.0, soundevent="Emote_Whistle", volume=42.0,},
+        },
+        { eventtype="playfoleysound", name="sfx-footstep", param={ soundtag="Footstep",},},
+        {
+          eventtype="playsound",
+          name="sfx-swish",
+          param={ soundevent="Player_swish", volume=29.0,},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-mammimal",
+          param={ soundevent="Emote_mammimal",},
+        },
+        { eventtype="playfoleysound", name="sfx-hand", param={ soundtag="Hand",},},
+        {
+          eventtype="playfoleysound",
+          name="sfx-footstep_stop",
+          param={ soundtag="Footstep Stop",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-whoosh",
+          param={ soundevent="Player_whoosh", volume=36.0,},
+        },
+        { eventtype="playsound", name="sfx-vo3", param={ soundevent="Emote_VO_03",},},
+        { eventtype="playsound", name="sfx-vo4", param={ soundevent="Emote_VO_04",},},
+        { eventtype="playsound", name="sfx-vo5", param={ soundevent="Emote_VO_05",},},
+        {
+          eventtype="playsound",
+          name="sfx-shotput",
+          param={ soundevent="Emote_shotput",},
+        },
+        { eventtype="playfoleysound", name="sfx-jump", param={ soundtag="Jump",},},
+        {
+          eventtype="playsound",
+          name="sfx-shout",
+          param={ sound_max_count=1.0, soundevent="Emote_shout",},
         },
       },
     },

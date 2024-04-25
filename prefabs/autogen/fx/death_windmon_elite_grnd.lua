@@ -12,5 +12,7 @@ return {
   noflip=true,
   onground=true,
   saturation=-88.0,
+  scalex=1.2000000476837,
+  scaley=1.2000000476837,
   sortorder=2,
 }

@@ -18,6 +18,9 @@ function HitTracker:OnDoDamage(attack)
 	if attack:GetID() ~= self.attack_type then
 		-- printf("Wrong ID (%s) for attack_type (%s)", attack:GetID(), self.attack_type)
 		return
+	elseif attack:GetProjectile() and self.inst ~= attack:GetProjectile() then
+		-- TheLog.ch.HitTracker:printf("Ignoring OnDoDamage (not correct projectile)")
+		return
 	end
 
 	if target ~= nil and not lume.find(self.targets_hit, target) then

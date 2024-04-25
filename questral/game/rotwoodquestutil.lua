@@ -1,10 +1,12 @@
 local Biomes = require "defs.biomes"
 local Consumable = require "defs.consumable"
 local Npc = require "components.npc"
+local Quip = require "questral.quip"
 local Quest = require "questral.quest"
 local fmodtable = require "defs.sound.fmodtable"
 local kassert = require "util.kassert"
 local lume = require "util.lume"
+local soundutil = require "util.soundutil"
 
 -- Game-specific utilities.
 local rotwoodquestutil = {}
@@ -38,10 +40,6 @@ local function get_first_interesting_ingredient(ingredients)
     return ing_name
 end
 
-function rotwoodquestutil.GetPrettyRecipeIngredient_NpcHome(npc_node)
-    return rotwoodquestutil.GetPrettyRecipeIngredient(npc_node.inst.components.npc:DesiredHomeRecipe())
-end
-
 -- Gets the most interesting ingredient as a string to display to user.
 function rotwoodquestutil.GetPrettyRecipeIngredient(recipe)
     assert(recipe)
@@ -51,57 +49,7 @@ function rotwoodquestutil.GetPrettyRecipeIngredient(recipe)
     return fmt_color_desire(mat.pretty.name)
 end
 
--- Can't apply this param in Quest_Start because the NPC may not exist yet.
-function rotwoodquestutil.UpdateDesiredHomeRecipeParam(quest)
-    local node = quest:GetCastMember("giver")
-    if node.inst then
-        local recipe = node.inst.components.npc:DesiredHomeRecipe()
-        quest.param.primary_ingredient_name = rotwoodquestutil.GetPrettyRecipeIngredient(recipe)
-    end
-end
-
 -- Common NPC quest filters {{{1
--- Pass these as the third argument to OnAttract.
-
--- TODO(dbriscoe): Do we need any of these filters?
-function rotwoodquestutil.Filter_IsWaitingForExile(quest, node, sim, objective_id)
-    local inst = node.inst
-    return inst.components.npc.exiled
-end
-function rotwoodquestutil.Filter_IsVisitor(quest, node, sim, objective_id)
-    local inst = node.inst
-    local player = node:GetInteractingPlayerEntity()
-    return not inst.components.conversation.persist.memory.VISITOR
-        and not inst.components.npc:CanCraftDesiredHome(player)
-end
-function rotwoodquestutil.Filter_IsSkipToItem(quest, node, sim, objective_id)
-    local inst = node.inst
-    local player = node:GetInteractingPlayerEntity()
-    return not inst.components.npc:CanCraftDesiredHome(player)
-        and inst.components.conversation.persist.memory.WANT_ITEM
-end
-function rotwoodquestutil.Filter_IsMoveIn(quest, node, sim, objective_id)
-    local inst = node.inst
-    local player = node:GetInteractingPlayerEntity()
-    return inst.components.npc:CanCraftDesiredHome(player)
-end
-function rotwoodquestutil.Filter_IsFirstHired(quest, node, sim, objective_id)
-    local inst = node.inst
-    return inst.components.npc:HasDesiredHome()
-        and not inst.components.conversation.persist.memory.FIRST_HIRED
-end
-function rotwoodquestutil.IsResident(node)
-    local inst = node.inst
-    -- Not sure it's good that we ignore them if they don't exist.
-    return inst and inst.components.npc:HasDesiredHome()
-end
-function rotwoodquestutil.Filter_CanBuildHome(quest, node, sim, objective_id)
-    local inst = node.inst
-    local player = node:GetInteractingPlayerEntity()
-    dbassert(player)
-    return not inst.components.npc:HasDesiredHome()
-        and inst.components.npc:CanCraftDesiredHome(player)
-end
 
 --Meeting any NPC for the first time in one run
 function rotwoodquestutil.Filter_FirstMeetingNPC(filter_fn, quest, node, sim, objective_id)
@@ -191,40 +139,6 @@ end
 
 rotwoodquestutil.GetGiverNpcAndPlayerEntities = GetGiverNpcAndPlayerEntities
 
-function rotwoodquestutil.UpgradeGiverHome(cx)
-    local inst, player = GetGiverNpcAndPlayerEntities(cx)
-    kassert.typeof("table", player)
-
-    local home = inst.components.npc.home
-
-    if home.components.buildingskinner ~= nil then
-        local BuildingSkinScreen = require "screens.town.buildingskinscreen"
-        cx:PresentCallbackScreen(BuildingSkinScreen, home, player)
-
-    elseif home.components.buildingupgrader ~= nil then
-        inst.components.npc:StartUpgradingHome(player)
-    end
-end
-
-function rotwoodquestutil.MoveGiverHome(cx)
-    cx:PresentCallbackAction(function(cb)
-
-        local inst, player = GetGiverNpcAndPlayerEntities(cx)
-        kassert.typeof("table", player)
-
-        -- Must close prompt before we can start another interaction.
-        TheDungeon.HUD:HidePrompt(inst)
-
-        local home = inst.components.npc.home
-        inst.components.npc:StartMovingHome(home, player, cb)
-    end)
-end
-
-function rotwoodquestutil.ExileGiver(cx)
-    local node = rotwoodquestutil.GetGiver(cx)
-    node.inst.components.npc:ExileFromTown()
-end
-
 -- Prevents the giver from restarting a convo for input seconds. Useful to
 -- allow their animation to play out before restarting conversation.
 function rotwoodquestutil.ConvoCooldownGiver(cx, delay_seconds)
@@ -235,7 +149,8 @@ end
 function rotwoodquestutil.OpenShop(cx, screen_ctor)
     local inst, player = GetGiverNpcAndPlayerEntities(cx)
     kassert.typeof("table", player)
-    TheFrontEnd:PushScreen(screen_ctor(player, inst))
+    cx:PresentCallbackScreen(screen_ctor, player, inst)
+    -- TheFrontEnd:PushScreen(screen_ctor(player, inst))
 end
 
 -- /end NPC actions
@@ -278,64 +193,6 @@ function rotwoodquestutil.IsInBiome(id)
     return TheDungeon:GetDungeonMap().data.region_id == id
 end
 
-function rotwoodquestutil.PushShopChat(cx, skip_talk)
-    local agent = cx.quest:GetCastMember("giver")
-    agent.skip_talk = skip_talk -- HACK
-    cx:TryPushHook(Quest.CONVO_HOOK.s.CHAT_TOWN_SHOP, agent)
-end
-
--- TODO: change cx to quest instead
--- TODO: do this via player.components.unlocktracker instead
-function rotwoodquestutil.GetAllDiscoveredMobs()
-    -- local unlocked_locations = {}
-    -- for id, def in pairs(Biomes.locations) do
-    --     if def.type == Biomes.location_type.DUNGEON then
-    --         if TheWorld:IsUnlocked(def.id) then -- ENEMY
-    --             table.insert(unlocked_locations, def)
-    --         end
-    --     end
-    -- end
-
-    -- local unlocked_mobs = {}
-    -- for _, def in ipairs(unlocked_locations) do
-    --     for _, mob in ipairs(def.monsters.mobs) do
-    --         if string.match(mob, "trap") == nil and TheWorld:IsUnlocked(mob) then
-    --             table.insert(unlocked_mobs, mob)
-    --         end
-    --     end
-    -- end
-
-    -- return unlocked_mobs
-    return {}
-end
-
--- TODO: change cx to quest instead
--- TODO: do this via player.components.unlocktracker instead
-function rotwoodquestutil.GetDiscoveredMobDrops(rarity)
-
-    -- local drops = {}
-    -- for id, def in pairs (Consumable.Items.MATERIALS) do
-    --     local src_mob = string.gsub(def.source, "drops_", "")
-    --     if TheWorld:IsUnlocked(src_mob) then
-    --         table.insert(drops, id)
-    --     end
-    -- end
-
-    -- if rarity == nil then
-    --     return drops
-    -- end
-
-    -- local filtered_drops = {}
-    -- for _, id in ipairs(drops) do
-    --     if table.contains(rarity, Consumable.Items.MATERIALS[id].rarity) then
-    --         table.insert(filtered_drops, id)
-    --     end
-    -- end
-
-    --return filtered_drops
-    return {}
-end
-
 function rotwoodquestutil.SelectDiscoveredMobDrop(rarity)
     local drops = rotwoodquestutil.GetDiscoveredMobDrops(rarity)
 
@@ -356,94 +213,10 @@ function rotwoodquestutil.PickFetchMaterial(cx)
     cx.quest.param.request_material = drop
 end
 
-
--- TODO: use playerunlocks instead
-function rotwoodquestutil.PickReward(cx)
-
-    -- if cx.quest.param.reward ~= "PLACEHOLDER" then
-    --     return
-    -- end
-
-    -- local rewards =
-    -- {
-    --     "stone_lamp", "well", "kitchen_barrel", "kitchen_sign", "outdoor_seating",
-    --     "outdoor_seating_stool", "chair1", "chair2", "street_lamp","bench_megatreemon",
-    --     "hammock", "plushies_lrg", "plushies_mid", "plushies_sm", "plushies_stack",
-    --     "wooden_cart", "weapon_rack", "tanning_rack", "dye1", "dye2", "dye3", "leather_rack"
-    -- }
-
-    -- local reward_index = math.random(1, #rewards)
-    -- while TheWorld:IsUnlocked(rewards[reward_index]) do
-    --     table.remove(rewards, reward_index)
-    --     if #rewards == 0 then
-    --         break
-    --     end
-    --     reward_index = math.random(1, #rewards)
-    -- end
-
-    -- cx.quest.param.reward = rewards[reward_index]
-end
-
-function rotwoodquestutil.SetPlayerSpecies(cx)
-    local player = cx.quest:GetPlayer()
-    local species_id = "species_" .. player.components.charactercreator:GetSpecies()
-    cx.quest:SetVar("species", STRINGS.NAMES[species_id])
-end
-
 function rotwoodquestutil.GiveReward(cx)
     local player = cx:GetPlayer().inst
     player.components.playercrafter:UnlockItem(cx.quest.param.reward, true)
 end
-
-function rotwoodquestutil.PushWeaponUnlockScreen(cx, give_weapon_fn, weapon_id)
-    cx:PresentCallbackAction(function(cb)
-        local player = cx:GetPlayer()
-        if not player and player.inst then
-            if cb then
-                cb()
-            end
-            return
-        end
-
-        player.inst:DoTaskInAnimFrames(20, function()
-            give_weapon_fn(player.inst)
-            player.inst.sg:GoToState("unsheathe_fast")
-        end)
-
-        player.inst:DoTaskInAnimFrames(50, function()
-
-            TheWorld.components.ambientaudio:PlayMusicStinger(fmodtable.Event.Mus_weaponUnlock_Stinger)
-
-            local itemforge = require "defs.itemforge"
-            local Equipment = require "defs.equipment"
-            local item_def = Equipment.Items["WEAPON"][weapon_id]
-            local item = itemforge.CreateEquipment(item_def.slot, item_def)
-            local weapon_type = item_def.weapon_type
-            local title = STRINGS.WEAPONS.UNLOCK.TITLE
-            local unlock_string = STRINGS.WEAPONS.UNLOCK[weapon_type] or string.format("%s UNLOCK STRING MISSING", weapon_type)
-            local how_to_play = STRINGS.WEAPONS.HOW_TO_PLAY[weapon_type] or string.format("%s HOW TO PLAY STRING MISSING", weapon_type)
-            local focus_hit = STRINGS.WEAPONS.FOCUS_HIT[weapon_type] or string.format("%s FOCUS HIT STRING MISSING", weapon_type)
-            local description = string.format("%s\n\n%s\n\n%s", unlock_string, how_to_play, focus_hit)
-
-            local ItemUnlockPopup = require "screens.itemunlockpopup"
-            local screen = ItemUnlockPopup(nil, nil, true)
-                :SetItemUnlock(item, title, description)
-
-            screen:SetOnDoneFn(
-                function()
-                    TheFrontEnd:PopScreen(screen)
-                    if cb then
-                        cb()
-                    end
-                end)
-
-            TheFrontEnd:PushScreen(screen)
-            screen:AnimateIn()
-
-        end)
-    end)
-end
-
 
 -- LockRoom: cause an entity to lock the room. You have to pass an entity to this function because we have to track *who* is keeping the room locked.
 function rotwoodquestutil.LockRoom(quest)
@@ -474,7 +247,7 @@ function rotwoodquestutil.GetGiver(cx_or_quest)
         giver = cx_or_quest.quest:GetCastMember("giver")
     end
 
-    assert(giver, "Couldn't find giver from what was provided. Please ask jambell for help!")
+    assert(giver, "Couldn't find giver from what was provided!")
 
     return giver
 end
@@ -487,14 +260,13 @@ end
 function rotwoodquestutil.HasDoneQuest(player, id)
     -- TODO: Once players each have their own quest state, this should be evaluated per-player
     local qman = player.components.questcentral:GetQuestManager()
-    local quest = qman:FindCompletedQuestByID(id)
-    return quest ~= nil
+    return qman:HasEverCompletedQuest(id)
 end
 
 function rotwoodquestutil.IsQuestActiveOrComplete(player, id)
     local qman = player.components.questcentral:GetQuestManager()
-    local quest = qman:FindQuestByID(id) or qman:FindCompletedQuestByID(id)
-    return quest ~= nil
+    local active_quest = qman:FindQuestByID(id)
+    return active_quest ~= nil or qman:HasEverCompletedQuest(id)
 end
 
 function rotwoodquestutil.IsQuestActive(player, id)
@@ -560,13 +332,217 @@ function rotwoodquestutil.AddCompleteObjectiveOnCast(Q, data)
                         data.on_complete_fn(quest)
                     end
                 end)
+
+    if data.default_active then
+        obj:InitialState(QUEST_OBJECTIVE_STATE.s.ACTIVE)
+    end
+
     return obj
+end
+
+
+-- only works with enemies
+function rotwoodquestutil.CreateCondition_DiedFighting(cast_id)
+    return function(quest, node, sim, convo_target)
+        local player = quest:GetPlayer() or convo_target
+        local lost_last_run = player.components.progresstracker:LostLastRun()
+
+        if not lost_last_run then
+            -- if the didn't lose then they didn't die - maybe abandoned
+            return
+        end
+
+        local prefab = quest:GetCastMemberPrefab(cast_id)
+        local seen = player.components.unlocktracker:IsEnemyUnlocked(prefab)
+        local defeated = player.components.progresstracker:GetNumKills(prefab) > 0
+        return seen and not defeated
+    end
+end
+
+function rotwoodquestutil.DiedFighting(cast_id)
+
 end
 
 function rotwoodquestutil.AlreadyHasCharacter(npc_role)
     dbassert(Npc.Role:Contains(npc_role), "Unknown role. See npc.lua for the list.")
     return TheWorld:IsFlagUnlocked("wf_town_has_" .. npc_role)
         or TheWorld:IsFlagUnlocked("wf_seen_npc_" .. npc_role)
+end
+
+--use "unlockable_title_IDs" to choose which title to unlock-- and remember lua starts at base 1 lmao
+function rotwoodquestutil.UnlockCosmeticTitle(player, _title)
+    local Cosmetics = require "defs.cosmetics.cosmetics"
+    local unlock_tracker = player.components.unlocktracker
+    local title_key = Cosmetics.PlayerTitles[_title].title_key
+
+    --unlock the title
+    unlock_tracker:UnlockCosmetic(_title, "PLAYER_TITLE")
+
+    --pop a notif on screen
+    TheDungeon.HUD:MakePopText({ 
+        target = player, 
+        button = string.format(STRINGS.UI.INVENTORYSCREEN.TITLE_UNLOCKED, STRINGS.COSMETICS.TITLES[title_key]), 
+        color = UICOLORS.KONJUR, 
+        size = 100, 
+        fade_time = 3.5,
+        y_offset = 650,
+    })
+end
+
+function rotwoodquestutil.GiveItemReward(player, item_type, reward_amount)
+    local Consumable = require "defs.consumable"
+    local reward_item = Consumable.FindItem(item_type)
+    local invscreen_str = Consumable.GetItemPopText(reward_item.name, reward_amount)
+    --rotwoodquestutil.GetPrettyMaterialName(reward_item.name)
+
+    if player:IsLocal() then
+        if item_type == "konjur_soul_lesser" then
+            soundutil.PlayCodeSound(player,fmodtable.Event.corestone_accept)
+        end
+        player.sg:GoToState("konjur_accept")
+    end
+
+    player.components.inventoryhoard:AddStackable(reward_item, reward_amount)
+    TheDungeon.HUD:MakePopText({
+        target = player,
+        button = string.format(invscreen_str, reward_amount),
+        color = UICOLORS.KONJUR,
+        size = 100,
+        fade_time = 3.5,
+        y_offset = 650,
+    })
+end
+
+function rotwoodquestutil.AddNPCToTown(Q, cast_id, unlock_flag)
+    -- will not actually cause the NPC to spawn
+    -- spawning conditions must be added to the objective manually.
+    local objective_name = ("spawn_%s_in_dungeon"):format(cast_id)
+
+    local obj = Q:AddObjective(objective_name)
+                    :InitialState(QUEST_OBJECTIVE_STATE.s.ACTIVE)
+                    :OnEvent("meetingmanager_spawn_npc_in_dungeon", function(quest, npc)
+                        if not TheNet:IsHost() then return end
+
+                        local cast_member = quest:GetCastMember(cast_id)
+
+                        if cast_member and cast_member.inst and cast_member.inst == npc then
+                            quest:Complete(objective_name)
+                        end
+                    end)
+                    :UnlockWorldFlagsOnComplete{unlock_flag}  -- the npc will now appear in this town
+                    :OnComplete(function(quest)
+                        TheDungeon.progression.components.runmanager:SetHasMetTownNPCInDungeon(true)
+                    end)
+    return obj
+end
+
+function rotwoodquestutil.CompleteObjectiveIfCastPresent(quest, cast_id, objective_id)
+    local cast_member = quest:GetCastMember(cast_id)
+    if cast_member and cast_member.inst then
+        quest:Complete(objective_id)
+    end
+end
+
+function rotwoodquestutil.GetUpgradeablePowerCount(player)
+    local powers = player.components.powermanager:GetUpgradeablePowers()
+    return #powers
+end
+
+
+--jcheng:
+-- local quip_convo = 
+-- {
+--     tags = {},                       -- tags to add on the quip
+--     not_tags = {},                   -- not tags to add on the quip
+--     tag_scores = 
+--     {
+--         chitchat = 100               -- specify scores to specific tags
+--     },
+--     strings = quest_strings,         -- strings used in the conversation
+--     quip = quest_strings.TALK,       -- quip line used when this quip is said
+--     convo = convo,                   -- called from OnHub
+--     repeatable = true,               -- quip line is not marked as read and can continually be used
+--     prefab = "npc_dojo_master",      -- who is talking
+-- }
+function rotwoodquestutil.AddQuipConvo(Q, quip_convo)
+    Q.Quest_EvaluateSpawn = function(self, quester)
+        return true
+    end
+
+    Q:UpdateCast("giver")
+        :FilterForPrefab(quip_convo.prefab)
+
+    local objective = Q:AddObjective("convo")
+        :InitialState(QUEST_OBJECTIVE_STATE.s.ACTIVE)
+
+    Q:UnlockPlayerFlagsOnComplete({ "qc_"..Q:GetContentID()})
+
+    local quip = Quip(table.unpack(quip_convo.tags))
+        :Not(quip_convo.not_tags or {})
+        :PossibleStrings({quip_convo.quip})
+        :SetFn(function(cx)
+            local convo_player = cx:GetPlayer()
+            local qman = convo_player.inst.components.questcentral:GetQuestManager()
+            local quest = qman:FindQuestByID(Q:GetContentID())
+
+            --jcheng: it's possible that we can't find this quest, because the quest is complete, 
+            --  BUT the fallback chat continued to hold on to the quip
+            if quest then
+                quest:SetVar("display_hub", true)
+            end
+        end)
+
+    if quip_convo.tag_scores then
+        for tag, score in pairs(quip_convo.tag_scores) do
+            quip:Tag(tag, score)
+        end
+    end
+
+    if quip_convo.repeatable then
+        quip:SetRepeatable()
+    end
+
+    if quip_convo.important then
+        quip:SetImportant()
+    end
+
+    --jcheng: remove the quip string from the strings
+    local quip_str_key = table.find(quip_convo.strings, quip_convo.quip)
+    dbassert(quip_str_key ~= nil)
+    quip_convo.strings[quip_str_key] = nil
+
+    Q:AddQuip( quip )
+
+    Q:OnHub("convo", "giver", function(quest)
+        local test = quest:GetVar("display_hub")
+        quest:SetVar("display_hub", false)
+        return test
+    end)
+        :Strings(quip_convo.strings)
+        :Fn(quip_convo.convo)
+
+    return objective
+end
+
+function rotwoodquestutil.ResetChosenQuipForNPC(player, npc_prefab)
+    --[[
+        loops through the player's quest log and looks at the `twn_fallback_chat` quests.
+        When it finds one that has a giver prefab that equals npc_prefab then it resets the
+        "chosen_quip" variable on the quest, allowing a new quip to be chosen
+    --]]
+
+    local quip_chats = player.components.questcentral:GetQuestManager():FindAllQuestByID('twn_fallback_chat')
+    for _, chat in ipairs(quip_chats) do
+        local cast = chat:GetCastMember("giver")
+        if cast and cast.prefab == npc_prefab then
+            -- completeing the quest causes a new/ fresh one to spawn next time you speak to the NPC.
+            -- this handles all variables that need to be reset.
+            chat:Complete() 
+            break
+        end
+    end
+
+    TheWorld:PushEvent("refresh_markers", {player = player})
 end
 
 return rotwoodquestutil

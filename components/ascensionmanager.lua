@@ -9,7 +9,7 @@ local lume = require "util.lume"
 local ascensions = {
 	-- Elite enemies spawn
 	{
-		stringkey = STRINGS.ASCENSIONS.ADD_ELITES,
+		stringkey = STRINGS.ASCENSIONS.ASCENSION_ONE,
 		icon = "images/map_ftf/frenzy_2.tex",
 		func = function(inst)
 			-- For creature tuning, see AscensionModifierSource in tuning.lua.
@@ -18,7 +18,7 @@ local ascensions = {
 
 	-- Enemies are more aggressive
 	{
-		stringkey = STRINGS.ASCENSIONS.AGGRESSIVE_ENEMIES,
+		stringkey = STRINGS.ASCENSIONS.ASCENSION_TWO,
 		icon = "images/map_ftf/frenzy_3.tex",
 		func = function(inst)
 			-- For creature tuning, see AscensionModifierSource in tuning.lua.
@@ -27,7 +27,7 @@ local ascensions = {
 
 	-- Enemies have more health
 	{
-		stringkey = STRINGS.ASCENSIONS.ENEMY_HEALTH_BOOST,
+		stringkey = STRINGS.ASCENSIONS.ASCENSION_THREE,
 		icon = "images/map_ftf/frenzy_4.tex",
 		func = function(inst)
 			-- For creature tuning, see AscensionModifierSource in tuning.lua.
@@ -118,10 +118,12 @@ end
 
 function AscensionManager:_GetDesiredLevel()
 	local biome_location = TheDungeon:GetDungeonMap():GetBiomeLocation()
-	local level = TheNet:IsHost()
-		and self:GetSelectedAscension(biome_location.id)
-		or TheNet:GetAscensionLevel() -- client
-	return level
+	if TheNet:IsHost() then
+		return self:GetSelectedAscension(biome_location.id)
+	else
+		local _mode, _seqNr, dungeon_run_params, _quest_params = TheNet:GetRunData() -- client
+		return dungeon_run_params.ascension or 0
+	end
 end
 
 function AscensionManager:Debug_SetAscension(level, location_id)
@@ -275,11 +277,72 @@ function AscensionManager:GetLootEligibility(player, location_id, weapon_type, l
 	return highest < level
 end
 
--- TODO @H: Handle this by player
 function AscensionManager:IsEligibleForHeart(player)
 	local location_id = TheDungeon:GetDungeonMap().data.location_id
 	local weapon_type = player.components.inventory:GetEquippedWeaponType()
 	return self:GetLootEligibility(player, location_id, weapon_type, self:GetCurrentLevel())
+end
+
+function AscensionManager.GetActiveModsPerLevel(frenzy_level)
+	local mods_per_level = {
+		[1] = {
+	        [FRENZY_MODIFIERS.id.STRONG_ENEMIES] = 1,
+	        [FRENZY_MODIFIERS.id.ELITE_SPAWN] = 1,
+	        [FRENZY_MODIFIERS.id.MINIBOSS_EQUIPMENT] = 1,
+	        [FRENZY_MODIFIERS.id.MORE_LOOT] = 1,
+	    },
+	    [2] = {
+	        [FRENZY_MODIFIERS.id.STRONG_ENEMIES] = 2,
+	        [FRENZY_MODIFIERS.id.AGGRESSIVE_ENEMIES] = 1,
+	        [FRENZY_MODIFIERS.id.MINIBOSS_EQUIPMENT] = 1,
+	        [FRENZY_MODIFIERS.id.ELITE_SPAWN] = 2,
+	        [FRENZY_MODIFIERS.id.MORE_LOOT] = 2,
+	        [FRENZY_MODIFIERS.id.REVIVE_COST] = 1,
+	    },
+	    [3] = {
+	        [FRENZY_MODIFIERS.id.STRONG_ENEMIES] = 3,
+	        [FRENZY_MODIFIERS.id.AGGRESSIVE_ENEMIES] = 2,
+	        [FRENZY_MODIFIERS.id.MINIBOSS_EQUIPMENT] = 1,
+	        [FRENZY_MODIFIERS.id.ELITE_SPAWN] = 2,
+	        [FRENZY_MODIFIERS.id.MINIBOSS_SPAWN] = 1,
+	        [FRENZY_MODIFIERS.id.MORE_LOOT] = 3,
+	        [FRENZY_MODIFIERS.id.REVIVE_COST] = 1,
+	    },
+	}
+	return mods_per_level[frenzy_level]
+end
+
+function AscensionManager.GetModDescription(frenzy_modifier, mod_level)
+	local descriptions = {
+		[FRENZY_MODIFIERS.id.STRONG_ENEMIES] = {
+	        [1] = STRINGS.ASCENSIONS.STRONG_ENEMIES_1,
+	        [2] = STRINGS.ASCENSIONS.STRONG_ENEMIES_2,
+	        [3] = STRINGS.ASCENSIONS.STRONG_ENEMIES_3,
+	    },
+	    [FRENZY_MODIFIERS.id.AGGRESSIVE_ENEMIES] = {
+	        [1] = STRINGS.ASCENSIONS.AGGRESSIVE_ENEMIES_1,
+	        [2] = STRINGS.ASCENSIONS.AGGRESSIVE_ENEMIES_2,
+	    },
+	    [FRENZY_MODIFIERS.id.MORE_LOOT] = {
+	        [1] = STRINGS.ASCENSIONS.MORE_LOOT_1,
+	        [2] = STRINGS.ASCENSIONS.MORE_LOOT_2,
+	        [3] = STRINGS.ASCENSIONS.MORE_LOOT_3,
+	    },
+	    [FRENZY_MODIFIERS.id.ELITE_SPAWN] = {
+	        [1] = STRINGS.ASCENSIONS.ELITE_SPAWN_1,
+	        [2] = STRINGS.ASCENSIONS.ELITE_SPAWN_2,
+	    },
+	    [FRENZY_MODIFIERS.id.MINIBOSS_SPAWN] = {
+	        [1] = STRINGS.ASCENSIONS.MINIBOSS_SPAWN_1,
+	    },
+	    [FRENZY_MODIFIERS.id.MINIBOSS_EQUIPMENT] = {
+	        [1] = STRINGS.ASCENSIONS.MINIBOSS_EQUIPMENT_1,
+	    },
+	    [FRENZY_MODIFIERS.id.REVIVE_COST] = {
+	        [1] = STRINGS.ASCENSIONS.REVIVE_COST_1,
+	    }
+	}
+	return descriptions[frenzy_modifier][mod_level or 1]
 end
 
 return AscensionManager

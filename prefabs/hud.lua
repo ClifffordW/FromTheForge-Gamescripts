@@ -21,6 +21,14 @@ local assets = {
 	Asset("ATLAS", "images/ui_dungeonmap.xml"),
 	Asset("IMAGE", "images/ui_dungeonmap.tex"),
 
+	-- These aren't actually prefabs, so they need to be a dependency somewhere.
+	Asset("PKGREF", "scripts/prefabs/bossutil.lua"),
+	Asset("PKGREF", "scripts/prefabs/prefabutil.lua"),
+
 }
 
-return Prefab("hud", function() end, assets)
+local prefabs = {
+	GroupPrefab("deps_autogen"),
+}
+
+return Prefab("hud", function() end, assets, prefabs)

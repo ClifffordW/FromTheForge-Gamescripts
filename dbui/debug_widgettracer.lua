@@ -1,5 +1,6 @@
 local DebugNodes = require "dbui.debug_nodes"
 local DebugWidget = require "dbui.debug_widget"
+local Enum = require "util.enum"
 local Widget = require "widgets.widget"
 local iterator = require "util.iterator"
 require "input.input"
@@ -14,6 +15,12 @@ local DebugWidgetTracer = Class(DebugNodes.DebugNode, function(self, ...) self:i
 DebugWidgetTracer.PANEL_WIDTH = 600
 DebugWidgetTracer.PANEL_HEIGHT = 600
 DebugWidgetTracer.MENU_BINDINGS = DebugWidget.MENU_BINDINGS
+
+local Devices = Enum{
+	"Keyboard",
+	"Mouse",
+	"Gamepad",
+}
 
 
 function DebugWidgetTracer:init( tracer )
@@ -36,6 +43,16 @@ function DebugWidgetTracer:PopWidget( desc )
     table.insert( self.trace, desc )
 end
 
+function DebugWidgetTracer:_GetInputDevice()
+	if self.input_device_name == Devices.s.Keyboard then
+		return TheInput:GetKeyboard()
+	elseif self.input_device_name == Devices.s.Mouse then
+		return TheInput:GetMouse()
+	elseif self.input_device_name == Devices.s.Gamepad then
+		return TheInput:GetGamepad(self.gamepad_id or 1)
+	end
+end
+
 function DebugWidgetTracer:RunTrace()
     self.trace = {}
     if (self.control_idx or 1) == 1 then
@@ -43,9 +60,11 @@ function DebugWidgetTracer:RunTrace()
         local x, y = TheFrontEnd:GetUIMousePos()
         TheFrontEnd:CheckMouseHover(x, y, self)
     else
-        local controls = ControlSet()
+        local controls = TheInput.ControlSet()
         controls:AddControl( self.all_controls[ self.control_idx or 1 ] )
-        TheFrontEnd:OnControlDown( controls, nil, self )
+		controls:SetDevice(self:_GetInputDevice())
+        local trace = self
+        TheFrontEnd:OnControlDown( controls, nil, trace )
     end
 end
 
@@ -57,8 +76,15 @@ function DebugWidgetTracer:RenderPanel( ui, panel )
 		self:RunTrace()
 	end
 
-    ui:Text( string.format( "Focus: %s", tostring( TheFrontEnd:GetFocusWidget() )))
-    ui:Text( string.format( "Hover: %s", tostring( TheFrontEnd:GetHoverWidget() )))
+	self.input_device_name = ui:_Enum("Input Device", self.input_device_name, Devices)
+	if self.input_device_name == Devices.s.Gamepad then
+		self.gamepad_id = ui:_SliderInt("Gamepad ID", self.gamepad_id or 1, 1, 4)
+	end
+
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		ui:Value("Focus p"..hunter_id, TheFrontEnd:GetFocusWidget(hunter_id))
+	end
+    ui:Value("Hover", TheFrontEnd:GetHoverWidget())
 
     local idx = ui:_Combo( "Control", self.control_idx or 1, self.all_controls )
     if idx and idx ~= self.control_idx then

@@ -19,13 +19,17 @@ local function IsAValidRevive(pow, inst, data)
 		valid = false
 	end
 
+	if not powerutil.IsInActiveCombat() then
+		valid = false
+	end
+
 	return valid
 end
 
 -- Gain konjur when you revive an ally
 Power.AddRevivePower("revive_gain_konjur",
 {
-	--JAMBELL: try % of health given
+	--NOTE: try % of health given
 	power_category = Power.Categories.SUSTAIN,
 	tuning =
 	{
@@ -48,7 +52,7 @@ Power.AddRevivePower("revive_gain_konjur",
 
 Power.AddRevivePower("revive_explosion",
 {
-	--JAMBELL: this is basically grand entrance. Fine for prototype, but how to make more unique? Is it OK if it's not unique?
+	--NOTE: this is basically grand entrance. Fine for prototype, but how to make more unique? Is it OK if it's not unique?
 	-- TODO: make it in an area around the downed player
 	power_category = Power.Categories.DAMAGE,
 	tuning =
@@ -80,14 +84,14 @@ Power.AddRevivePower("revive_explosion",
 						inst.components.combat:DoPowerAttack(power_attack)
 
 						ent.components.combat:SetTarget(inst)
-						powerutil.SpawnPowerHitFx("hits_first_contact", inst, ent, 0, 0, HitStopLevel.NONE) --SLOTH: revive_explosion fx
+						powerutil.SpawnPowerHitFx("hits_first_contact", inst, ent, 0, 0, HitStopLevel.NONE) --TODO add fx: revive_explosion fx
 					end
 				end)
 			end
 			if proced then
 				--sound
 				local params = {}
-				params.fmodevent = fmodtable.Event.Power_bigStick_Explode --LUCA: revive_explosion sound
+				params.fmodevent = fmodtable.Event.Power_bigStick_Explode
 				params.sound_max_count = 1
 				soundutil.PlaySoundData(inst, params)
 			end
@@ -113,7 +117,7 @@ end
 
 Power.AddRevivePower("revive_damage_bonus",
 {
-	--JAMBELL:
+	--NOTE:
 	power_category = Power.Categories.DAMAGE,
 	tuning =
 	{
@@ -169,7 +173,7 @@ Power.AddRevivePower("revive_damage_bonus",
 
 Power.AddRevivePower("revive_borrow_power",
 {
-	--JAMBELL:
+	--NOTE:
 	power_category = Power.Categories.SUPPORT,
 	can_drop = false,
 	tuning =
@@ -192,6 +196,10 @@ Power.AddRevivePower("revive_borrow_power",
 		end,
 
 		["revive"] = function(pow, inst, data)
+			if not IsAValidRevive(pow, inst, data) then
+				return
+			end
+
 			local my_pm = inst.components.powermanager
 			local revivee = data.revivee
 			local powers = revivee.components.powermanager:GetAllRelicPowersInAcquiredOrder()
@@ -226,7 +234,7 @@ Power.AddRevivePower("revive_borrow_power",
 
 -- Power.AddRevivePower("revive_heal",
 -- {
--- 	--JAMBELL:
+-- 	--NOTE:
 -- 	power_category = Power.Categories.SUSTAIN,
 -- 	tuning =
 -- 	{

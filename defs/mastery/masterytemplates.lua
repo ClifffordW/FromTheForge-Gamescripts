@@ -1,10 +1,12 @@
 local templates = {}
+local lume = require "util.lume"
 
 -- Helper Functions for creating basic Masteries:
-templates.AddKillMonsterMastery = function(add_mastery_fn, prefab, num)
+templates.AddKillMonsterMastery = function(add_mastery_fn, prefab, data, num)
 	local id = (prefab.."_kill"):lower()
 
-	local data = {
+
+	data = lume.merge(data, {
 		max_progress = num or 30,
 		event_triggers =
 		{
@@ -15,215 +17,256 @@ templates.AddKillMonsterMastery = function(add_mastery_fn, prefab, num)
 				end
 			end,
 		},
-	}
+	})
 
 	add_mastery_fn(id, data)
 end
 
-templates.AddFocusKillMonsterMastery = function(add_mastery_fn, prefab, num)
-	local id = (prefab.."_kill_focus"):lower()
+templates.AddBossKillMonsterMastery = function(add_mastery_fn, prefab, data, num)
+	local id = (prefab.."_kill"):lower()
 
-	local data = {
-		max_progress = num or 30,
+
+	data = lume.merge(data, {
+		max_progress = num or 1,
 		event_triggers =
 		{
-			["kill"] = function(mst, inst, data)
-				local target = data.attack:GetTarget()
-				if target and target.prefab == prefab then
-					if data.attack:GetFocus() then
+			["boss_kill"] = function(mst, inst, boss_pfb)
+				if boss_pfb and boss_pfb.prefab == prefab then
+					mst:DeltaProgress(1)
+				end
+			end,
+		},
+	})
+
+	add_mastery_fn(id, data)
+end
+
+templates.AddAscensionBossKillMonsterMastery = function(add_mastery_fn, prefab, data, ascensionlevel, num)
+	local id = (prefab.."_kill_ascension_"..ascensionlevel):lower()
+
+
+	data = lume.merge(data, {
+		max_progress = num or 1,
+		event_triggers =
+		{
+			["boss_kill"] = function(mst, inst, boss_pfb)
+				if boss_pfb and boss_pfb.prefab == prefab then
+					if TheDungeon.progression.components.ascensionmanager:GetCurrentLevel() >= ascensionlevel then
+						-- Accept clearing at a higher ascension level, use >= not ==
 						mst:DeltaProgress(1)
 					end
 				end
 			end,
 		},
-	}
+	})
 
 	add_mastery_fn(id, data)
 end
 
-templates.AddLightAttackKillMonsterMastery = function(add_mastery_fn, prefab)
-	local id = (prefab.."_kill_lightattack"):lower()
+-- templates.AddFocusKillMonsterMastery = function(add_mastery_fn, prefab, num)
+-- 	local id = (prefab.."_kill_focus"):lower()
 
-	local data = {
-		on_add_fn = function(mst, inst, is_upgrade)
-			mst.mem.targets_health = {}
-		end,
+-- 	local data = {
+-- 		max_progress = num or 30,
+-- 		event_triggers =
+-- 		{
+-- 			["kill"] = function(mst, inst, data)
+-- 				local target = data.attack:GetTarget()
+-- 				if target and target.prefab == prefab then
+-- 					if data.attack:GetFocus() then
+-- 						mst:DeltaProgress(1)
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
 
-		event_triggers =
-		{
-			["kill"] = function(mst, inst, data)
-				local attack = data.attack
-				local target = attack:GetTarget()
+-- 	add_mastery_fn(id, data)
+-- end
 
-				if target and target.prefab == prefab then
-					if attack:GetID() == "light_attack"	then
-						mst:DeltaProgress(1)
-					end
-				end
-			end,
-		},
-	}
+-- templates.AddLightAttackKillMonsterMastery = function(add_mastery_fn, prefab)
+-- 	local id = (prefab.."_kill_lightattack"):lower()
 
-	add_mastery_fn(id, data)
-end
+-- 	local data = {
+-- 		on_add_fn = function(mst, inst, is_upgrade)
+-- 			mst.mem.targets_health = {}
+-- 		end,
 
-templates.AddHeavyAttackKillMonsterMastery = function(add_mastery_fn, prefab)
-	local id = (prefab.."_kill_heavyattack"):lower()
+-- 		event_triggers =
+-- 		{
+-- 			["kill"] = function(mst, inst, data)
+-- 				local attack = data.attack
+-- 				local target = attack:GetTarget()
 
-	local data = {
-		on_add_fn = function(mst, inst, is_upgrade)
-			mst.mem.targets_health = {}
-		end,
+-- 				if target and target.prefab == prefab then
+-- 					if attack:GetID() == "light_attack"	then
+-- 						mst:DeltaProgress(1)
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
 
-		event_triggers =
-		{
-			["kill"] = function(mst, inst, data)
-				local attack = data.attack
-				local target = attack:GetTarget()
+-- 	add_mastery_fn(id, data)
+-- end
 
-				if target and target.prefab == prefab then
-					if attack:GetID() == "heavy_attack"	then
-						mst:DeltaProgress(1)
-					end
-				end
-			end,
-		},
-	}
+-- templates.AddHeavyAttackKillMonsterMastery = function(add_mastery_fn, prefab)
+-- 	local id = (prefab.."_kill_heavyattack"):lower()
 
-	add_mastery_fn(id, data)
-end
+-- 	local data = {
+-- 		on_add_fn = function(mst, inst, is_upgrade)
+-- 			mst.mem.targets_health = {}
+-- 		end,
 
-templates.AddSkillKillMonsterMastery = function(add_mastery_fn, prefab)
-	local id = (prefab.."_kill_skill"):lower()
+-- 		event_triggers =
+-- 		{
+-- 			["kill"] = function(mst, inst, data)
+-- 				local attack = data.attack
+-- 				local target = attack:GetTarget()
 
-	local data = {
-		on_add_fn = function(mst, inst, is_upgrade)
-			mst.mem.targets_health = {}
-		end,
+-- 				if target and target.prefab == prefab then
+-- 					if attack:GetID() == "heavy_attack"	then
+-- 						mst:DeltaProgress(1)
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
 
-		event_triggers =
-		{
-			["kill"] = function(mst, inst, data)
-				local attack = data.attack
-				local target = attack:GetTarget()
+-- 	add_mastery_fn(id, data)
+-- end
 
-				if target and target.prefab == prefab then
-					if attack:GetID() == "skill" then
-						mst:DeltaProgress(1)
-					end
-				end
-			end,
-		},
-	}
+-- templates.AddSkillKillMonsterMastery = function(add_mastery_fn, prefab)
+-- 	local id = (prefab.."_kill_skill"):lower()
 
-	add_mastery_fn(id, data)
-end
+-- 	local data = {
+-- 		on_add_fn = function(mst, inst, is_upgrade)
+-- 			mst.mem.targets_health = {}
+-- 		end,
 
-templates.AddKillQuicklyMonsterMastery = function(add_mastery_fn, prefab, time)
-	local id = (prefab.."_kill_quickly"):lower()
+-- 		event_triggers =
+-- 		{
+-- 			["kill"] = function(mst, inst, data)
+-- 				local attack = data.attack
+-- 				local target = attack:GetTarget()
 
-	local data = {
-		event_triggers =
-		{
-			["kill"] = function(mst, inst, data)
-				local target = data.attack:GetTarget()
-				if target and target.prefab == prefab then
-					local target_time = time or 5
-					local spawn_time = target.spawntime
-					local age = GetTime() - spawn_time
+-- 				if target and target.prefab == prefab then
+-- 					if attack:GetID() == "skill" then
+-- 						mst:DeltaProgress(1)
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
 
-					if age <= target_time then
-						mst:DeltaProgress(1)
-					end
-				end
-			end,
-		},
-	}
+-- 	add_mastery_fn(id, data)
+-- end
 
-	add_mastery_fn(id, data)
-end
+-- templates.AddKillQuicklyMonsterMastery = function(add_mastery_fn, prefab, time)
+-- 	local id = (prefab.."_kill_quickly"):lower()
 
-templates.AddKillWithNoDamageMastery = function(add_mastery_fn, prefab, time)
-	local id = (prefab.."_kill_flawless"):lower()
+-- 	local data = {
+-- 		event_triggers =
+-- 		{
+-- 			["kill"] = function(mst, inst, data)
+-- 				local target = data.attack:GetTarget()
+-- 				if target and target.prefab == prefab then
+-- 					local target_time = time or 5
+-- 					local spawn_time = target.spawntime
+-- 					local age = GetTime() - spawn_time
 
-	local data = {
-		on_add_fn = function(mst, inst)
-			mst.mem.damage_log = {}
-		end,
+-- 					if age <= target_time then
+-- 						mst:DeltaProgress(1)
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
 
-		event_triggers =
-		{
-			["take_damage"] = function(mst, inst, attack)
-				-- Whenever this mob type attacks player, store how much damage it dealt.
-				-- Later, check if there is any damage listed. If not, the player killed without receiving damage.
+-- 	add_mastery_fn(id, data)
+-- end
 
-				local attacker = attack:GetAttacker()
-				if attacker and attacker.prefab == prefab then
-					local damage = attack:GetDamage()
-					if mst.mem.damage_log[attacker] then
-						mst.mem.damage_log[attacker] = mst.mem.damage_log[attacker] + damage
-					else
-						mst.mem.damage_log[attacker] = damage
-					end
-				end
-			end,
+-- templates.AddKillWithNoDamageMastery = function(add_mastery_fn, prefab, time)
+-- 	local id = (prefab.."_kill_flawless"):lower()
 
-			["kill"] = function(mst, inst, data)
-				local target = data.attack:GetTarget()
-				if target and target.prefab == prefab then
-					if not mst.mem.damage_log[target] then
-						-- We haven't logged any damage from this mob
-						mst:DeltaProgress(1)
-					end
-				end
-			end,
-		},
-	}
+-- 	local data = {
+-- 		on_add_fn = function(mst, inst)
+-- 			mst.mem.damage_log = {}
+-- 		end,
 
-	add_mastery_fn(id, data)
-end
+-- 		event_triggers =
+-- 		{
+-- 			["take_damage"] = function(mst, inst, attack)
+-- 				-- Whenever this mob type attacks player, store how much damage it dealt.
+-- 				-- Later, check if there is any damage listed. If not, the player killed without receiving damage.
 
-templates.AddKillOneHitMastery = function(add_mastery_fn, prefab)
-	local id = (prefab.."_kill_onehit"):lower()
+-- 				local attacker = attack:GetAttacker()
+-- 				if attacker and attacker.prefab == prefab then
+-- 					local damage = attack:GetDamage()
+-- 					if mst.mem.damage_log[attacker] then
+-- 						mst.mem.damage_log[attacker] = mst.mem.damage_log[attacker] + damage
+-- 					else
+-- 						mst.mem.damage_log[attacker] = damage
+-- 					end
+-- 				end
+-- 			end,
 
-	local data = {
-		on_add_fn = function(mst, inst, is_upgrade)
-			mst.mem.targets_health = {}
-		end,
+-- 			["kill"] = function(mst, inst, data)
+-- 				local target = data.attack:GetTarget()
+-- 				if target and target.prefab == prefab then
+-- 					if not mst.mem.damage_log[target] then
+-- 						-- We haven't logged any damage from this mob
+-- 						mst:DeltaProgress(1)
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
 
-		event_triggers =
-		{
-			["do_damage"] = function(mst, inst, attack)
-				local target = attack:GetTarget()
+-- 	add_mastery_fn(id, data)
+-- end
 
-				if target and target.prefab == prefab then
-					local health = target.components.health
+-- templates.AddKillOneHitMastery = function(add_mastery_fn, prefab)
+-- 	local id = (prefab.."_kill_onehit"):lower()
 
-					if health then
-						mst.mem.targets_health[inst] = health:GetCurrent() -- Store their health on this hit, so we can compare later and see if they died in one hit.
-					end
-				end
-			end,
+-- 	local data = {
+-- 		on_add_fn = function(mst, inst, is_upgrade)
+-- 			mst.mem.targets_health = {}
+-- 		end,
 
-			["kill"] = function(mst, inst, data)
-				local target = data.attack:GetTarget()
+-- 		event_triggers =
+-- 		{
+-- 			["do_damage"] = function(mst, inst, attack)
+-- 				local target = attack:GetTarget()
 
-				if target and target.prefab == prefab then
-					if mst.mem.targets_health[inst] and target.components.health then
-						local health = mst.mem.targets_health[inst]
-						local max_health = target.components.health:GetMax()
+-- 				if target and target.prefab == prefab then
+-- 					local health = target.components.health
 
-						if health == max_health	then
-							mst:DeltaProgress(1)
-						end
-					end
-				end
-			end,
-		},
-	}
+-- 					if health then
+-- 						mst.mem.targets_health[inst] = health:GetCurrent() -- Store their health on this hit, so we can compare later and see if they died in one hit.
+-- 					end
+-- 				end
+-- 			end,
 
-	add_mastery_fn(id, data)
-end
+-- 			["kill"] = function(mst, inst, data)
+-- 				local target = data.attack:GetTarget()
+
+-- 				if target and target.prefab == prefab then
+-- 					if mst.mem.targets_health[inst] and target.components.health then
+-- 						local health = mst.mem.targets_health[inst]
+-- 						local max_health = target.components.health:GetMax()
+
+-- 						if health == max_health	then
+-- 							mst:DeltaProgress(1)
+-- 						end
+-- 					end
+-- 				end
+-- 			end,
+-- 		},
+-- 	}
+
+-- 	add_mastery_fn(id, data)
+-- end
 
 return templates
 -- MASTERY IDEAS:

@@ -150,7 +150,7 @@ function PrefabEditorBase:Test(prefab, params, count)
 		self:SetupHandle(self.handle)
 	end
 	if self.want_spawn_target then
-		self.last_spawn_pos = self:GetLastSpawnPosition()
+		self.last_spawn_pos = self:GetLastSpawnPosition() or self.last_spawn_pos
 	end
 end
 
@@ -202,7 +202,8 @@ function PrefabEditorBase:WantSpawnPosition()
 		end,
 		last = function()
 			-- Call GetLastSpawnPosition again in case the user moved it. Keep
-			-- last_spawn_pos incase it was removed.
+			-- last_spawn_pos incase it was removed. (Editors should update
+			-- last_spawn_pos before removing!)
 			return self:GetLastSpawnPosition() or self.last_spawn_pos or Vector3()
 		end,
 	}

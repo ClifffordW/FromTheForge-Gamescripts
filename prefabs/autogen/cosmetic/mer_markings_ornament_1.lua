@@ -11,9 +11,5 @@ return {
     uitags={  },
   },
   group="PLAYER_BODYPART",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

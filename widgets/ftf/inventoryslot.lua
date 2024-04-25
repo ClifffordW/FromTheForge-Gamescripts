@@ -116,6 +116,23 @@ InventorySlot.CONTROL_MAP =
 	},
 }
 
+function InventorySlot:GetSizeVar()
+	return self.size
+end
+
+function InventorySlot:SetSize(size)
+	self.size = size
+
+	self.selection:SetSize(self.size, self.size)
+	self.mask:SetSize(self.size, self.size)
+	self.background:SetSize(self.size, self.size)
+	self.button:SetSize(self.size + self.item_size, self.size + self.item_size)
+	self.overlay:SetSize(self.size, self.size)
+	self.unseenBadge:SetSize(self.size * 0.35, self.size * 0.35)
+	self.equippedBadge:SetSize(self.size, self.size)
+	self.selection_brackets:SetSize(self.size + 16 * HACK_FOR_4K, self.size + 16 * HACK_FOR_4K)
+end
+
 function InventorySlot:ApplyTheme_DungeonSummary(tooltip_fn)
 	return self:HideBackground()
 		:SetIconSize(0, -15 * HACK_FOR_4K)
@@ -306,6 +323,11 @@ end
 
 function InventorySlot:SetToolTipClass(...)
 	self.button:SetToolTipClass(...)
+	return self
+end
+
+function InventorySlot:DisableToolTip(...)
+	self.button:DisableToolTip(...)
 	return self
 end
 

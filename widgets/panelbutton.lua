@@ -109,11 +109,7 @@ function PanelButton:_RefreshImageState()
 	if self:IsSelected() then
 		self:OnSelect()
 	elseif self:IsEnabled() then
-		if self.focus then
-			self:GainFocus()
-		else
-			self:LoseFocus()
-		end
+		self:RefreshFocus()
 	else
 		self:OnDisable()
 	end
@@ -202,7 +198,7 @@ function PanelButton:OnLoseFocus()
 end
 
 function PanelButton:HandleControlDown(controls)
-	if not self:IsEnabled() or not self.focus then return end
+	if not self:IsEnabled() or not self:HasFocus() then return end
 
 	if self:IsSelected() and not self.AllowOnControlWhenSelected then return false end
 
@@ -233,10 +229,11 @@ function PanelButton:HandleControlDown(controls)
 end
 
 function PanelButton:HandleControlUp(controls)
-	if not self:IsEnabled() or not self.focus then return end
+	if not self:IsEnabled() or not self:HasFocus() then return end
 
 	if self:IsSelected() and not self.AllowOnControlWhenSelected then return false end
 
+	local input_device = controls:GetDevice()
 	if controls:Has(self.control) then
 		if self.down then
 			if self.has_image_down then
@@ -250,7 +247,7 @@ function PanelButton:HandleControlUp(controls)
 			self.down = false
 			self:ResetPreClickPosition()
 			if self.onclick then
-				self.onclick()
+				self.onclick(input_device:unpack())
 			end
 			self:StopUpdating()
 		end
@@ -260,11 +257,7 @@ end
 
 function PanelButton:OnEnable()
 	PanelButton._base.OnEnable(self)
-	if self.focus then
-		self:GainFocus()
-	else
-		self:LoseFocus()
-	end
+    self:RefreshFocus()
 end
 
 function PanelButton:OnDisable()
@@ -314,7 +307,7 @@ end
 function PanelButton:SetFocusScale(scale)
 	self.scaleFocus = scale or 1.2
 
-	if self.focus and self.scaleOnFocus and not self.selected then
+	if self:HasFocus() and self.scaleOnFocus and not self.selected then
 		self.image:ScaleTo(nil, self.scaleFocus, 0.1, easing.inOutQuad)
 	end
 	return self
@@ -323,7 +316,7 @@ end
 function PanelButton:SetNormalScale(scale)
 	self.scaleNormal = scale or 1
 
-	if not self.focus and self.scaleOnFocus then
+	if not self:HasFocus() and self.scaleOnFocus then
 		self.image:ScaleTo(nil, self.scaleNormal, 0.2, easing.inOutQuad)
 	end
 	return self
@@ -336,7 +329,7 @@ function PanelButton:SetImageNormalColour(r,g,b,a)
 		self.imagenormalcolour = r
 	end
     
-	if self:IsEnabled() and not self.focus and not self.selected then
+	if self:IsEnabled() and not self:HasFocus() and not self.selected then
 		self.image:SetMultColor(self.imagenormalcolour[1], self.imagenormalcolour[2], self.imagenormalcolour[3], self.imagenormalcolour[4])
 	end
 	return self
@@ -349,7 +342,7 @@ function PanelButton:SetImageFocusColour(r,g,b,a)
 		self.imagefocuscolour = r
 	end
     
-	if self.focus and not self.selected then
+	if self:HasFocus() and not self.selected then
 		self.image:SetMultColor(table.unpack(self.imagefocuscolour))
 	end
 	return self

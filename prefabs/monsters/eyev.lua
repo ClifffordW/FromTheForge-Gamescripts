@@ -27,6 +27,7 @@ local prefabs =
     GroupPrefab("drops_eyev"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "eyev")
+prefabutil.SetupDeathFxPrefabs(prefabs, "eyev_elite")
 
 local attacks =
 {
@@ -87,6 +88,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks = lume.merge(attacks,
 {
@@ -105,6 +107,7 @@ local elite_attacks = lume.merge(attacks,
 		end
 	},
 })
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 0.75
 

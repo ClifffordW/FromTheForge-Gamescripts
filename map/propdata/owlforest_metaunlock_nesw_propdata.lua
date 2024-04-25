@@ -1,0 +1,83 @@
+return {
+  corestone_converter_1p={
+    {
+      flip=true,
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1,
+        interact_radius=4,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 1",
+        purchase_type="XPPerCurrency",
+        status_widget_location="Player",
+        weapon="polearm",
+        xp_per_currency=10,
+      },
+      sole_occupant=true,
+      x=-11.0,
+      z=8.0,
+    },
+  },
+  corestone_converter_2p={
+    {
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1,
+        interact_radius=4,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 2",
+        purchase_type="XPPerCurrency",
+        status_widget_location="Player",
+        weapon="polearm",
+        xp_per_currency=10,
+      },
+      sole_occupant=true,
+      x=7.0,
+      z=8.0,
+    },
+  },
+  corestone_converter_3p={
+    {
+      flip=true,
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1,
+        interact_radius=4,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 3",
+        purchase_type="XPPerCurrency",
+        status_widget_location="Player",
+        weapon="polearm",
+        xp_per_currency=10,
+      },
+      sole_occupant=true,
+      x=-11.0,
+      z=-9.0,
+    },
+  },
+  corestone_converter_4p={
+    {
+      script_args={
+        currency="Meta",
+        currency_per_deposit=1,
+        interact_radius=4,
+        meta_progress="BIOME_EXPLORATION",
+        player_binding="Player 4",
+        purchase_type="XPPerCurrency",
+        status_widget_location="Player",
+        weapon="polearm",
+        xp_per_currency=10,
+      },
+      x=7.0,
+      z=-9.0,
+    },
+  },
+  corestone_converter_decor1={
+    { variation=1, x=-19.5, z=14.5,},
+    { variation=1, x=16.5, z=-12.5,},
+    { variation=1, x=16.5, z=11.5,},
+  },
+  corestone_converter_decor2={ { variation=1, x=-20.5, z=5.5,}, { variation=1, x=14.5, z=-14.5,},},
+  corestone_converter_decor4={ { variation=1, x=-20.5, z=-12.5,},},
+  corestone_converter_decor5={ { flip=true, variation=1, x=15.5, z=5.5,},},
+}

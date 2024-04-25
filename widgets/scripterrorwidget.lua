@@ -241,7 +241,7 @@ function ScriptErrorWidget:ConfirmDialog(title, body, confirm_text, cancel_text,
 
 	local error_widget = self
 	-- add handler to cancel out of dialog and return to active menu
-	self.confirm_menu.OnControl = function(self, controls, down)
+	self.confirm_menu.OnControl = function(self, controls, down, ...)
 		Menu.OnControl(self,controls,down)
 		if controls:Has(Controls.Digital.CANCEL) then
 			if error_widget.moremenu:IsVisible() then 

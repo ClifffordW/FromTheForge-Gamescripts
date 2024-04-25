@@ -5,6 +5,6 @@ return {
   anim="intro",
   bank="fx_thatcher",
   bloom=20.0,
-  build="fx_thatcher_new",
+  build="fx_thatcher",
   group="fx_thatcher",
 }

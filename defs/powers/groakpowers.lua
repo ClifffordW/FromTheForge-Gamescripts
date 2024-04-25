@@ -1,6 +1,7 @@
 local Power = require("defs.powers.power")
 local lume = require "util.lume"
 local SGCommon = require "stategraphs.sg_common"
+local entityutil = require "util.entityutil"
 local monsterutil = require "util.monsterutil"
 local audioid = require "defs.sound.audioid"
 local fmodtable = require "defs.sound.fmodtable"
@@ -127,15 +128,6 @@ local function SpitOut(inst, swallower, data)
 	SGCommon.Fns.ExitSwallowed(inst, { swallower = swallower, knockback = knockback, spitout = true })
 end
 
--- TODO: Copied from revive component. Consider making this a common function.
-local function TryGetEntity(entity_id)
-	local guid = TheNet:FindGUIDForEntityID(entity_id)
-	if guid and guid ~= 0 and Ents[guid] and Ents[guid]:IsValid() then
-		return Ents[guid]
-	end
-	return nil
-end
-
 local SWALLOW_TIMEOUT_TICKS = 480
 
 Power.AddGroakPower("groak_swallowed",
@@ -210,7 +202,7 @@ Power.AddGroakPower("groak_swallowed",
 		local has_swallower = e:DeserializeBoolean()
 		if has_swallower then
 			local ent_id = e:DeserializeEntityID()
-			pow.mem.swallower = TryGetEntity(ent_id)
+			pow.mem.swallower = entityutil.TryGetEntity(ent_id)
 		end
 	end,
 

@@ -51,7 +51,7 @@ local healamount_to_fontsize =
 }
 
 local FOCUS_FONTSIZE_MULTIPLIER = 1.1
-local CRIT_FONTSIZE_MULTIPLIER = 1.5
+local CRIT_FONTSIZE_MULTIPLIER = 1.6
 
 function DamageNumber:OnFaded()
 	if self.attacker ~= nil then
@@ -121,7 +121,7 @@ function DamageNumber:InitNew(target, value, offset_mod, num_sources, active_num
 		self.y_offset_target = self.y_offset_target * 1.5
 		self.x_offset_mod = self.x_offset_mod * 3
 		self.fade_time = self.fade_time * 1.5
-		damage_text = string.format("%s!", damage_text)
+		damage_text = string.format(STRINGS.UI.DAMAGE_NUMBERS.CRIT, damage_text)
 
 		self.number:SetGlyphColor(UICOLORS.ATK_CRIT)
 	end
@@ -150,6 +150,7 @@ function DamageNumber:InitNew(target, value, offset_mod, num_sources, active_num
 		self.y_offset_target = 150
 		font_size = healfontsize
 		self.number:SetGlyphColor(UICOLORS.HEAL)
+		damage_text = string.format(STRINGS.UI.DAMAGE_NUMBERS.HEAL, damage_text)
 	end
 
 	if is_secondary_attack then

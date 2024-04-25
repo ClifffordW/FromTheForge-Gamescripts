@@ -48,8 +48,6 @@ function LoadoutWidget:SetState(state)
 end
 
 function LoadoutWidget:OnLoadoutKey(toggle_mode)
-	if TheWorld:HasTag("town") then return end
-
 	-- Check whether the emote-key is being held down or not
 	self.should_show = (toggle_mode == "down")
 

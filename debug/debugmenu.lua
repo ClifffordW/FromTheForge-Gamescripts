@@ -9,7 +9,7 @@ local SaveData = require "savedata.savedata"
 local iterator = require "util.iterator"
 local lume = require "util.lume"
 local ui = require "dbui.imgui"
-
+local SaveDataFormat = require "savedata.save_data_format"
 
 local MAX_HISTORY = 6*60 -- 6 seconds of history
 
@@ -29,8 +29,12 @@ local History = Class(function(self, inst)
 		:sort()
 		:result()
 
-	self.savedata = SaveData("replay")
-	self.enabled = not PLAYTEST_MODE and TheNet:IsGameTypeLocal()
+	self.savedata = SaveData("replay", SaveDataFormat.id.Replay)
+	self.enabled = (
+		DEBUG_MENU_ENABLED -- gc stalls make history unshippable
+		and not Platform.IsAndroid()
+		and not Platform.IsIos()
+		and TheNet:IsGameTypeLocal())
 
 	-- Reset history when we enter a new room since the history doesn't make
 	-- much sense in the new environment. Also prevents history files from
@@ -43,6 +47,7 @@ end)
 -- capture another frame.
 function History:_ShutdownTracker()
 	for name,history in iterator.indexed_pairs(self.db, self.db_keys) do
+		dbassert(history.ShutdownTracker, name)
 		history:ShutdownTracker()
 	end
 end
@@ -180,7 +185,7 @@ function DebugRenderer:WorldLine(p1, p2, color, thickness, lifetime)
 		self.persistworldlinesbatch[self.persistworldlinehandle] =
 			{p1, p2, color, thickness, lifetime}
 		self.persistworldlinehandle = self.persistworldlinehandle + 1
-		-- TODO: victorc - return handle?
+		-- TODO: debugrenderer - return handle?
 	end
 end
 

@@ -10,5 +10,5 @@ return {
   proptype=1,
   randomflip=true,
   randomize=true,
-  variations=3,
+  variations=5,
 }

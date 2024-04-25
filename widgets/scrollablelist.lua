@@ -230,10 +230,10 @@ function ScrollableList:DebugDraw_AddSection(ui, panel)
     ui:Unindent()
 end
 
-function ScrollableList:OnControl(controls, down, force)
-    if ScrollableList._base.OnControl(self, controls, down) then return true end
+function ScrollableList:OnControl(controls, down, force, ...)
+    if ScrollableList._base.OnControl(self, controls, down, ...) then return true end
 
-    if down and ((self.focus and self.scroll_bar:IsVisible()) or force) then
+    if down and ((self:HasFocus() and self.scroll_bar:IsVisible()) or force) then
         if controls:Has(Controls.Digital.MENU_SCROLL_BACK) then
             if self:Scroll(-scroll_per_click, true) then
                 TheFrontEnd:GetSound():PlaySound(fmodtable.Event.hover)
@@ -321,7 +321,7 @@ function ScrollableList:RefreshView(movemarker)
                 self.focused_index = self.view_offset+self.widgets_per_view
             end
         else
-            if v.focus then
+            if v:HasFocus() then
                 if i < self.view_offset+1 then
                     self.items[self.view_offset+1]:SetFocus()
                     self.focused_index = self.view_offset+1
@@ -605,14 +605,14 @@ function ScrollableList:OnGainFocus()
     -- Static table of widgets that we show and hide
     if self.updatefn ~= nil and self.static_widgets ~= nil then
         for i, v in ipairs(self.static_widgets) do
-            if v.focus then
+            if v:HasFocus() then
                 self.focused_index = self.view_offset + i
                 return
             end
         end
     elseif self.items ~= nil then
         for i, v in ipairs(self.items) do
-            if v.focus then
+            if v:HasFocus() then
                 self.focused_index = i
                 return
             end
@@ -627,14 +627,14 @@ function ScrollableList:OnLoseFocus()
     -- Static table of widgets that we show and hide
     if self.updatefn ~= nil and self.static_widgets ~= nil then
         for i, v in ipairs(self.static_widgets) do
-            if v.focus then
+            if v:HasFocus() then
                 self.focused_index = self.view_offset + i
                 return
             end
         end
     elseif self.items ~= nil then
         for i, v in ipairs(self.items) do
-            if v.focus then
+            if v:HasFocus() then
                 self.focused_index = i
                 return
             end
@@ -676,63 +676,64 @@ function ScrollableList:DoFocusHookups()
     if self.items and not self.updatefn and not self.static_widgets then
         for k,v in ipairs(self.items) do
             if k > 1 then
-                self.items[k]:SetFocusChangeDir(MOVE_UP, self.items[k-1])
+                self.items[k]:SetFocusChangeDir(FocusMove.s.up, self.items[k-1])
             end
 
             if k < #self.items then
-                self.items[k]:SetFocusChangeDir(MOVE_DOWN, self.items[k+1])
+                self.items[k]:SetFocusChangeDir(FocusMove.s.down, self.items[k+1])
             end
         end
     elseif self.updatefn and self.static_widgets then
         for k,v in ipairs(self.static_widgets) do
             if k > 1 then
-                self.static_widgets[k]:SetFocusChangeDir(MOVE_UP, self.static_widgets[k-1])
+                self.static_widgets[k]:SetFocusChangeDir(FocusMove.s.up, self.static_widgets[k-1])
             end
 
             if k < #self.static_widgets then
-                self.static_widgets[k]:SetFocusChangeDir(MOVE_DOWN, self.static_widgets[k+1])
+                self.static_widgets[k]:SetFocusChangeDir(FocusMove.s.down, self.static_widgets[k+1])
             end
         end
     end
 end
 
-function ScrollableList:OnFocusMove(dir, down)
-    if ScrollableList._base.OnFocusMove(self,dir,down) then return true end
+function ScrollableList:OnFocusMove(dir, input_device)
+    local parent_pick = ScrollableList._base.OnFocusMove(self,dir,input_device)
+	if parent_pick then
+		return parent_pick
+	end
 
-    if down then
+    if true then
         -- Static table of widgets that we show and hide
         if self.updatefn ~= nil and self.static_widgets ~= nil then
             for i, v in ipairs(self.static_widgets) do
-                if v.focus then
+                if v:HasFocus() then
                     self.focused_index = i + self.view_offset
                     break
                 end
             end
 
-            if dir == MOVE_UP then
+            if dir == FocusMove.s.up then
                 if self.focused_index <= self.view_offset + 1 then
                     self:Scroll(-1, true)
                     TheFrontEnd:GetSound():PlaySound(fmodtable.Event.hover)
-                    self.static_widgets[1]:SetFocus()
                     self.focused_index = self.focused_index - 1
-                    return true
+                    return self.static_widgets[1]
                 end
-            elseif dir == MOVE_DOWN and self.focused_index >= self.view_offset + #self.static_widgets and self.view_offset + #self.static_widgets < #self.items then
+            elseif dir == FocusMove.s.down and self.focused_index >= self.view_offset + #self.static_widgets and self.view_offset + #self.static_widgets < #self.items then
                 self:Scroll(1, true)
                 TheFrontEnd:GetSound():PlaySound(fmodtable.Event.hover)
-                self.static_widgets[#self.static_widgets]:SetFocus()
                 self.focused_index = self.focused_index + 1
-                return true
+                return self.static_widgets[#self.static_widgets]
             end
         elseif self.items ~= nil then
             for i, v in ipairs(self.items) do
-                if v.focus then
+                if v:HasFocus() then
                     self.focused_index = i
                     break
                 end
             end
 
-            if dir == MOVE_UP and self.focused_index > 1 then
+            if dir == FocusMove.s.up and self.focused_index > 1 then
                 if self.focused_index <= self.view_offset + 1 then
                     self:Scroll(-1, true)
                     TheFrontEnd:GetSound():PlaySound(fmodtable.Event.hover)
@@ -740,12 +741,12 @@ function ScrollableList:OnFocusMove(dir, down)
                     self.focused_index = self.focused_index - 1
                 end
                 return true
-            elseif dir == MOVE_DOWN and self.focused_index < #self.items then
+            elseif dir == FocusMove.s.down and self.focused_index < #self.items then
                 if self.focused_index >= self.view_offset + self.widgets_per_view then
                     self:Scroll(1, true)
                     TheFrontEnd:GetSound():PlaySound(fmodtable.Event.hover)
-                    self.items[self.view_offset + self.widgets_per_view]:SetFocus()
                     self.focused_index = self.focused_index + 1
+                    return self.items[self.view_offset + self.widgets_per_view]
                 end
                 return true
             end

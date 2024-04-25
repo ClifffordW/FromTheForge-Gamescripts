@@ -29,13 +29,15 @@ function AttackTracker:AddAttack(attack_id, data)
 		startup_frames_remaining = data.startup_frames and data.startup_frames or 0,
 		cooldown = data.cooldown or 0,
 		is_hitstun_pressure_attack = data.is_hitstun_pressure_attack or false,
+		hitstun_pressure_attack_condition_fn = data.hitstun_pressure_attack_condition_fn or nil,
 		pre_anim = data.pre_anim,
 		hold_anim = data.hold_anim,
 		has_hold = data.hold_anim ~= nil,
 		loop_hold_anim = data.loop_hold_anim or false,
 		attack_state_override = data.attack_state_override or nil,
 		min_startup_frames = data.min_startup_frames and data.min_startup_frames or 0,
-		-- TODO(dbriscoe): Is it valid to have no start_conditions_fn? We'll never start this attack.
+		min_interrupted_startup_frames = data.min_interrupted_startup_frames and data.min_interrupted_startup_frames or TUNING.ENEMY_MIN_STARTUP_FRAMES_AFTER_INTERRUPTION,
+		-- Condition to auto start attack. Even when nil or returns false, we might start it if is_hitstun_pressure_attack, etc.
 		start_conditions_fn = data.start_conditions_fn or nil,
 		priority = data.priority or 0, -- higher priority goes first
 		--max_interrupts = data.max_interrupts or math.huge,
@@ -80,6 +82,11 @@ function AttackTracker:OnAttackInterrupted()
 		if remaining_startup_frames <= 0 then
 			self.force_attack = true
 			self.active_attack.startup_frames_remaining = self.active_attack.startup_frames -- Also need to reset startup frames
+		else
+			-- If this is a normal interruption, make sure the "frames remaining" is never lower than the desired amount.
+			-- Set this in TUNING.ENEMY_MIN_STARTUP_FRAMES_AFTER_INTERRUPTION
+			-- If this is too low, then interrupted enemies can attack with extremely low startup frames, unreactably.
+			self.active_attack.startup_frames_remaining = math.max(remaining_startup_frames, self.active_attack.min_interrupted_startup_frames)
 		end
 	--end
 end
@@ -123,7 +130,7 @@ function AttackTracker:CompleteActiveAttack()
 	-- once you successfully do the attack we don't need to track this attack anymore
 	self.inst:PushEvent("completeactiveattack")
 
-	-- Apply minimum_cooldown_mod to minimum_cooldown just-in-time (as opposed to at construction time) to permit state 
+	-- Apply minimum_cooldown_mod to minimum_cooldown just-in-time (as opposed to at construction time) to permit state
 	-- graph code to set minimum_cooldown dynamically as it sees fit.
 	local minimum_cooldown = self.minimum_cooldown * self.minimum_cooldown_mod
 	self.inst.components.combat:StartCooldown(minimum_cooldown * self.cooldown_mod)
@@ -134,8 +141,6 @@ function AttackTracker:CompleteActiveAttack()
 	self.inst:RemoveEventCallback("attack_interrupted", self._on_attack_interrupted_fn)
 	self.active_attack = nil
 	self.force_attack = nil
-
-	self.inst.components.combat:ResetCurrentHitStunPressureFrames()
 end
 
 function AttackTracker:DoStartupFrames(frames)
@@ -193,7 +198,7 @@ function AttackTracker:PickNextAttack(data, trange)
 				elseif use_retry_cooldown then
 					retry_cooldown = math.max(retry_cooldown, atk_data.retry_cooldown)
 				end
-				self:Logf("[%s] start_conditions_fn: can_attack=%s, retry_cooldown=%s", id, can_attack, retry_cooldown)
+				self:Logf("<%s> start_conditions_fn: can_attack=%s, retry_cooldown=%s", id, can_attack, retry_cooldown)
 			end
 		end
 	end
@@ -234,7 +239,7 @@ function AttackTracker:PickHitStunPressureAttack(data, trange)
 
 	-- Look for hitstun pressure attacks only.
 	for id, atk_data in pairs(self.attack_data) do
-		if atk_data.is_hitstun_pressure_attack then
+		if atk_data.is_hitstun_pressure_attack and (not atk_data.hitstun_pressure_attack_condition_fn or atk_data.hitstun_pressure_attack_condition_fn(self.inst)) then
 			table.insert(valid_attacks, atk_data)
 		end
 	end
@@ -331,7 +336,7 @@ function AttackTracker:UpdateModifiers()
 
 	self.initial_cooldown_mod = TUNING.DEFAULT_MINIMUM_COOLDOWN
 	if self.inst:HasTag("elite") then
-		self.initial_cooldown_mod = modifiers.EliteInitialCooldownMult 
+		self.initial_cooldown_mod = modifiers.EliteInitialCooldownMult
 	elseif self.inst:HasTag("boss") then
 		self.initial_cooldown_mod = modifiers.BossInitialCooldownMult
 	else

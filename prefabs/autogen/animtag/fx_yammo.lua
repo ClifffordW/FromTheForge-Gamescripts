@@ -13,14 +13,17 @@ return {
       behavior2={ events={ { frame=7, name="vfx-behavior2",},},},
       elite_heavy_slam={
         events={
-          { frame=8, name="vfx-elite_heavy_slam",},
           { frame=12, name="vfx-impact_elite_heavy_slam",},
+          { frame=10, name="vfx-elite_heavy_slam",},
         },
       },
       elite_swing={ events={ { frame=6, name="vfx-elite_swing",},},},
       elite_swing_close={ events={ { frame=6, name="vfx-elite_swing_close",},},},
       heavy_slam={
-        events={ { frame=8, name="vfx-heavy_slam",}, { frame=12, name="vfx-impact_heavy_slam",},},
+        events={
+          { frame=12, name="vfx-impact_heavy_slam",},
+          { frame=10, name="vfx-heavy_slam",},
+        },
       },
       idle={ events={ { frame=0, name="vfx-idle",},},},
       knockdown_pre={ events={ { frame=9, name="vfx-impact_knockdown_pre",},},},

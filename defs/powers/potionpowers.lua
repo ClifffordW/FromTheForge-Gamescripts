@@ -1,4 +1,5 @@
 local Power = require("defs.powers.power")
+-- local SGPlayerCommon = require("stategraphs.sg_player_common")
 
 function Power.AddPotionPower(id, data)
 	if not data.power_category then
@@ -18,18 +19,13 @@ function Power.AddPotionPower(id, data)
 	Power.AddPower(Power.Slots.POTION_POWER, id, "potion_powers", data)
 end
 
--- TODO(jambell): lots temp here
 local function _DoCooperativeHeal(inst, pow)
-	local x,z = inst.Transform:GetWorldXZ()
-	local friendlies = FindTargetTagGroupEntitiesInRange(x, z, pow.persistdata:GetVar("radius"), inst.components.combat:GetFriendlyTargetTags(), nil)
-	for _,ent in ipairs(friendlies) do
-		if ent.components.health and inst ~= ent then
-			local friendly_heal = Attack(inst, ent)
-			friendly_heal:SetHeal(pow.persistdata:GetVar("heal") * TUNING.POTION_AOE_PERCENT) --TODO(jambell) prototype: tune + implement smarter
-			friendly_heal:SetID("potion_heal_friendly")
-			ent.components.combat:ApplyHeal(friendly_heal)
-		end
-	end
+	local radius = pow.persistdata:GetVar("radius")
+	local amount = pow.persistdata:GetVar("heal") * TUNING.POTION_AOE_PERCENT
+	local id = "potion_heal_friendly"
+
+	local SGPlayerCommon = require("stategraphs.sg_player_common") --cannot require this at top of file
+	SGPlayerCommon.Fns.DoAOEHeal(inst, radius, amount, id)
 end
 
 local function _MakeFlatHealPower(common_heal, epic_heal, legendary_heal, radius)

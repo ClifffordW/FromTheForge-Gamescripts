@@ -1,14 +1,15 @@
 -- This file is used by exportprefabs.lua, so don't use global functions from main here.
-require "util.colorutil"
+require "prefabs"
 require "util"
+require "util.colorutil"
 local Enum = require "util.enum"
 local strict = require "util.strict"
 
 HACK_FOR_4K = 2 -- TODO(4k): Remove all instances once they're known to look good.
 
-SECONDS = 60 -- victorc: 60Hz, const for converting values expressed in seconds to game update ticks
-TICKS = 1 / 60 -- victorc: 60Hz, const for converting values expressed in game update ticks to time (seconds).  Length of a tick expressed in seconds.  Should match TheSim:GetTickTime() (SIMTICK in native)
-ANIM_FRAMES = (SECONDS == 60) and 2 or 1 -- victorc: 60Hz, const for converting values expressed in anim frames (1/30s) to game update ticks
+SECONDS = 60 -- 60Hz, const for converting values expressed in seconds to game update ticks
+TICKS = 1 / 60 -- 60Hz, const for converting values expressed in game update ticks to time (seconds).  Length of a tick expressed in seconds.  Should match TheSim:GetTickTime() (SIMTICK in native)
+ANIM_FRAMES = (SECONDS == 60) and 2 or 1 -- 60Hz, const for converting values expressed in anim frames (1/30s) to game update ticks
 PI = 3.14159265359
 DEGREES = PI/180
 
@@ -36,7 +37,7 @@ MAX_CHATS_PER_TOWN_VISIT = 3
 
 QUEST_IMPORTANCE = Enum{
     "LOW", -- Convos related to this objective or quest will not be marked
-    "DEFAULT", -- Convos related to this objective or quest will be marked
+    "DEFAULT", -- Convos related to this objective or quest will also not be marked (used to mark - changed because we want to emphasise the high prio convos)
     "HIGH", -- Convos related to this objective or quest will be marked with a special marker
 }
 
@@ -48,6 +49,12 @@ QUEST_OBJECTIVE_STATE = Enum{
     "CANCELED"
 }
 
+-- Who is this quest going on?
+QUESTER_TYPE = Enum{
+    "PLAYER",
+    "WORLD",
+}
+
 QUEST_PRIORITY = {
     LOWEST = -100,
     LOW = -10,
@@ -57,6 +64,10 @@ QUEST_PRIORITY = {
 }
 
 ----------- -----------
+
+TOOLTIP_BG_ALPHA = 0.8
+
+---
 
 FACING_RIGHT = 0
 FACING_UP = 1
@@ -98,10 +109,12 @@ SCALEMODE_FIXEDSCREEN_NONDYNAMIC = 4 --scale same amount as window scaling from 
 PHYSICS_TYPE_ANIMATION_CONTROLLED = 0
 PHYSICS_TYPE_PHYSICS_CONTROLLED = 1
 
-MOVE_UP = "up"
-MOVE_DOWN = "down"
-MOVE_LEFT = "left"
-MOVE_RIGHT = "right"
+FocusMove = Enum{
+	"up",
+	"down",
+	"left",
+	"right",
+}
 
 NUM_CRAFTING_RECIPES = 10
 
@@ -130,6 +143,11 @@ BACKEND_PREFABS = {
 	"debug_worldtext",
 }
 FRONTEND_PREFABS = { "frontend" }
+DEPENDS_PREFABS = {
+	-- Ensure these prefabs exist in the build, but don't load automatically.
+	GroupPrefab("deps_worlds"),
+	GroupPrefab("all_fx_groups"), -- fx deps aren't robust, so don't strip any.
+}
 
 FADE_OUT = false
 FADE_IN = true
@@ -291,6 +309,7 @@ BUTTON_W = 290 * HACK_FOR_4K
 BUTTON_H = 70 * HACK_FOR_4K
 BUTTON_SQUARE_SIZE = 60 * HACK_FOR_4K
 DOUBLE_CLICK_TIMEOUT = .5
+BACKGROUND_DARK_ALPHA = 0.5
 
 -- A coherent palette for UI elements
 UICOLORS = {
@@ -301,6 +320,7 @@ UICOLORS = {
     GOLD_UNIMPORTANT = RGB(213, 213, 203), -- non-interactive non-important text
     GOLD = RGB(202, 174, 118),
     BLUE = RGB(80, 143, 244),
+    DARKBLUE = RGB(0, 0, 144),
     GREY = RGB(145.35, 145.35, 145.35),
     BLACK = RGB(0, 0, 0),
     WHITE = RGB(255, 255, 255),
@@ -354,6 +374,8 @@ UICOLORS = {
     INFO =                 HexToRGB(0xBEEADFFF),
     INFO_DARK =            HexToRGB(0xB8DFD6FF),
 
+    DARK_TOOLTIP_BG =      HexToRGB(0X4f3b33FF),
+
 	-- Light text usually on a dark background.
     LIGHT_TEXT_TITLE =     HexToRGB(0xEEEDE9FF),
     LIGHT_TEXT =           HexToRGB(0xDFCAB3FF),
@@ -374,8 +396,8 @@ UICOLORS = {
 
 	-- Automatic colors used within questral.
     ACTOR_NAME    = HexToRGB(0x25688AFF),
-    LOCATION_NAME = HexToRGB(0x258A6DFF), -- TODO(dbriscoe): We don't use locations yet.
-    JOB_NAME      = HexToRGB(0xFFCCCCFF), -- TODO(dbriscoe): We don't use jobs yet.
+    LOCATION_NAME = HexToRGB(0x258A6DFF), -- TODO(quest): We don't use locations yet.
+    JOB_NAME      = HexToRGB(0xFFCCCCFF), -- TODO(quest): We don't use jobs yet.
     QUEST_TITLE   = HexToRGB(0x611D8DFF),
 
     ITEM_MID =             HexToRGB(0x8D8D8DFF),
@@ -513,8 +535,6 @@ FONTSIZE = {
     INWORLD_POWER_DESCRIPTION = 55,
 
     DUNGEON_MAP_TITLE = 100,
-    PAUSE_SCREEN_LEGEND_TITLE = 80,
-    PAUSE_SCREEN_LEGEND_TEXT = 60,
 
     OPTIONS_SCREEN_TAB = 68,
     OPTIONS_ROW_TITLE = 70,
@@ -567,75 +587,18 @@ TWITCH =
     CHAT_CONNECT_FAILED = 2,
 }
 
--- How does this creature apply stunlock to the player
-PLAYERSTUNLOCK =
+MOUSE_CONSTRAIN_MODE =
 {
-    ALWAYS = nil,--0,
-    OFTEN = 1,
-    SOMETIMES = 2,
-    RARELY = 3,
-    NEVER = 4,
+	OFF = 0,
+	FULLSCREEN = 1,
+	ALWAYS = 2,
 }
-
--- Server pricacy options
-PRIVACY_TYPE =
-{
-    PUBLIC = 0,
-    FRIENDS = 1,
-    LOCAL = 2,
-    CLAN = 3,
-}
-
-COMMAND_PERMISSION = {
-    ADMIN = "ADMIN", -- only admins see and can activate
-    MODERATOR = "MODERATOR", -- only admins and mods can see and activate
-    USER = "USER", -- anyone can see and do instantly. Mostly for local commands, or if a mod wants to offer accessible functionality
-}
-
-COMMAND_RESULT = {
-    ALLOW = "ALLOW",
-    DISABLED = "DISABLED", --cannot run it right now (not related to voting)
-    VOTE = "VOTE",
-    DENY = "DENY", --cannot start vote right now
-    INVALID = "INVALID",
-}
-
-USER_HISTORY_EXPIRY_TIME = 60*60*24*30 -- 30 days, in seconds
 
 -- needs to be kept synchronized with InventoryProgress enum in InventoryManager.h
 INVENTORY_PROGRESS =
 {
 	IDLE = 0,
 }
-
-CURRENT_BETA = 1 -- set to 0 if there is no beta. Note: release builds wont use this so only staging and dev really care
-BETA_INFO =
-{
-    {
-		NAME = "ROTBETA",
-		SERVERTAG = "return_of_them_beta",
-		VERSION_MISMATCH_STRING = "VERSION_MISMATCH_ROTBETA",
-		URL = "https://forums.kleientertainment.com/forums/topic/106156-how-to-opt-in-to-return-of-them-beta-for-dont-starve-together/ ",
-	},
-
-    {
-		NAME = "ANRBETA",
-		SERVERTAG = "a_new_reign_beta",
-		VERSION_MISMATCH_STRING = "VERSION_MISMATCH_ARNBETA",
-		URL = "http://forums.kleientertainment.com/topic/69487-how-to-opt-in-to-a-new-reign-beta-for-dont-starve-together/",
-	},
-
-	-- THE GENERIC PUBLIC BETA INFO MUST BE LAST --
-	-- This is added to all beta servers as a fallback
-	{
-		NAME = "PUBLIC_BETA",
-		SERVERTAG = "public_beta",
-		VERSION_MISMATCH_STRING = "VERSION_MISMATCH_PUBLIC_BETA",
-		URL = "http://forums.kleientertainment.com/forum/66-dont-starve-together-general-discussion/",
-	},
-}
-PUBLIC_BETA = #BETA_INFO
-
 
 TEMP_ITEM_ID = "0"
 
@@ -746,7 +709,15 @@ Sound_PlaybackMode =
     Stopping = 4,
 }
 
-TOWN_LEVEL = "town_plots_base"
+--[[
+When the TOWN_LEVEL prefab changes (to a new filename), all props therein tagged with Placeable.DECOR_TAG will be
+added to the town save file. This has the side effect that the decor props from ALL town iterations are accumulated by
+the player.
+
+Whenever the TOWN_LEVEL is loaded, all props therein tagged with Placeable.DECOR_TAG are removed. Then all the decor
+props in the town save file are placed.
+]]
+TOWN_LEVEL = "town_plots_base_wide2"
 
 NORMAL_FRENZY_LEVELS = 3
 SUPER_FRENZY_STARTING_LEVEL = 4
@@ -758,7 +729,7 @@ WEAPON_TYPES = {
     ["GREATSWORD"] = "CLEAVER",
     ["CANNON"] = "CANNON",
     ["SHOTPUT"] = "SHOTPUT",
-    ["PROTOTYPE"] = "HAMMER",                       --MIKERproto: replace with whatever bank you want to test
+    ["PROTOTYPE"] = "HAMMER",                       --#MAKING_WEAPONS: replace with whatever bank you want to test
 }
 
 ARMOUR_TYPES = Enum{
@@ -793,6 +764,12 @@ EQUIPMENT_STATS = Enum{
     "SPEED",
     "RARITY",
     "WEIGHT",
+}
+
+MASTERY_DIFFICULY = Enum{
+    "EASY",
+    "MEDIUM",
+    "HARD",
 }
 
 EQUIPMENT_MODIFIER_NAMES = {}
@@ -913,11 +890,33 @@ UNLOCKABLE_CATEGORIES = Enum{
     "ASCENSION_LEVEL",
 }
 
+DECOR_PLUSHIE_SIZE = Enum{
+    "SMALL",
+    "MEDIUM", 
+    "LARGE", 
+}
+
+ENERGY_WELL_PROCESSING_STATE = Enum{
+    "IDLE",
+    "ACTIVE",
+    "DONE",
+}
+
 CHARACTER_SPECIES = 
 {
     CANINE = "canine",
     MER = "mer",
     OGRE = "ogre",
+}
+
+FRENZY_MODIFIERS = Enum{
+    "STRONG_ENEMIES",
+    "MORE_LOOT",
+    "ELITE_SPAWN",
+    "MINIBOSS_EQUIPMENT",
+    "AGGRESSIVE_ENEMIES",
+    "REVIVE_COST",
+    "MINIBOSS_SPAWN",
 }
 
 DEFAULT_CHARACTERS_SETUP = {
@@ -936,7 +935,8 @@ DEFAULT_CHARACTERS_SETUP = {
 	        ORNAMENT = "canine_none_ornament_1",
 	        OTHER = "tail_canine_slim_other_1",
 	        SHIRT = "bust_tank_shirt_canine_1",
-	        SMEAR = "smear_smear_1",
+	        SMEAR = "smear_canine_1",
+            SMEAR_WEAPON = "smear_weapon_canine_1",
 	        TORSO = "torso_canine_torso_1",
 	        UNDIES = "plain_undies_canine_1",
 	        NOSE = "canine_flat_dainty_nose_1",
@@ -947,12 +947,11 @@ DEFAULT_CHARACTERS_SETUP = {
 	        MOUTH_COLOR = "canine_mouth_color_1",
 	        NOSE_COLOR = "canine_nose_color_1",
 			EAR_COLOR = "canine_ear_color_1",
-	        ORNAMENT_COLOR = "ornament_color_1",
+	        ORNAMENT_COLOR = "canine_ornament_color_1",
 	        SHIRT_COLOR = "canine_shirt_color_2",
 	        SKIN_TONE = "canine_periwinkle_skin_tone_1",
-	        SMEAR_SKIN_COLOR =   "smear_skin_color_1",
-	        SMEAR_WEAPON_COLOR = "smear_weapon_color_1",
-	        UNDIES_COLOR = "undies_color_2",
+	        SMEAR_WEAPON_COLOR = "smear_weapon_color_canine_1",
+	        UNDIES_COLOR = "canine_undies_color_2",
 	    },
 		species = "canine",
 	},
@@ -971,7 +970,8 @@ DEFAULT_CHARACTERS_SETUP = {
 	        NOSE = "mer_flat_nose_1",
 	        ORNAMENT = "mer_waves_ornament_1",
 	        SHIRT = "flat_none_shirt_mer_1",
-	        SMEAR = "smear_smear_1",
+	        SMEAR = "smear_mer_1",
+            SMEAR_WEAPON = "smear_weapon_mer_1",
 	        TORSO = "torso_mer_torso_1",
 	        UNDIES = "plain_undies_mer_1",
 	    },
@@ -981,12 +981,11 @@ DEFAULT_CHARACTERS_SETUP = {
 	        MOUTH_COLOR = "mer_mouth_color_1",
 	        NOSE_COLOR = "mer_nose_color_1",
 			EAR_COLOR = "mer_ear_color_1",
-	        ORNAMENT_COLOR = "mer_green_ornament_color_1",
+	        ORNAMENT_COLOR = "mer_neongreen_ornament_color_1",
 	        SHIRT_COLOR = "mer_shirt_color_1",
 	        SKIN_TONE = "mer_turquoise_skin_tone_1",
-	        SMEAR_SKIN_COLOR =   "smear_skin_color_1",
-	        SMEAR_WEAPON_COLOR = "smear_weapon_color_1",
-	        UNDIES_COLOR = "undies_color_1",
+	        SMEAR_WEAPON_COLOR = "smear_weapon_color_mer_1",
+	        UNDIES_COLOR = "mer_undies_color_1",
 	    },
 
 		species = "mer",
@@ -1006,7 +1005,8 @@ DEFAULT_CHARACTERS_SETUP = {
 	        NOSE = "ogre_button_nose_1",
 	        ORNAMENT = "ogre_horns_ornament_1",
 	        SHIRT = "flat_none_shirt_ogre_1",
-	        SMEAR = "smear_smear_1",
+	        SMEAR = "smear_ogre_1",
+            SMEAR_WEAPON = "smear_weapon_ogre_1",
 	        TORSO = "torso_ogre_torso_1",
 	        UNDIES = "plain_undies_ogre_1",
 	    },
@@ -1017,11 +1017,10 @@ DEFAULT_CHARACTERS_SETUP = {
 	        NOSE_COLOR = "ogre_nose_color_1",
 			EAR_COLOR = "ogre_ear_color_1",
 	        ORNAMENT_COLOR = "ogre_ornament_color_1",
-	        SHIRT_COLOR = "shirt_color_1",
+	        SHIRT_COLOR = "ogre_shirt_color_1",
 	        SKIN_TONE = "ogre_orange_skin_tone_1",
-	        SMEAR_SKIN_COLOR =   "smear_skin_color_1",
-	        SMEAR_WEAPON_COLOR = "smear_weapon_color_1",
-	        UNDIES_COLOR = "undies_color_1",
+	        SMEAR_WEAPON_COLOR = "smear_weapon_color_ogre_1",
+	        UNDIES_COLOR = "ogre_undies_color_1",
 	    },
 
 		species = "ogre",

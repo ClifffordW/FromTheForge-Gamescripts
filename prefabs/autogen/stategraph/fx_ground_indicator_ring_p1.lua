@@ -8,9 +8,20 @@ return {
       events={
         idle={
           {
+            eventtype="spawnparticles",
+            frame=13,
+            param={ followsymbol="ring_untex", ischild=true, particlefxname="ground_glow_p1",},
+          },
+          {
             eventtype="spawneffect",
             frame=13,
-            param={ fxname="ground_indicator_beam_p1", ischild=true, stopatexitstate=true,},
+            param={
+              fxname="ground_indicator_beam_p1",
+              ischild=true,
+              scalex=0.80000001192093,
+              scalez=1.0,
+              stopatexitstate=true,
+            },
           },
         },
       },

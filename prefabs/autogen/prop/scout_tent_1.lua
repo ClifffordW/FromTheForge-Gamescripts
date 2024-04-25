@@ -3,7 +3,7 @@ return {
   __displayName="scout_tent_1",
   clickable=true,
   gridsize={ { expand={ bottom=2,}, h=3, w=3,},},
-  group="town_buildings",
+  group="town_buildings_deprecated",
   looping=true,
   parallax={
     { anim="front", dist=-0.8, shadow=true,},

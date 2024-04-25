@@ -13,7 +13,7 @@ local KonjurSoulsWidget = Class(Widget, function(self, konjur_on_skip)
 
 	-- Main icon
 	self.lesser_souls_container = self:AddChild(Widget())
-		:SetToolTip(STRINGS.UI.PAUSEMENU.MAP_LEGEND.konjur_soul_lesser)
+		:SetToolTip(STRINGS.NAMES.konjur_soul_lesser)
 	self.lesser_souls_icon = self.lesser_souls_container:AddChild(Image('images/hud_images/hud_konjur_soul_lesser_drops_currency.tex'))
 		:SetScale(self.scale * .525)
 		:LayoutBounds("center", "center", self.rings:GetCenterWidget())

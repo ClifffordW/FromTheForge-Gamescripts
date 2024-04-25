@@ -33,6 +33,8 @@ function MetaProgress.AddProgression(slot, name, data)
 
 		-- reward data
 		rewards = data.rewards or {},
+
+		no_rewards_cb = data.no_rewards_cb -- a callback to run if trying to interact with the metaprogressstore when there are no rewards left
 	}
 
 	for k, v in pairs(data) do
@@ -72,13 +74,17 @@ function MetaProgress.GetRewardForLevel(def, level)
 		return nil
 	end
 
-	if level >= #def.rewards and def.endless_reward then
+	if level > MetaProgress.GetMaxLevel(def) and def.endless_reward then
 		-- We've leveled past our designed rewards -- give a repeatedable endless reward
 		return def.endless_reward
 	else
 		return def.rewards[level]
 	end
 
+end
+
+function MetaProgress.GetMaxLevel(def)
+	return #def.rewards
 end
 
 -- Validation

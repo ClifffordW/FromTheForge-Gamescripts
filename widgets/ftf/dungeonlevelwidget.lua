@@ -9,14 +9,9 @@ local audioid = require "defs.sound.audioid"
 local easing = require "util.easing"
 local MetaProgress = require("defs.metaprogression")
 
-local xp_tick_sound_map = {fmodtable.Event.endOfRun_XP_tick_1P, fmodtable.Event.endOfRun_XP_tick_2P, fmodtable.Event.endOfRun_XP_tick_3P, fmodtable.Event.endOfRun_XP_tick_4P}
-
 --   ┌─────────────────────────────────┐◄ only shows if self:ShowLargePresentation() is called
 --   │ title_container                 │
 --   └─────────────────────────────────┘
--- ┌─────────────────────────────────────┐◄ only shows if self:ShowLargePresentation() is called
--- │ top_container                       │
--- └─────────────────────────────────────┘
 --              ┌───────────┐◄ badge_bg
 --              │ badge     │  badge_radial
 --              │           │  badge_overlay
@@ -25,9 +20,6 @@ local xp_tick_sound_map = {fmodtable.Event.endOfRun_XP_tick_1P, fmodtable.Event.
 --              │           │
 --              │           │
 --              └───────────┘
---          ┌───────────────────┐◄ only shows if self:ShowLargePresentation() is called
---          │ bottom_decor      │
---          └───────────────────┘
 
 local DungeonLevelWidget = Class(Widget, function(self, player)
 	Widget._ctor(self, "DungeonLevelWidget")
@@ -39,6 +31,12 @@ local DungeonLevelWidget = Class(Widget, function(self, player)
 		:SetName("Badge")
 	self.badge_bg = self.badge:AddChild(Image("images/ui_ftf_runsummary/DungeonLevelBg.tex"))
 		:SetName("Badge bg")
+	local ghost_color = deepcopy(self.progress_color)
+	ghost_color[4] = ghost_color[4] * 0.25
+	self.badge_radial_ghost = self.badge:AddChild(RadialProgress("images/ui_ftf_runsummary/DungeonLevelRadial.tex"))
+		:SetName("Badge radial ghost")
+		:SetSize(100 * HACK_FOR_4K, 100 * HACK_FOR_4K)
+		:SetMultColor(ghost_color)
 	self.badge_radial = self.badge:AddChild(RadialProgress("images/ui_ftf_runsummary/DungeonLevelRadial.tex"))
 		:SetName("Badge radial")
 		:SetSize(100 * HACK_FOR_4K, 100 * HACK_FOR_4K)
@@ -62,9 +60,7 @@ end)
 function DungeonLevelWidget:SetPlayer(player)
 	self.player = player
 	self.player_id = self.player:GetHunterId()
-	self.xp_tick_sound = xp_tick_sound_map[self.player_id]
 	self.faction = player:IsLocal() and 1 or 2 -- sets faction parameter to 1 for local players, 2 for remote
-
 	return self
 end
 
@@ -85,18 +81,10 @@ function DungeonLevelWidget:ShowLargePresentation(decor_color, title_color, titl
 		:SetAutoSize(text_width or 450)
 		:OverrideLineHeight(title_size * 0.9)
 
-	self.top_container = self:AddChild(Widget())
-		:SetName("Top container")
-	self.top_container_bg = self.top_container:AddChild(Image("images/ui_ftf_runsummary/DungeonLevelTopDecor.tex"))
-		:SetName("Top container bg")
+	self.bg = self:AddChild(Image("images/ui_ftf_runsummary/DungeonLevelDecor.tex"))
+		:SetName("bg")
 		:SetMultColor(self.decor_color)
-	self.top_container_value = self.top_container:AddChild(Text(FONTFACE.DEFAULT, 21 * HACK_FOR_4K, "", self.progress_color))
-		:SetName("Top container value")
-
-	self.bottom_decor = self:AddChild(Image("images/ui_ftf_runsummary/DungeonLevelBottomDecor.tex"))
-		:SetName("Bottom decor")
-		:SetMultColor(self.decor_color)
-		:SendToBack()
+		:MoveToBack()
 
 	self:Layout()
 	return self
@@ -115,7 +103,9 @@ function DungeonLevelWidget:RefreshMetaProgress(biome_exploration)
 
 	self.biome_exploration = biome_exploration
 	self.meta_reward = self.biome_exploration.meta_reward
-	self.meta_reward_def = MetaProgress.FindProgressByName(TheDungeon:GetDungeonMap().data.region_id)
+	self.meta_reward_def = self.biome_exploration.meta_reward_def
+		or MetaProgress.FindProgressByName(TheDungeon:GetDungeonMap().data.location_id)
+
 
 	self.meta_level = self.biome_exploration.meta_level
 	self.meta_exp = self.biome_exploration.meta_exp
@@ -158,6 +148,10 @@ function DungeonLevelWidget:SetProgress(level, exp, exp_max)
 	return self
 end
 
+function DungeonLevelWidget:SetProgressGhost(xp, xp_grant, xp_target)
+	local ghost_progress = (xp + xp_grant) / xp_target
+	self.badge_radial_ghost:SetProgress(ghost_progress)
+end
 function DungeonLevelWidget:GetMetaLevel()
 	return self.meta_level
 end
@@ -170,108 +164,88 @@ function DungeonLevelWidget:ShouldPlaySound(should_play_sound)
 end
 
 -- Callback:
--- on_progress_fn(current_level, move_up, reward_earned, next_reward, sequence_done)
-function DungeonLevelWidget:ShowMetaProgression(on_progress_fn)
-	if not self.meta_reward_log then
-		--sound
-		--immediately stop SetProgressData looping sound if we're aborting here
-		--if self.handle then
-		--	TheFrontEnd:GetSound():KillSound(self.handle)
-		--	self.handle = nil
-		--end
-
-		return nil
-	end
-
+-- on_progress_fn(current_level, move_up, reward_earned, sequence_done)
+function DungeonLevelWidget:ShowMetaProgression(on_progress_fn, meta_reward_log)
 	-- Let's loop through the levels gained, show the progress, and update the main screen
-	local levels_gained = self.meta_reward_log
-	local has_moved_up = false
-
 	local presentation = {}
-	for i, level_data in ipairs(levels_gained) do
+	meta_reward_log = meta_reward_log or self.meta_reward_log
+	if meta_reward_log then
+		local level_data = meta_reward_log[1]
+
 		local level_num = level_data.start_level
 
 		-- Show bar increasing
-		local levels_left_to_animate = #levels_gained - i
-		self:BarMovementPresentation(presentation, level_data, levels_left_to_animate)
+		self:BarMovementPresentation(presentation, level_data, 0)
 
 		-- If we leveled up, notify the parent
 		if level_data.did_level then
 			self:LevelUpPresentation(presentation, level_data)
-		end
 
-		-- If the parent widget hasn't moved up, do it
-		if not has_moved_up then
 			table.insert(presentation, Updater.Wait(0.2))
-			table.insert(presentation, Updater.Do(function() on_progress_fn(level_num, true, nil, nil, nil) end))
+			table.insert(presentation, Updater.Do(function() on_progress_fn( {level_num = level_num, move_up = true} ) end))
 			table.insert(presentation, Updater.Wait(0.4))
-			has_moved_up = true
-		end
 
-		-- Then show the reward
-		if level_data.did_level then
 			-- you get the reward on achieving the level
 			-- ie: leveling from 0 -> 1 grants you the reward for level 1
 			local current_reward = MetaProgress.GetRewardForLevel(self.meta_reward_def, level_num + 1)
-			table.insert(presentation, Updater.Do(function() on_progress_fn(level_num, nil, current_reward, nil, nil) end))
-			table.insert(presentation, Updater.Wait(1.6))
-		end
-
-		-- Show the upcoming reward
-		if levels_left_to_animate == 0 then
-
-			local next_level = level_num + 1
-
-			local perfect_level = level_data.did_level
-
-			if perfect_level then
-				-- We actually did level up to the next level, but got 0 exp in the next level so there is no presentation to be done.
-				-- Because of that, we need to fake it.
-				next_level = level_num + 2
-			end
-
-			local next_reward = MetaProgress.GetRewardForLevel(self.meta_reward_def, next_level)
-			if next_reward then
-				table.insert(presentation, Updater.Wait(0.6))
-				table.insert(presentation, Updater.Do(function()
-					if perfect_level then
-						self:SetProgressData(0, MetaProgress.GetEXPForLevel(self.meta_reward_def, next_level))
-					end
-					on_progress_fn(next_level, nil, nil, next_reward, nil)
-				end))
-				table.insert(presentation, Updater.Wait(0.8))
-				table.insert(presentation, Updater.Do(function() on_progress_fn(next_level, nil, nil, nil, true) end))
-			end
+			table.insert(presentation,Updater.Do(function() on_progress_fn( {level_num = level_num, reward_earned = current_reward} ) end),
+			table.insert(presentation, Updater.Wait(1.6)))
 		end
 	end
 
-	self:RunUpdater(Updater.Series(presentation))
+	return self:RunUpdater(Updater.Series(presentation))
 end
 
 function DungeonLevelWidget:BarMovementPresentation(pres, data, remaining)
-
 	local percent_delta = (data.end_exp - data.start_exp) / MetaProgress.GetEXPForLevel(self.meta_reward_def, data.start_level)
 
-	local bar_time = (self.log_has_levelling and remaining == 0) and 3 or (1.5 * percent_delta)
+	local ease_time = (self.log_has_levelling and remaining == 0) and 3 or (1.5 * percent_delta)
 
-	bar_time = math.max(bar_time, 0.75)
-
+	ease_time = math.max(ease_time, 0.75)
 	local easefn = remaining == 0 and easing.outSine or easing.linear
+
+	local progress
+
+	local progress_min = data.start_exp
+	local progress_max = data.end_exp
+	local progress_delta = progress_max - progress_min
 
 	table.insert(pres, Updater.Parallel({
 		Updater.Do(function()
 			self:SetProgressData(data.start_exp, MetaProgress.GetEXPForLevel(self.meta_reward_def, data.start_level))
+			-- creating the looping XP bar sound
+			if progress_delta > 0 and not self.did_level then
+				self.meter_sound_LP = self:PlaySpatialSound(fmodtable.Event.endOfRun_XP_tick_LP,
+					{
+						faction_player_id = self.player_id,
+						faction = self.faction,
+						progress = progress,
+					},true) --autostop
+			end
 		end),
-
-		Updater.Ease(function(v) self:SetProgressData(v, self.meta_exp_max) end, data.start_exp, data.end_exp, bar_time, easefn),
+		Updater.Ease(function(v)
+			-- update the progress bar
+			self:SetProgressData(v, self.meta_exp_max)
+			progress = v / self.meta_exp_max
+			if self.meter_sound_LP then
+				if self.did_level then
+					TheFrontEnd:GetSound():KillSound(self.meter_sound_LP)
+					self.meter_sound_LP = nil
+				else
+					-- adjust pitch of sound according to where we are in the meter
+					TheFrontEnd:GetSound():SetParameter(self.meter_sound_LP, "progress", progress)
+				end
+			end
+		end, progress_min, progress_max, ease_time, easefn),
 		Updater.Series({
-			Updater.Wait(bar_time),
-			--Updater.Do(function()
-			--	if self.handle then
-			--		TheFrontEnd:GetSound():KillSound(self.handle)
-			--		self.handle = nil
-			--	end
-			--end),
+			Updater.Wait(ease_time),
+			Updater.Do(function()
+				if self.meter_sound_LP then
+					TheFrontEnd:GetSound():KillSound(self.meter_sound_LP)
+					self.meter_sound_LP = nil
+					self.did_level = nil
+				end
+			end),
 		})
 	}))
 
@@ -279,67 +253,29 @@ end
 
 function DungeonLevelWidget:LevelUpPresentation(pres, data)
 	table.insert(pres, Updater.Do(function()
-		self.meta_level = data.start_level + 1
-		self:SetLevelText(self.meta_level)
 		self.badge_glow:RunUpdater(Updater.Ease(function(v) self.badge_glow:SetMultColorAlpha(v) end, 0.9, 0, 1.2, easing.inQuad))
-		self.badge:RunUpdater(Updater.Ease(function(v) self.badge:SetScale(v) end, 1.1, 1, 0.4, easing.inQuad))
+		self.badge_value:RunUpdater(Updater.Ease(function(v) self.badge_value:SetScale(v) end, 1.6, 1, 0.4, easing.inQuad))
 		self.meta_exp_max = MetaProgress.GetEXPForLevel(self.meta_reward_def, self.meta_level)
+		
+		self.did_level = true -- i set this for sound so we can stop the xp tick loop and not recreate it
+		self:PlaySpatialSound(fmodtable.Event.endOfRun_XP_levelUp, {faction_player_id = self.player_id, faction = self.faction})
+		audioid.oneshot.stinger = self:PlaySpatialSound(fmodtable.Event.Mus_levelUp_Stinger, {faction = self.faction, faction_player_id = self.player_id})
 	end))
 end
 
 function DungeonLevelWidget:SetLevelText(level)
+	level = level + 1 -- it's a bit weird if we start at level 0... visually increase levels by 1
+
+	if self.meta_reward and self.meta_reward:IsMaxLevel() then
+		level = STRINGS.UI.DUNGEONSUMMARYSCREEN.MAX_META_LEVEL
+	end
+	
 	self.badge_value:SetText(level)
 	self:Layout()
 end
 
 function DungeonLevelWidget:SetProgressData(current, max)
 	self.badge_radial:SetProgress(current/max)
-	if self.title_container then
-		self.top_container_value:SetText(string.format(STRINGS.UI.DUNGEONLEVELWIDGET.PROGRESS_VALUE, math.round(current, 0), max))
-	end
-
-	-- initialize var for setting pitch for musical stinger / baseline pitch of looping XP bar
-	if not self.levels_gained_this_session then
-		self.levels_gained_this_session = 1
-	end
-
-	local xp_parameter_for_sound = (current/max)
-
-	-- start looping XP sound
-	--if not self.handle then
-	--	self.handle = self:PlaySpatialSound(fmodtable.Event.endOfRun_XP_tick_LP, { faction_player_id = self.player_id})	
-	--else
-	--	TheFrontEnd:GetSound():SetParameter(self.handle, "xp_percent", xp_parameter_for_sound)
-	--	TheFrontEnd:GetSound():SetParameter(self.handle, "levels_gained", self.levels_gained_this_session)
-	--end
-
-	-- on level up. Could probably also do this in LevelUpPresentation()
-	if xp_parameter_for_sound == 1 then
-		if self.levels_gained_this_session == 1 then
-			audioid.oneshot.stinger = self:PlaySpatialSound(fmodtable.Event.Mus_levelUp_Stinger, { faction = self.faction, faction_player_id = self.player_id })
-		end
-
-		self:PlaySpatialSound(fmodtable.Event.endOfRun_XP_levelUp, { faction = self.faction, levels_gained = self.levels_gained_this_session })
-		self.levels_gained_this_session = self.levels_gained_this_session + 1
-
-		-- stop looping sound when it's not animating
-		--TheFrontEnd:GetSound():KillSound(self.handle)
-		--self.handle = nil
-	end
-
-	-- plays the event associated with a given player banner's XP tick sound
-
-	-- do not play the sound on initial draw, only when the meter actually animates
-	if self.badge_radial.is_initial_draw == nil then
-		self.badge_radial.is_initial_draw = false
-	elseif self.badge_radial.is_initial_draw == false then
-		self.badge_radial.is_initial_draw = true
-	end
-	
-	if self.badge_radial.is_initial_draw and self.should_play_sound then
-		self.handle = self:PlaySpatialSound(self.xp_tick_sound, { faction = self.faction, xp_percent = xp_parameter_for_sound, levels_gained = self.levels_gained_this_session })
-	end
-		
 	return self
 end
 
@@ -350,19 +286,29 @@ function DungeonLevelWidget:Layout()
 
 	if self.title_container then
 
-		self.top_container_value:LayoutBounds("center", "center", self.top_container_bg)
-			:Offset(0 * HACK_FOR_4K, -3.5 * HACK_FOR_4K)
-		self.top_container:LayoutBounds("center", "above", self.badge)
-			:Offset(0 * HACK_FOR_4K, 1 * HACK_FOR_4K)
+		self.bg:LayoutBounds("center", "center", self.badge)
 
-		self.title_container:LayoutBounds("center", "above", self.top_container)
-			:Offset(0 * HACK_FOR_4K, 6 * HACK_FOR_4K)
-
-		self.bottom_decor:LayoutBounds("center", "below", self.badge)
-			:Offset(0 * HACK_FOR_4K, 40 * HACK_FOR_4K)
+		self.title_container:LayoutBounds("center", "above", self.bg)
+			:Offset(0, 12)
 	end
 
 	return self
+end
+
+function DungeonLevelWidget:OnVizChange(is_visible)
+	if self.meter_sound_LP then
+		if not is_visible then
+			TheFrontEnd:GetSound():KillSound(self.meter_sound_LP)
+			self.meter_sound_LP = nil
+		end
+	end
+end
+
+function DungeonLevelWidget:OnRemoved()
+	if self.meter_sound_LP then
+	TheFrontEnd:GetSound():KillSound(self.meter_sound_LP)
+	self.meter_sound_LP = nil
+	end
 end
 
 return DungeonLevelWidget

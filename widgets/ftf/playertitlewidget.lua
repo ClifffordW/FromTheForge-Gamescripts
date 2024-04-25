@@ -1,6 +1,6 @@
 local Widget = require("widgets/widget")
 local Text = require("widgets/text")
-
+local Image = require("widgets/image")
 
 --- Displays a single player character's username
 -- Check PlayerStatusWidget to see this with a health bar, actions bar and buffs container
@@ -17,6 +17,9 @@ local PlayerTitleWidget =  Class(Widget, function(self, owner, size)
 		:SetShadowOffset(1, -1)
 		:EnableOutline()
 		:SetOutlineColor(UICOLORS.BLACK)
+
+	self.title_bg = self:AddChild(Image("images/ui_ftf_hud/title_bg.tex"))
+		:SendToBack()
 
 	if owner then 
 		self:SetOwner(owner) 
@@ -63,6 +66,9 @@ function PlayerTitleWidget:Refresh()
 	else
 		self.title_text:SetText(title_str)
 			:Spool(self.spool_rate)
+
+		self.title_text:LayoutBounds("center", "center", self.title_bg)
+		
 		self:Show()
 	end
 end

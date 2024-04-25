@@ -42,6 +42,11 @@ function FoodIconWidget:BuildTextureName(food)
 	return string.lower(name)
 end
 
+function FoodIconWidget:SetPower(power)
+	self:SetFood(power)
+	return self
+end
+
 -- Accepts power ItemInstance instead of pow since may present unselected powers.
 function FoodIconWidget:SetFood(food)
 	self.food = food

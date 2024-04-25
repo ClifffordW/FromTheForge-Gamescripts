@@ -4,8 +4,11 @@ return {
   bank="outdoor_seating_basic",
   build="outdoor_seating_basic",
   clickable=true,
-  gridsize={ { h=4, w=4,},},
-  group="town_decor",
+  gridsize={ { h=3, w=5,},},
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
+  networked=1,
   parallax={
     { anim="frontchr_front", dist=-1, shadow=true,},
     { anim="table_top", dist=-0.8, shadow=true,},

@@ -2,6 +2,7 @@ local Power = require "defs.powers"
 local Text = require "widgets.text"
 local Widget = require "widgets.widget"
 local SkillIconWidget = require "widgets.skilliconwidget"
+local PowerTooltip = require"widgets.ftf.powertooltip"
 local easing = require "util.easing"
 
 -- Displays a power widget (frame, icon, and stacks)
@@ -12,6 +13,8 @@ local SkillWidget = Class(Widget, function(self, width, owner, skill)
 	self.width = width or 107
 
 	self.owner = owner
+
+	self:SetToolTipClass(PowerTooltip)
 
 	self.skill_widget_root = self:AddChild(Widget())
 
@@ -65,7 +68,7 @@ function SkillWidget:SetSkill(skill)
 end
 
 function SkillWidget:UpdateUI()
-	self:SetToolTip((STRINGS.UI.UNITFRAME.SKILL_TOOLTIP):format(self.skill_def.pretty.name, Power.GetDescForPower(self.skill)))
+	self:SetToolTip( { power = self.skill } )
 	self.skill_widget:UpdateSkill()
 end
 

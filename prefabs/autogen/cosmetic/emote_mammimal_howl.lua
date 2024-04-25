@@ -8,9 +8,4 @@ return {
     name_key="emote_mammimal_howl",
   },
   group="PLAYER_EMOTE",
-  hidden=false,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
 }

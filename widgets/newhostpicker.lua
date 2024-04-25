@@ -31,7 +31,7 @@ local NewHostPicker = Class(Widget, function(self)
 
     local function CheckClearDescription()
         for i, v in ipairs(self.buttons) do
-            if v.focus then
+            if v:HasFocus() then
                 return
             end
         end
@@ -67,10 +67,10 @@ local NewHostPicker = Class(Widget, function(self)
 
     for i, v in ipairs(self.buttons) do
         if i > 1 then
-            v:SetFocusChangeDir(MOVE_LEFT, self.buttons[i - 1])
+            v:SetFocusChangeDir(FocusMove.s.left, self.buttons[i - 1])
         end
         if i < #self.buttons then
-            v:SetFocusChangeDir(MOVE_RIGHT, self.buttons[i + 1])
+            v:SetFocusChangeDir(FocusMove.s.right, self.buttons[i + 1])
         end
     end
 
@@ -109,7 +109,7 @@ function NewHostPicker:SetFocus(direction)
         return
     end
 
-    if direction == MOVE_LEFT then
+    if direction == FocusMove.s.left then
         self.buttons[#self.buttons]:SetFocus()
     else
         self.buttons[1]:SetFocus()

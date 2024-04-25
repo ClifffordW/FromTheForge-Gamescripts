@@ -87,14 +87,13 @@ function ConnectGamepadSidebar:_UpdateGamepadList()
 
 	local device_tuples = TheInput:GetAllFreeDevices()
 	TheLog.ch.FrontEnd:printf("_UpdateGamepadList: found %s free devices", #device_tuples)
-	for _,tup in ipairs(device_tuples) do
-		local device_type, device_id = table.unpack(tup)
-		local tex = TheInput:GetTexForControlName(Controls.Digital.ACTIVATE_INPUT_DEVICE.key, device_type, device_id)
+	for _,device in ipairs(device_tuples) do
+		local tex = TheInput:GetTexForControlName(Controls.Digital.ACTIVATE_INPUT_DEVICE.key, device.device_type, device.device_id)
 
 		local line = STRINGS.UI.PAUSEMENU.CONNECT_SIDEBAR.GAMEPAD_LIST:subfmt({
 				button_icon = tex_fmt:format(tex),
-				device_icon = TheInput:GetLabelForDevice(device_type, device_id),
-				device_name = TheInput:GetDeviceName(device_type, device_id),
+				device_icon = TheInput:GetLabelForDevice(device),
+				device_name = TheInput:GetDeviceName(device),
 			})
 		self.gamepad_root:AddChild(CreateGamepadText(font_size))
 			:SetText(line)
@@ -106,15 +105,16 @@ function ConnectGamepadSidebar:_UpdateGamepadList()
 	end
 end
 
-function ConnectGamepadSidebar:HandlePreControlDown(controls, device_type, trace, device_id)
+function ConnectGamepadSidebar:HandlePreControlDown(controls, trace)
 	if not self:IsWaitingToReconnect() then
 		return
 	end
+	local input_device = controls:GetDevice()
 	-- Use HandlePreControlDown instead of AddGamepadButtonHandler so we only
 	-- listen to buttons which ignores drifty gamepad sticks and we consume the
 	-- input so ChangeInputDialog doesn't show.
 	if controls:Has(Controls.Digital.ACTIVATE_INPUT_DEVICE) then
-		return self:_TryAssignDevice(device_type, device_id)
+		return self:_TryAssignDevice(input_device)
 	end
 end
 
@@ -202,27 +202,16 @@ end
 
 
 
---~ function ConnectGamepadSidebar:OnRawKey(raw_key, down)
---~ 	if self.inst:GetTimeAlive() < 1 then
---~ 		-- Ignore keyboard input for testing.
---~ 		return
---~ 	end
---~ 	self:_TryAssignDevice("keyboard", 1)
---~ end
-
---~ function ConnectGamepadSidebar:OnRawGamepadButton(gamepad_id, raw_button, down)
---~ 	self:_TryAssignDevice("gamepad", gamepad_id)
---~ end
-
-function ConnectGamepadSidebar:_TryAssignDevice(device_type, device_id)
+function ConnectGamepadSidebar:_TryAssignDevice(input_device)
+	local device_type, device_id = input_device:unpack()
 	local msg
-	local can_switch = TheInput:IsDeviceFree(device_type, device_id)
+	local can_switch = TheInput:IsDeviceFree(input_device)
 	if can_switch then
 		net_modifyplayer(self.target_player.Network:GetPlayerID(), TheInput:ConvertToInputID(device_type, device_id))
 		msg = "" -- it won't be visible for long, so just clear.
 	else
 		msg = STRINGS.UI.PAUSEMENU.CONNECT_SIDEBAR.FOUND_IN_USE:subfmt({
-				device_icon = TheInput:GetLabelForDevice(device_type, device_id)
+				device_icon = TheInput:GetLabelForDevice(input_device)
 			})
 	end
 

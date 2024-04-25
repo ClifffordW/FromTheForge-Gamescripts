@@ -145,6 +145,7 @@ local BuildingSkinScreen = Class(Screen, function(self, building, player)
 
 	TheCamera:SetZoom(-15)
 	TheCamera:SetTarget(building)
+	-- TheCamera:SetOffset(self, 0, 6, 0)
 	TheWorld:PushEvent("startcustomizing")
 end)
 
@@ -152,10 +153,10 @@ function BuildingSkinScreen:Close()
 	self.player.components.playercontroller:SetInteractTarget(nil)
 	self.player.sg:GoToState("idle")
 	self.player:ReturnToScene()
-	
+
 	TheCamera:SetTarget(TheFocalPoint)
 	TheCamera:SetZoom(0)
-	TheCamera:SetOffset(0, 0, 0)
+	TheCamera:ClearOffsetFrom(self)
 	TheWorld:PushEvent("stopcustomizing")
 
 	TheFrontEnd:PopScreen(self)

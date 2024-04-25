@@ -3,7 +3,9 @@ return {
   __displayName="sound_swarmy",
   anim_events={
     swarmy_bank={
+      acid_burst={ events={ { frame=1, name="sfx-acidburst",},},},
       acid_burst2={ events={ { frame=1, name="sfx-acidburst",},},},
+      acid_burst2_pre={ events={ { frame=6, name="sfx-vo_long",},},},
       acid_dash={
         events={
           { frame=5, name="sfx-vo_short",},
@@ -13,11 +15,40 @@ return {
         },
       },
       acid_dash_hold={ events={ { frame=1, name="sfx-vo_long",},},},
+      behavior2={
+        events={
+          { frame=38, name="sfx-bodyfall_q",},
+          { frame=4, name="sfx-be2",},
+          { frame=23, name="sfx-be2",},
+        },
+      },
+      flinch_hold={ events={ { frame=0, name="sfx-hit",},},},
+      flinch_pst={ events={ { frame=3, name="sfx-hit",},},},
+      hit_hold={ events={ { frame=0, name="sfx-hit",},},},
+      knockdown_getup={
+        events={ { frame=20, name="sfx-footstep",}, { frame=23, name="sfx-bodyfall_q",},},
+      },
+      knockdown_hit_hold={ events={ { frame=0, name="sfx-hit",},},},
       knockdown_hold={ events={ { frame=0, name="sfx-knockdown_hold",},},},
       knockdown_pre={
         events={ { frame=10, name="sfx-bodyfall",}, { frame=11, name="sfx-knockdown",},},
       },
-      spawn={ events={ { frame=15, name="sfx-splat",}, { frame=1, name="sfx-vo_long",},},},
+      spawn={
+        events={
+          { frame=15, name="sfx-splat",},
+          { frame=1, name="sfx-vo_short",},
+          { frame=1, name="sfx-dash",},
+          { frame=17, name="sfx-bodyfall",},
+        },
+      },
+      uppercut={
+        events={
+          { frame=12, name="sfx-dash",},
+          { frame=14, name="sfx-punch",},
+          { frame=34, name="sfx-bodyfall",},
+        },
+      },
+      uppercut_pre={ events={ { frame=10, name="sfx-vo_long",},},},
       walk_loop={
         events={ { frame=12, name="sfx-footstep",}, { frame=14, name="sfx-footstep",},},
       },

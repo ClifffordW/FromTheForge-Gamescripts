@@ -31,6 +31,7 @@ local prefabs =
 	GroupPrefab("drops_currency"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "blarmadillo")
+prefabutil.SetupDeathFxPrefabs(prefabs, "blarmadillo_elite")
 
 local attacks =
 {
@@ -58,7 +59,7 @@ local attacks =
 		pre_anim = "roll_pre",
 		hold_anim = "roll_pre_hold",
 		start_conditions_fn = function(inst, data, trange)
-			-- TODO(dbriscoe): Is this logic inverted?
+			-- TODO(combat): Is this logic inverted?
 			if trange:IsInRange(7) -- if your target is too close to you
 			or trange:IsOutOfRange(22) -- or if you're just way too far away
 			or trange:IsOutOfZRange(7) then -- if you're more than 5 Z units away from your target
@@ -67,6 +68,8 @@ local attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local elite_attacks =
 {
@@ -103,6 +106,9 @@ local elite_attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
+
 
 local MONSTER_SIZE = 1.1
 

@@ -21,125 +21,85 @@ return {
     --UNASSIGNED!-- These titles have no associated mastery. Give them a home!
         {
             name = "buckaroo",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="BUCKAROO",},
         },
         {
             name = "ace",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="ACE",},
         },
         {
             name = "pawbeans",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="PAWBEANS",},
         },
         --titles that unlock from completing toot tutorials
         {
             name = "teacherspet",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="TEACHERSPET",},
         },
         {
             name = "hunterphd",
-            mastery="none",
-            rarity="LEGENDARY",
             cosmetic_data={ title_key="HUNTERPHD",},
         },
         --queen/king/royalty should unlock together
         {
             name = "highqueen",
-            mastery="none",
-            rarity="LEGENDARY",
             cosmetic_data={ title_key="HIGHQUEEN",},
         },
         {
             name = "highking",
-            mastery="none",
-            rarity="LEGENDARY",
             cosmetic_data={ title_key="HIGHKING",},
         },
         {
             name = "highroyalty",
-            mastery="none",
-            rarity="LEGENDARY",
             cosmetic_data={ title_key="HIGHROYALTY",},
         },
         {
             name = "goofygoober",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="GOOFYGOOBER",},
         },
         {
             name = "shredder",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="SHREDDER",},
         },
         {
             name = "creepycryptid",
-            mastery="none",
-            rarity="EPIC",
             cosmetic_data={ title_key="CREEPYCRYPTID",},
         },
         {
             name = "teammascot",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="TEAMMASCOT",},
         },
         {
             name = "pocketmedic",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="POCKETMEDIC",},
         },
         {
             name = "glasscannon",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="GLASSCANNON",},
         },
         {
             name = "tank",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="TANK",},
         },
         --maybe from crafting a certain number of armour pieces?
         {
             name = "fashionista",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="FASHIONISTA",},
         },
         {
             name = "jokesclown",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="JOKESCLOWN",},
         },
         {
             name = "mysteriousstranger",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="MYSTERIOUSSTRANGER",},
         },
         {
             name = "chickenchaser",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="CHICKENCHASER",},
         },
         {
             name = "impostor",
-            mastery="none",
-            rarity="COMMON",
             cosmetic_data={ title_key="IMPOSTOR",},
         },
 
@@ -150,7 +110,6 @@ return {
         {
             name = "albatross",
             mastery="HAMMER_MASTERY",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="ALBATROSS",},
         },
@@ -161,7 +120,6 @@ return {
         {
             name = "drillsergeant",
             mastery="POLEARM_MASTERY",
-            rarity="EPIC",
             
             cosmetic_data={ title_key="DRILLSERGEANT",},
         },
@@ -170,8 +128,6 @@ return {
     --CANNON ("CANNON_MASTERY")--
         {
             name = "boomer",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="BOOMER",},
         },
@@ -180,8 +136,6 @@ return {
     --STRIKER ("STRIKER_MASTERY")--
         {
             name = "juggler",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="JUGGLER",},
         },
@@ -191,8 +145,6 @@ return {
         --all weapon mastery
         {
             name = "battlemaster",
-            mastery="NONE",
-            rarity="LEGENDARY",
             
             cosmetic_data={ title_key="BATTLEMASTER",},
         },
@@ -203,7 +155,6 @@ return {
         {
             name = "lilbuddy",
             mastery="CABBAGEROLL_MASTERY",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="LILBUDDY",},
         },
@@ -211,8 +162,6 @@ return {
         --beets mastery
         {
             name = "beetmaster",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="BEETMASTER",},
         },
@@ -220,8 +169,6 @@ return {
         --zucco, gourdo, yammo kill mastery
         {
             name = "piemaster",
-            mastery="NONE",
-            rarity="EPIC",
             
             cosmetic_data={ title_key="PIEMASTER",},
         },
@@ -229,8 +176,6 @@ return {
         --treemon mastery
         {
             name = "treehugger",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="TREEHUGGER",},
         },
@@ -238,8 +183,6 @@ return {
         --megatreemon mastery
         {
             name = "forestkeeper",
-            mastery="NONE",
-            rarity="LEGENDARY",
             
             cosmetic_data={ title_key="FORESTKEEPER",},
         },
@@ -247,8 +190,6 @@ return {
         --gnarlic mastery
         {
             name = "stinky",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="STINKY",},
         },
@@ -258,8 +199,6 @@ return {
         --owlitzer mastery
         {
             name = "nightshroud",
-            mastery="NONE",
-            rarity="LEGENDARY",
             
             cosmetic_data={ title_key="NIGHTSHROUD",},
         },
@@ -267,8 +206,6 @@ return {
         --floracrane mastery
         {
             name = "primaballerina",
-            mastery="NONE",
-            rarity="EPIC",
             
             cosmetic_data={ title_key="PRIMABALLERINA",},
         },
@@ -276,8 +213,6 @@ return {
         --eyev mastery
         {
             name = "watcher",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="WATCHER",},
         },
@@ -287,8 +222,6 @@ return {
         --bandicoot mastery
         {
             name = "madtrickster",
-            mastery="NONE",
-            rarity="LEGENDARY",
             
             cosmetic_data={ title_key="MADTRICKSTER",},
         },
@@ -296,8 +229,6 @@ return {
         --slowpoke mastery
         {
             name = "chubbster",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="CHUBBSTER",},
         },
@@ -305,8 +236,6 @@ return {
         --woworm mastery
         {
             name = "woworm",
-            mastery="NONE",
-            rarity="COMMON",
             
             cosmetic_data={ title_key="WOWORM",},
         },

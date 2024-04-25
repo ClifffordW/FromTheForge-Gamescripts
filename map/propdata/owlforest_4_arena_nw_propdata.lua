@@ -194,8 +194,8 @@ return {
   room_loot={ { x=8.5, z=-3.5,},},
   spawner_creature={
     { script_args={ creature_spawner_type="perimeter",}, x=14.74, z=16.85,},
-    { script_args={ creature_spawner_type="perimeter",}, x=-9.37, z=0.76,},
-    { script_args={ creature_spawner_type="perimeter",}, x=-13.39, z=0.48,},
+    { script_args={ creature_spawner_type="perimeter",}, x=28.35, z=-9.16,},
+    { script_args={ creature_spawner_type="perimeter",}, x=-12.49, z=0.98,},
     { script_args={ creature_spawner_type="battlefield",}, x=-13.81, z=-6.87,},
     { script_args={ creature_spawner_type="battlefield",}, x=-2.11, z=-14.96,},
     { script_args={ creature_spawner_type="battlefield",}, x=-7.24, z=-19.06,},

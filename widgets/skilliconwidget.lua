@@ -16,6 +16,11 @@ local SkillIconWidget = Class(Widget, function(self)
 	self.icon_container = self:AddChild(Widget("Icon Root"))
 
 	self.border = self.icon_container:AddChild(Image("images/ui_ftf_powers/common_damage.tex"))
+	self.border_highlight = self.icon_container:AddChild(Image("images/ui_ftf_powers/common_damage.tex"))
+		:SetScale(1.1, 1.1)
+		:SendToBack()
+		:Hide()
+
 
 	-- With the size of the bg, we can compute any desired pixel width.
 	self.base_width = self.border:GetSize()
@@ -41,6 +46,11 @@ function SkillIconWidget:BuildTextureName()
 	return self.TextureFromRarity(self.skill:GetRarity())
 end
 
+function SkillIconWidget:SetPower(power)
+	self:SetSkill(power)
+	return self
+end
+
 -- Accepts power ItemInstance instead of pow since may present unselected powers.
 function SkillIconWidget:SetSkill(skill)
 	self.skill = skill
@@ -48,6 +58,7 @@ function SkillIconWidget:SetSkill(skill)
 
 	local current_rarity_idx = lume.find(Power.RarityIdx, self.skill:GetRarity())
 	self.border:SetTexture( self:BuildTextureName() )
+	self.border_highlight:SetTexture( self:BuildTextureName() )
 	self.icon:SetTexture(self.def.icon)
 	self.icon:SetMultColor(RARITY_TO_ICON_COLOUR[self.skill:GetRarity()])
 	return self
@@ -56,6 +67,15 @@ end
 function SkillIconWidget:UpdateSkill()
 	local current_rarity_idx = lume.find(Power.RarityIdx, self.skill:GetRarity())
 	self.border:SetTexture( self:BuildTextureName() )
+end
+
+function SkillIconWidget:AssignToPlayer(player)
+	if player ~= nil and player:IsValid() and player.uicolor then
+		local color = player.uicolor
+		self.border_highlight:SetMultColor(0, 0, 0, 1)
+		self.border_highlight:SetAddColor(color[1], color[2], color[3], 1)
+		self.border_highlight:Show()
+	end
 end
 
 return SkillIconWidget

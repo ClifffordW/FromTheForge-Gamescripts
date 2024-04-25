@@ -40,16 +40,18 @@ local function OnPostLoadWorld(inst)
 			-- Replace the spawner proxy by an actual prop realization.
 			local prop = SpawnPrefab(creature_spawner_prop)
 
-			if creature_spawner.sole_occupant_radius then
-				SceneGen.ClaimSoleOccupancy(prop, creature_spawner.sole_occupant_radius)
-			end
-
 			-- Inherit the creaturespawner script.
 			prop.components.prop.script = inst.components.prop.script
 			prop.components.prop.script_args = inst.components.prop.script_args
 
 			-- Inherit the transform of the proxy.
 			prop.Transform:SetPosition(inst.Transform:GetWorldPosition())
+
+			-- Sole occupancy registers the position, so be sure to run this code *after* setting the position.
+			if creature_spawner.sole_occupant_radius then
+				-- TODO @chrisp #soleoccupant - verify that this only runs on network host
+				TheWorld.components.spawncoordinator:ClaimSoleOccupancy(prop, creature_spawner.sole_occupant_radius)
+			end
 
 			if creature_spawner.color then
 				prop.components.prop:ShiftHsb(creature_spawner.color)
@@ -98,7 +100,9 @@ local function Construct(prefabname)
 	if TheDungeon:GetDungeonMap():IsDebugMap() then
 		SpawnUtil.MakeEditable(inst, "square")
 		inst.AnimState:SetScale(1, 1)
-		inst.AnimState:SetMultColor(table.unpack(UICOLORS.BLUE))
+		local color = inst.components.prop.data.script_args.creature_spawner_type == "perimeter" and UICOLORS.DARKBLUE or UICOLORS.BLUE
+		color = inst.components.prop.data.script_args.creature_spawner_type == "miniboss" and RGB(255, 0, 255) or color
+		inst.AnimState:SetMultColor(table.unpack(color))
 	end
 
 	return inst

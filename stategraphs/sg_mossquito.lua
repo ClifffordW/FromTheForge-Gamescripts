@@ -80,7 +80,7 @@ end]]
 	local trapdata =
 	{
 		size = "small",
-		temporary = true,
+		traplifetime = 300,
 	}
 
 	EffectEvents.MakeNetEventPushEventOnMinimalEntity(aoe, "acid_start", trapdata)

@@ -8,5 +8,5 @@ return {
   parallax={ { anim="stalag",},},
   parallax_use_baseanim_for_idle=true,
   proptype=1,
-  variations=3,
+  variations=4,
 }

@@ -25,7 +25,7 @@ local states =
 		end,
 
 		ontimeout = function(inst)
-			inst.sg:GoToState("idle") --JAMBELL TEMP,
+			inst.sg:GoToState("idle")
 		end,
 	}),
 

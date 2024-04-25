@@ -13,7 +13,6 @@ local mobhealth_to_xp =
 {
 	-- mob max health, gem XP for killing this mob
 
-	-- jambell:
 	-- This list is a bit designed... killing 3 mothballs is not the same effort as killing 1 Cabbage Roll, so shouldn't necessarily give the same XP.
 	-- I don't -think- a simple linear / exponential / logarithmic expression would give the right feel here.
 	{0,		0 },
@@ -114,7 +113,7 @@ function EquipmentGemManager:_OnKill(data)
 		}
 		dumptable(debug_data)
 		dumptable(data)
-		assert(false, "Something went wrong with giving XP to gems! Please send 'clipboard' to jambell.")
+		assert(false, "Something went wrong with giving XP to gems! Please send 'clipboard' to design team.")
 	end
 
 	self:ApplyXP(xp)
@@ -129,15 +128,16 @@ function EquipmentGemManager:ApplyXP(xp)
 			local gem = slot.gem
 			if gem then
 				local def = gem:GetDef()
-				local target_exp = def.base_exp[gem.ilvl]
+				local ilvl = gem:GetEffectiveItemLevel()
+				local target_exp = def.base_exp[ilvl]
 				gem.exp = gem.exp + xp
 
 				if gem.exp >= target_exp then
 					
 					-- If the gem can level up, do so.
 
-					if gem.ilvl < def.max_ilvl then
-						gem:SetItemLevel(gem.ilvl + 1)
+					if ilvl < def.max_ilvl then
+						gem:UpgradeItemLevel()
 						gem.exp = gem.exp - target_exp
 						self:UpdateWeaponStats()
 						self:NotifyLevelUp(gem)
@@ -172,7 +172,7 @@ end
 
 function EquipmentGemManager:NotifyLevelUp(gem)
 	local def = gem:GetDef()
-	local target_exp = def.base_exp[gem.ilvl]
+	local target_exp = def.base_exp[gem:GetEffectiveItemLevel()]
 
 	-- TEMP: NOTIFY PROGRESS
 	local popup_data =
@@ -193,7 +193,7 @@ end
 
 function EquipmentGemManager:NotifyProgress(gem)
 	local def = gem:GetDef()
-	local target_exp = def.base_exp[gem.ilvl]
+	local target_exp = def.base_exp[gem:GetEffectiveItemLevel()]
 
 	local exp = gem.exp
 

@@ -155,16 +155,16 @@ return
             -- This would be used in GL to reference NPCs who were instantiated
             -- in game with a unique activation id. Not currently used in
             -- rotwood.
-            return string.format( "<!node_%d><#ACTOR_NAME>%s</></>", agent and agent:GetActivationID() or 0000, agent and agent:GetName() )
+            return string.format( "<!node_%d><#ACTOR_NAME>%s</></>", agent and agent:GetActivationID() or 0000, agent and agent:GetPrettyName() )
         end
         return tostring(agent)
     end,
 
     location = function( location )
         if require("sim.sector").is_instance(location) then
-            return string.format( "<!node_%d><#LOCATION_NAME>%s</></>", location:GetActivationID(), location:GetName() )
-        elseif location and location.GetName then
-            return location:GetName()
+            return string.format( "<!node_%d><#LOCATION_NAME>%s</></>", location:GetActivationID(), location:GetPrettyName() )
+        elseif location and location.GetPrettyName then
+            return location:GetPrettyName()
         else
             return tostring(location)
         end
@@ -188,15 +188,15 @@ return
 
 
     item = function ( item )
-        if item and item.GetName then
-            return string.format( "<!todo>%s</>", item:GetName() )
+        if item and item.GetPrettyName then
+            return string.format( "<!todo>%s</>", item:GetPrettyName() )
         end
         return tostring(item)
     end,
 
     item_plural = function( item )
-        if item and item.GetName then
-            return string.format( "<!todo>%s</>", item:GetName( nil, 99 ) )
+        if item and item.GetPrettyName then
+            return string.format( "<!todo>%s</>", item:GetPrettyName( nil, 99 ) )
         end
         return tostring(item)
     end,
@@ -205,7 +205,7 @@ return
         local loc = require "questral.util.loc"
         local amts = {}
         for k,v in ipairs( items ) do
-            local name = v:GetName() or tostring(v)
+            local name = v:GetPrettyName() or tostring(v)
             amts[name] = (amts[name] or 0) + 1
         end
         local names = {}

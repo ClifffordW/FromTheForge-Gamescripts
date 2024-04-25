@@ -106,9 +106,9 @@ local function chain_reaction(pow, inst, eventdata)
 
 	local x,z = inst.Transform:GetWorldXZ()
 	local ents = TheSim:FindEntitiesXZ(x, z, pow.persistdata:GetVar("radius"), nil, {"INLIMBO"}, chain_reaction_tags)
-	local fx
 
 	if #ents > 0 then
+		local attacker = eventdata.attack:GetAttacker()
 		local current_node_pos = inst:GetPosition()
 		local delay = CHAIN_DELAY_INITIAL
 		local valid_nodes = 0
@@ -119,8 +119,9 @@ local function chain_reaction(pow, inst, eventdata)
 				delay = delay + addition
 				valid_nodes = valid_nodes + 1
 				ent:DoTaskInAnimFrames(delay, function()
-					-- TODO: networking2022, ownership of this entity could change by the time this delay is triggered
-					if ent:IsValid() and not ent:IsInLimbo() and ent.components.powermanager:HasPower(pow.def) then -- POSSIBLE OPTIMIZATION: don't check HasPower twice (once above), only on this time around.
+					local fx_params
+					-- POSSIBLE OPTIMIZATION: don't check HasPower twice (once above), only on this time around.
+					if attacker:IsValid() and ent:IsValid() and not ent:IsInLimbo() and ent.components.powermanager:HasPower(pow.def) then
 						local inst1position = current_node_pos
 						local inst2position = ent:GetPosition()
 
@@ -144,28 +145,43 @@ local function chain_reaction(pow, inst, eventdata)
 						end
 
 						local scale = piecewise_fn(dist, dataset)
-						if fx ~= nil and fx:IsValid() then -- optimization: only allow this instance of this chain reaction to have one FX live at a time. might play funky with sloth's final fx, check again then
-							fx:Remove()
-						end
 
-						-- TODO: networking2022  -  cannot set an absolute rotation, cannot set an absolute position
-						fx = SpawnPrefab(fxname)
-						fx.AnimState:SetOrientation(ANIM_ORIENTATION.OnGround)
-						fx.Transform:SetScale(scale, 1 + scale*0.1, scale) -- don't scale Y as heavily as the others, because it begins to look very wide and stretchy
-						fx.Transform:SetRotation(angle)
-						fx.Transform:SetPosition(mid_x, mid_y, mid_z)
+						-- TODO: this "optimization" to limit fx doesn't work because it's within an independent delayed task
+						-- optimization: only allow this instance of this chain reaction to have one FX live at a time. might play funky with final fx, check again then
+						fx_params =
+						{
+							fxname = fxname,
+							orientation = ANIM_ORIENTATION.OnGround,
+							offset_is_absolute = true,
+							offx = mid_x,
+							offy = mid_y,
+							offz = mid_z,
+							rotation = angle,
+							scale_applies_to_transform = true,
+							scalex = scale,
+							scaley = 1 + scale * 0.1,
+							scalez = scale,
+						}
 
 						current_node_pos = inst2position
 
-						ent:PushEvent("power_charged_damage", eventdata.attack)
+						if attacker:IsNetworked() and ent:IsNetworked() then
+							TheNetEvent:ApplyPowerChargedDamage(attacker.GUID, ent.GUID, eventdata.attack)
+						else
+							ent:PushEvent("power_charged_damage", eventdata.attack)
+						end
 					end
-				end)
+
+					if fx_params and inst:IsValid() then
+						EffectEvents.MakeEventSpawnEffect(inst, fx_params)
+					end
+				end) -- task
 			end
-		end
+		end -- for
 
 		if valid_nodes > 0 then
 			inst:DoTaskInAnimFrames(HitStopLevel.KILL, function()
-				--JAMBELL todo: Known issue, if a thing gets killed by a chain reaction/other power, it doesn't exist in HitStopLevel.KILL ticks to spawn this prefab, so this effect doesn't get added
+				-- todo: Known issue, if a thing gets killed by a chain reaction/other power, it doesn't exist in HitStopLevel.KILL ticks to spawn this prefab, so this effect doesn't get added
 				local suffix = GetEntitySizeSuffix(inst)
 				powerutil.SpawnFxOnEntity("electric_chain_start"..suffix, inst, { ischild = true })
 				powerutil.SpawnFxOnEntity("electric_chain_identifier"..suffix, inst, { ischild = true })
@@ -182,8 +198,8 @@ local function spawn_charge_applied_fx(inst)
 	local suffix = GetEntitySizeSuffix(inst)
 	powerutil.SpawnFxOnEntity("hits_electric"..suffix, inst, { ischild = true} )
 
-	-- jambell: an older version of this optimized by killed any existing FX if a new one was applied
-	-- jambell: simplifying for network, but here's the old version:
+	-- NOTE: an older version of this optimized by killed any existing FX if a new one was applied
+	-- NOTE: simplifying for network, but here's the old version:
 
 	-- If it's already currently playing a charge applied FX, kill the old one and play a new one
 	-- if inst.charge_applied_fx ~= nil and inst.charge_applied_fx:IsValid() then
@@ -208,6 +224,7 @@ Power.AddPowerFamily("ELECTRIC")
 Power.AddElectricPower("charged",
 {
 	prefabs = {
+		GroupPrefab("electricity"),
 		"hits_electric_sml",
 		"hits_electric_med",
 		"hits_electric_lrg",
@@ -254,7 +271,8 @@ Power.AddElectricPower("charged",
 				power_attack:SetSource(pow.def.name)
 				power_attack:SetHitstunAnimFrames(10)
 				power_attack:InitDamageAmount()
-				-- TODO: networking2022, this likely doesn't work when the attacker is remote
+				power_attack:SetForceRemoteHitConfirm(true) -- no hitboxes for electric charge
+				-- TODO: networking2022, maybe don't try to take control for this attack?
 				attack:GetAttacker().components.combat:DoPowerAttack(power_attack)
 
 				local suffix = GetEntitySizeSuffix(inst)
@@ -269,19 +287,39 @@ Power.AddElectricPower("charged",
 
 		["power_stacks_changed"] = function(pow, inst, data)
 			if inst.AnimState then
-				inst.AnimState:SetBloom(math.min(data.new, 5) * 0.05) -- temp, testing: TODO shouldn't just be a white glow -- check with dan and sloth
+				inst.AnimState:SetBloom(math.min(data.new, 5) * 0.05) -- temp, testing: TODO shouldn't just be a white glow -- check with artists
 			end
 		end,
 
 		["dying"] = function(pow, inst, data)
 			chain_reaction(pow, inst, data)
-		end
+		end,
+
+		["death"] = function(pow, inst, data)
+			if inst:HasTag("boss") then
+				inst.components.powermanager:RemovePower(pow.def)
+			end
+		end,
 	},
 
 	on_add_fn = function(pow, inst)
-		--jambell todo: change this fx based on charged amount
+		if not inst.components.health then
+			TheLog.ch.ElectricPowers:printf("Warning: applied charged power to entity %s with no health component", inst)
+			return
+		end
+
+		if pow.mem.fx then
+			pow.mem.fx:Remove()
+		end
+
+		-- make a local version of this fx
+		-- Remote clients don't run on_add_fn for non-transferrable, non-local entities
+		-- For example, bosses won't get this effect applied.  See PowerManager:_RegisterPower
+		-- Instead, it's toggled on/off via on_net_serialize family of event handlers below
+
+		-- todo: change this fx based on charged amount
 		local suffix = GetEntitySizeSuffix(inst)
-		inst[pow.def.name.."_fx"] = powerutil.SpawnFxOnEntity("electric_charged_tier1"..suffix, inst, { ischild = true })
+		pow.mem.fx = powerutil.SpawnLocalChildFxOnEntity("electric_charged_tier1" .. suffix, inst)
 
 		powerutil.SpawnFxOnEntity("electric_charge_start"..suffix, inst, { ischild = true })
 		TheLog.ch.ElectricPowers:printf("%s EntityID %d charged: electric_charge_start%s",
@@ -291,9 +329,33 @@ Power.AddElectricPower("charged",
 	end,
 
 	on_remove_fn = function(pow, inst)
-		if inst[pow.def.name.."_fx"] then
-			inst[pow.def.name.."_fx"]:Remove()
-			inst[pow.def.name.."_fx"] = nil
+		if pow.mem.fx then
+			pow.mem.fx:Remove()
+			pow.mem.fx = nil
+		end
+	end,
+
+	on_net_serialize_fn = function(pow, e)
+		e:SerializeBoolean(pow.mem.fx ~= nil)
+	end,
+
+	on_net_deserialize_fn = function(pow, e)
+		local has_fx = e:DeserializeBoolean()
+		local inst = Ents[e:GetGUID()]
+		local is_local_or_transferable = inst:IsLocal() or inst:IsTransferable()
+		if is_local_or_transferable then
+			return
+		end
+
+		if has_fx and not pow.mem.fx then
+			local suffix = GetEntitySizeSuffix(inst)
+			-- todo: change this fx based on charged amount
+			pow.mem.fx = powerutil.SpawnLocalChildFxOnEntity("electric_charged_tier1" .. suffix, inst)
+			TheLog.ch.ElectricPowers:printf("%s EntityID %d charged (remote) electric_charged_tier1%s",
+				inst, inst.Network:GetEntityID(), suffix)
+		elseif not has_fx and pow.mem.fx then
+			pow.mem.fx:Remove()
+			pow.mem.fx = nil
 		end
 	end,
 })
@@ -330,9 +392,16 @@ Power.AddElectricPower("charge_apply_on_light_attack",
 				local charge_def = Power.Items.ELECTRIC.charged
 				assert(charge_def)
 				for i, target in ipairs(data.targets_hit) do
-					if target:IsValid() and target.components.powermanager then
-						target.components.powermanager:AddPower(target.components.powermanager:CreatePower(charge_def), pow.persistdata:GetVar("stacks"))
-						spawn_charge_applied_fx(target)
+					if target.components.powermanager and target:IsValid() and target.components.health then -- checking CanReceivePowers here too so we don't erroneously spawn FX if AddPower() dumps the power add
+						if inst:IsNetworked() and target:IsNetworked() then
+							TheNetEvent:ApplyPower(inst.GUID, target.GUID, charge_def.name, pow.persistdata:GetVar("stacks"))
+						elseif target:IsLocalOrMinimal() then
+							target.components.powermanager:AddPower(target.components.powermanager:CreatePower(charge_def), pow.persistdata:GetVar("stacks"))
+						else
+							-- not sure what to do here
+							-- dbassert(false, "not sure what to do here")
+						end
+						spawn_charge_applied_fx(target) -- spawn locally for better responsiveness
 					end
 				end
 				inst:PushEvent("used_power", pow.def)
@@ -376,13 +445,16 @@ Power.AddElectricPower("charge_apply_on_heavy_attack",
 							local charge_def = Power.Items.ELECTRIC.charged
 							assert(charge_def)
 							for i, ent in ipairs(ents) do
-								if ent.components.powermanager and ent:IsValid() then -- checking CanReceivePowers here too so we don't erroneously spawn FX if AddPower() dumps the power add
-									if ent:TryToTakeControl() then
+								if ent.components.powermanager and ent:IsValid() and ent.components.health then -- checking CanReceivePowers here too so we don't erroneously spawn FX if AddPower() dumps the power add
+									if inst:IsNetworked() and ent:IsNetworked() then
+										TheNetEvent:ApplyPower(inst.GUID, ent.GUID, charge_def.name, pow.persistdata:GetVar("stacks"))
+									elseif ent:IsLocalOrMinimal() then
 										ent.components.powermanager:AddPower(ent.components.powermanager:CreatePower(charge_def), pow.persistdata:GetVar("stacks"))
-										spawn_charge_applied_fx(ent)
 									else
-										-- networking2022  if can't take control, send an event to add a Charged power + play the FX
+										-- not sure what to do here
+										-- dbassert(false, "not sure what to do here")
 									end
+									spawn_charge_applied_fx(ent) -- spawn locally for better responsiveness
 								end
 							end
 							inst:PushEvent("used_power", pow.def)
@@ -429,7 +501,7 @@ Power.AddElectricPower("charge_orb_on_dodge",
 Power.AddElectricPlayerPower("charge_consume_on_focus",
 {
 	power_category = Power.Categories.DAMAGE,
-	can_drop = false, -- JAMBELL: this power is broken right now because chain_reaction()'s pow argument is expecting the chainreacting creature's Charged pow. more work needed, disabling for VS
+	can_drop = false, -- this power is broken right now because chain_reaction()'s pow argument is expecting the chainreacting creature's Charged pow. more work needed, disabling for VS
 	tuning = {
 		[Power.Rarity.EPIC] = { radius = 100 },
 	},
@@ -451,7 +523,7 @@ Power.AddElectricPlayerPower("charge_consume_on_focus",
 Power.AddElectricPlayerPower("charge_consume_on_crit",
 {
 	power_category = Power.Categories.DAMAGE,
-	can_drop = false, -- JAMBELL: this power is broken right now because chain_reaction()'s pow argument is expecting the chainreacting creature's Charged pow. more work needed, disabling for VS
+	can_drop = false, -- this power is broken right now because chain_reaction()'s pow argument is expecting the chainreacting creature's Charged pow. more work needed, disabling for VS
 	tuning = {
 		[Power.Rarity.EPIC] = { radius = 100 },
 	},

@@ -35,7 +35,7 @@ return
             text_start_delay = 0.4,
             --timeout_after_spool = 2,			-- when set the slide will advance x seconds after text spool finished
 
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_1
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_1
         },
 
     -- SLIDE 2 
@@ -51,7 +51,7 @@ return
             music_section = 1,
             text_start_delay = 3.4, -- After the "POOF"
 
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_2
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_2
         },
 
 -- SLIDE 3
@@ -67,7 +67,7 @@ return
             music_section = 2,
             text_start_delay = 0.4,
 
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_3
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_3
         },
 
 -- SLIDE 4
@@ -116,7 +116,7 @@ return
             text_start_delay = 0.2,
 
 -- Spaces before line intentional for timing, please don't remove.
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_4
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_4
         },
 
 -- SLIDE 7
@@ -133,7 +133,7 @@ return
             text_start_delay = 0.3,
 
 -- Spaces before line intentional for timing, please don't remove.
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_5
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_5
         },
 
 -- SLIDE 8
@@ -150,7 +150,7 @@ return
             text_start_delay = 0.2,
 
 -- Spaces before line intentional for timing, please don't remove.
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_6
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_6
         },
 
 -- SLIDE 9
@@ -166,7 +166,7 @@ return
             music_section = 7,
             text_start_delay = 0.3,
 
-            txt = STRINGS.UI.SLIDESHOW_SCREEN.CAPTION_7
+            txt = STRINGS.SLIDESHOW.INTRO.CAPTION_7
         },
 
 -- SLIDE 10

@@ -6,8 +6,6 @@ return {
   scene_init={  },
   subactors={  },
   timelines={
-    attachswipefx={  },
-    blurscreen={  },
     cameradist={
       { 0, 1, { eventtype="cameradist", param={ cut=true, dist=22.0, duration=1,},},},
       {
@@ -39,7 +37,6 @@ return {
         },
       },
     },
-    cameraoffset={  },
     camerapitch={
       { 0, 1, { eventtype="camerapitch", param={ cut=true, duration=1, pitch=16.0,},},},
       {
@@ -88,6 +85,7 @@ return {
         95,
         150,
         {
+          apply_to_all_players=false,
           eventtype="cameratargetend",
           param={
             curve={
@@ -114,10 +112,7 @@ return {
         },
       },
     },
-    cameratargetoverride={  },
-    detachswipefx={  },
-    disableplayinput={ { 0, 150.0, { eventtype="disableplayinput", param={  },},},},
-    facing={  },
+    disableplayinput={ { 0, 150, { eventtype="disableplayinput", param={  },},},},
     fade={
       {
         0,
@@ -125,7 +120,6 @@ return {
         { eventtype="fade", param={ duration=16, fade_in=true, fade_type="black",},},
       },
     },
-    gameevent={  },
     gotostate={
       {
         81,
@@ -138,14 +132,8 @@ return {
         },
       },
     },
-    letterbox={ { 0, 91, { eventtype="letterbox", param={ duration=91,},},},},
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
-    musicbossstart={  },
-    musicbossstop={  },
-    playcountedsound={  },
-    playfoleysound={  },
+    letterbox={ { 0, 110, { eventtype="letterbox", param={ duration=110,},},},},
+    musicstart={ { 140, 150, { eventtype="musicstart", is_unedited=true, param={  },},},},
     playsound={
       {
         0,
@@ -192,7 +180,6 @@ return {
         },
       },
     },
-    playsound_window={  },
     pushanim={
       {
         1,
@@ -225,12 +212,6 @@ return {
         },
       },
     },
-    runintoscene={  },
-    setsheathed={  },
-    setsoundparameter={  },
-    setvisible={  },
-    shakecamera={  },
-    spawneffect={  },
     spawnimpactfx={
       {
         48,
@@ -242,16 +223,10 @@ return {
         },
       },
     },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
     stopsound={
       { 39, 44, { eventtype="stopsound", param={ duration=5, name="ratchet",},},},
-      { 94, 150.0, { eventtype="stopsound", param={ name="ratchet2",},},},
+      { 94, 150, { eventtype="stopsound", param={ name="ratchet2",},},},
     },
-    teleport={  },
-    titlecard={  },
-    uibosshealthbar={  },
     uihidehud={ { 0, 101, { eventtype="uihidehud", param={ duration=101,},},},},
   },
 }

@@ -9,7 +9,7 @@ require "class"
 -- member variables.
 local DebugSettings = Class(function(self, group_key)
 	assert(group_key, "Expected something like 'embellisher.edit_options'")
-	self.group_key = group_key
+	self._group_key = group_key
 	self._storage = self:_GetSettings()
 end)
 
@@ -18,8 +18,8 @@ end)
 local ROOT_SETTINGS = "DebugSettings"
 function DebugSettings:_GetSettings()
 	local root_store = Profile:GetValue(ROOT_SETTINGS) or {}
-	local store = root_store[self.group_key] or {}
-	root_store[self.group_key] = store
+	local store = root_store[self._group_key] or {}
+	root_store[self._group_key] = store
 	return store
 end
 
@@ -27,15 +27,17 @@ function DebugSettings:_SetSettings()
 	assert(self._storage, "Forgot to init.")
 	-- Re-fetch from profile in case another editor was changing things.
 	local root_store = Profile:GetValue(ROOT_SETTINGS) or {}
-	root_store[self.group_key] = self._storage
+	root_store[self._group_key] = self._storage
 	Profile:SetValue(ROOT_SETTINGS, root_store) -- mark dirty
 end
 
+-- Declare a setting. Do this in your ctor for all options you'll use (or they
+-- won't load correctly).
 function DebugSettings:Option(option_name, default)
 	self[option_name] = self._storage[option_name]
 	if default ~= nil and type(self[option_name]) ~= type(default) then
 		-- Nil or type changed.
-		self[option_name] = default
+		self:Set(option_name, default)
 	end
 	return self
 end

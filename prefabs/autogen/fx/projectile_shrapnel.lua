@@ -11,6 +11,4 @@ return {
   looping=true,
   randomstartframe=true,
   scalex=1.5449999570847,
-  sound_max_count=3.0,
-  soundevent="Power_pew_pew_launch",
 }

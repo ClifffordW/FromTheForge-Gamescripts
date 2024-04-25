@@ -110,7 +110,7 @@ function PlayerActionWidget:SetProgress(progress)
 end
 
 function PlayerActionWidget:_RefreshImageState()
-	if self.focus or self.hover then
+	if self:HasFocus() or self.hover then
 		self.actionFill:SetMultColor(self.progress < 1 and self.colourBgLoadingHover or self.colourBgActiveHover)
 	else
 		self.actionFill:SetMultColor(self.progress < 1 and self.colourBgLoading or self.colourBgActive)
@@ -137,8 +137,8 @@ function PlayerActionWidget:OnLoseFocus()
 	self.mouseWasDown = false
 end
 
-function PlayerActionWidget:OnControl(controls, down)
-	PlayerActionWidget._base.OnControl(self, controls, down)
+function PlayerActionWidget:OnControl(controls, down, ...)
+	PlayerActionWidget._base.OnControl(self, controls, down, ...)
 
 	if self.progress < 1 then return self end
 

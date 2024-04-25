@@ -66,7 +66,7 @@ function CharacterPreviewScreen:RefreshSpecies(species)
 		self.puppet.components.charactercreator:SetSpecies(species)
 		for i, data in ipairs(DEFAULT_CHARACTERS_SETUP) do
 			if data.species == species then
-				self.puppet.components.charactercreator:OnLoad(data)
+				self.puppet.components.charactercreator:LoadFromTable(data)
 			end
 		end
 	end

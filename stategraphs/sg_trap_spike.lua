@@ -9,7 +9,7 @@ local COOLDOWN_TIME = 0.4
 local KNOCKBACK_DISTANCE = 1.2
 local HITSTUN = 10 -- anim frames
 local WARNING_FRAMES = 25
-local TRAP_DAMAGE_RADIUS = .5 -- manually set up by luca for the test
+local TRAP_DAMAGE_RADIUS = .5
 
 -- default values, these are set in prop editor, but storing them here as well
 -- so we can transition back to original bloom values if the trap un-dormants

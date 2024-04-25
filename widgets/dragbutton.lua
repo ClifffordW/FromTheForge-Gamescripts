@@ -62,8 +62,8 @@ function DragButton:UpdateImage()
 end
 
 
-function DragButton:StartDragging()
-    self:SetFocus(true)
+function DragButton:StartDragging(hunter_id)
+    self:SetFocus(hunter_id)
     self.down = true
     self.dragging = true
     local x, y = self:TransformFromWorld(TheInput:GetUIMousePos())
@@ -74,7 +74,7 @@ function DragButton:StartDragging()
     TheFrontEnd:LockFocus()
 end
 
-function DragButton:StopDragging()
+function DragButton:StopDragging(hunter_id)
     self.down = false
     self.dragging = false
     self:UpdateImage()
@@ -82,15 +82,17 @@ function DragButton:StopDragging()
     TheFrontEnd:LockFocus(false)
 end
 
-function DragButton:OnControl(controls, down)
+function DragButton:OnControl(controls, down, ...)
+	local input_device = controls:GetDevice()
+	local hunter_id = input_device:GetOwnerId()
 	if down then
 		if controls:Has(Controls.Digital.MENU_ACCEPT) and self.hover and not self.dragging then
-			self:StartDragging()
+			self:StartDragging(hunter_id)
 			return true
 		end
 	else
 		if controls:Has(Controls.Digital.MENU_ACCEPT) and self.dragging then
-        		self:StopDragging()
+			self:StopDragging(hunter_id)
 		end
 	end
 end

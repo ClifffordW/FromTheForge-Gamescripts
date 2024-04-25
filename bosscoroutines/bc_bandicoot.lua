@@ -173,6 +173,37 @@ local BossCoroBandicoot = Class(BossCoroutine, function(self, inst)
 	self:CheckHealthPhaseTransition(PHASE_THRESHOLDS)
 end)
 
+function BossCoroBandicoot:OnNetSerialize()
+	local e = self.inst.entity
+
+	e:SerializeBoolean(self.music_phase ~= nil)
+	if self.music_phase then
+		e:SerializeUInt(self.music_phase, 3) -- 0 thru 4
+	end
+end
+
+function BossCoroBandicoot:OnNetDeserialize()
+	local e = self.inst.entity
+
+	local has_music_phase = e:DeserializeBoolean()
+	if has_music_phase then
+		local new_music_phase = e:DeserializeUInt(3)
+		if not self.music_started then
+			TheLog.ch.Audio:print("***///***bc_bandicoot.lua: Fight in progress, starting boss music.")
+			if new_music_phase then
+				TheLog.ch.Audio:print("***///***bc_bandicoot.lua: Skipping to phase" .. new_music_phase .. " .")
+				TheWorld.components.ambientaudio:StartBossMusic(new_music_phase)
+			else
+				TheWorld.components.ambientaudio:StartBossMusic()
+			end
+			self.music_started = true
+		end
+		if new_music_phase ~= self.music_phase then
+			self:SetMusicPhase(new_music_phase)
+		end
+	end
+end
+
 function BossCoroBandicoot:SpawnSetDressing(data)
 	BossCoroBandicoot._base.SpawnSetDressing(self, data)
 	TheWorld.components.spawncoordinator:SpawnPropDestructibles(10, true)
@@ -196,6 +227,7 @@ end
 
 function BossCoroBandicoot:SetMusicPhase(phase)
 	TheAudio:SetPersistentSoundParameter(audioid.persistent.boss_music, "Music_BossPhase", phase)
+	self.music_phase = phase
 end
 
 local function OnEnterRageMode(inst)
@@ -261,6 +293,14 @@ function BossCoroBandicoot:DoHowl()
 	self.inst:DoTaskInTime(2, function(inst) inst:PushEvent("spawn_spores") end)
 	self:WaitForEvent("howl_over")
 	TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.Music_Boss_StingerCounter, 1)
+end
+
+function BossCoroBandicoot:PhaseTransitionSpawnStalactites(is_rage)
+	if is_rage then
+		stalactite_spawn_patterns_rage["CIRCLE"](self)
+	else
+		stalactite_spawn_patterns_howl["CIRCLE"](self)
+	end
 end
 
 function BossCoroBandicoot:DoHide()
@@ -416,24 +456,23 @@ function BossCoroBandicoot:Main()
 	self:DoUntilHealthPercent(PHASE_THRESHOLDS[1], self.PhaseOne)
 
 	-- Phase 2: Clone
+	if not self.inst:HasTag("clone") then
+		self:SetMusicPhase(2)
+		TheLog.ch.Audio:print("Phase change")
+	end
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(PHASE_THRESHOLDS[2]) end)
 	self:DoUntilHealthPercent(PHASE_THRESHOLDS[2], self.PhaseTwo)
-	--if not self.inst:HasTag("clone") then
-		--self:SetMusicPhase(2)
-		--setting this in the animation because we want to use the initial cloning as a music transition
-		--and we don't want this triggering during a pillar hide
-	--end
 
 	-- Phase 4: Start rage & bite attack
 	if not self.inst:HasTag("clone") then
-		self:SetMusicPhase(4)
+		self:SetMusicPhase(3)
 	end
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(PHASE_THRESHOLDS[3]) end)
 	self:DoUntilHealthPercent(PHASE_THRESHOLDS[3], self.PhaseThree)
 
 	-- Phase 5: Clone
 	if not self.inst:HasTag("clone") then
-		self:SetMusicPhase(5)
+		self:SetMusicPhase(4)
 	end
 	self:SetConditionalFunction(function() return self:HealthAbovePercent(0) end)
 	self:DoUntilHealthPercent(0, self.PhaseFour)

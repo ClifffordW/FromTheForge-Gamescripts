@@ -41,7 +41,7 @@ local SelectablePuppet = Class(Clickable, function(self, font_size)
 		:SetHiddenBoundingBox(true)
 		:SendToBack()
 		:SetScale(0.85)
-		:SetMultColorAlpha(0.3)
+		:SetMultColorAlpha(0.08)
 		:LayoutBounds(nil, "center", self.puppet)
 	self.selection_floor = self:AddChild(Image("images/ui_ftf_character/CharacterSelectionFloorGlow.tex"))
 		:SetName("Selection floor")
@@ -165,19 +165,9 @@ function SelectablePuppet:Randomize(species)
 	return self
 end
 
-function SelectablePuppet:RefreshCharacterData()
-	local data = self:GetCharacterData()
-	self:SetCharacterData(data)
-	return self
-end
-
 function SelectablePuppet:SetCharacterData(data)
-	self.puppet.components.charactercreator:OnLoad(data)
+	self.puppet.components.charactercreator:LoadFromTable(data)
 	return self
-end
-
-function SelectablePuppet:GetCharacterData()
-	return self.puppet.components.charactercreator:OnSave()
 end
 
 function SelectablePuppet:SetInventoryData(data)
@@ -192,10 +182,10 @@ function SelectablePuppet:SetEquipmentDyerData(data)
 	return self
 end
 
-function SelectablePuppet:SetPlayerData(data)
-	self:SetCharacterData(data.charactercreator)
-	self:SetInventoryData(data.inventory)
-	self:SetEquipmentDyerData(data.equipmentdyer)
+function SelectablePuppet:SetPlayerData(entity_data, player_data)
+	self:SetCharacterData(entity_data.charactercreator or player_data.CharacterCreator) -- entity_data.charactercreator is legacy
+	self:SetInventoryData(entity_data.inventory)
+	self:SetEquipmentDyerData(entity_data.equipmentdyer)
 	return self
 end
 

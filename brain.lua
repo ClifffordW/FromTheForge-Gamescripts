@@ -1,9 +1,12 @@
+local Pool = require "util.pool"
+
+
 local BrainWrangler = Class(function(self)
 	self.lasttick = 0
 	self.updaters = {}
 	self.swapupdaters = {}
 	self.tickwaiters = {}
-	self.waiterspool = SimpleTablePool()
+	self.waiterspool = Pool.SimpleTablePool()
 end)
 
 BrainManager = BrainWrangler()

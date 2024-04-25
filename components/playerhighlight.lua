@@ -10,12 +10,7 @@ local PlayerHighlight = Class(function(self, inst)
 	self.last_angle = 0
 
 	self._onremovetarget = function(inst)
-		if self.aim then
-			self.aim:DelayedRemove()
-		end
-		if self.highlight then
-			self.highlight:DelayedRemove()
-		end
+		self:Clear()
 	end
 end)
 
@@ -32,51 +27,64 @@ function PlayerHighlight:HideHighlight()
 	end
 end
 
+function PlayerHighlight:Clear()
+	self.active = false
+	if self.aim then
+		if self.aim:IsValid() then
+			self.aim:DelayedRemove()
+		end
+		self.aim = nil
+	end
+	if self.highlight then
+		if self.highlight:IsValid() then
+			self.highlight:DelayedRemove()
+		end
+		self.highlight = nil
+	end
+end
 
 function PlayerHighlight:SetPlayer(player, init_hidden)
 	-- Note: This won't necessarily be attached to the player. This could be an item that is assigned to the player.
-	--if self.player ~= player then 
-		self.player = player
+	self.player = player
 
-		self.inst:ListenForEvent("onremove", self._onremovetarget, player)
+	self.inst:ListenForEvent("onremove", self._onremovetarget, player)
 
-		if not self.active and player.GetHunterId then
-			local playerID = player:GetHunterId() or 1
+	if not self.active and player.GetHunterId then
+		local playerID = player:GetHunterId() or 1
 
-			if self.inst == player then
+		if self.inst == player then
 
-				-- For all players, have a coloured highlight under the player.
-				local fx_pfb = "ground_indicator_p"..playerID
-				local highlight = SpawnPrefab(fx_pfb, player)
-				highlight.entity:SetParent(self.inst.entity)
+			-- For all players, have a coloured highlight under the player.
+			local fx_pfb = "ground_indicator_p"..playerID
+			local highlight = SpawnPrefab(fx_pfb, player)
+			highlight.entity:SetParent(self.inst.entity)
 
-				self.highlight = highlight
+			self.highlight = highlight
 
-				-- For local players, have a direction indicator under the player, as well.
-				if self.inst:IsLocal() then
-					local aim_pfb = "aim_pointer_p"..playerID
-					local aim = SpawnPrefab(aim_pfb, player)
-					aim.AnimState:SetScale(-1, 1)
+			-- For local players, have a direction indicator under the player, as well.
+			if self.inst:IsLocal() then
+				local aim_pfb = "aim_pointer_p"..playerID
+				local aim = SpawnPrefab(aim_pfb, player)
+				aim.AnimState:SetScale(-1, 1)
 
-					self.aim = aim
-					self.inst:StartUpdatingComponent(self)
-				end
-			else
-				-- This is an object we're trying to highlight belongs to a player.
-				local fx_pfb = "ground_indicator_ring_p"..playerID
-				local highlight = SpawnPrefab(fx_pfb, player)
-				highlight.entity:SetParent(self.inst.entity)
-
-				self.highlight = highlight
+				self.aim = aim
+				self.inst:StartUpdatingComponent(self)
 			end
+		else
+			-- This is an object we're trying to highlight belongs to a player.
+			local fx_pfb = "ground_indicator_ring_p"..playerID
+			local highlight = SpawnPrefab(fx_pfb, player)
+			highlight.entity:SetParent(self.inst.entity)
 
-			self.active = true
+			self.highlight = highlight
 		end
 
-		if init_hidden then
-			self:HideHighlight()
-		end
---	end
+		self.active = true
+	end
+
+	if init_hidden then
+		self:HideHighlight()
+	end
 end
 
 function PlayerHighlight:GetControlAngle()
@@ -91,7 +99,7 @@ function PlayerHighlight:GetControlAngle()
 		angle = math.floor(angle)
 
 		-- Clamp the angle of the aim indicator to the actual effective angles that a player can attack
-		local angle_snap = 0 --TUNING.player.attack_angle_clamp - 10 -- Give a bit less angle
+		local angle_snap = TUNING.player.attack_angle_clamp - 25 -- Give a bit less angle
 		if math.abs(angle) < 90 then
 			-- angle = 0
 			angle = math.clamp(angle, -angle_snap, angle_snap)

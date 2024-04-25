@@ -5,7 +5,7 @@ return {
   bank="fx_hit_electric",
   bloom=100.0,
   build="fx_hit_electric",
-  group="electricity",
+  group="portals",
   hue=85.0,
   multcolor="FFFFFFE6",
   randomflip=true,

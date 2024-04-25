@@ -26,14 +26,12 @@ end
 function contentutil.IMG(path)
 	return contentutil.GetContentDB():GetImageAsset(path)
 end
-function contentutil.LOC(str)
-	return contentutil.GetContentDB():GetString(str)
-end
 
 -- Use to define at the top of a file.
--- local ANIM, IMG, LOC = contentutil.anim_img_loc()
-function contentutil.anim_img_loc()
-	return contentutil.ANIM, contentutil.IMG, contentutil.LOC
+-- local ANIM, IMG = contentutil.anim_img_fns()
+-- LOC is available as a global LOC. See loc.lua
+function contentutil.anim_img_fns()
+	return contentutil.ANIM, contentutil.IMG
 end
 
 return contentutil

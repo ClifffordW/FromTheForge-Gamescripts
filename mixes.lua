@@ -1,3 +1,6 @@
+-- This file is dead and removing TheMixer is in progress. Use fmod instead.
+--
+-- https://klei.slack.com/archives/C030398NKG9/p1695226930685609
 local Mixer = require("mixer")
 
 local amb = "set_ambience/ambience"

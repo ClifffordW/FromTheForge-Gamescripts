@@ -68,10 +68,14 @@ function WareVisualizer:Initialize(ware_details)
 	self.ware_name = ware_details.ware_name
 	self.power = ware_details.power
 	self.power_type = ware_details.power_type
-	
+
 	local power_def = Lume(Power.GetAllPowers()):match(function(power)
 		 return power.name == self.power
 	end):result()
+
+	if power_def then
+		self.rarity = Power.GetBaseRarity(power_def)
+	end
 
 	local shown_symbol, hidden_symbol
 	if power_def then

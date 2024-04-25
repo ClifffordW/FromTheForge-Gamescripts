@@ -56,6 +56,7 @@ local function fn()
 
 	if TheDungeon:GetDungeonMap():IsDebugMap() then
 		spawnutil.MakeEditable(inst, "square")
+		inst.AnimState:SetMultColor(table.unpack(WEBCOLORS.ORANGERED))
 		inst.AnimState:SetScale(1.5, 1.5)
 		local preview_phantom = GetPreviewDestructible() or FALLBACK_PREVIEW_PHANTOM
 		TheSim:LoadPrefabs({preview_phantom})

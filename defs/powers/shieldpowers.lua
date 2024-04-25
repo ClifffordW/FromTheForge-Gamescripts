@@ -133,7 +133,7 @@ Power.AddShieldPower("shield_hit_streak",
 {
 	tags = { POWER_TAGS.PROVIDES_SHIELD, POWER_TAGS.PROVIDES_SHIELD_SEGMENTS, POWER_TAGS.USES_HITSTREAK },
 	tuning = {
-		[Power.Rarity.LEGENDARY] = { shield = 1, hitstreak = 10 }, -- jambell: playtesting w/ hammer: 5 seems too easy, 7 seems too hard. 6 seems just right!
+		[Power.Rarity.LEGENDARY] = { shield = 1, hitstreak = 10 }, -- playtesting w/ hammer: 5 seems too easy, 7 seems too hard. 6 seems just right!
 	},
 	tooltips =
 	{
@@ -187,7 +187,12 @@ local shield_off_colormult = { 255/255, 255/255, 255/255 }
 Power.AddShieldPlayerPower("shield",
 {
 	power_category = Power.Categories.SUSTAIN,
-	prefabs = { "shield_acquire_groundring_frnt", "shield_acquire_groundring_back" },
+	prefabs = {
+		"shield_acquire_groundring_frnt",
+		"shield_acquire_groundring_back",
+		GroupPrefab("shields"),
+	},
+
 	tuning = {
 		[Power.Rarity.LEGENDARY] = { damage = 1 },
 	},

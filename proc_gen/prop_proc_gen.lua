@@ -50,7 +50,7 @@ return {
 		"ceiling_decor"
 	},
 	Boss = enum(lume(bossdata.boss):keys():result()),
-	Tile = enum { "path", "rough" },
+	Tile = enum { "path", "rough", "pool" },
 	RoomType = mapgen.roomtypes.RoomType,
 	Tag = enum { "unique", "required", "centered", "tall" },
 }

@@ -62,8 +62,6 @@ function ConsoleScreen:OnBecomeActive()
 	self.console_edit:SetEditing(true)
 
 	self.completer:ClearState()
-
-    self:ToggleRemoteExecute(true) -- if we are admin, start in remote mode
 end
 
 function ConsoleScreen:OnBecomeInactive()
@@ -75,8 +73,8 @@ function ConsoleScreen:OnBecomeInactive()
     end
 end
 
-function ConsoleScreen:OnControl(controls, down)
-	if self.runtask ~= nil or ConsoleScreen._base.OnControl(self, controls, down) then return true end
+function ConsoleScreen:OnControl(controls, down, ...)
+	if self.runtask ~= nil or ConsoleScreen._base.OnControl(self, controls, down, ...) then return true end
 
 	if not down and controls:Has(Controls.Digital.CANCEL, Controls.Digital.OPEN_DEBUG_CONSOLE) then
 		self:Close()
@@ -84,32 +82,7 @@ function ConsoleScreen:OnControl(controls, down)
 	end
 end
 
-function ConsoleScreen:ToggleRemoteExecute(force)
-    local is_valid_time_to_use_remote = false -- NW networking2022: remove this: TheNet:GetIsClient() and (TheNet:GetIsServerAdmin() or Platform.IsConsole())
-    if is_valid_time_to_use_remote then
-        self.console_remote_execute:Show()
-        if force == nil then
-            self.toggle_remote_execute = not self.toggle_remote_execute
-        elseif force == true then
-            self.toggle_remote_execute = true
-        elseif force == false then
-            self.toggle_remote_execute = false
-        end
-
-        if self.toggle_remote_execute then
-			self.console_remote_execute:SetText(STRINGS.UI.CONSOLESCREEN.REMOTEEXECUTE)
-			self.console_remote_execute:SetGlyphColor(0.7,0.7,1,1)
-        else
-			self.console_remote_execute:SetText(STRINGS.UI.CONSOLESCREEN.LOCALEXECUTE)
-			self.console_remote_execute:SetGlyphColor(1,0.7,0.7,1)
-        end
-    elseif self.toggle_remote_execute then
-        self.console_remote_execute:Hide()
-        self.toggle_remote_execute = false
-    end
-end
-
-function ConsoleScreen:OnRawKey(key, down)
+function ConsoleScreen:OnRawKey(key, down, input_device)
 	if TheInput:IsKeyDown(InputConstants.Keys.CTRL) and TheInput:IsPasteKey(key) then
 		self.ctrl_pasting = true
 	end
@@ -117,7 +90,7 @@ function ConsoleScreen:OnRawKey(key, down)
 	if down then return end
 
 	if self.runtask ~= nil then return true end
-	if ConsoleScreen._base.OnRawKey(self, key, down) then
+	if ConsoleScreen._base.OnRawKey(self, key, down, input_device) then
 		return true
 	end
 
@@ -135,8 +108,6 @@ function ConsoleScreen:OnRawKeyHandler(key, down)
 		self:_CycleHistory(-1)
 	elseif key == InputConstants.Keys.DOWN then
 		self:_CycleHistory(1)
-	elseif (key == InputConstants.Keys.LCTRL or key == InputConstants.Keys.RCTRL) and not self.ctrl_pasting then
-       self:ToggleRemoteExecute()
 	end
 
 	if self.ctrl_pasting and (key == InputConstants.Keys.LCTRL or key == InputConstants.Keys.RCTRL) then
@@ -190,13 +161,8 @@ function ConsoleScreen:Run()
 		AppendConsoleHistoryItem(fnstr)
 	end
 
-	if self.toggle_remote_execute then
-		local x, z = TheSim:ScreenToWorldXZ(TheInput:GetMousePos())
-		TheNet:SendRemoteExecute(fnstr, x, z)
-	else
-		local success = ExecuteConsoleCommand(fnstr)
-		self.did_last_run_fail = not success
-	end
+	local success = ExecuteConsoleCommand(fnstr)
+	self.did_last_run_fail = not success
 end
 
 function ConsoleScreen:Close()
@@ -278,6 +244,7 @@ function ConsoleScreen:DoInit()
 		:Hide()
 
 	self.console_edit = self.root:AddChild(TextEdit(FONTFACE.CODE))
+		:SetName("TextEdit:console_edit")
 		:SetSize(edit_width)
 		:SetHelpTextEdit("...")
 		:SetHAlign(ANCHOR_LEFT)
@@ -298,11 +265,16 @@ function ConsoleScreen:DoInit()
 
 	self.completer = LuaCompleter()
 
-	self.console_edit:EnableWordPrediction({width = self.edit_width + 20 * HACK_FOR_4K, pad_x = -15 * HACK_FOR_4K, pad_y = 20 * HACK_FOR_4K, mode=Profile:GetConsoleAutocompleteMode()})
+	self.console_edit:EnableWordPrediction({
+			width = self.edit_width + 20 * HACK_FOR_4K,
+			pad_x = -15 * HACK_FOR_4K,
+			pad_y = 20 * HACK_FOR_4K,
+			mode = Profile:GetConsoleAutocompleteMode(),
+		})
 
 	for _,delim in ipairs({'"', "'",}) do
 		self.console_edit:AddWordPredictionDictionary({name = "prefab", words = prefab_names, prefix = delim, postfix = delim, })
-		-- TODO(dbriscoe): Can we require a function (c_power) before these words to reduce noise?
+		-- Could require a function (c_power) before these words to reduce noise?
 		self.console_edit:AddWordPredictionDictionary({name = "power",  words = power_names,  prefix = delim, postfix = delim, })
 	end
 
@@ -310,14 +282,17 @@ function ConsoleScreen:DoInit()
 
 	self.console_edit:SetForceEdit(true)
     self.console_edit.OnStopForceEdit = function() self:Close() end
-    self.console_edit.OnRawKey = function(s, key, down) if TextEdit.OnRawKey(self.console_edit, key, down) then return true end self:OnRawKeyHandler(key, down) end
+	self.console_edit.OnRawKey = function(s, key, down, input_device)
+		if TextEdit.OnRawKey(self.console_edit, key, down, input_device) then
+			return true
+		end
+		self:OnRawKeyHandler(key, down, input_device)
+	end
 
 	self.console_edit.validrawkeys[InputConstants.Keys.LCTRL] = true
 	self.console_edit.validrawkeys[InputConstants.Keys.RCTRL] = true
 	self.console_edit.validrawkeys[InputConstants.Keys.UP] = true
 	self.console_edit.validrawkeys[InputConstants.Keys.DOWN] = true
-	self.toggle_remote_execute = false
-
 end
 
 return ConsoleScreen

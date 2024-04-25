@@ -22,8 +22,8 @@ return {
             frame=1,
             param={
               ischild=true,
-              offx=-0.89999997615814,
-              offy=5.2399997711182,
+              offx=-0.23000000417233,
+              offy=2.2699999809265,
               offz=-0.0099999997764826,
               particlefxname="smoke_marketroom_shop",
               stopatexitstate=true,

@@ -62,10 +62,10 @@ STRINGS.NAMES =
 	shop_potion = "Doc Hoggins", --he/him
 	shop_powerupgrade = "Alki", --they/them
 	shop_armorsmith = "Alphonse", --he/him
-	shop_magpie = "Nimble", --cute/bird (he/him tho)
+	shop_magpie = "Nimble", --cute/bird (she/her tho)
 
 	--Reynard, Godric, Cato, Oswald, Filbert
-	npc_grandad = "Hubert", --flitt's grandpa (might change)
+	npc_grandpa = "Reynard", --flitt's grandpa (might change)
 	flitt_lastname = "Mulligan",
 
 	--NPC Jobs
@@ -94,14 +94,14 @@ STRINGS.NAMES =
 	station_refiner = "Researcher's Equipment",
 	station_cook = "Cook's Kitchen",
 	station_dojo = "Battlemaster's Pit", --meet me in the PIT
-	station_marketroom_shop = "Market Cart", -- WRITER
+	station_marketroom_shop = "Market Caravan",
 
 	elite_prefix = "Imbued",
 	miniboss_prefix = "Greater",
 
 	--General Monster Name
 	rot = "Rot",
-	rot_miniboss = "Miniboss Rot",
+	rot_miniboss = "Rot Miniboss",
 	rot_boss = "Boss Rot",
 
 	--Biomes (used to refer to the groupings of dungeons, primarily for the exploration screen, no plural)
@@ -113,7 +113,7 @@ STRINGS.NAMES =
 	brundle = "Camp",
 	treemon_forest = "Great Rotwood Forest",
 	owlitzer_forest = "Nocturne Grove",
-	kanft_swamp = "Blisterbane Bog",
+	bandi_swamp = "Blisterbane Bog",
 	thatcher_swamp = "The Molded Grave",
 	sedament_tundra = "???", --KRIS HELLOWRITER
 
@@ -125,7 +125,7 @@ STRINGS.NAMES =
 	owlitzer = "Owlitzer",
 	quetz = "Quetzalcoatl",
 	rotwood = "Rotwood",
-	thatcher = "Thatcher",
+	thatcher = "Swarm",
 	megatreemon = "Mother Treek",
 
 	--Small monsters
@@ -133,8 +133,8 @@ STRINGS.NAMES =
 	battoad_elite = "{name.elite_prefix} Ribbat",
 	blarmadillo = "Rillo",
 	blarmadillo_elite = "{name.elite_prefix} Rillo",
-	bulbug = "Tectormite",
-	bulbug_elite = "{name.elite_prefix} Tectormite",
+	bulbug = "Bulbug",
+	bulbug_elite = "{name.elite_prefix} Bulbug",
 	beets = "Beets",
 	beets_elite = "{name.elite_prefix} Beets",
 	cabbageroll = "Bulbin",
@@ -152,27 +152,41 @@ STRINGS.NAMES =
 	mossquito_elite = "{name.elite_prefix} Mossquito",
 	slowpoke = "Snortoise",
 	slowpoke_elite = "{name.elite_prefix} Snortoise",
-	totolili = "Totolili",
-	totolili_elite = "{name.elite_prefix} Totolili",
-	woworm = "Woworm",
-	woworm_elite = "{name.elite_prefix} Woworm",
-	swarmy = "Swarmy",
-	swarmy_elite = "{name.elite_prefix} Swarmy",
+	totolili = "Totolilli",
+	totolili_elite = "{name.elite_prefix} Totolilli",
+	woworm = "Wollusk",
+	woworm_elite = "{name.elite_prefix} Wollusk",
+	swarmy = "Gloop",
+	swarmy_elite = "{name.elite_prefix} Gloop",
+
+	bunippy = "Bunippy",
+	bunippy_elite = "{name.elite_prefix} Bunippy",
+	meowl = "Meowl",
+	meowl_elite = "{name.elite_prefix} Meowl",
+	antleer = "Antleer",
+	antleer_elite = "{name.elite_prefix} Antleer",
 
 	-- Big monsters
 	yammo = "Yammo",
-	yammo_elite = "{name.miniboss_prefix} Yammo",
+	yammo_elite = "{name.elite_prefix} Yammo",
+	yammo_miniboss = "{name.miniboss_prefix} Yammo",
 	zucco = "Zucco",
-	zucco_elite = "{name.miniboss_prefix} Zucco",
+	zucco_elite = "{name.elite_prefix} Zucco",
 	gourdo = "Gourdo",
-	gourdo_elite = "{name.miniboss_prefix} Gourdo",
+	gourdo_elite = "{name.elite_prefix} Gourdo",
+	gourdo_miniboss = "{name.miniboss_prefix} Gourdo",
 
 	floracrane = "Floracrane",
-	floracrane_elite = "{name.miniboss_prefix} Floracrane",
+	floracrane_elite = "{name.elite_prefix} Floracrane",
+	floracrane_miniboss = "{name.miniboss_prefix} Floracrane",
 	groak = "Groak",
-	groak_elite = "{name.miniboss_prefix} Groak",
+	groak_elite = "{name.elite_prefix} Groak",
+	groak_miniboss = "{name.miniboss_prefix} Groak",
 	seeker = "Seeker",
-	seeker_elite = "{name.miniboss_prefix} Seeker",
+	seeker_elite = "{name.elite_prefix} Seeker",
+	crystroll = "Crystroll",
+	crystroll_elite = "{name.elite_prefix} Crystroll",
+	crystroll_miniboss = "{name.miniboss_prefix} Crystroll",
 
 	-- Stationary
 	treemon = "Treek",
@@ -192,6 +206,8 @@ STRINGS.NAMES =
 	-- Key Props
 	damselfly = "Damselfly",
 	town_grid_cryst = "Wellspring",
+	dgn_grid_cryst = "Spring Port", --STRING HOOKUP
+	dgn_resource_converter = "Spring Port", --STRING HOOKUP
 
 	--Currency
 	konjur = "Teffra",
@@ -207,6 +223,7 @@ STRINGS.NAMES =
 	tonic = "{name.konjur} Pearl",
 	material = "Material",
 	konjur_soul_lesser = "Corestone",
+	i_konjur_soul_lesser = "<p img='images/ui_ftf_icons/lesser_soul.tex' rpad=1>Corestone",
 	konjur_soul_greater = "Metastone",
 	konjur_heart = "Heartstone",
 	i_konjur_heart = "<p img='images/ui_ftf_icons/konjur_heart.tex' rpad=1>Heartstone",
@@ -243,7 +260,7 @@ STRINGS.NAMES =
 	powerdesc_double = "double",
 	powerdesc_triple = "triple",
 	powerdesc_modifier = "Modifier",
-	powerdesc_nopower = "No Power", -- TODO: Isn't this placeholder text?
+	powerdesc_nopower = "No Power",
 
 
 	-- Power variable names. Use the end of the name as your variable name and
@@ -264,7 +281,7 @@ STRINGS.NAMES =
 	powerdesc_hitstunbonus = "Hitstun Bonus",
 	powerdesc_konjur_bonus = "{name.i_konjur} Bonus",
 	powerdesc_konjur_cost = "{name.i_konjur} Cost",
-	powerdesc_pullstrength = "Gravity", -- Groak sucking force. HELLOWRITER: Shouldn't it be Suction?
+	powerdesc_pullstrength = "Vacuum",
 	powerdesc_seconds = "Duration (Seconds)",
 	powerdesc_shield_segments = "{name.concept_shield} Segments", -- Can't use name_multiple from NAMES.
 	powerdesc_invincibilityduration = "Invincibility Duration",
@@ -275,9 +292,9 @@ STRINGS.NAMES =
 	powerdesc_shared_heal = "Heal Share", --how much of your healing you share with allies
 	powerdesc_heal_on_enter = "Heal on Enter", --how much you heal when entering a new room
 
-
 	dungeon_room = "Encounter",
 	run = "Hunt",
+	ascension = "Frenzy",
 
 	basic = "Basic", -- starting equipment
 }
@@ -298,9 +315,19 @@ STRING_METADATA.NAMES_PLURAL =
 	--Expedition Name
 	foxtails = "Foxtails",
 
+	--NPC Jobs
+	job_scout = "Scouts",
+	job_blacksmith = "Blacksmiths",
+	job_armorsmith = "Armourers",
+	job_apothecary = "Apothecaries",
+	job_refiner = "Researchers",
+	job_cook = "Cooks",
+	job_dojo = "Battlemasters",
+	job_konjurist = "Teffrites",
+
 	--General Monster Name
 	rot = "Rots",
-	rot_miniboss = "Miniboss Rots",
+	rot_miniboss = "Rot Minibosses",
 	rot_boss = "Boss Rots",
 
 	--Hunters
@@ -317,7 +344,7 @@ STRING_METADATA.NAMES_PLURAL =
 	owlitzer = "Owlitzers",
 	quetz = "Quetzalcoatl",
 	rotwood = "Rotwoods",
-	thatcher = "Thatchers",
+	thatcher = "Shredders",
 	megatreemon = "Mother Treeks",
 
 	--Small monsters
@@ -325,8 +352,8 @@ STRING_METADATA.NAMES_PLURAL =
 	battoad_elite = "{name.elite_prefix} Ribbats",
 	blarmadillo = "Rillos",
 	blarmadillo_elite = "{name.elite_prefix} Rillos",
-	bulbug = "Tectormites",
-	bulbug_elite = "{name.elite_prefix} Tectormites",
+	bulbug = "Bulbugs",
+	bulbug_elite = "{name.elite_prefix} Bulbugs",
 	beets = "Beetses",
 	beets_elite = "{name.elite_prefix} Beetses",
 	cabbageroll = "Bulbins",
@@ -344,6 +371,12 @@ STRING_METADATA.NAMES_PLURAL =
 	mossquito_elite = "{name.elite_prefix} Mossquitoes",
 	slowpoke = "Snortoises",
 	slowpoke_elite = "{name.elite_prefix} Snortoise",
+	totolili = "Totolillies",
+	totolili_elite = "{name.elite_prefix} Totolillies",
+	woworm = "Wollusks",
+	woworm_elite = "{name.elite_prefix} Wollusks",
+	swarmy = "Gloops",
+	swarmy_elite = "{name.elite_prefix} Gloops",
 
 	-- Big monsters
 	yammo = "Yammos",
@@ -444,16 +477,16 @@ STRINGS.TITLE_CARDS = {
 		-- Remove if we stop using yammo for miniboss.
 		LOWERTHIRD = "Big, yellow, and doesn't mean well in the least",
 	},
-	yammo_elite = {
+	yammo_miniboss = {
 		LOWERTHIRD = "Menace of the Woods",
 	},
-	floracrane_elite = {
+	floracrane_miniboss = {
 		LOWERTHIRD = "Highest in the pecking order"
 	},
-	gourdo_elite = {
+	gourdo_miniboss = {
 		LOWERTHIRD = "Gourd big or go home"
 	},
-	groak_elite = {
+	groak_miniboss = {
 		LOWERTHIRD = "Big mouth. Bigger temper"
 	},
 	bandicoot = {
@@ -463,7 +496,7 @@ STRINGS.TITLE_CARDS = {
 		LOWERTHIRD = "Mother of Darkness"
 	},
 	thatcher = {
-		LOWERTHIRD = "[TEMP] Greatly Misunderstood"
+		LOWERTHIRD = "The Orphaned Hivemind"
 	},
 	npc_armorsmith = {
 		LOWERTHIRD = "{name.npc_armorsmith} joined your camp!"

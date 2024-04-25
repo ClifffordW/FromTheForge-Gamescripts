@@ -3,27 +3,22 @@ return {
   __displayName="sound_flyingmachine",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "flying_machine",},
+  prefab={ "flying_machine_town",},
   stategraphs={
     sg_flying_machine={
       events={
-        idle={
-          {
-            eventtype="playsound",
-            frame=1,
-            param={
-              autostop=true,
-              name="spin_LP",
-              soundevent="flying_machine_spin_LP",
-              stopatexitstate=true,
-            },
-          },
-        },
+        idle={  },
         off={
           { eventtype="playsound", frame=1, param={ soundevent="flying_machine_spin_pst",},},
+          { eventtype="stopsound", frame=1, param={ name="spin_LP",},},
         },
         on={
           { eventtype="playsound", frame=1, param={ soundevent="flying_machine_spin_pre",},},
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ autostop=true, name="spin_LP", soundevent="flying_machine_spin_LP",},
+          },
         },
       },
     },

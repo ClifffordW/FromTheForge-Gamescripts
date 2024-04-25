@@ -848,6 +848,7 @@ local function particlesPropEditable(self, ui)
 
 	ui:PushItemWidth(100)
 
+	-- TODO: Use a DragVec3f for this instead.
 	local hasSnapToGrid = self.inst.components.snaptogrid ~= nil
 	local transformFormat = hasSnapToGrid and "%1.f" or "%1.2f"
 	local transformThrow = hasSnapToGrid and 1.0 or 0.05
@@ -869,8 +870,15 @@ local function particlesPropEditable(self, ui)
 		self.inst.Transform:SetPosition(x, y, valueZ)
 		self:OnPropChanged()
 	end
-
 	ui:PopItemWidth()
+
+	-- Can we rotate particles? Seems like right now, no.
+	--~ local changed
+	--~ local rot = self.inst.Transform:GetRotation()
+	--~ changed, rot = ui:SliderFloat("Rotation##Transform", rot, -180, 180, "%.1fº")
+	--~ if changed then
+	--~ 	self.inst.Transform:SetRotation(rot)
+	--~ end
 
 	if ui:Checkbox("Snap to Grid", hasSnapToGrid) then
 		particlesPropSnapToGrid(self, not hasSnapToGrid)
@@ -879,6 +887,8 @@ local function particlesPropEditable(self, ui)
 
 	ui:Separator()
 	ui:Text("Particles")
+
+	ui:Text("Add more widgets in components/particlesystem.lua") -- this section seems empty?
 
 	-- setup self data sufficiently to trick Particle Editor functions
 	-- into working as intended on non-screen data

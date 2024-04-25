@@ -30,17 +30,16 @@ local PlayerStatusWidget = Class(Widget, function(self, owner)
 	self.root = self:AddChild(Widget("PlayerStatusWidget root"))
 
 	self.bg = self.root:AddChild(Widget())
-	self.bg_static = self.bg:AddChild(Image("images/ui_ftf_hud/UI_HUD_BG_root.tex"))
+	self.bg_static = self.bg:AddChild(Image("images/ui_ftf_hud/UI_HUD_BG_root2.tex"))
 		:SetRegistration("left", "top")
-	self.bg_stretch = self.bg:AddChild(Image("images/ui_ftf_hud/UI_HUD_BG_stretch.tex"))
-		:SetRegistration("left", "top")
+	self.bg_stretch = self.bg:AddChild(Image("images/ui_ftf_hud/UI_HUD_BG_stretch2.tex"))
+		-- :SetRegistration("left", "top")
 		:LayoutBounds("after", "top", self.bg_static)
 
-	-- Add username
-	self.username = self.root:AddChild(PlayerUsernameWidget(self.owner))
-		:SetFontSize(20 * HACK_FOR_4K)
+	-- d_view(self.bg_stretch)
 
-	self.player_title = self.username:AddChild(PlayerTitleWidget(self.owner))
+	-- Add username
+	self.username = self.root:AddChild(PlayerUsernameWidget(self.owner, nil, 160))
 		:SetFontSize(20 * HACK_FOR_4K)
 
 	self.health_bar = self.root:AddChild(SegmentedHealthBar(self.owner))
@@ -50,9 +49,16 @@ local PlayerStatusWidget = Class(Widget, function(self, owner)
 	self.portrait = self.root:AddChild(PlayerPortrait())
 		:SetScale(BG_SCALE, BG_SCALE)
 
-	self.shield_pips = self.root:AddChild(ShieldPips(self.owner))
+	self.player_title = self.portrait:AddChild(PlayerTitleWidget(self.owner))
+		:SetFontSize(20 * HACK_FOR_4K)
+		:LayoutBounds("center", "top", self.portrait)
+		:Offset(0, 15)
+
+	self.shield_pips = self.portrait:AddChild(ShieldPips(self.owner))
 		:SetTheme_UnitFrame()
 		:SetScale(BG_SCALE)
+		:LayoutBounds("center", "bottom", self.portrait)
+		:Offset(0, 22)
 
 	-- Add powers widgets
 	self.player_powers = self.root:AddChild(PlayerPowersWidget(self.owner))
@@ -198,10 +204,11 @@ function PlayerStatusWidget:_SetAlignment(hreg, vreg)
 	self.player_powers:SetRegistration(hreg, vreg)
 	self.portrait:SetRegistration(hreg, vreg)
 	self.potion_widget:SetRegistration(hreg, vreg)
-	self.shield_pips:SetRegistration(hreg, vreg)
 	self.username:SetRegistration(hreg, vreg)
-	self.player_title:SetRegistration(hreg, vreg)
 	self.waiting_to_join:SetRegistration(hreg, vreg)
+
+	-- self.shield_pips:SetRegistration(hreg, vreg)
+	-- self.player_title:SetRegistration(hreg, vreg)
 
 	self.bg:SetAnchors(hreg, vreg)
 	self.health_bar:SetAnchors(hreg, vreg)
@@ -211,10 +218,11 @@ function PlayerStatusWidget:_SetAlignment(hreg, vreg)
 	self.player_powers:SetAnchors(hreg, vreg)
 	self.portrait:SetAnchors(hreg, vreg)
 	self.potion_widget:SetAnchors(hreg, vreg)
-	self.shield_pips:SetAnchors(hreg, vreg)
 	self.username:SetAnchors(hreg, vreg)
-	self.player_title:SetAnchors(hreg, vreg)
 	self.waiting_to_join:SetAnchors(hreg, vreg)
+
+	-- self.shield_pips:SetAnchors(hreg, vreg)
+	-- self.player_title:SetAnchors(hreg, vreg)
 
 	self.y_anim_scale = vreg == "top" and 1 or -1
 end
@@ -245,7 +253,7 @@ function PlayerStatusWidget:_Layout(anchors, to_middle)
 	-- Prevent gaps around screen edge by starting draw a bit offscreen.
 	local offscreen_pad = 5
 	-- Not sure how we got this.
-	local magic_width = 110
+	local magic_width = 175
 
 	self:SetPosition(to_edge:scale(offscreen_pad):unpack())
 	self:_SetAlignment(anchors.left, anchors.top)
@@ -255,22 +263,24 @@ function PlayerStatusWidget:_Layout(anchors, to_middle)
 	self.username
 		:LayoutBounds(anchors.left, anchors.top, self.bg)
 		:Offset(inset_pad * to_middle.x, inset_pad * to_middle.y)
-	
-	self.player_title
-		:LayoutBounds(anchors.center, anchors.below, self.username)
-	  	--:Offset(inset_pad * to_middle.x, inset_pad * to_middle.y)
-	
-	-- TODO(dbriscoe): move shield inside portrait so layout is consistent.
-	self.portrait
-		:LayoutBounds(anchors.left, nil, self.username)
-		:LayoutBounds(nil, anchors.below, self.player_title)
-		:Offset(0, 16 * to_middle.y)
 
 	self.shield_pips:RefreshLayout({})
 
+	self.portrait
+		:LayoutBounds(anchors.left, anchors.below, self.username)
+		:Offset(0, 16 * to_middle.y)
+
+	-- shield pips is a child of portrait, but for some reason this lays out differently
+	-- in each corner so the position is hard coded when we re-layout
+	self.shield_pips:SetPosition(0, -110)
+
+	self.health_bar
+		:LayoutBounds(anchors.after, nil, self.portrait)
+		:LayoutBounds(nil, anchors.center, self.username)
+
 	self.potion_widget
 		:LayoutBounds(anchors.left, anchors.bottom, self.bg)
-		:Offset(10 * to_edge.x, -100 * to_edge.y)
+		:Offset(10 * to_edge.x, -10 * to_edge.y)
 
 	self.konjur
 		:LayoutBounds(anchors.center, anchors.below, self.potion_widget)
@@ -278,15 +288,11 @@ function PlayerStatusWidget:_Layout(anchors, to_middle)
 
 	self.loot_stack
 		:LayoutBounds(anchors.after, anchors.center, self.potion_widget)
-		:Offset(0, 0)
+		:Offset(10 * to_edge.x, -10 * to_edge.y)
 
 	self.player_powers
 		:LayoutBounds(anchors.after, anchors.top, self.portrait)
 		:Offset(8 * to_middle.x, 0)
-
-	self.health_bar
-		:LayoutBounds(anchors.after, anchors.top, self.username)
-		:Offset(40 * to_middle.x, 0)
 
 	self.waiting_to_join
 		:LayoutBounds(anchors.after, anchors.top, self.portrait)
@@ -298,15 +304,16 @@ function PlayerStatusWidget:_Layout(anchors, to_middle)
 	end)
 
 	local function relayoutfn()
-		self.shield_pips
-			:LayoutBounds("center", "below", self.portrait)
-			:Offset(0, 60)
 		local bg_w, bg_h = self.bg_stretch:GetScaledSize()
 		local health_w = self.health_bar:GetScaledSize()
 		local powers_w = self.player_powers:GetScaledSize()
 		local new_width = (math.max(health_w, powers_w) + magic_width) / BG_SCALE
 
+		--printf("health_w: %s, powers_w: %s, new_width: %s", health_w, powers_w, new_width)
+
 		self.bg_stretch:SetSize(new_width, bg_h)
+
+		self.bg_stretch:LayoutBounds("after", "top", self.bg_static)
 
 		-- Registration needs to be re-applied after the size of the object changes?
 		self.player_powers:SetRegistration(anchors.left, anchors.top)
@@ -320,6 +327,7 @@ function PlayerStatusWidget:_Layout(anchors, to_middle)
 	self.inst:ListenForEvent("refresh_hud", relayoutfn, self.owner)
 
 	relayoutfn()
+
 	self.health_bar.on_size_change_fn()
 end
 

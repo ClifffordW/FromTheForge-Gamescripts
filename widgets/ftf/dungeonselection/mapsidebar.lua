@@ -6,7 +6,6 @@ local UIAnim = require "widgets.uianim"
 
 local FrenzySelectionWidget = require"widgets.ftf.dungeonselection.frenzyselectionwidget"
 local LocationBossesWidget = require"widgets.ftf.dungeonselection.locationbosseswidget"
-local InventoryScreen = require "screens.town.inventoryscreen"
 local DungeonLevelWidget = require"widgets/ftf/dungeonlevelwidget"
 
 local MetaProgress = require "defs.metaprogression"
@@ -71,9 +70,6 @@ local MapSidebar = Class(Widget, function(self)
 			-- self:RefreshMaterialDrops()
 			self:DoLayout()
 		end)
-		-- :SetOnChangeWeaponClickFn(function()
-		-- 	self:TriggerWeaponSwitch()
-		-- end)
 
 	-- Mobs list
 	self.mobs_title = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT*1.3, STRINGS.ASCENSIONS.MOBS_TITLE, UICOLORS.LIGHT_TEXT))
@@ -123,13 +119,24 @@ function MapSidebar:SetLocationData(locationData)
 	self.dungeon_level:SetBiomeTitle(self.locationData.pretty.name)
 	self.dungeon_level:ShouldPlaySound(false)
 	local mrm = self:GetOwningPlayer().components.metaprogressmanager
-	local def = MetaProgress.FindProgressByName(self.locationData.region_id)
+	local def = MetaProgress.FindProgressByName(self.locationData.id)
 	local progress = mrm:GetProgress(def)
 	if not progress and def ~= nil then
 		-- The player hasn't made progress on this location
 		progress = mrm:StartTrackingProgress(mrm:CreateProgress(def))
 	end
-	self.dungeon_level:SetProgress(progress:GetLevel(), progress:GetEXP(), progress:GetEXPForLevel(progress:GetLevel()))
+
+	local meta_progress = {
+		meta_reward = progress,
+		meta_reward_def = progress.def,
+		meta_level = progress:GetLevel(),
+		meta_exp = progress:GetEXP(),
+		meta_exp_max = progress:GetEXPForLevel(progress:GetLevel()),
+	}
+
+	self.dungeon_level:RefreshMetaProgress(meta_progress)
+
+	-- self.dungeon_level:SetProgress(progress:GetLevel(), progress:GetEXP(), progress:GetEXPForLevel(progress:GetLevel()))
 
 	-- Update ascension widget
 	self.ascension_widget:SetLocation(self.locationData)
@@ -149,14 +156,6 @@ function MapSidebar:OnUpdate()
 	else
 		self.ascension_widget:OnUpdate()
 	end
-end
-
-function MapSidebar:TriggerWeaponSwitch()
-	local inventory_screen = InventoryScreen(self:GetOwningPlayer())
-	inventory_screen:SetCloseCallback(function()
-		self:RefreshContents()
-	end)
-	TheFrontEnd:PushScreen(inventory_screen)
 end
 
 function MapSidebar:RefreshContents()
@@ -235,7 +234,7 @@ function MapSidebar:DoLayout()
 	self.boss_header_anim_back:LayoutBounds("center", "above", self.bg)
 		:Offset(-20, -10)
 	self.bosses_widget:LayoutBounds("center", "bottom", self.boss_header_anim_back)
-		:Offset(80, -40)
+		:Offset(30, -40)
 	self.boss_header_anim_front:SetPos(self.boss_header_anim_back:GetPos())
 
 	self.dungeon_level:LayoutBounds("center", "above", self.bg)

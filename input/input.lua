@@ -1,3 +1,4 @@
+local Pool = require "util.pool"
 local gamepadguesser = require "input.gamepadguesser"
 local kassert = require "util.kassert"
 local lume = require "util.lume"
@@ -22,7 +23,7 @@ local REVERSECONTROLDEVICETYPE =
 	[5] = "touch",
 }
 
-ControlSet = Class(function(self)
+local ControlSet = Class(function(self)
 	self._controls = {}
 end)
 
@@ -38,6 +39,7 @@ end
 
 function ControlSet:Clear()
 	table.clear(self._controls)
+	self.input_device = nil
 end
 
 function ControlSet:IsEmpty()
@@ -72,6 +74,15 @@ function ControlSet:AddControl(control, devicetype)
 	local n = #self._controls
 	self._controls[n + 1] = control
 	self._controls[n + 2] = CONTROLDEVICETYPE[devicetype]
+end
+
+function ControlSet:SetDevice(input_device)
+	self.input_device = input_device
+	return self
+end
+
+function ControlSet:GetDevice()
+	return self.input_device
 end
 
 function ControlSet:Has(...)
@@ -192,6 +203,40 @@ end
 TheInput = nil
 TheInputProxy = nil
 
+
+local InputDevice = Class(function(self, device_type, device_id)
+	self.device_type = device_type
+	self.device_id = device_id
+end)
+
+-- We shouldn't need this since all instances of InputDevice come from Input,
+-- but just in case.
+function InputDevice:__eq(b)
+	return (self.device_type == b.device_type
+		and self.device_id == b.device_id)
+end
+
+function InputDevice:unpack()
+	return self.device_type, self.device_id
+end
+
+function InputDevice:GetOwnerId_strict()
+	local player = self:GetPlayer()
+	return player and player:GetHunterId()
+end
+
+function InputDevice:GetOwnerId()
+	-- If there's no player, then assign to p1. This allows inputs to work
+	-- where there are no players (mainmenu) or where we haven't created the
+	-- player yet (ChangeInputDialog).
+	return self:GetOwnerId_strict() or 1
+end
+
+function InputDevice:GetPlayer()
+	return TheInput:GetDeviceOwner(self)
+end
+
+
 local KBM_DEVICE_ID <const> = 1
 local KBM_DEVICE_HANDLE <const> = "kbm"
 
@@ -208,6 +253,11 @@ local Input = Class(function(self)
 	self.active_inputs = {} -- map device handle to active state about each control.
 	self.active_inputs[KBM_DEVICE_HANDLE] = {}
 
+	self.device_keyboard = InputDevice("keyboard", KBM_DEVICE_ID)
+	self.device_mouse = InputDevice("mouse", KBM_DEVICE_ID)
+	self.device_touch = InputDevice("touch", KBM_DEVICE_ID)
+	self.device_gamepads = {}
+
 	self.position = EventProcessor()
 	self.oncontrol = EventProcessor()
 	self.ontextinput = EventProcessor()
@@ -219,11 +269,8 @@ local Input = Class(function(self)
 	self.enabledebugtoggle = true
 	self.worldeditors = {}
 
-	self.last_input = {
-		-- TODO(input): Fetch this from native to get data from last simreset.
-		device_type = "mouse",
-		device_id = nil,
-	}
+	-- TODO(input): Fetch this from native to get data from last simreset.
+	self.last_input = self.device_mouse
 	self.on_device_changed_callbacks = {}
 	self.mouse_enabled = Platform.IsNotConsole()
 	self.cursorvisible = TheSim:GetCursorVisibility()
@@ -234,7 +281,7 @@ local Input = Class(function(self)
 	-- that's probably in-world.
 	self:SetMousePos(RES_X / 2, RES_Y / 2)
 
-	self.gamepads = {}
+	self.gamepads = {}  -- holds the input state for each gamepad
 	self.keys = {}
 	self.mousebuttons = {}
 
@@ -279,45 +326,71 @@ function Input:_TryAssignGamepad(device_id, pad_data, ent)
 	end
 end
 
-function Input:RegisterDeviceOwner(ent, device_type, device_id)
-	device_id = device_id or -1
-	if device_type == "gamepad" then
-		if device_id == -1 then
-			-- take whatever free gamepad is available
-			for k,v in pairs(self.gamepads) do
-				local id = self:_TryAssignGamepad(k, v, ent)
-				if id then
-					return id
-				end
+-- All devices have ownership registered with TheNet, so no
+-- additional registration needed for keyboard.
+function Input:RegisterGamepadOwner(ent, input_device)
+	if not input_device then
+		-- take whatever free gamepad is available
+		for k,v in pairs(self.gamepads) do
+			local id = self:_TryAssignGamepad(k, v, ent)
+			if id then
+				return id
 			end
 		end
-
-		if self.gamepads[device_id] then
-			if self:_TryAssignGamepad(device_id, self.gamepads[device_id], ent) then
-				return device_id
-			end
-		end
-
-		TheLog.ch.Input:printf("RegisterDeviceOwner: Failed to register Gamepad id=%d to entity GUID %d", device_id, ent.GUID)
-		return -1
 	end
-	-- else: all devices have ownership registered with TheNet, so no
-	-- additional registration needed for keyboard.
-	return nil
+
+	local device_id = input_device.device_id
+	if self.gamepads[device_id] then
+		if self:_TryAssignGamepad(device_id, self.gamepads[device_id], ent) then
+			return device_id
+		end
+	end
+
+	TheLog.ch.Input:printf("RegisterDeviceOwner: Failed to register Gamepad id=%d to entity GUID %d", device_id, ent.GUID)
+	return -1
 end
 
-function Input:UnregisterDeviceOwner(device_type, device_id)
-	if device_type == "gamepad" then
-		local ent = self.gamepadowners[device_id]
+function Input:UnregisterDeviceOwner(input_device)
+	if input_device and input_device.device_type == "gamepad" then
+		local ent = self.gamepadowners[input_device.device_id]
 		if ent then
-			TheLog.ch.InputSpam:printf("UnregisterDeviceOwner %s for device_id=%d", tostring(ent), device_id)
-			ent:PushEvent("deviceunregistered", {device_type = device_type, device_id = device_id})
+			TheLog.ch.InputSpam:printf("UnregisterDeviceOwner %s for device_id=%d", tostring(ent), input_device.device_id)
+			ent:PushEvent("deviceunregistered", input_device)
 		end
-		self.gamepadowners[device_id] = nil
+		self.gamepadowners[input_device.device_id] = nil
 	end
 end
 
-function Input:GetDeviceOwner(device_type, device_id)
+-- Legacy helper
+function Input:GetInputDevice(device_type, device_id)
+	if device_type == "keyboard" then
+		return self.device_keyboard
+	elseif device_type == "mouse" then
+		return self.device_mouse
+	elseif device_type == "touch" then
+		return self.device_touch
+	elseif device_type == "gamepad" then
+		return self:GetGamepad(device_id)
+	end
+end
+
+function Input:GetKeyboard()
+	return self.device_keyboard
+end
+
+function Input:GetMouse()
+	return self.device_mouse
+end
+
+function Input:GetGamepad(device_id)
+	return self.device_gamepads[device_id]
+end
+
+function Input:GetDeviceOwner(input_device)
+	if not input_device then
+		return nil
+	end
+	local device_type, device_id = input_device:unpack()
 	local inputID = self:ConvertToInputID(device_type, device_id)
 	local guid = TheNet:FindGUIDForLocalInputID(inputID)
 	if guid and Ents[guid] then
@@ -327,36 +400,42 @@ function Input:GetDeviceOwner(device_type, device_id)
 	return nil
 end
 
-function Input:IsDeviceFree(device_type, device_id)
-	return self:GetDeviceOwner(device_type, device_id) == nil
+function Input:IsDeviceFree(input_device)
+	return self:GetDeviceOwner(input_device) == nil
 end
 
-function Input:IsDeviceValid(device_type, device_id)
-	if device_type == "gamepad" then
-		return self.gamepads[device_id] ~= nil
+function Input:IsDeviceValid(input_device)
+	if not input_device then
+		return false
 	end
+	if input_device.device_type == "gamepad" then
+		return self.gamepads[input_device.device_id] ~= nil
+	end
+	return input_device.device_type == "mouse"
+		or input_device.device_type == "keyboard"
 end
 
 function Input:FindFreeDeviceID(device_type)
 	if device_type == "gamepad" then
-		for k,_ in pairs(self.gamepads) do
-			if self:IsDeviceFree(device_type, k) then
-				return k
+		for id,pad in pairs(self.device_gamepads) do
+			if self:IsDeviceFree(pad) then
+				return id
 			end
 		end
 	end
 	return nil
 end
 
--- Returns a list of input tuples: device_type, device_id
+-- Returns a list of InputDevices.
 function Input:GetAllFreeDevices()
 	local free = {}
-	if self:IsDeviceFree("keyboard", 0) then
-		table.insert(free, {"keyboard", 0})
+	if self:IsDeviceFree(self.device_keyboard) then
+		table.insert(free, self.device_keyboard)
 	end
 	for k,_ in pairs(self.gamepads) do
-		if self:IsDeviceFree("gamepad", k) then
-			table.insert(free, {"gamepad", k})
+		local gamepad_device = self:GetGamepad(k)
+		if self:IsDeviceFree(gamepad_device) then
+			table.insert(free, gamepad_device)
 		end
 	end
 	return free
@@ -620,12 +699,12 @@ function Input:OnMouseButton(button, down, x, y)
 	end
 end
 
-function Input:OnRawKey(key, down)
-	self.onkey:HandleEvent("onkey", key, down)
+function Input:OnRawKey(key, down, input_device)
+	self.onkey:HandleEvent("onkey", key, down, input_device)
 	if down then
-		return self.onkeydown:HandleEvent(key)
+		return self.onkeydown:HandleEvent(key, input_device)
 	else
-		return self.onkeyup:HandleEvent(key)
+		return self.onkeyup:HandleEvent(key, input_device)
 	end
 end
 
@@ -791,7 +870,7 @@ function Input:IsKeyDown(key)
 	return self.keys[key] == true
 end
 
--- victorc: hack - local multiplayer, looks expensive to call when device owners enabled
+-- TODO: hack - local multiplayer, looks expensive to call when device owners enabled
 function Input:IsControlDownOnAnyDevice(control)
 	if control then
 		local state = self.control_state[control]
@@ -809,13 +888,16 @@ function Input:IsControlDownOnAnyDevice(control)
 	return false
 end
 
-function Input:IsControlDown(control, device_type, device_id)
+-- TODO: This function is pretty brittle (passing no InputDevice appears to
+-- only work for keyboard?). Remove it and put something on the InputDevice
+-- instead.
+function Input:IsControlDown(control, input_device)
+	input_device = input_device or table.empty
+	local device_type = input_device.device_type
 	if control then
-		if device_type == "any" then
-			return self:IsControlDownOnAnyDevice(control)
-		end
 		local state
-		if device_type and device_type == "gamepad" then
+		if device_type == "gamepad" then
+			local device_id = input_device.device_id
 			if device_id and self.gamepad_control_state[device_id] then
 				state = self.gamepad_control_state[device_id][control]
 			end
@@ -828,8 +910,8 @@ function Input:IsControlDown(control, device_type, device_id)
 	return false
 end
 
-function Input:GetDigitalControlValue(control, device_type, device_id)
-	return self:IsControlDown(control, device_type, device_id) and 1 or 0
+function Input:GetDigitalControlValue(control, input_device)
+	return self:IsControlDown(control, input_device) and 1 or 0
 end
 
 function Input:ApplyDeadZone(xdir, ydir)
@@ -847,15 +929,16 @@ function Input:ApplyDeadZone(xdir, ydir)
 	return 0, 0, false
 end
 
-function Input:GetAnalogControlValue(control, device_type, device_id, ignoreDigitalInput)
-	-- victorc: hack -- for some reason, sometimes we miss the 'up' digital input event
+function Input:GetAnalogControlValue(control, input_device, ignoreDigitalInput)
+	-- TODO: hack -- for some reason, sometimes we miss the 'up' digital input event
 	-- and that messes up movement, making it feel "sticky"
 	-- This ignores digital input outright in those cases
 	ignoreDigitalInput = ignoreDigitalInput or false
 
 	if control then
 		local state
-		if device_type and device_type == "gamepad" then
+		if input_device and input_device.device_type == "gamepad" then
+			local device_id = input_device.device_id
 			if device_id and self.gamepad_axis_state[device_id] then
 				state = self.gamepad_axis_state[device_id][control]
 			end
@@ -878,30 +961,10 @@ function Input:GetAnalogControlValue(control, device_type, device_id, ignoreDigi
 end
 
 -- For a float value where two controls are opposite ends of the axis.
-function Input:GetAnalogAxisValue(positive_control, negative_control, device_type, device_id, ignoreDigitalInput)
-	local pos = self:GetAnalogControlValue(positive_control, device_type, device_id, ignoreDigitalInput)
-	local neg = self:GetAnalogControlValue(negative_control, device_type, device_id, ignoreDigitalInput)
+function Input:GetAnalogAxisValue(positive_control, negative_control, input_device, ignoreDigitalInput)
+	local pos = self:GetAnalogControlValue(positive_control, input_device, ignoreDigitalInput)
+	local neg = self:GetAnalogControlValue(negative_control, input_device, ignoreDigitalInput)
 	return pos - neg
-end
-
--- victorc: temporary troubleshooting helper function
-function Input:DumpAnalogControlValue(control, device_type, device_id)
-	if control then
-		local state
-		if device_type and device_type == "gamepad" then
-			if device_id and self.gamepad_axis_state[device_id] then
-				state = self.gamepad_axis_state[device_id][control]
-			end
-		else
-			state = self.axis_state[control]
-		end
-
-		if state then
-			local digital = state.down and 1 or 0
-			local analog = state.val or 0
-			TheLog.ch.Input:printf("DumpAnalogControlValue control=%s digital=%1.3f analog=%1.3f", control.key, digital, analog)
-		end
-	end
 end
 
 function Input:IsPasteKey(key)
@@ -970,19 +1033,20 @@ function Input:OnUpdate(dt)
 			v.rep_time = v.rep_time - dt
 			if v.rep_time <= 0 then
 				v.rep_time = 1/k.repeat_rate
-				-- TODO: victorc - how to confirm that this is really a keyboard input
-				self:DoControlRepeat(k, "keyboard", KBM_DEVICE_ID)
+				-- TODO: input - how to confirm that this is really a keyboard input
+				self:DoControlRepeat(k, self:GetKeyboard())
 			end
 		end
 	end
 
 	for id,_name in pairs(self.gamepads) do
+		local input_device = self:GetGamepad(id)
 		for k,v in pairs(self.gamepad_control_state[id]) do
 			if v.down and k.repeat_rate then
 				v.rep_time = v.rep_time - dt
 				if v.rep_time <= 0 then
 					v.rep_time = 1/k.repeat_rate
-					self:DoControlRepeat(k, "gamepad", id)
+					self:DoControlRepeat(k, input_device)
 				end
 			end
 		end
@@ -1070,14 +1134,8 @@ function Input:UpdateCursorVisible()
 		return self.cursorvisibleoverride
 	end
 
-	for _i,player in ipairs(AllPlayers) do
-		local last_device_type = player.components.playercontroller:GetLastInputDeviceType()
-		if not last_device_type
-			or last_device_type == "mouse"
-			or last_device_type == "keyboard"
-		then
-			return true
-		end
+	if self:GetMouse():GetPlayer() then
+		return true
 	end
 
 	if self:IsEditMode() or self.cursorvisible_mousemove then
@@ -1150,7 +1208,8 @@ end
 
 -- Get a tex representing the input device or an error image for invalid
 -- device. Use string in an Image widget to display.
-function Input:GetTexForDevice(device_type, device_id)
+function Input:GetTexForDevice(input_device)
+	local device_type, device_id = input_device:unpack()
 	if not device_type then
 		return "images/ui_ftf/error_large.tex"
 	elseif device_type == "keyboard"
@@ -1171,9 +1230,9 @@ end
 
 -- Get an icon representing the input device or an error image for invalid
 -- device. Add this string to a Text widget to display.
-function Input:GetLabelForDevice(device_type, device_id, scale)
+function Input:GetLabelForDevice(input_device, scale)
 	scale = scale or 1.5
-	local tex = self:GetTexForDevice(device_type, device_id)
+	local tex = self:GetTexForDevice(input_device)
 	return string.format("<p img='%s' color=0 scale=%.2f>", tex, scale)
 end
 
@@ -1247,11 +1306,13 @@ function Input:GetGamepadAppearance(device_id)
 end
 
 -- Return the name reported by the platform for the device.
-function Input:GetDeviceName(device_type, device_id)
-	if device_type == "keyboard" then
+function Input:GetDeviceName(input_device)
+	if not input_device then
+		return nil
+	elseif input_device.device_type == "keyboard" then
 		return STRINGS.UI.KEYBOARD
-	elseif device_id then
-		return self.gamepads[device_id].name
+	elseif input_device.device_id then
+		return self.gamepads[input_device.device_id].name
 	end
 	-- else: Invalid input
 end
@@ -1269,11 +1330,11 @@ function Input:GetDeviceImageAtlas(device_type, device_id)
 	end
 end
 
-function Input:HasMouseWheel(control, device_type, device_id)
+function Input:HasMouseWheel(control, input_device)
 	assert(type(control) == "table" and type(control.key) == "string", "Must pass a Control.")
 	assert(self.last_input.device_type, "How did last_input get cleared?")
-	device_type = device_type or self.last_input.device_type
-	if device_type ~= "mouse" then
+	input_device = input_device or self.last_input
+	if input_device.device_type ~= "mouse" then
 		return false
 	end
 	local scroll_up   = InputConstants.MouseButtonById[InputConstants.MouseButtons.SCROLL_UP]
@@ -1401,22 +1462,20 @@ function Input:_PopLastActiveBinding(control, binding, device_handle)
 	return removed_active_context
 end
 
-function Input:_SetLastInputDevice(device_type, device_id, device_handle)
+function Input:_SetLastInputDevice(input_device, device_handle)
 	local old_device_type = self.last_input.device_type
-	local changed_device = self.last_input.device_handle ~= device_handle
-	self.last_input.device_type = device_type
-	self.last_input.device_id = device_id
+	local changed_device = self.last_input_device_handle ~= device_handle
+	self.last_input = input_device
 	-- device_handle is solely used as an index to active_inputs.
-	self.last_input.device_handle = device_handle
+	self.last_input_device_handle = device_handle
 
 	if changed_device then
 		for _,cb in ipairs(self.on_device_changed_callbacks) do
-			cb(old_device_type, device_type)
+			cb(old_device_type, input_device.device_type)
 		end
 	end
 
-
-	if device_type == "gamepad" then
+	if input_device.device_type == "gamepad" then
 		self.cursorvisible_mousemove = false
 	end
 end
@@ -1446,7 +1505,7 @@ function Input:OnMouseButtonDownInternal(x, y, button, device_type, is_scroll)
 		for k,v in ipairs(bindings) do
 			if self:CheckModifiers(v) then
 				if self:_SetActiveBinding(v.control, v, KBM_DEVICE_HANDLE) then
-					-- TODO: victorc: Not sure why scrolling doesn't count as a mouse control
+					-- TODO: input - Not sure why scrolling doesn't count as a mouse control
 					control_set:AddControl(v.control, not is_scroll and "mouse" or "unknown")
 				end
 			end
@@ -1454,12 +1513,13 @@ function Input:OnMouseButtonDownInternal(x, y, button, device_type, is_scroll)
 	end
 
 	if not control_set:IsEmpty() then
-		self:DoControlDown(control_set, device_type, KBM_DEVICE_ID)
+		control_set:SetDevice(self:GetInputDevice(device_type))
+		self:DoControlDown(control_set)
 		control_set:Clear()
 	end
 	self.control_set_pool:Recycle(control_set)
 
-	self:_SetLastInputDevice("mouse", KBM_DEVICE_ID, KBM_DEVICE_HANDLE)
+	self:_SetLastInputDevice(self:GetMouse(), KBM_DEVICE_HANDLE)
 end
 
 function Input:OnMouseButtonUpInternal(x, y, button, device_type, is_scroll)
@@ -1472,14 +1532,15 @@ function Input:OnMouseButtonUpInternal(x, y, button, device_type, is_scroll)
 		for k,v in pairs(bindings) do
 			if self:CheckModifiers(v) then
 				if self:_PopLastActiveBinding(v.control, v, KBM_DEVICE_HANDLE) then
-					-- TODO: victorc: Not sure why scrolling doesn't count as a mouse control
+					-- TODO: input - Not sure why scrolling doesn't count as a mouse control
 					control_set:AddControl(v.control, not is_scroll and "mouse" or "unknown")
 				end
 			end
 		end
 	end
 	if not control_set:IsEmpty() then
-		self:DoControlUp(control_set, device_type, KBM_DEVICE_ID)
+		control_set:SetDevice(self:GetInputDevice(device_type))
+		self:DoControlUp(control_set)
 		control_set:Clear()
 	end
 	self.control_set_pool:Recycle(control_set)
@@ -1588,9 +1649,11 @@ function Input:CheckModifiers( binding )
 end
 
 -- This was on game in GL.
-function Input:OnControlDown(control, device_type, device_id)
-	TheLog.ch.InputControlSpam:printf("OnControlDown %s %s", device_type, device_id)
-	if self.debug and device_type == "gamepad" then
+function Input:OnControlDown(control)
+	-- control is a ControlSet!
+	local input_device = control:GetDevice()
+	TheLog.ch.InputControlSpam:printf("OnControlDown %s %s", input_device:unpack())
+	if self.debug and input_device.device_type == "gamepad" then
 		if control:Has(Controls.Digital.TOGGLE_DEBUG_MENU) then
 			self.debug:TogglePanel()
 			self.debug_using_gamepad = self.debug:DebugPanelsOpen()
@@ -1603,11 +1666,12 @@ function Input:OnControlDown(control, device_type, device_id)
 	end
 
 	if self.debug == nil or not self.debug:IsConsoleDocked() then
-		if TheFrontEnd:OnControlDown(control, device_type, nil, device_id) then
+		if TheFrontEnd:OnControlDown(control) then
 			return true
 		end
-		if device_type == "gamepad" and self.per_gamepad_oncontrol[device_id] then
-			TheLog.ch.InputControlSpam:printf("OnControlDown HandleEvent %s %s", device_type, device_id)
+		local device_id = input_device.device_id
+		if input_device.device_type == "gamepad" and self.per_gamepad_oncontrol[device_id] then
+			TheLog.ch.InputControlSpam:printf("OnControlDown HandleEvent %s %s", input_device:unpack())
 			self.per_gamepad_oncontrol[device_id]:HandleEvent(control, true)
 			self.per_gamepad_oncontrol[device_id]:HandleEvent("oncontrol", control, true)
 		else
@@ -1616,7 +1680,7 @@ function Input:OnControlDown(control, device_type, device_id)
 		end
 	end
 
-	if self.debug and self.debug:OnControlDown( control, device_type ) then
+	if self.debug and self.debug:OnControlDown( control ) then
 		return true
 	end
 
@@ -1629,18 +1693,20 @@ function Input:OnControlDown(control, device_type, device_id)
 	end
 end
 
-function Input:DoControlDown( control_set, device_type, device_id )
-	TheLog.ch.InputControlSpam:printf("DoControlDown %s %s", device_type, device_id)
-	if device_type == "gamepad" and self.ignore_gamepad then
+function Input:DoControlDown( control_set )
+	local input_device = control_set:GetDevice()
+	TheLog.ch.InputControlSpam:printf("DoControlDown %s %s", input_device:unpack())
+	if input_device.device_type == "gamepad" and self.ignore_gamepad then
 		return false
 	end
 
+	local device_id = input_device.device_id
 	for i = control_set:GetSize(), 1, -1 do
 		local control, deviceTypeId = control_set:GetControlDetailsAt(i)
 
 		-- map digital to analog inputs as well
 		local digitalstate, analogstate
-		if device_type == "gamepad" and self.gamepads[device_id] then
+		if input_device.device_type == "gamepad" and self.gamepads[device_id] then
 			digitalstate = self.gamepad_control_state[device_id][control]
 			analogstate = self.gamepad_axis_state[device_id][control]
 		else
@@ -1660,7 +1726,7 @@ function Input:DoControlDown( control_set, device_type, device_id )
 
 				if digitalstate then
 					process = true
-					--self:OnControlDown( control, device_type, device_id )
+					--self:OnControlDown( control )
 				end
 			end
 		end
@@ -1670,23 +1736,26 @@ function Input:DoControlDown( control_set, device_type, device_id )
 	end
 
 	if not control_set:IsEmpty() then
-		return self:OnControlDown( control_set, device_type, device_id )
+		return self:OnControlDown( control_set )
 	end
 end
 
 -- this was in Game in GL
-function Input:OnControlUp(control, device_type, device_id)
-	TheLog.ch.InputControlSpam:printf("OnControlUp %s %s", device_type, device_id)
-	if self.debug and self.debug_using_gamepad and device_type == "gamepad" and self.debug:DebugPanelsOpen() then
+function Input:OnControlUp(control)
+	-- control is a ControlSet!
+	local input_device = control:GetDevice()
+	TheLog.ch.InputControlSpam:printf("OnControlUp %s %s", input_device:unpack())
+	if self.debug and self.debug_using_gamepad and input_device.device_type == "gamepad" and self.debug:DebugPanelsOpen() then
 		return true
 	end
 
 	if self.debug == nil or not self.debug:IsConsoleDocked() then
-		if TheFrontEnd:OnControlUp(control, device_type, device_id) then
+		if TheFrontEnd:OnControlUp(control) then
 			return true
 		end
-		if device_type == "gamepad" and self.per_gamepad_oncontrol[device_id] then
-			TheLog.ch.InputControlSpam:printf("OnControlUp HandleEvent %s %d", device_type, device_id)
+		local device_id = input_device.device_id
+		if input_device.device_type == "gamepad" and self.per_gamepad_oncontrol[device_id] then
+			TheLog.ch.InputControlSpam:printf("OnControlUp HandleEvent %s %d", input_device:unpack())
 			self.per_gamepad_oncontrol[device_id]:HandleEvent(control, false)
 			self.per_gamepad_oncontrol[device_id]:HandleEvent("oncontrol", control, false)
 		else
@@ -1696,17 +1765,19 @@ function Input:OnControlUp(control, device_type, device_id)
 	end
 end
 
-function Input:DoControlUp( control_set, device_type, device_id )
-	if device_type == "gamepad" and self.ignore_gamepad then
+function Input:DoControlUp( control_set )
+	local input_device = control_set:GetDevice()
+	if input_device.device_type == "gamepad" and self.ignore_gamepad then
 		return false
 	end
 
+	local device_id = input_device.device_id
 	for i = control_set:GetSize(), 1, -1 do
 		local control, deviceTypeId = control_set:GetControlDetailsAt(i)
 
 		-- map digital to analog inputs as well
 		local digitalstate, analogstate
-		if device_type == "gamepad" and self.gamepads[device_id] then
+		if input_device.device_type == "gamepad" and self.gamepads[device_id] then
 			digitalstate = self.gamepad_control_state[device_id][control]
 			analogstate = self.gamepad_axis_state[device_id][control]
 		else
@@ -1723,7 +1794,7 @@ function Input:DoControlUp( control_set, device_type, device_id )
 				state.down = false
 				if digitalstate then
 					process = true
-					--self:OnControlUp( control, device_type, device_id )
+					--self:OnControlUp( control )
 				end
 			end
 		end
@@ -1733,15 +1804,16 @@ function Input:DoControlUp( control_set, device_type, device_id )
 	end
 
 	if not control_set:IsEmpty() then
-		return self:OnControlUp( control_set, device_type, device_id )
+		return self:OnControlUp( control_set )
 	end
 end
 
-function Input:DoControlRepeat(control, device_type, device_id)
+function Input:DoControlRepeat(control, input_device)
 	local control_set = self.control_set_pool:Get()
-	control_set:AddControl(control, device_type)
-	self:DoControlUp(control_set, device_type, device_id)
-	self:DoControlDown(control_set, device_type, device_id)
+	control_set:AddControl(control, input_device.device_type)
+	control_set:SetDevice(input_device)
+	self:DoControlUp(control_set)
+	self:DoControlDown(control_set)
 	control_set:Clear()
 	self.control_set_pool:Recycle(control_set)
 end
@@ -1756,7 +1828,7 @@ function Input:OnKeyDown(keyid, modifiers)
 		return
 	end
 
-	if self:OnRawKey(keyid, true) then
+	if self:OnRawKey(keyid, true, TheInput.device_keyboard) then
 		return true
 	end
 
@@ -1789,11 +1861,12 @@ function Input:OnKeyDown(keyid, modifiers)
 	end
 
 	if not control_set:IsEmpty() then
-		self:DoControlDown(control_set, "keyboard", KBM_DEVICE_ID)
+		control_set:SetDevice(self:GetKeyboard())
+		self:DoControlDown(control_set)
 		control_set:Clear()
 	end
 	self.control_set_pool:Recycle(control_set)
-	self:_SetLastInputDevice("keyboard", KBM_DEVICE_ID, KBM_DEVICE_HANDLE)
+	self:_SetLastInputDevice(self:GetKeyboard(), KBM_DEVICE_HANDLE)
 end
 
 function Input:OnKeyRepeat(keyid, modifiers)
@@ -1809,7 +1882,7 @@ function Input:OnKeyUp(keyid, modifiers)
 		local key = InputConstants.KeyById[keyid]
 		if not key then return end
 
-		if self:OnRawKey(keyid, false) then
+		if self:OnRawKey(keyid, false, TheInput.device_keyboard) then
 			return true
 		end
 
@@ -1838,7 +1911,8 @@ function Input:OnKeyUp(keyid, modifiers)
 		end
 
 		if not control_set:IsEmpty() then
-			self:DoControlUp(control_set, "keyboard", KBM_DEVICE_ID)
+			control_set:SetDevice(self:GetKeyboard())
+			self:DoControlUp(control_set)
 			control_set:Clear()
 		end
 		self.control_set_pool:Recycle(control_set)
@@ -1870,12 +1944,13 @@ function Input:OnGamePadButtonDown(gamepad_id, button)
 		end
 
 		if not control_set:IsEmpty() then
-			self:DoControlDown(control_set, "gamepad", gamepad_id)
+			control_set:SetDevice(self:GetGamepad(gamepad_id))
+			self:DoControlDown(control_set)
 			control_set:Clear()
 		end
 		self.control_set_pool:Recycle(control_set)
 	end
-	self:_SetLastInputDevice("gamepad", gamepad_id)
+	self:_SetLastInputDevice(self:GetGamepad(gamepad_id))
 end
 
 function Input:OnGamePadButtonRepeat(gamepad_id, button)
@@ -1908,7 +1983,8 @@ function Input:OnGamePadButtonUp(gamepad_id, button)
 			end
 		end
 		if not control_set:IsEmpty() then
-			self:DoControlUp(control_set, "gamepad", gamepad_id)
+			control_set:SetDevice(self:GetGamepad(gamepad_id))
+			self:DoControlUp(control_set)
 			control_set:Clear()
 		end
 		self.control_set_pool:Recycle(control_set)
@@ -2027,6 +2103,7 @@ end
 
 function Input:OnGamepadConnected(gamepad_id, gamepad_device_description)
 	self.gamepads[gamepad_id] = {}
+	self.device_gamepads[gamepad_id] = InputDevice("gamepad", gamepad_id)
 	-- The "name" is a description like "XInput Controller"
 	self.gamepads[gamepad_id].name = gamepad_device_description;
 	kassert.assert_fmt(self.active_inputs[gamepad_id] == nil, "Duplicate device? %s [%s]", gamepad_id, gamepad_device_description)
@@ -2041,14 +2118,6 @@ function Input:OnGamepadConnected(gamepad_id, gamepad_device_description)
 
 	ResetControlStateSet(self.gamepad_control_state[gamepad_id], self.gamepad_axis_state[gamepad_id])
 
-	-- nw: disabled this for now. Need to ask if we want to add the gamepad to the active player, or if we want to add a new
-	-- player for it.
-	-- special case to hot enable gamepads for single player
---	if #AllPlayers == 1 and not AllPlayers[1].components.playercontroller:HasGamepad() then
---		TheLog.ch.InputSpam:printf("Attempting to assign newly-connected gamepad to player 1...")
---		AllPlayers[1].components.playercontroller:TryChangeInputDevice("gamepad", gamepad_id)
---	end
-
 	for source, fn in pairs(self.gamepadconnectionhandlers) do
 		fn(true, gamepad_id)
 	end
@@ -2058,9 +2127,11 @@ function Input:OnGamepadDisconnected(gamepad_id)
 	local pad_data = self.gamepads[gamepad_id]
 	TheLog.ch.Input:printf("Input:OnGamepadDisconnected id=%d [%s]", gamepad_id, pad_data and pad_data.name)
 
+	local input_device = self.device_gamepads[gamepad_id]
+	self.device_gamepads[gamepad_id] = nil
 	self.gamepads[gamepad_id] = nil
 	self.active_inputs[gamepad_id] = nil
-	self:UnregisterDeviceOwner("gamepad", gamepad_id)
+	self:UnregisterDeviceOwner(input_device)
 
 	self.per_gamepad_oncontrol[gamepad_id] = nil
 	table.clear(self.gamepad_control_state[gamepad_id])
@@ -2197,19 +2268,19 @@ end
 function Input:DebugListDevices(device_type, verbose)
 	if not device_type then
 		-- Dig into multiple lists to track down inconsistencies.
-		local function CheckDevice(device, device_id, data)
+		local function CheckDevice(device, data)
 			-- Use GetDeviceOwner to use TheNet to discover device owners
 			-- according to native; and check every input id and each player.
-			local device_owner = TheInput:GetDeviceOwner(device, device_id)
+			local device_owner = TheInput:GetDeviceOwner(device)
 			if device_owner then
-				PrintDeviceOwner(device_owner, device, device_id, data and data.name or "<Unknown>")
+				PrintDeviceOwner(device_owner, device.device_type, device.device_id, data and data.name or "<Unknown>")
 			end
 		end
 		TheLog.ch.Input:print("Owned Devices:")
 		TheLog.ch.Input:indent() do
-			CheckDevice("keyboard", 0)
+			CheckDevice(self:GetKeyboard())
 			for device_id=0,10 do
-				CheckDevice("gamepad", device_id, self.gamepads[device_id])
+				CheckDevice(self:GetGamepad(device_id), self.gamepads[device_id])
 			end
 		end TheLog.ch.Input:unindent()
 
@@ -2246,20 +2317,8 @@ function Input:DebugListDevices(device_type, verbose)
 
 	elseif device_type == "gamepad" then
 		for k,v in pairs(self.gamepads) do
-			PrintDeviceOwner(self.gamepadowners[k], device_type, k, v.name)
-			if verbose then
-				local analogLeft = self:GetAnalogControlValue(Controls.Analog.MOVE_LEFT, device_type, k)
-				local analogRight = self:GetAnalogControlValue(Controls.Analog.MOVE_RIGHT, device_type, k)
-				local analogUp = self:GetAnalogControlValue(Controls.Analog.MOVE_UP, device_type, k)
-				local analogDown = self:GetAnalogControlValue(Controls.Analog.MOVE_DOWN, device_type, k)
-				TheLog.ch.Input:printf("  Analog1 L:%1.2f R:%1.2f (xdir=%1.2f) U:%1.2f, D:%1.2f (ydir=%1.2f)",
-					analogLeft, analogRight, analogRight - analogLeft,
-					analogUp, analogDown, analogUp - analogDown)
-				self:DumpAnalogControlValue(Controls.Analog.MOVE_LEFT, device_type, k)
-				self:DumpAnalogControlValue(Controls.Analog.MOVE_RIGHT, device_type, k)
-				self:DumpAnalogControlValue(Controls.Analog.MOVE_UP, device_type, k)
-				self:DumpAnalogControlValue(Controls.Analog.MOVE_DOWN, device_type, k)
-			end
+			local gamepad_device = self:GetGamepad(k)
+			PrintDeviceOwner(self.gamepadowners[k], gamepad_device.device_type, k, v.name)
 		end
 	end
 	if verbose then
@@ -2270,7 +2329,7 @@ function Input:DebugListDevices(device_type, verbose)
 end
 
 function Input:ConvertToInputID(device_type, device_id)
-	if device_type == "gamepad" then 
+	if device_type == "gamepad" then
 		return device_id
 	else
 		return 0
@@ -2278,7 +2337,7 @@ function Input:ConvertToInputID(device_type, device_id)
 end
 
 function Input:ConvertFromInputID(inputID)
-	if inputID == 0 then 
+	if inputID == 0 then
 		return "keyboard", 1
 	else
 		return "gamepad", inputID
@@ -2295,6 +2354,17 @@ function Input:UnregisterGamepadConnectionHandler(source)
 	self.gamepadconnectionhandlers[source] = nil
 end
 
+function Input:RenderDebugUI(ui, panel, colorscheme)
+	-- Render some tables that can't be debug inspected because they change references.
+	if ui:CollapsingHeader("entitiesundermouse") then
+		ui:Indent()
+		for i,ent in ipairs(self.entitiesundermouse) do
+			panel:AppendTable(ui, ent)
+		end
+		ui:Unindent()
+	end
+end
 
 
+Input.ControlSet = ControlSet
 return Input

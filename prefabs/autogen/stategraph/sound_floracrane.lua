@@ -4,7 +4,7 @@ return {
   group="sound_creature",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "floracrane", "floracrane_elite",},
+  prefab={ "floracrane", "floracrane_elite", "floracrane_miniboss",},
   stategraphs={
     sg_floracrane={
       events={
@@ -89,7 +89,7 @@ return {
         {
           eventtype="playfoleysound",
           name="sfx-footstep",
-          param={ soundtag="Footstep", volume=26.0,},
+          param={ soundtag="Footstep", volume=13.0,},
         },
       },
     },

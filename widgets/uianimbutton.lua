@@ -44,9 +44,9 @@ function UIAnimButton:OnLoseFocus()
 
 end
 
-function UIAnimButton:OnControl(controls, down)
-    --UIAnimButton._base.OnControl(self, controls, down)
-    if not self:IsEnabled() or not self.focus or self:IsSelected() then return end
+function UIAnimButton:OnControl(controls, down, ...)
+    --UIAnimButton._base.OnControl(self, controls, down, ...)
+    if not self:IsEnabled() or not self:HasFocus() or self:IsSelected() then return end
 
     if controls:Has(self.control) then
         if down then
@@ -86,11 +86,7 @@ end
 
 function UIAnimButton:OnEnable()
     UIAnimButton._base.OnEnable(self)
-    if self.focus then 
-        self:GainFocus()
-    else
-        self:LoseFocus()
-    end
+    self:RefreshFocus()
 end
 
 function UIAnimButton:OnDisable()
@@ -148,7 +144,7 @@ function UIAnimButton:PushIdleAnim(idle_anim)
         self.idleanimation = idle_anim
     end
 
-    if self:IsEnabled() and not self.focus and not self.selected then
+    if self:IsEnabled() and not self:HasFocus() and not self.selected then
         self.animstate:PushAnimation(self.idleanimation, self.loops[idle_anim])
     end
 end
@@ -160,7 +156,7 @@ function UIAnimButton:SetIdleAnim(idle_anim, loop)
     self:SetLoop(idle_anim, loop)
     self.idleanimation = idle_anim
 
-    if self:IsEnabled() and not self.focus and not self.selected and not self.animstate:IsCurrentAnimation(self.idleanimation) then
+    if self:IsEnabled() and not self:HasFocus() and not self.selected and not self.animstate:IsCurrentAnimation(self.idleanimation) then
         self.animstate:PlayAnimation(self.idleanimation, self.loops[idle_anim])
     end
 end
@@ -172,7 +168,7 @@ function UIAnimButton:SetFocusAnim(focus_anim, loop)
     self:SetLoop(focus_anim, loop)
     self.focusanimation = focus_anim
     
-    if self.focus and not self.selected and not self.animstate:IsCurrentAnimation(self.focusanimation) then
+    if self:HasFocus() and not self.selected and not self.animstate:IsCurrentAnimation(self.focusanimation) then
         self.animstate:PlayAnimation(self.focusanimation, self.loops[focus_anim])
     end
 end

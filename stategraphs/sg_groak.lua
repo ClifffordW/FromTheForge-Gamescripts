@@ -630,8 +630,7 @@ local states =
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("burrow")
 
-			inst.components.powermanager:ResetData()
-			inst.components.powermanager:SetCanReceivePowers(false)
+			monsterutil.RemoveStatusEffects(inst)
 			inst.components.hitbox:StartRepeatTargetDelay()
 		end,
 
@@ -690,7 +689,7 @@ local states =
 		onexit = function(inst)
 			inst.components.hitbox:StopRepeatTargetDelay()
 			inst.components.attacktracker:CompleteActiveAttack()
-			inst.components.powermanager:SetCanReceivePowers(true)
+			monsterutil.ReinitializeStatusEffects(inst)
 
 			inst.HitBox:SetInvincible(false)
 			inst.HitBox:SetEnabled(true)
@@ -706,8 +705,7 @@ local states =
 			-- No animation for this state. Groak is hidden 'underground'.
 			inst:Hide()
 
-			inst.components.powermanager:ResetData()
-			inst.components.powermanager:SetCanReceivePowers(false)
+			monsterutil.RemoveStatusEffects(inst)
 
 			inst.HitBox:SetInvincible(true)
 			inst.HitBox:SetEnabled(false)
@@ -723,7 +721,7 @@ local states =
 		onexit = function(inst)
 			inst.components.hitbox:StopRepeatTargetDelay()
 			inst.components.attacktracker:CompleteActiveAttack()
-			inst.components.powermanager:SetCanReceivePowers(true)
+			monsterutil.ReinitializeStatusEffects(inst)
 
 			inst.HitBox:SetInvincible(false)
 			inst.HitBox:SetEnabled(true)

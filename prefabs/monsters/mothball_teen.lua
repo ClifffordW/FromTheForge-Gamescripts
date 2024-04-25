@@ -25,8 +25,11 @@ local prefabs =
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
 	"mothball_teen_projectile",
-	"mothball_teen_projectile_elite",
 	"mothball_teen_projectile2_elite",
+	"mothball_teen_projectile_aoe",
+	"mothball_teen_projectile_elite",
+	"projectile_teen_mothball",
+	"projectile_teen_mothball_elite",
 
 	--Drops
 	GroupPrefab("drops_generic"),
@@ -34,6 +37,7 @@ local prefabs =
 	GroupPrefab("drops_mothball_teen"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "mothball_teen")
+prefabutil.SetupDeathFxPrefabs(prefabs, "mothball_teen_elite")
 
 local attacks =
 {
@@ -62,6 +66,9 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
+
 
 local MONSTER_SIZE = 1
 
@@ -72,6 +79,7 @@ local function fn(prefabname)
 	monsterutil.MakeBasicMonster(inst, MONSTER_SIZE, monsterutil.MonsterSize.MEDIUM)
 	inst.Transform:SetScale(1.2, 1.2, 1.2)
 	inst.components.scalable:SnapshotBaseSize()
+	--inst:AddTag("ACID_IMMUNE")
 
 	inst.AnimState:SetBank("mothball_teen_bank")
 	inst.AnimState:SetBuild("mothball_teen_build")
@@ -158,7 +166,6 @@ local function projectile_fn(prefabname, fx_prefab)
 	monsterutil.BuildTuningTable(inst, prefabname)
 
 	inst.components.projectilehitbox:PermanentlyDisableTrigger()
-	inst:AddComponent("powermanager")
 	inst:AddComponent("timer") -- some powers use timer
 	inst:AddComponent("dropshadow")
 
@@ -198,7 +205,7 @@ local function aoe_hitbox(inst, data)
 	local projectile_owner = inst.owner and inst.owner or inst
 	local has_confuse = projectile_owner:HasTag("confuse")
 	local effect_type = has_confuse and "confused" or "slowed"
-	local power_value = has_confuse and 1 or 100
+	local power_value = has_confuse and 4 or 100
 	SGCommon.Events.OnProjectileHitboxTriggered(inst, data, {
 		attackdata_id = "attack",
 		damage_mod = 0,

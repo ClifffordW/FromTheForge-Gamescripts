@@ -1004,7 +1004,7 @@ end
 function SceneGenEditor:GatherRoomsErrors(rooms)
 	-- Require a room with each exits scheme for each room type.
 	local map_gen_room_types = {"arena", "small"}
-	local exit_schemas = {"nw", "new", "nsw", "nesw", "ew", "esw", "sw"}
+	local exit_schemas = {"nesw"}
 	local map_gen_errors = {}
 	for _, room_type in ipairs(map_gen_room_types) do
 		for _, exits in ipairs(exit_schemas) do

@@ -56,6 +56,8 @@ end
 function MakeAutogenFx(name, params, debug)
 	local assets =
 	{
+		Asset("PKGREF", "scripts/prefabs/autogen/fx/".. name ..".lua"),
+		Asset("PKGREF", "scripts/prefabs/fx_autogen.lua"),
 		Asset("PKGREF", "scripts/prefabs/fx_autogen_data.lua"),
 	}
 
@@ -63,11 +65,8 @@ function MakeAutogenFx(name, params, debug)
 	-- included in the prefab's dependency list (prefabs in player_side).
 
 	local build = params.build or name
-	prefabutil.TryAddAsset_Anim(assets, build, debug)
-
-	if params.bankfile ~= nil and params.bankfile ~= build then
-		prefabutil.TryAddAsset_Anim(assets, params.bankfile, debug)
-	end
+	local bank = params.bank or name
+	prefabutil.CollectAssetsForAnim(assets, build, bank, params.bankfile, debug)
 
 	-- this is stripped down from prop_autogen.lua
 	local networktype = NetworkType_None
@@ -226,6 +225,11 @@ function MakeAutogenFx(name, params, debug)
 
 		inst.OnSetSpawnInstigator = OnSetSpawnInstigator
 
+		-- Add this tag to disable history on this FX, for performance reasons.
+		if params.disabledebughistory then
+			inst:AddTag("dbg_nohistory")
+		end
+
 		return inst
 	end
 
@@ -233,26 +237,23 @@ function MakeAutogenFx(name, params, debug)
 end
 
 local ret = {}
-local groups = {}
+local target_groups = {}
 
 for name, params in pairs(FxAutogenData) do
-	if params.group ~= nil and string.len(params.group) > 0 then
-		local fxlist = groups[params.group]
-		if fxlist ~= nil then
-			fxlist[#fxlist + 1] = name
-		else
-			groups[params.group] = { name }
-		end
-	end
 	ret[#ret + 1] = MakeAutogenFx(name, params)
+	if params.target_prefab
+		and not (params.group or ""):lower():startswith("test")
+	then
+		local g = target_groups[params.target_prefab] or {}
+		table.insert(g, name)
+		target_groups[params.target_prefab] = g
+	end
+end
+for prefab,g in pairs(target_groups) do
+	table.insert(ret, Prefab(GroupPrefab("fx_for_".. prefab), nil, nil, g))
 end
 
-for groupname, fxlist in pairs(groups) do
-	-- Dummy prefab (no fn) for loading dependencies. Ignore "test" groups
-	-- since we won't need to load tests.
-	if not groupname:lower():startswith("test") then
-		ret[#ret + 1] = Prefab(GroupPrefab(groupname), nil, nil, fxlist)
-	end
-end
+local _, group_prefabs = prefabutil.CreateGroupPrefabs(FxAutogenData, ret)
+table.insert(ret, Prefab(GroupPrefab("all_fx_groups"), nil, nil, group_prefabs))
 
 return table.unpack(ret)

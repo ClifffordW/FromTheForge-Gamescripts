@@ -23,6 +23,34 @@ function DebugWidgetExplorer:RenderPanel( ui, panel )
 		return
 	end
 
+	ui:TextColored(self.colorscheme.header, "Current Focus")
+	for h_id=1,MAX_PLAYER_COUNT do
+		local focus = TheFrontEnd.focus_widgets[h_id]
+		panel:AppendTable(ui, focus, "P"..h_id)
+		ui:SameLineWithSpace()
+		ui:Text(focus)
+	end
+	ui:Value("Hover Widget", TheFrontEnd:GetHoverWidget())
+	ui:Value("FE:IsRelativeNavigation", TheFrontEnd:IsRelativeNavigation())
+	ui:Value("Screen:IsRelativeNavigation", TheFrontEnd:GetActiveScreen():IsRelativeNavigation())
+
+	-- Show the breadcrumbs of focus to help debug when focus is broken:
+	-- usually from setting focus before a widget exists in the hierarchy.
+	if ui:CollapsingHeader("Focus Parents") then
+		ui:Indent()
+		local hunter_id = 1
+		local wid = TheFrontEnd:GetFocusWidget(hunter_id)
+		while wid do
+			panel:AppendTable(ui, wid)
+			ui:SameLineWithSpace()
+			ui:Value("focus", wid:HasFocus(hunter_id))
+			wid = wid.parent
+		end
+		ui:Unindent()
+	end
+
+	ui:Separator()
+
 	ui:TextColored(RGB(255, 255, 0), "Ctrl-click to open the selected widget in a new panel." )
 
 	-- Expand/Collapse All

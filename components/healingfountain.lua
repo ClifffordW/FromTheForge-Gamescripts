@@ -44,6 +44,9 @@ local HealingFountain = Class(function(self, inst)
 			self.pulse_tasks[params.player] = inst:DoPeriodicTask(HEALING_PULSE_PERIOD, function(_) 
 				HealingPulseFX(params.player) 
 			end)
+
+			params.player:SetTempData('used_healingfountain')
+
 			ParticleSystemHelper.MakeEventSpawnParticles(params.player, {
 				name = EMITTER_NAME,
 				particlefxname = "heal_over_time_healingfountain",

@@ -183,12 +183,12 @@ function Weight:ResetAndUpdateEquipmentWeight()
 	local body = inventoryhoard:GetEquippedItem("BODY")
 	local waist = inventoryhoard:GetEquippedItem("WAIST")
 
-	-- TODO @jambell #weight make this less prototypey
+	-- TODO #weight make this less prototypey
 	local empty_slot_mod = Weight.EquipmentWeight_to_WeightMod[Weight.EquipmentWeight.s.None]
 
 	local weapon_mod = weapon and Weight.EquipmentWeight_to_WeightMod[weapon:GetDef().weight] or empty_slot_mod
 	self:AddWeightAddModifier("equipment_weapon", weapon_mod, true)
-	
+
 	local head_mod = head and Weight.EquipmentWeight_to_WeightMod[head:GetDef().weight] or empty_slot_mod
 	self:AddWeightAddModifier("equipment_head", head_mod, true)
 
@@ -206,6 +206,10 @@ function Weight:ResetAndUpdateEquipmentWeight()
 end
 
 function Weight:OnStatusChangeByEquipment(previous_status)
+	if self.inst:HasTag("created_by_debugspawn") then
+		return
+	end
+
 	local STRINGS = STRINGS.UI.WEIGHT_CHANGED_SCREEN
 	local current_status = self:GetStatus()
 	local CheckFirstTimeWeightClassSeen = function(persistent_has_seen, weight_class, label, description)
@@ -217,8 +221,8 @@ function Weight:OnStatusChangeByEquipment(previous_status)
 		end
 		local ConfirmDialog = require "screens.dialogs.confirmdialog"
 		local screen = ConfirmDialog(
-			nil, 
-			nil, 
+			self.inst,
+			nil,
 			false,
 			STRINGS.TITLE,
 			STRINGS.SUB_TITLE_FMT:subfmt({ weight_class = label, }),

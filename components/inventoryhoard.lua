@@ -1,4 +1,5 @@
 local Consumable = require "defs.consumable"
+local Constructable = require "defs.constructable"
 local Equipment = require "defs.equipment"
 local EquipmentGem = require "defs.equipmentgems"
 local itemforge = require "defs.itemforge"
@@ -11,7 +12,6 @@ local soundutil = require "util.soundutil"
 local fmodtable = require "defs.sound.fmodtable"
 
 require "util"
-require "components.vendingmachine" -- for RequiredBitCount
 
 local NUM_LOADOUTS = 5
 
@@ -53,6 +53,11 @@ local function create_default_data()
 		data.inventory[slot] = {}
 	end
 
+	for _,slot in pairs(Constructable.Slots) do
+		assert(not data.inventory[slot], "Inventory Hoard already has slot ".. slot)
+		data.inventory[slot] = {}
+	end
+
 	for i = 1, NUM_LOADOUTS do
 		table.insert(data.loadouts, {})
 	end
@@ -74,10 +79,13 @@ end)
 local MaterialTypeNrBits = 3
 local MaterialCountNrBits = 12
 
+local function ShouldSerialize(x)
+	return x:HasTag("netserialize")
+end
 function InventoryHoard:OnNetSerialize()
 	local e = self.inst.entity
 	local slot_items = self.data.inventory[Consumable.Slots.MATERIALS] -- only care about specific slots
-	local net_count = slot_items and lume.count(slot_items, function(x) return x:HasTag("netserialize") end) or 0
+	local net_count = slot_items and lume.count(slot_items, ShouldSerialize) or 0
 	e:SerializeUInt(net_count, MaterialTypeNrBits)
 
 	if net_count > 0 then
@@ -110,18 +118,25 @@ function InventoryHoard:SerializeEquipmentSlot(slot)
 	local item_count = items and lume.count(items) or 0
 	self.inst.entity:SerializeUInt(item_count, EQUIPMENT_ITEM_COUNT_BIT_COUNT)
 	if item_count ~= 0 then
-		lume(items):each(function(item)
+		for i,item in ipairs(items) do
 			self.inst.entity:SerializeString(item.id)
 			self.inst.entity:SerializeUInt(item.ilvl, ILVL_BIT_COUNT)
-		end)
+			self.inst.entity:SerializeUInt(item.upgrade_level, ILVL_BIT_COUNT)
+		end
 	end
 end
 
+local temp_ids = {}
 function InventoryHoard:OnNetDeserialize()
 	local e = self.inst.entity
 	local slot_items = self.data.inventory[Consumable.Slots.MATERIALS]
 	local net_count = e:DeserializeUInt(MaterialTypeNrBits)
-	
+
+	lume.clear(temp_ids)
+	for id,_ in pairs(slot_items) do
+		temp_ids[id] = true
+	end
+
 	for _i=1,net_count do
 		local id = e:DeserializeString()
 		local count = e:DeserializeUInt(MaterialCountNrBits)
@@ -130,8 +145,15 @@ function InventoryHoard:OnNetDeserialize()
 		local old_count = slot_items[id] and slot_items[id].count or 0
 		dbassert(itemdef.tags["netserialize"])
 		if old_count ~= count then
-			self:AddStackable(itemdef, count - old_count)
+			local suppress_konjur_event <const> = true
+			self:AddStackable(itemdef, count - old_count, suppress_konjur_event)
 		end
+		temp_ids[id] = nil
+	end
+
+	for id,_ in pairs(temp_ids) do
+		-- client no longer has this item, remove from our inventory
+		self:RemoveStackable(slot_items[id]:GetDef(), slot_items[id].count)
 	end
 
 	self:DeserializeEquipmentSlot(Equipment.Slots.BODY)
@@ -142,21 +164,51 @@ end
 
 function InventoryHoard:DeserializeEquipmentSlot(slot)
 	local item_count = self.inst.entity:DeserializeUInt(EQUIPMENT_ITEM_COUNT_BIT_COUNT)
-	local items = {}
+
+	local slottable = self.data.inventory[slot]
+	
+	lume.clear(temp_ids)
+	for _, item in ipairs(slottable) do
+		temp_ids[item.id] = item	-- quick lookup by id
+	end
+
 	for i = 1, item_count do
 		-- Build a lightweight proxy view of the remote equipment.
 		local id = self.inst.entity:DeserializeString()
 		local ilvl = self.inst.entity:DeserializeUInt(ILVL_BIT_COUNT)
-		local item_proxy = {
-			id = id,
-			ilvl = ilvl, -- needed for Tuning:GetWeaponModifiers()
-			slot = slot, -- needed for GetDef()
-		}
-		-- Add the ItemInstance meta-table so GetDef() works.
-		itemforge.ConvertToRuntimeItem(item_proxy)
-		table.insert(items, item_proxy)
+		local upgrade_level = self.inst.entity:DeserializeUInt(ILVL_BIT_COUNT)
+	
+		local item_proxy = temp_ids[id]	-- see if this item already exists. 
+		if item_proxy then
+			item_proxy.ilvl = ilvl
+			item_proxy.upgrade_level = upgrade_level
+			item_proxy.slot = slot
+			item_proxy.deserialized = true	-- mark it as 'don't delete!'
+		else
+			-- create a new item:
+			item_proxy = {
+				id = id,
+				ilvl = ilvl, -- needed for Tuning:GetWeaponModifiers()
+				upgrade_level = upgrade_level,
+				slot = slot, -- needed for GetDef()
+			}
+			-- Add the ItemInstance meta-table so GetDef() works.
+			itemforge.ConvertToRuntimeItem(item_proxy)
+			item_proxy.deserialized = true -- mark it as 'don't delete!'
+			table.insert(slottable, item_proxy);
+		end
 	end
-	self.data.inventory[slot] = items
+
+	-- Remove all the items that weren't deserialized:
+	local i=1
+	while i <= #slottable do
+		if not slottable[i].deserialized then
+			table.remove(slottable, i)
+		else
+			slottable[i].deserialized = nil
+			i = i+1
+		end
+	end
 end
 
 function InventoryHoard:OnSave()
@@ -197,6 +249,13 @@ function InventoryHoard:OnLoad(data)
 				data.inventory[slot] = {}
 			end
 		end
+
+		for _,slot in pairs(Constructable.Slots) do
+			if not data.inventory[slot] then
+				data.inventory[slot] = {}
+			end
+		end
+
 		------------------
 
 		kassert.typeof('table', data.inventory.WEAPON)
@@ -310,6 +369,7 @@ function InventoryHoard:OnLoadoutChanged()
 	self.inst.components.locomotor:AddSpeedMult(modifier_name, stats.SPEED)
 	self.inst.components.lucky:AddLuckMod(modifier_name, stats.LUCK)
 	self.inst.components.combat:SetDungeonTierDamageReductionMult(modifier_name, stats.ARMOUR)
+	self.inst.components.combat:SetHitStreakDecayTimeMult("base", 1)
 	self.inst.components.damagebonus.cached_stats = stats
 
 	self.inst:PushEvent("loadout_changed", self.data.selectedLoadoutIndex)
@@ -446,13 +506,23 @@ function InventoryHoard:Debug_GiveRelevantEquipment()
 	self:SwitchToLoadout(1)
 end
 
-function InventoryHoard:Debug_GiveProps()
-	local num_per_material = 1
-	local tags = nil -- {"drops_resources"}
-	local items = Consumable.GetItemList(Consumable.Slots.PLACEABLE_PROP, tags)
-	for _,mat in pairs(items) do
-		self:AddStackable(mat, num_per_material)
+function InventoryHoard:Debug_GiveDecor()
+	local items = Constructable.GetItemList(Constructable.Slots.DECOR)
+	for _, item in pairs(items) do
+		self:AddStackable(item, 1)
 	end
+end
+
+function InventoryHoard:Debug_GiveStructures()
+	local items = Constructable.GetItemList(Constructable.Slots.STRUCTURES)
+	for _, item in pairs(items) do
+		self:AddStackable(item, 1)
+	end
+end
+
+function InventoryHoard:Debug_GiveAllConstructables()
+	self:Debug_GiveDecor()
+	self:Debug_GiveStructures()
 end
 
 function InventoryHoard:Debug_GiveKeyItems()
@@ -666,13 +736,15 @@ function InventoryHoard:GetAllGems()
 
 	-- Sort gems by level and exp
 	table.sort(gems, function(a, b)
-		if a.ilvl == b.ilvl then
+		local a_ilvl = a:GetEffectiveItemLevel()
+		local b_ilvl = b:GetEffectiveItemLevel()
+		if a_ilvl == b_ilvl then
 			if a.exp == b.exp then
 				return a.id > b.id
 			end
 			return a.exp > b.exp
 		end
-		return a.ilvl > b.ilvl
+		return a_ilvl > b_ilvl
 	end)
 
 	return gems
@@ -714,6 +786,16 @@ function InventoryHoard:Debug_GiveItem(slot, name, count, should_equip)
 		end
 		return true
 
+	elseif Constructable.Slots[slot] then
+		-- ignore should_equip, you cannot equip consumables.
+		local def = Constructable.Items[slot][name]
+		if not def then
+			print("Couldn't find constructable:", slot, name)
+			return false
+		end
+		print("giving", self.inst, def.name)
+		self:AddStackable(def, count or 1)
+		return true
 	elseif Consumable.Slots[slot] then
 		-- ignore should_equip, you cannot equip consumables.
 		local def = Consumable.Items[slot][name]
@@ -769,14 +851,32 @@ function InventoryHoard:DebugDrawEntity(ui, panel, colors)
 end
 
 function InventoryHoard:Debug_RemoveByName(slot, item_name)
-	local item_def = Equipment.Items[slot][item_name]
+	if Equipment.Slots[slot] then	
+		local item_def = Equipment.Items[slot][item_name]
 
-	if item_def == nil then
-		print ("COULD NOT FIND DEFINITION FOR ITEM ", item_name)
-		return
+		if item_def == nil then
+			print ("COULD NOT FIND DEFINITION FOR ITEM ", item_name)
+			return
+		end
+
+		self:RemoveFromInventory(self:GetInventoryItem(item_def))
+	elseif Constructable.Slots[slot] then
+		-- ignore should_equip, you cannot equip consumables.
+		local item_def = Constructable.Items[slot][item_name]
+		if not item_def then
+			print("Couldn't find constructable:", slot, item_name)
+			return
+		end
+		self:RemoveStackable(item_def, 1)
+	elseif Consumable.Slots[slot] then
+		-- ignore should_equip, you cannot equip consumables.
+		local item_def = Consumable.Items[slot][item_name]
+		if not item_def then
+			print("Couldn't find consumable:", slot, item_name)
+			return
+		end
+		self:RemoveStackable(item_def, 1)
 	end
-
-	self:RemoveFromInventory(self:GetInventoryItem(item_def))
 end
 
 

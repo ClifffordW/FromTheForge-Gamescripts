@@ -78,11 +78,15 @@ function CurrencyPanel:Refresh()
 	for currency, widget in pairs(self.widgets) do
 		-- don't show non-serialized currencies in HUD for remote players
 		local item = self.player.components.inventoryhoard:GetSlotItems(Consumable.Slots.MATERIALS)[currency]
-		if not self.player.components.unlocktracker:IsConsumableUnlocked(currency) or
-			(not self.player:IsLocal() and (not item or not item:HasTag("netserialize"))) then
-			widget:Hide()
-		else
+
+		local mat_def = Consumable.Items.MATERIALS[currency]
+		local currency_count = self.player.components.inventoryhoard:GetStackableCount(mat_def) or 0
+
+		if (self.player.components.unlocktracker:IsConsumableUnlocked(currency) or currency_count > 0) and	-- item is unlocked, or has a count > 0
+			(self.player:IsLocal() or (item and item:HasTag("netserialize"))) then
 			widget:Show()
+		else
+			widget:Hide()
 		end
 	end
 

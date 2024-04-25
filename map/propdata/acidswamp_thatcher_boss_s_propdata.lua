@@ -1,22 +1,22 @@
 local t = {
-  acid_drops_swamp={ { param_id="", x=1.28, z=-22.31,}, { param_id="", x=-10.03, z=35.79,},},
+  acid_drops_swamp={ { param_id="", x=1.28, z=-22.31,}, { param_id="", x=0.54, z=-14.57,},},
   bandiforest_bg_boulder_acid={
     {
-      color_variant={ brightness=12.0, hue=-5.0, saturation=-5.0,},
+      color_variant={ brightness=33, hue=29, saturation=-41,},
       hsb=nil,
       variation=3,
-      x=2.56,
-      z=31.36,
+      x=2.58,
+      z=30.63,
     },
     {
-      color_variant={ brightness=28, hue=-13, saturation=-16,},
+      color_variant={ brightness=33, hue=29, saturation=-41,},
       hsb=nil,
       variation=3,
       x=-23.41,
       z=31.26,
     },
     {
-      color_variant={ brightness=20, hue=-7, saturation=-9,},
+      color_variant={ brightness=33, hue=29, saturation=-41,},
       hsb=nil,
       variation=3,
       x=24.37,
@@ -25,11 +25,11 @@ local t = {
     { variation=3, x=33.78, z=21.82,},
     { variation=2, x=-23.22, z=-14.96,},
     {
-      color_variant={ brightness=35, hue=-8.0, saturation=-9,},
+      color_variant={ brightness=33, hue=29, saturation=-41,},
       hsb=nil,
       variation=2,
-      x=-14.01,
-      z=36.74,
+      x=-13.54,
+      z=36.64,
     },
   },
   bandiforest_bg_bug={
@@ -59,29 +59,28 @@ local t = {
   },
   bandiforest_bg_bugwings={
     {
-      color_variant={ brightness=-6, hue=-12, saturation=1,},
+      color_variant={ brightness=0.0, hue=-12, saturation=12.0,},
       hsb=nil,
-      x=26.11,
+      x=26.12,
       z=1.53,
     },
   },
-  bandiforest_bg_cuttree={ { variation=2, x=-8.0, z=25.9,}, { variation=1, x=7.68, z=25.57,},},
   bandiforest_bg_deadbug={
     {
-      color_variant={ brightness=-6.0, hue=-12.0, saturation=1.0,},
+      color_variant={ brightness=4.0, hue=-12.0, saturation=1.0,},
       fade={ bottom=-4.02, top=-0.98,},
       hsb=nil,
       x=0.56,
-      z=21.57,
+      z=21.58,
     },
   },
   bandiforest_bg_fillreed={
     {
-      color_variant={ brightness=43.0, hue=13.0, saturation=-15.0,},
+      color_variant={ brightness=38, hue=-21, saturation=-40,},
       fade={ bottom=-7.29, top=-0.27,},
       hsb=nil,
-      x=-1.96,
-      z=52.54,
+      x=-2.07,
+      z=54.5,
     },
   },
   bandiforest_bg_lilypad_cut={
@@ -125,16 +124,23 @@ local t = {
       color_variant={ brightness=10, hue=2.0, saturation=-1.0,},
       hsb=nil,
       variation=4,
-      x=-4.51,
-      z=29.29,
+      x=-4.48,
+      z=27.66,
     },
     { variation=3, x=-37.69, z=13.35,},
+    {
+      color_variant={ brightness=10, hue=2.0, saturation=-1.0,},
+      hsb=nil,
+      variation=4,
+      x=6.32,
+      z=13.95,
+    },
   },
   bandiforest_bg_lrgtree={
     { variation=1, x=29.34, z=17.33,},
     { variation=4, x=-28.48, z=13.48,},
     {
-      color_variant={ brightness=28, hue=-13, saturation=-16,},
+      color_variant={ brightness=38, hue=29, saturation=-4,},
       hsb=nil,
       variation=3,
       x=-31.11,
@@ -144,7 +150,7 @@ local t = {
   bandiforest_bg_lrgtree_cuts={
     { variation=2, x=-27.68, z=-4.97,},
     {
-      color_variant={ brightness=35, hue=-8, saturation=-9,},
+      color_variant={ brightness=21, hue=15, saturation=-4,},
       hsb=nil,
       variation=4,
       x=-18.05,
@@ -154,7 +160,7 @@ local t = {
     { variation=2, x=17.7, z=27.82,},
     { variation=4, x=32.66, z=9.43,},
     {
-      color_variant={ brightness=35, hue=-8, saturation=-9,},
+      color_variant={ brightness=38, hue=29, saturation=-4,},
       hsb=nil,
       variation=4,
       x=29.69,
@@ -171,14 +177,14 @@ local t = {
     { variation=4, x=-37.18, z=1.87,},
     { variation=4, x=-40.3, z=27.07,},
     {
-      color_variant={ brightness=20, hue=-7, saturation=-9,},
+      color_variant={ brightness=21.0, hue=15.0, saturation=-4,},
       hsb=nil,
       variation=2,
-      x=-6.08,
-      z=35.66,
+      x=-5.43,
+      z=35.45,
     },
     {
-      color_variant={ brightness=35, hue=-8, saturation=-9,},
+      color_variant={ brightness=38, hue=29, saturation=-4,},
       fade={ bottom=-4.17, top=1.24,},
       hsb=nil,
       variation=3,
@@ -186,7 +192,7 @@ local t = {
       z=37.76,
     },
     {
-      color_variant={ brightness=23.0, hue=-2.0, saturation=-9.0,},
+      color_variant={ brightness=21, hue=15, saturation=-4,},
       hsb=nil,
       variation=1,
       x=12.86,
@@ -205,7 +211,7 @@ local t = {
     { variation=3, x=-17.7, z=29.89,},
     { variation=3, x=-30.19, z=27.1,},
     { variation=4, x=-29.18, z=7.26,},
-    { variation=2, x=-20.93, z=-10.8,},
+    { variation=2, x=-23.59, z=-9.72,},
     {
       color_variant={ brightness=0, hue=-1, saturation=-8,},
       hsb=nil,
@@ -213,7 +219,7 @@ local t = {
       x=-24.47,
       z=8.53,
     },
-    { variation=1, x=-12.17, z=31.28,},
+    { variation=1, x=-12.81, z=30.82,},
     { variation=4, x=8.8, z=17.65,},
     { variation=2, x=12.79, z=24.61,},
     { variation=1, x=-19.05, z=24.05,},
@@ -222,7 +228,6 @@ local t = {
     { variation=2, x=30.37, z=-2.45,},
     { variation=4, x=41.01, z=18.14,},
     { variation=1, x=-21.45, z=-18.66,},
-    { variation=1, x=-0.88, z=27.93,},
     { variation=2, x=4.71, z=28.89,},
     { variation=2, x=-14.25, z=26.17,},
     { variation=3, x=-7.04, z=28.24,},
@@ -240,7 +245,19 @@ local t = {
     { variation=1, x=-40.04, z=20.78,},
     { variation=4, x=36.16, z=30.65,},
     { variation=2, x=40.46, z=32.32,},
-    { variation=1, x=-25.25, z=-7.88,},
+    { variation=1, x=-26.21, z=-7.14,},
+    {
+      color_variant={ brightness=28, hue=-13, saturation=-16,},
+      variation=4,
+      x=-10.22,
+      z=33.68,
+    },
+    {
+      color_variant={ brightness=28, hue=-13, saturation=-16,},
+      variation=4,
+      x=-0.94,
+      z=34.53,
+    },
   },
   bandiforest_bg_tendril={
     {
@@ -282,13 +299,6 @@ local t = {
     {
       color_variant={ brightness=0, hue=-1, saturation=-8,},
       hsb=nil,
-      variation=4,
-      x=-6.86,
-      z=24.03,
-    },
-    {
-      color_variant={ brightness=0, hue=-1, saturation=-8,},
-      hsb=nil,
       variation=5,
       x=10.91,
       z=28.46,
@@ -308,14 +318,21 @@ local t = {
       x=9.08,
       z=14.91,
     },
+    {
+      color_variant={ brightness=0, hue=-1, saturation=-8,},
+      hsb=nil,
+      variation=5,
+      x=-2.82,
+      z=14.17,
+    },
   },
   bandiforest_bg_tendrilspawner={
     {
       color_variant={ brightness=0, hue=-1, saturation=-8,},
       hsb=nil,
       script_args={  },
-      x=-24.98,
-      z=17.4,
+      x=-24.95,
+      z=16.73,
     },
     {
       color_variant={ brightness=0, hue=-1, saturation=-8,},
@@ -335,8 +352,8 @@ local t = {
       color_variant={ brightness=0, hue=-1, saturation=-8,},
       hsb=nil,
       script_args={  },
-      x=24.69,
-      z=-4.05,
+      x=24.2,
+      z=-4.86,
     },
   },
   bandiforest_fg_boulder_slime={
@@ -357,9 +374,9 @@ local t = {
     {
       color_variant={ brightness=-18.0, hue=-1, saturation=3.0,},
       hsb=nil,
-      variation=3,
-      x=-2.89,
-      z=-23.23,
+      variation=2,
+      x=11.73,
+      z=-23.22,
     },
     {
       color_variant={ brightness=-28, hue=-1, saturation=6,},
@@ -376,16 +393,16 @@ local t = {
   },
   bandiforest_fg_canopyslime={ { variation=2, x=12.78, y=3.0, z=-22.38,},},
   bandiforest_fg_deadbug={
-    { variation=1, x=-16.29, z=-19.31,},
+    { variation=1, x=-15.58, z=-19.49,},
     {
       color_variant={ brightness=-28, hue=-1, saturation=6,},
       flip=true,
       hsb=nil,
       variation=3,
-      x=-8.85,
-      z=-19.12,
+      x=-10.2,
+      z=-19.45,
     },
-    { variation=2, x=20.64, z=-17.79,},
+    { variation=2, x=20.54, z=-16.52,},
   },
   bandiforest_fg_lilypadcut={
     {
@@ -393,23 +410,30 @@ local t = {
       flip=true,
       hsb=nil,
       variation=2,
-      x=-13.45,
-      z=-27.93,
+      x=-14.97,
+      z=-26.0,
     },
     {
       color_variant={ brightness=-28, hue=-1, saturation=6,},
       hsb=nil,
       variation=1,
-      x=27.73,
-      z=-18.22,
+      x=26.77,
+      z=-18.32,
     },
-    { variation=2, x=21.28, z=-15.79,},
+    { variation=2, x=23.43, z=-14.61,},
     {
       color_variant={ brightness=-28, hue=-1, saturation=6,},
       hsb=nil,
       variation=1,
-      x=1.74,
-      z=-26.55,
+      x=2.47,
+      z=-25.5,
+    },
+    { variation=2, x=7.85, z=-18.93,},
+    {
+      color_variant={ brightness=-28, hue=-1, saturation=6,},
+      variation=3,
+      x=15.34,
+      z=-25.05,
     },
   },
   bandiforest_fg_reed={
@@ -417,8 +441,8 @@ local t = {
       color_variant={ brightness=-29, hue=-4, saturation=0,},
       hsb=nil,
       variation=1,
-      x=16.68,
-      z=-27.3,
+      x=16.9,
+      z=-27.29,
     },
     {
       color_variant={ brightness=-29, hue=-4, saturation=0,},
@@ -431,11 +455,9 @@ local t = {
       color_variant={ brightness=-29, hue=-4, saturation=0,},
       hsb=nil,
       variation=3,
-      x=-3.76,
-      z=-25.41,
+      x=-7.14,
+      z=-22.62,
     },
-    { variation=2, x=17.43, z=-19.75,},
-    { variation=1, x=-13.42, z=-21.91,},
     {
       color_variant={ brightness=-29, hue=-4, saturation=0,},
       hsb=nil,
@@ -455,20 +477,11 @@ local t = {
       color_variant={ brightness=-29, hue=-4, saturation=0,},
       hsb=nil,
       variation=3,
-      x=13.96,
-      z=-25.79,
+      x=14.54,
+      z=-22.04,
     },
   },
-  bandiforest_fg_tendril={
-    { variation=2, x=-26.1, z=-24.54,},
-    {
-      color_variant={ brightness=0, hue=12.0, saturation=0,},
-      hsb=nil,
-      variation=3,
-      x=-18.36,
-      z=-16.97,
-    },
-  },
+  bandiforest_fg_tendril={ { variation=2, x=-26.1, z=-24.54,},},
   bandiforest_fg_tree_cut={
     { variation=3, x=-19.0, z=-30.54,},
     { variation=2, x=21.63, z=-23.31,},
@@ -500,23 +513,23 @@ local t = {
   },
   bandiforest_ul_fartreelrg={
     {
-      color_variant={ brightness=-11, hue=12.0, saturation=-28.0,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=4,
-      x=-15.84,
-      z=43.73,
+      x=-15.15,
+      z=42.19,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
-      x=-8.92,
-      z=41.94,
+      x=-10.07,
+      z=42.86,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=2,
@@ -524,7 +537,7 @@ local t = {
       z=44.25,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=2,
@@ -532,7 +545,7 @@ local t = {
       z=43.81,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=4,
@@ -540,7 +553,7 @@ local t = {
       z=45.52,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
@@ -548,7 +561,7 @@ local t = {
       z=40.88,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
@@ -556,7 +569,7 @@ local t = {
       z=43.01,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=2,
@@ -564,7 +577,7 @@ local t = {
       z=39.99,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=1,
@@ -572,7 +585,7 @@ local t = {
       z=40.02,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=4,
@@ -596,7 +609,7 @@ local t = {
       z=42.95,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
@@ -604,7 +617,7 @@ local t = {
       z=44.6,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=2,
@@ -612,7 +625,7 @@ local t = {
       z=43.99,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=4,
@@ -620,7 +633,7 @@ local t = {
       z=47.3,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=2,
@@ -636,7 +649,7 @@ local t = {
       z=45.61,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
@@ -644,7 +657,7 @@ local t = {
       z=47.17,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
@@ -652,7 +665,7 @@ local t = {
       z=47.06,
     },
     {
-      color_variant={ brightness=-11, hue=12, saturation=-28,},
+      color_variant={ brightness=-11, hue=-11, saturation=-28,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=1,
@@ -660,15 +673,15 @@ local t = {
       z=41.68,
     },
     {
-      color_variant={ brightness=1, hue=19.0, saturation=-14.0,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=3,
-      x=-13.51,
-      z=49.39,
+      x=-14.09,
+      z=52.27,
     },
     {
-      color_variant={ brightness=1, hue=19, saturation=-14,},
+      color_variant={ brightness=1, hue=-2, saturation=-14,},
       fade={ bottom=-6.79, top=-0.82,},
       hsb=nil,
       variation=2,
@@ -681,13 +694,14 @@ local t = {
     { variation=3, x=30.88, z=-12.64,},
     { variation=4, x=-27.41, z=7.95,},
     { variation=2, x=-29.34, z=-11.76,},
-    { variation=1, x=6.9, y=6.0, z=1.31,},
+    { variation=1, x=10.1, y=6.0, z=0.96,},
     { variation=2, x=-14.95, y=2.5, z=-13.96,},
-    { variation=4, x=-13.09, y=4.0, z=11.32,},
+    { flip=true, variation=4, x=-8.59, y=4.0, z=7.5,},
     { variation=3, x=3.01, z=23.17,},
     { variation=1, x=-19.01, z=21.98,},
     { variation=3, x=25.71, z=29.66,},
   },
+  fog_swamp_billboard_bg_boss={ { layer="bg", param_id="", x=-13.56, z=39.52,},},
   lightspot_smlbubbly={
     {
       script_args={
@@ -724,13 +738,13 @@ local t = {
         trans_speed=0.74699997901917,
       },
       variation=2,
-      x=-6.02,
-      z=1.64,
+      x=-6.94,
+      z=0.11,
     },
     {
       script_args={
         animate=true,
-        intensity=0.24099999666214,
+        intensity=0.0,
         light_color="89EE7EFF",
         max_rotation=5.6040000915527,
         max_translation=0.11299999803305,
@@ -743,11 +757,11 @@ local t = {
         trans_speed=0.74699997901917,
       },
       variation=4,
-      x=-2.76,
+      x=-2.77,
       z=-3.29,
     },
   },
-  spawner_boss_test={ { place_anywhere=true, z=5.0,},},
+  spawner_boss_test={ { place_anywhere=true, z=20.0,},},
   spawner_propdestructible={
     { x=12.0, z=2.0,},
     { x=17.0, z=-4.0,},
@@ -758,6 +772,35 @@ local t = {
     { x=-17.0, z=-2.0,},
     { x=-14.0, z=14.0,},
     { x=16.0, z=11.0,},
+  },
+  spawner_trap={
+    {
+      no_snap=true,
+      place_anywhere=true,
+      script_args={ trap_directions={ 2,},},
+      x=-8.0,
+      z=25.9,
+    },
+    {
+      no_snap=true,
+      place_anywhere=true,
+      script_args={ trap_directions={ 0,},},
+      x=7.68,
+      z=25.57,
+    },
+  },
+  swamp_bubbles={
+    { param_id="", x=5.54, z=16.93,},
+    { param_id="", x=-8.76, z=23.9,},
+    { param_id="", x=7.0, z=24.97,},
+    { param_id="", x=23.68, z=7.27,},
+    { param_id="", x=-23.13, z=7.6,},
+    { param_id="", x=-23.61, z=-4.33,},
+  },
+  swamp_bubbles_tester={
+    { param_id="", x=0.25, z=10.68,},
+    { param_id="", x=-7.15, z=11.52,},
+    { param_id="", x=21.72, z=17.93,},
   },
 }
 t.bandiforest_bg_boulder_acid[1].hsb = t.bandiforest_bg_boulder_acid[1].color_variant
@@ -776,6 +819,7 @@ t.bandiforest_bg_lilypad_cut[4].hsb = t.bandiforest_bg_lilypad_cut[4].color_vari
 t.bandiforest_bg_lilypad_cut[5].hsb = t.bandiforest_bg_lilypad_cut[5].color_variant
 t.bandiforest_bg_lilypad_cut[6].hsb = t.bandiforest_bg_lilypad_cut[6].color_variant
 t.bandiforest_bg_lilypad_cut[7].hsb = t.bandiforest_bg_lilypad_cut[7].color_variant
+t.bandiforest_bg_lilypad_cut[9].hsb = t.bandiforest_bg_lilypad_cut[9].color_variant
 t.bandiforest_bg_lrgtree[3].hsb = t.bandiforest_bg_lrgtree[3].color_variant
 t.bandiforest_bg_lrgtree_cuts[2].hsb = t.bandiforest_bg_lrgtree_cuts[2].color_variant
 t.bandiforest_bg_lrgtree_cuts[6].hsb = t.bandiforest_bg_lrgtree_cuts[6].color_variant
@@ -785,14 +829,14 @@ t.bandiforest_bg_lrgtree_cuts[12].hsb = t.bandiforest_bg_lrgtree_cuts[12].color_
 t.bandiforest_bg_lrgtree_cuts[13].hsb = t.bandiforest_bg_lrgtree_cuts[13].color_variant
 t.bandiforest_bg_lrgtree_cuts[14].hsb = t.bandiforest_bg_lrgtree_cuts[14].color_variant
 t.bandiforest_bg_reed[6].hsb = t.bandiforest_bg_reed[6].color_variant
-t.bandiforest_bg_reed[21].hsb = t.bandiforest_bg_reed[21].color_variant
+t.bandiforest_bg_reed[20].hsb = t.bandiforest_bg_reed[20].color_variant
 t.bandiforest_bg_tendril[1].hsb = t.bandiforest_bg_tendril[1].color_variant
 t.bandiforest_bg_tendril[2].hsb = t.bandiforest_bg_tendril[2].color_variant
 t.bandiforest_bg_tendril[3].hsb = t.bandiforest_bg_tendril[3].color_variant
 t.bandiforest_bg_tendril[4].hsb = t.bandiforest_bg_tendril[4].color_variant
 t.bandiforest_bg_tendril[5].hsb = t.bandiforest_bg_tendril[5].color_variant
 t.bandiforest_bg_tendril[7].hsb = t.bandiforest_bg_tendril[7].color_variant
-t.bandiforest_bg_tendril[8].hsb = t.bandiforest_bg_tendril[8].color_variant
+t.bandiforest_bg_tendril[9].hsb = t.bandiforest_bg_tendril[9].color_variant
 t.bandiforest_bg_tendril[10].hsb = t.bandiforest_bg_tendril[10].color_variant
 t.bandiforest_bg_tendril[11].hsb = t.bandiforest_bg_tendril[11].color_variant
 t.bandiforest_bg_tendrilspawner[1].hsb = t.bandiforest_bg_tendrilspawner[1].color_variant
@@ -810,10 +854,9 @@ t.bandiforest_fg_lilypadcut[4].hsb = t.bandiforest_fg_lilypadcut[4].color_varian
 t.bandiforest_fg_reed[1].hsb = t.bandiforest_fg_reed[1].color_variant
 t.bandiforest_fg_reed[2].hsb = t.bandiforest_fg_reed[2].color_variant
 t.bandiforest_fg_reed[3].hsb = t.bandiforest_fg_reed[3].color_variant
-t.bandiforest_fg_reed[6].hsb = t.bandiforest_fg_reed[6].color_variant
+t.bandiforest_fg_reed[4].hsb = t.bandiforest_fg_reed[4].color_variant
+t.bandiforest_fg_reed[5].hsb = t.bandiforest_fg_reed[5].color_variant
 t.bandiforest_fg_reed[7].hsb = t.bandiforest_fg_reed[7].color_variant
-t.bandiforest_fg_reed[9].hsb = t.bandiforest_fg_reed[9].color_variant
-t.bandiforest_fg_tendril[2].hsb = t.bandiforest_fg_tendril[2].color_variant
 t.bandiforest_ul_fartreelrg[1].hsb = t.bandiforest_ul_fartreelrg[1].color_variant
 t.bandiforest_ul_fartreelrg[2].hsb = t.bandiforest_ul_fartreelrg[2].color_variant
 t.bandiforest_ul_fartreelrg[3].hsb = t.bandiforest_ul_fartreelrg[3].color_variant

@@ -4,29 +4,45 @@ local itemcatalog = require"defs.itemcatalog"
 local lume = require "util.lume"
 require "util"
 
-local function create_default_data()
-	local data =
-	{
-		[UNLOCKABLE_CATEGORIES.s.FLAG] = {},
-		[UNLOCKABLE_CATEGORIES.s.LOCATION] = {},
-		[UNLOCKABLE_CATEGORIES.s.REGION] = {},
-	}
-	return data
-end
+--
+-- C++ API for accessing world flags through TheWorldData:
+--
+-- TheWorldData:IsValid()							--> Returns whether the data for the world is valid (loaded/synced). (May return false on clients for a short period at the start of the game)
+--
+-- TheWorldData:ResetUnlocks()						--> (Host only) Resets all unlocks
+-- TheWorldData:ResetUnlocks("Category")			--> (Host only) Resets all unlocks in this category
+--
+-- TheWorldData:SetIsUnlocked("Category", "ID", true/false)	--> Set the unlock state of item with name ID in category Category to true or false
+-- TheWorldData:IsUnlocked("Category", "ID")		--> Returns true/false for the given category and item
+--
+-- TheWorldData:GetAllUnlocked(category)			--> Gets all unlocks in the given category
+--
+-- TheWorldData:GetSaveData()						--> Returns a table with all saved data
+-- TheWorldData:SetLoadData(datatable)				--> Loads the save-data-table into the unlocks
+--
+-- TheWorldData:GetSize()							--> Returns the size of the world-data in bytes (for network optimization purposes)
+--
+--  // CALLBACKS:
+--
+-- In addition to the API above, lua will received a callback in networking.lua whenever the world data changes. 
+--
+-- (networking.lua)	OnNetworkWorldDataChanged(isRemoteData) --> callback that happens when the data changes. isRemoteData signifies whether the data came from a remote machine, or a local machine (for example after loading the worlddata)
+--
+
+
 
 -- Total collection of everything the player's unlocked
 local WorldUnlocks = Class(function(self, inst)
 	self.inst = inst
-	self.data = create_default_data()
 end)
 
 function WorldUnlocks:OnSave()
-	return self.data
+	return TheWorldData:GetSaveData()
 end
 
 function WorldUnlocks:OnLoad(data)
 	assert(data)
-	self.data = data
+	TheWorldData:SetLoadData(data);
 end
 
 function WorldUnlocks:OnPostSpawn()
@@ -34,7 +50,7 @@ function WorldUnlocks:OnPostSpawn()
 end
 
 function WorldUnlocks:ResetUnlocksToDefault()
-	self.data = create_default_data()
+	TheWorldData:ResetUnlocks();
 	self:GiveDefaultUnlocks()
 end
 
@@ -44,22 +60,23 @@ function WorldUnlocks:GiveDefaultUnlocks()
 end
 
 function WorldUnlocks:IsUnlocked(id, category)
-	return self.data[category][id]
+	return TheWorldData:IsUnlocked(category, id)
 end
 
 function WorldUnlocks:SetIsUnlocked(id, category, unlocked)
+	TheWorldData:SetIsUnlocked(category, id, unlocked)
 	if unlocked then
-		self.data[category][id] = true
 		self.inst:PushEvent("global_item_unlocked", {id = id, category = category})
 	else
-		self.data[category][id] = nil
 		self.inst:PushEvent("global_item_locked", {id = id, category = category})
 	end
 end
 
 function WorldUnlocks:GetAllUnlocked(category)
-	assert(self.data[category] ~= nil, "INVALID UNLOCKABLE CATEGORY:", category)
-	return deepcopy(self.data[category])
+	local result = TheWorldData:GetAllUnlocked(category)
+	if result then 
+		return deepcopy(result)
+	end
 end
 
 ------------------------------------------------------------------------------------------------------------
@@ -107,5 +124,11 @@ function WorldUnlocks:LockRegion(region)
 	self:SetIsUnlocked(region, UNLOCKABLE_CATEGORIES.s.REGION, false)
 end
 ----------------------------------------------------------------------------------------------------
+
+
+function WorldUnlocks:DebugDrawEntity(ui, panel, colors)
+	local networkui = require "dbui.debug_network"
+	networkui:RenderNetworkWorldData(ui)
+end
 
 return WorldUnlocks

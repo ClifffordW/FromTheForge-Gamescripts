@@ -74,18 +74,23 @@ STRINGS.COSMETICS =
 			PIEMASTER = "Piemaster", --kill a zucco, yammo and a gourdo
 			TREEHUGGER = "Treehugger", --treemon mastery
 			FORESTKEEPER = "Forest Keeper", --megatreemon mastery
+			BUSHWHACKER = "Bushwhacker", --explored Treemon Forest 
 
 		--OWLITZER_FOREST
 			STINKY = "Stinky", --gnarlic mastery
 			NIGHTSHROUD = "Nightshroud", --owlitzer mastery
+			DUSKFARER = "Duskfarer", --explored Owlitzer Forest 
 
 		--BANDICOOT_SWAMP
 			PRIMABALLERINA = "Prima Ballerina", --floracrane mastery
 			WATCHER = "Watcher", --eyev mastery
 			MADTRICKSTER = "Mad Trickster", --bandicoot mastery
+			GALLIVANTER = "Gallivanter", --explored Bandicoot Swamp 
 
 		--THATCHER_SWAMP
 			CHUBBSTER = "Chubbster", --slowpoke mastery
 			WOWORM = "Lil' Slime", --woworm mastery
-	},
+			BALLADWEAVER = "Balladweaver",
+			SWAMPRUNNER = "Swamprunner", --explored Thatcher Swamp
+		},
 }

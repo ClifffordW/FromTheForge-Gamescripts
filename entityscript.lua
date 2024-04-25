@@ -233,7 +233,7 @@ function EntityScript:CanTakeControl(attack)
 		return false
 	end
 
-	-- jambell: The order here might be important. Checking this after IsInvicible check because if it's invincible, the attack won't connect.
+	-- The order here might be important. Checking this after IsInvicible check because if it's invincible, the attack won't connect.
 	if attack and health_cmp and self.components.combat then
 		-- If we predict that this attack will kill the entity, take control so the kill feels local.
 		local damage = self.components.combat:CalculateProcessedDamage(attack)
@@ -289,12 +289,12 @@ end
 
 function EntityScript:RemoveFromScene()
 	self.entity:AddTag("INLIMBO")
-	self:ResolveInLimboTag();
+	self:ResolveInLimboTag()
 end
 
 function EntityScript:ReturnToScene()
 	self.entity:RemoveTag("INLIMBO")
-	self:ResolveInLimboTag();
+	self:ResolveInLimboTag()
 end
 
 function EntityScript:Pause()
@@ -486,6 +486,15 @@ function EntityScript:GetComponentName(cmp)
 	return "component"
 end
 
+-- == A Partial List of Tags ==
+-- FX: Animated visual effects. Makes raycasts return parent entity and is ignored by GetEntitiesOnTileAtPoint.
+-- INLIMBO: Entity exists, but isn't in the current scene (mostly inactive).
+-- NOCLICK: Do not allow the mouse to click.
+-- YESCLICK: Override optimizations that would exclude this object from being clicked.
+-- interactable: Entities the player can interact with.
+-- player: This is a player.
+-- prop: Items placeable in the level by an artist.
+-- survives_room_travel: Not destroyed when moving between rooms in a dungeon.
 function EntityScript:AddTag(tag)
 	self.entity:AddTag(tag)
 end
@@ -547,13 +556,18 @@ function EntityScript:AddComponent(name, ...)
 	end
 
 	if cmp.OnNetSerialize ~= nil and cmp.OnNetDeserialize ~= nil
-		and (not self.prefab or Prefabs[self.prefab].network_type ~= NetworkType_None) then
+		and (not self.prefab or Prefabs[self.prefab].network_type ~= NetworkType_None)
+	then
 		self.netcomponents[smallhash(name)] = cmp
 		self.nrnetcomponents = self.nrnetcomponents + 1
 
 		NetworkUpdatingEnts[self] = true
 	end
 
+	--~ if DEV_MODE then
+	--~ 	cmp.__zone_update_component = string.format("%s:OnUpdate", name)
+	--~ 	cmp.__zone_serialize_netcomponent = string.format("%s:NetSerialize", name)
+	--~ end
 	return cmp
 end
 
@@ -727,7 +741,8 @@ function EntityScript:SetStateGraph(name, opt_table)
 		if (opt_table) then
 			self.sg = StateGraphInstance(self, opt_table)
 		else
-			local entityName = self:HasTag("widget") and self.name or self.prefab
+			local prefabname = self.embellisher_prefab_override or self.prefab
+			local entityName = self:HasTag("widget") and self.name or prefabname
 			assert(entityName, [[First call SetPrefabName on your prefab:
 				local function fn(prefabname)
 					local inst = CreateEntity()
@@ -1444,20 +1459,26 @@ function EntityScript:NetSerialize()
 
 		-- Serialize the stategraph if it exists:
 		if self.sg then
+			--~ TheSim:ProfilerPush("networkserialize.sg")
 			self.entity:PushSerializationMarker("sg");
 			self.sg:OnNetSerialize()
 			self.entity:PopSerializationMarker()
+			--~ TheSim:ProfilerPop()
 		end
 
 		if self.boss_coro and self.boss_coro.OnNetSerialize then
+			--~ TheSim:ProfilerPush("networkserialize.boss_coro")
 			self.entity:PushSerializationMarker("boss_coro");
 			self.boss_coro:OnNetSerialize()
 			self.entity:PopSerializationMarker()
+			--~ TheSim:ProfilerPop()
 		end
 
 		self.entity:SerializeUInt(self.nrnetcomponents, MaxNrComponentsBits)
 
 		for k, v in pairs(self.netcomponents) do
+			--~ TheSim:ProfilerPush(v.__zone_serialize_netcomponent or "Component:NetSerialize")
+
 			-- save the hash of the name of the netcomponent:
 			self.entity:AlignToByte();
 
@@ -1473,6 +1494,8 @@ function EntityScript:NetSerialize()
 			if compname then
 				self.entity:PopSerializationMarker();
 			end
+
+			--~ TheSim:ProfilerPop()
 		end
 
 		self.entity:EndSerialization()

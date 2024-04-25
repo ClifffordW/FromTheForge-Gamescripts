@@ -11,7 +11,7 @@ local function OnHitBoxTriggered(inst, data)
 		local v = data.targets[i]
 		if inst.components.combat:CanTargetEntity(v) then
 			local powermanager = v.components.powermanager
-			if powermanager then
+			if powermanager and v.components.health then
 				powermanager:AddPower(powermanager:CreatePower(Power.Items.ELECTRIC.charged), inst.chargestacks or CHARGE_STACKS_DEFAULT)
 				inst.spawn_charge_applied_fx(v)
 
@@ -39,7 +39,7 @@ local states =
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("electric_orb_pre")
-			--JAMBELL TODO: reduce startup time with sloth
+			--TODO: reduce startup time
 			--inst.AnimState:SetFrame(8)
 			--print(inst.AnimState:GetCurrentAnimationNumFrames())
 		end,

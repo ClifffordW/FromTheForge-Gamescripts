@@ -163,7 +163,7 @@ return {
         106,
         {
           eventtype="titlecard",
-          param={ duration=75, titlekey="floracrane_elite",},
+          param={ duration=75, titlekey="floracrane_miniboss",},
           target_role="lead",
         },
       },

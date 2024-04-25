@@ -2,16 +2,11 @@
 return {
   __displayName="ogre_strawberryblonde_hair_color_1",
   cosmetic_data={
-    color={ 0.088888888888889, 0.52, 0.98,},
-    colorgroup="HAIR_COLOR",
+    color={ 0.11196911334991, 0.45173746347427, 0.99613898992538,},
     color_species="ogre",
+    colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

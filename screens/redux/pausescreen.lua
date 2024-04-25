@@ -4,19 +4,15 @@ local DungeonHistoryMap = require "widgets.ftf.dungeonhistorymap"
 local DungeonLayoutMap = require "widgets.ftf.dungeonlayoutmap"
 local EditableEditor = require "debug.inspectors.editableeditor"
 local Enum = require "util.enum"
-local Image = require "widgets.image"
 local OptionsScreen = require "screens.optionsscreen"
-local ManageMPScreen = require "screens.manage_mp_screen"
 local PlayersScreen = require "screens.playersscreen"
-local Panel = require "widgets.panel"
 local RoomLoader = require "roomloader"
 local Screen = require "widgets.screen"
 local Text = require "widgets.text"
-local Widget = require "widgets.widget"
 local easing = require "util.easing"
 local fmodtable = require "defs.sound.fmodtable"
-local lume = require "util.lume"
 local templates = require "widgets.ftf.templates"
+local DiscordSharingSetting = require ("widgets/ftf/discordsharingsetting")
 
 
 local PauseScreen = Class(Screen, function(self, player)
@@ -91,11 +87,6 @@ local PauseScreen = Class(Screen, function(self, player)
 		:Offset(-20, 0)
 	if not self.inTown then
 		self.quit_button:SetText(STRINGS.UI.PAUSEMENU.ABANDON_BUTTON)
-		local can_abandon = TheDungeon.progression.components.runmanager:CanAbandonRun()
-		if not can_abandon then
-			self.quit_button:SetEnabled(false)
-				:SetToolTip(STRINGS.UI.PAUSEMENU.NO_ABANDON_QUEST)
-		end
 	end
 
 	self.imStuckButton = self:AddChild(templates.Button(STRINGS.UI.PAUSEMENU.IMSTUCK_BUTTON))
@@ -110,7 +101,52 @@ local PauseScreen = Class(Screen, function(self, player)
 			:SetToolTip(STRINGS.UI.PAUSEMENU.IMSTUCK.NON_HOST)
 	end
 
-	local joincode = TheNet:GetJoinCode()
+	self:UpdateJoinCodeAndDiscordButtons()
+			
+	-- Map widget is only in dungeons
+	if not self.inTown then
+		self.map = self:AddChild(DungeonHistoryMap(self.worldmap.nav))
+			:SetOnMapChangedFn(function() self:OnMapChanged() end)
+			:DrawFullMap()
+			:LayoutBounds("left", "above", self.closeButton)
+			:Offset(0, 80)
+
+
+		self.layout_btn = self.map.buttons:AddChild(templates.Button("Show Dungeon Layout"))
+			:SetDebug()
+			:SetOnClick(function()
+				self.controls:Hide() -- more space for layout
+				self.map:Hide()
+				self.dungeon_layout = self:AddChild(DungeonLayoutMap(self.worldmap.nav))
+					:Debug_SetupEditor(self)
+					:SetOnMapChangedFn(function() self:OnMapChanged() end)
+					:DrawFullMap()
+				self:OnMapChanged()
+			end)
+
+		self.map.buttons:LayoutChildrenInGrid(1, 10)
+		self.map.buttons:Reparent(self)
+			:SetScale(0.6, 0.6)
+			:LayoutBounds("right", "top", self.bg)
+			:Offset(-30, -30)
+
+		self:OnMapChanged()
+	end
+
+	self.default_focus = self.closeButton
+	self:SetOwningPlayer(player)
+end)
+
+function PauseScreen:UpdateJoinCodeAndDiscordButtons()
+	print("PauseScreen:UpdateJoinCodeAndDiscordButtons()")
+	if self.online_joincode_button then
+		self.online_joincode_button:Remove()
+		self.online_joincode_button = nil
+	end
+
+
+	local joincode = GetNetworkJoinCode()
+	print("joincode = "..joincode)
 	if joincode ~= "" then
 		self.online_joincode_button = self:AddChild(templates.Button(STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL:subfmt({ joincode = joincode })))
 			:SetToolTip(STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL_TOOLTIP)
@@ -121,54 +157,36 @@ local PauseScreen = Class(Screen, function(self, player)
 			:SetOnClick(function() self:OnClickOnlineJoinCode() end)
 			:LayoutBounds("left", "top", self.bg)
 			:Offset(20,-20)
+
+
+		self.online_joincode_button.on_streamer_mode_changed = function()
+			local newstr = STRINGS.UI.ONLINESCREEN.JOINCODE_LABEL:subfmt({ joincode = GetNetworkJoinCode() })
+			self.online_joincode_button:SetText(newstr);
+		end
+
+		self.online_joincode_button.inst:ListenForEvent("ui_streamer_mode_changed", self.online_joincode_button.on_streamer_mode_changed, TheGlobalInstance)
 	end
 
-	-- Map widget
-	self.map = self:AddChild(DungeonHistoryMap(self.worldmap.nav))
-		:SetOnMapChangedFn(function() self:OnMapChanged() end)
-	if TheWorld:HasTag("town") then
-		-- TODO(dbriscoe): What does town map look like?
-		self.map:Hide()
-	else
-		self.map:DrawFullMap()
+	-- Discord settings:
+	if self.discord_sharing_setting then
+		self.discord_sharing_setting:Remove()
+		self.discord_sharing_setting = nil
 	end
-	self.map:LayoutBounds("left", "above", self.closeButton)
-		:Offset(0, 80)
 
+	self.discord_sharing_setting = self:AddChild(DiscordSharingSetting())
 
-	self.layout_btn = self.map.buttons:AddChild(templates.Button("Show Dungeon Layout"))
-		:SetDebug()
-		:SetOnClick(function()
-			self.controls:Hide() -- more space for layout
-			self.map:Hide()
-			self.dungeon_layout = self:AddChild(DungeonLayoutMap(self.worldmap.nav))
-				:Debug_SetupEditor(self)
-				:SetOnMapChangedFn(function() self:OnMapChanged() end)
-				:DrawFullMap()
-			self:OnMapChanged()
-		end)
+	if self.online_joincode_button then 
+		self.discord_sharing_setting:LayoutBounds("after", "top", self.online_joincode_button):Offset(20,-60)
+	else 
+		self.discord_sharing_setting:LayoutBounds("left", "top", self.bg):Offset(20,-70)
+	end
+end
 
-	self.map.buttons:LayoutChildrenInGrid(1, 10)
-	self.map.buttons:Reparent(self)
-		:SetScale(0.6, 0.6)
-		:LayoutBounds("right", "top", self.bg)
-		:Offset(-30, -30)
-
-	self:OnMapChanged()
-
-	self.mapLegend = self:AddChild(self:AssembleMapLegend())
-		:LayoutBounds("right", "top", self.bg)
-		:Offset(-20, -20)
-		-- TODO(dbriscoe): Are we going to completely remove the legend?
-		:Hide()
-
-	self.default_focus = self.closeButton
-	self:SetOwningPlayer(player)
-end)
 
 function PauseScreen:SetOwningPlayer(player)
 	PauseScreen._base.SetOwningPlayer(self, player)
 	self.controls:SetOwningPlayer(player)
+	return self
 end
 
 function PauseScreen:OnMapChanged()
@@ -182,107 +200,6 @@ function PauseScreen:OnMapChanged()
 	end
 
 	return self
-end
-
-function PauseScreen:AssembleMapLegend()
-	local legendContainer = Widget("Map Legend")
-
-	local legendTitle = legendContainer:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.PAUSE_SCREEN_LEGEND_TITLE))
-		:SetGlyphColor(UICOLORS.LIGHT_TEXT)
-		:SetHAlign(ANCHOR_LEFT)
-		:SetText(STRINGS.UI.PAUSEMENU.MAP_LEGEND_TITLE)
-
-	local legendMarkersContainer = legendContainer:AddChild(Widget())
-
-	local keys
-	if self.inTown then
-		keys = {
-		}
-	else
-		-- Dungeon map legend
-		keys = {
-			-- Specific ordered list of keys to display in a grid with 3
-			-- columns. We don't show everything so we can enforce order and
-			-- prevent info overload.
-			"location", "BLANK",        "BLANK",
-			"coin",     "potion",       "BLANK",
-			"plain",    "powerupgrade", "miniboss",
-			"fabled",   "mystery",      "hype",
-		}
-	end
-
-	local desc = TheDungeon:GetDungeonMap().nav:GetArtDescriptions()
-	desc.location = "location"
-	local animated = {
-		location = true,
-	}
-	local legend = lume.map(keys, function(key)
-		if key == "BLANK" then
-			return {}
-		end
-		local art_name = desc[key]
-		local str = STRINGS.UI.PAUSEMENU.MAP_LEGEND[key]
-		if not str then
-			TheLog.ch.FrontEnd:printf("Missing string for map element '%s'.", key)
-		end
-		return {
-			key = key,
-			text = str,
-			animate = animated[key],
-			icon = ("images/ui_ftf_pausescreen/ic_%s.tex"):format(art_name),
-		}
-	end)
-
-	for _, v in ipairs(legend) do
-
-		-- Add label container
-		local row = legendMarkersContainer:AddChild(Widget())
-
-		-- Add icon
-		if v.animate then
-			-- Animated icon
-			local icon = row:AddChild(Panel(v.icon))
-				:SetNineSliceCoords(60, 60, 68, 68)
-				:SetNineSliceBorderScale(0.5)
-				:SetScale(0.5)
-				:SetMultColor(UICOLORS.LIGHT_TEXT_DARK)
-				:SetSize(FONTSIZE.PAUSE_SCREEN_LEGEND_TEXT, FONTSIZE.PAUSE_SCREEN_LEGEND_TEXT)
-
-			local speed = 0.8
-			local amplitude = 3
-			local w, h = icon:GetSize()
-			icon:RunUpdater(
-				Updater.Loop({
-						Updater.Ease(function(v) icon:SetSize(w + v, h + v) end, amplitude, 0, speed * 0.3, easing.inOutQuad),
-						Updater.Ease(function(v) icon:SetSize(w + v, h + v) end, 0, amplitude, speed, easing.inOutQuad),
-						Updater.Wait(speed * 0.5),
-					})
-				)
-		elseif v.icon then
-			-- Plain icon
-			local icon = row:AddChild(Image(v.icon))
-				:SetMultColor(UICOLORS.LIGHT_TEXT_DARK)
-				:SetSize(FONTSIZE.PAUSE_SCREEN_LEGEND_TEXT, FONTSIZE.PAUSE_SCREEN_LEGEND_TEXT)
-		end
-		-- else: empty slot
-
-
-		-- Add text
-		local text = row:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.PAUSE_SCREEN_LEGEND_TEXT))
-			:SetGlyphColor(UICOLORS.LIGHT_TEXT_DARK)
-			:SetHAlign(ANCHOR_LEFT)
-			:SetText(v.text)
-			:LayoutBounds("after", nil)
-			:Offset(10, 0)
-
-	end
-
-	-- Layout
-	legendMarkersContainer:LayoutChildrenInAutoSizeGrid(3, 30, 10)
-	legendTitle:LayoutBounds("left", "above", legendMarkersContainer)
-		:Offset(-5, 10)
-
-	return legendContainer
 end
 
 -- Only really specific special cases should call this (player join, feedback).
@@ -300,11 +217,18 @@ function PauseScreen:Unpause()
 	TheFrontEnd:PopScreen(self)
 end
 
+function PauseScreen:OnOpen()
+	PauseScreen._base.OnOpen(self)
+
+	self:UpdateJoinCodeAndDiscordButtons()
+end
+
+
 function PauseScreen:OnClose()
 	PauseScreen._base.OnClose(self)
 
 	-- TODO: someone, force player to travel if leaving screen and debug travel was used
-	-- if self.map:Debug_TravelUsed() or self.dungeon_layout:Debug_TravelUsed() then
+	-- if self.map and (self.map:Debug_TravelUsed() or self.dungeon_layout:Debug_TravelUsed()) then
 	-- end
 	self:_UnpauseTime()
 	TheDungeon.HUD:Show()
@@ -337,7 +261,7 @@ function PauseScreen:OnClickReturnToTown()
 end
 
 function PauseScreen:OnClickOptions()
-	TheFrontEnd:PushScreen(OptionsScreen())
+	TheFrontEnd:PushScreen(OptionsScreen(self:GetOwningPlayer()))
 	TheDungeon.HUD:Show()
 	--Ensure last_focus is the options button since mouse can
 	--unfocus this button during the screen change, resulting
@@ -351,7 +275,7 @@ function PauseScreen:OnClickImStuck()
 	TheLog.ch.FrontEnd:printf("'I'm Stuck' clicked")
 
 	local confirm_popup
-	confirm_popup = ConfirmDialog(nil, nil, true)
+	confirm_popup = ConfirmDialog(self:GetOwningPlayer(), nil, true)
 		:SetTitle(STRINGS.UI.PAUSEMENU.IMSTUCK.TITLE)
 		:SetText(STRINGS.UI.PAUSEMENU.IMSTUCK.BODY)
 		:HideArrow()
@@ -373,6 +297,7 @@ function PauseScreen:OnClickImStuck()
 			TheFrontEnd:PopScreen(confirm_popup)
 		end)
 		:CenterButtons()
+
 	TheFrontEnd:PushScreen(confirm_popup)
 
 	self.last_focus = self.imStuckButton
@@ -388,7 +313,7 @@ end
 
 function PauseScreen:OnClickDebugSave()
 	local town = "home_forest"
-	local popup = ConfirmDialog()
+	local popup = ConfirmDialog(self:GetOwningPlayer())
 		:SetTitle("Unsaved editor changes!")
 		:SetText("You have unsaved changes to this level. Some props were modified.")
 		:HideArrow()
@@ -434,21 +359,20 @@ function PauseScreen:OnClickQuit()
 	}
 
 	if TheNet:IsHost() and not TheNet:IsGameTypeLocal() then
-		dialog = ConfirmDialog(nil, self.quit_button, true,
+		dialog = ConfirmDialog(self:GetOwningPlayer(), self.quit_button, true,
 			STRINGS.UI.PAUSEMENU.HOSTQUITTITLE,
 			STRINGS.UI.PAUSEMENU.HOSTQUITSUBTITLE)
-		dialog:SetYesTooltip(STRINGS.UI.PAUSEMENU.HOSTRETURNTOTOWN_TOOLTIP)
-		dialog:SetNoTooltip(STRINGS.UI.PAUSEMENU.HOSTQUIT_TOOLTIP)
+		dialog:SetYesTooltip(STRINGS.UI.PAUSEMENU.HOSTQUIT_TOOLTIP)
 	else
 		-- Only if there are actually multiple players.
 		local subtitle = #AllPlayers > 1 and STRINGS.UI.PAUSEMENU.CLIENTQUITBODY_MP or nil
 		if TheWorld:HasTag("town") then
-			dialog = ConfirmDialog(nil, self.quit_button, true,
+			dialog = ConfirmDialog(self:GetOwningPlayer(), self.quit_button, true,
 				STRINGS.UI.PAUSEMENU.CLIENTQUITTITLE_TOWN,
 				subtitle,
 				STRINGS.UI.PAUSEMENU.CLIENTQUITSUBTITLE_TOWN)
 		else
-			dialog = ConfirmDialog(nil, self.quit_button, true,
+			dialog = ConfirmDialog(self:GetOwningPlayer(), self.quit_button, true,
 				STRINGS.UI.PAUSEMENU.CLIENTQUITTITLE_DUNGEON,
 				subtitle,
 				STRINGS.UI.PAUSEMENU.CLIENTQUITSUBTITLE_DUNGEON)
@@ -466,11 +390,18 @@ function PauseScreen:OnClickQuit()
 	else
 		dialog
 			:SetText(STRINGS.UI.PAUSEMENU.CLIENTQUITSUBTITLE_DUNGEON)
+			:SetYesTooltip(STRINGS.UI.PAUSEMENU.HOSTRETURNTOTOWN_TOOLTIP)
 			:SetYesButtonText(STRINGS.UI.PAUSEMENU.RETURN_TO_TOWN_BUTTON)
 			:SetNoButton(STRINGS.UI.PAUSEMENU.QUIT_BUTTON)
 			-- :SetCancelButtonText(STRINGS.UI.PAUSEMENU.CANCEL_QUIT)
 			:SetCloseButton(function() dialog:Close() end)
 			:SetCallbackActionLabels(Actions.s.Yes_Abandon, Actions.s.No_QuitToMenu, Actions.s.Cancel)
+
+			local can_abandon = TheDungeon.progression.components.runmanager:CanAbandonRun()
+			if not can_abandon then
+				dialog.yesButton:SetEnabled(false)
+					:SetToolTip(STRINGS.UI.PAUSEMENU.NO_ABANDON_QUEST)
+			end
 
 		if not TheNet:IsHost() then
 			dialog.yesButton:SetEnabled(false)
@@ -480,12 +411,12 @@ function PauseScreen:OnClickQuit()
 
 	-- Set the dialog's callback
 	dialog:SetOnDoneFn(
-		function(_, action)
+		function(action)
 			assert(Actions:Contains(action))
 			if action == Actions.s.Yes_Abandon then
 				self:OnClickReturnToTown()
 			elseif action == Actions.s.No_QuitToMenu then
-				TheLog.ch.Audio:print("***///***pausescreen.lua: Stopping all music.")
+				--TheLog.ch.Audio:print("***///***pausescreen.lua: Stopping all music.")
 				TheWorld.components.ambientaudio:StopAllMusic()
 				TheWorld.components.ambientaudio:StopAmbient()
 				--TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_input_up_confirm_save)
@@ -494,6 +425,7 @@ function PauseScreen:OnClickQuit()
 				TheFrontEnd:PopScreen(dialog)
 			end
 		end)
+	dialog:SetOwningPlayer(self:GetOwningPlayer())
 
 	-- Show the popup
 	TheFrontEnd:PushScreen(dialog)
@@ -532,14 +464,14 @@ PauseScreen.CONTROL_MAP =
 	{
 		control = Controls.Digital.SHOW_PLAYERS_LIST,
 		fn = function(self)
-			TheFrontEnd:PushScreen(PlayersScreen())
+			self:OnClickManageMP()
 			return true
 		end,
 	},
 }
 
-function PauseScreen:OnControl(controls, down)
-	if PauseScreen._base.OnControl(self,controls, down) then
+function PauseScreen:OnControl(controls, down, ...)
+	if PauseScreen._base.OnControl(self,controls, down, ...) then
 		return true
 	elseif not down and (controls:Has(Controls.Digital.PAUSE, Controls.Digital.CANCEL)) then
 		self:Unpause()
@@ -572,14 +504,23 @@ function PauseScreen:AnimateIn()
 
 	-- Hide elements
 	self.bg:SetMultColorAlpha(0)
-	self.map:SetMultColorAlpha(0)
-	self.mapLegend:SetMultColorAlpha(0)
-
 
 	-- Get default positions
 	local bgX, bgY = self.bg:GetPosition()
-	local mapX, mapY = self.map:GetPosition()
-	local mapLegendX, mapLegendY = self.mapLegend:GetPosition()
+
+	local map_updater
+	if self.map then
+		local mapX, mapY = self.map:GetPosition()
+		self.map:SetMultColorAlpha(0)
+		-- And the map
+		map_updater = Updater.Series({
+				Updater.Wait(0.1),
+				Updater.Parallel({
+						Updater.Ease(function(v) self.map:SetMultColorAlpha(v) end, 0, 1, 0.1, easing.outQuad),
+						Updater.Ease(function(v) self.map:SetPosition(mapX, v) end, mapY + 10, mapY, 0.4, easing.outQuad),
+					}),
+			})
+	end
 
 	local function AnimateButtonFromLeft_Sequence(btn)
 		local btn_x, btn_y = btn:GetPosition()
@@ -592,7 +533,6 @@ function PauseScreen:AnimateIn()
 				})
 		}
 	end
-
 
 	-- Start animating
 	local animateSequence = Updater.Parallel({
@@ -611,31 +551,18 @@ function PauseScreen:AnimateIn()
 			}),
 		}),
 
-		-- And the map
 		Updater.Series({
-			Updater.Wait(0.1),
-			Updater.Parallel({
-				Updater.Ease(function(v) self.map:SetMultColorAlpha(v) end, 0, 1, 0.1, easing.outQuad),
-				Updater.Ease(function(v) self.map:SetPosition(mapX, v) end, mapY + 10, mapY, 0.4, easing.outQuad),
-			}),
+			Updater.Series(AnimateButtonFromLeft_Sequence(self.closeButton)),
+			Updater.Do(function()
+				self:EnableFocusBracketsForGamepad()
+			end),
 		}),
-
-		-- And the legend
-		Updater.Series({
-			Updater.Wait(0.4),
-			Updater.Parallel({
-				Updater.Ease(function(v) self.mapLegend:SetMultColorAlpha(v) end, 0, 1, 0.1, easing.outQuad),
-				Updater.Ease(function(v) self.mapLegend:SetPosition(v, mapLegendY) end, mapLegendX + 40, mapLegendX, 0.3, easing.outQuad),
-			}),
-		}),
-
-		Updater.Series(AnimateButtonFromLeft_Sequence(self.closeButton)),
 		Updater.Series(AnimateButtonFromLeft_Sequence(self.manageMPButton)),
 
+		map_updater, -- these are parallel and this might be nil, so keep it last.
 	})
 
 	-- Animate the other buttons too
-
 	local function AnimateButtonFromRight(btn)
 		btn:SetMultColorAlpha(0)
 		local btn_x, btn_y = btn:GetPosition()

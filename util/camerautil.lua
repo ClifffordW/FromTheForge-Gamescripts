@@ -27,7 +27,7 @@ function camerautil.ReleaseCamera(inst)
 		end
 		inst.blend_tasks = nil
 	end
-	TheCamera:SetOffset(0, 0, 0)
+	TheCamera:ClearOffsetFrom(inst)
 	TheCamera:SetPitch(camerautil.defaults.pitch)
 end
 
@@ -67,7 +67,7 @@ function camerautil.StartTarget(inst, param)
 	TheCamera:SetTarget(inst)
 	TheCamera:SetDistance(param.dist or TheFocalPoint.desired_camera_distance)
 	local offset = param.offset or Vector3.zero
-	TheCamera:SetOffset(Vector3.unpack(offset))
+	TheCamera:SetOffset(inst, Vector3.unpack(offset))
 	if param.cut then
 		TheCamera:Snap()
 	end
@@ -113,12 +113,12 @@ function camerautil.BlendOffset(inst, param)
 	inst.blend_tasks.offset = inst:DoDurationTaskForAnimFrames(param.duration, function(inst_, progress)
 		progress = EvaluateCurve(param.curve, progress)
 		local offset = lume.lerp(start_offset, desired_offset, progress)
-		TheCamera:SetOffset(offset:unpack())
+		TheCamera:SetOffset(inst, offset:unpack())
 	end)
 end
 
-function camerautil.ApplyOffset(offset)
-	TheCamera:SetOffset(Vector3.unpack(offset or Vector3.zero))
+function camerautil.ApplyOffset(source, offset)
+	TheCamera:SetOffset(source, Vector3.unpack(offset or Vector3.zero))
 end
 
 function camerautil.Edit_Offset(ui, param, inst)
@@ -133,12 +133,12 @@ function camerautil.Edit_Offset(ui, param, inst)
 
 	local should_preview = ui:IsItemActive()
 	if should_preview then
-		camerautil.ApplyOffset(param.offset)
+		camerautil.ApplyOffset(inst, param.offset)
 		TheCamera:Snap()
 		was_previewing = true
 	elseif was_previewing then
 		was_previewing = nil
-		camerautil.ApplyOffset(camerautil.defaults.offset)
+		camerautil.ApplyOffset(inst, camerautil.defaults.offset)
 	end
 	return changed
 end
@@ -167,9 +167,13 @@ function camerautil.Edit_Curve(ui, param)
 	param.curve = param.curve or CreateCurve(0, 1)
 	local snap_to_min_max = true
 	if ui:CurveEditor("Curve", param.curve, nil, nil, snap_to_min_max) then
-		-- Force starting value to 0 so blend in is always smooth.
-		param.curve[2] = 0
+		camerautil.EnforceValidCurve(param.curve)
 	end
+end
+
+function camerautil.EnforceValidCurve(curve)
+	-- Force starting value to 0 so blend in is always smooth.
+	curve[2] = 0
 end
 
 return camerautil

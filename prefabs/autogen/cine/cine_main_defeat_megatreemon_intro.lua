@@ -7,8 +7,7 @@ return {
   scene_init={  },
   subactors={  },
   timelines={
-    attachswipefx={  },
-    blurscreen={  },
+    allmusicstop={ { 0, 190.0, { eventtype="allmusicstop", is_unedited=true, param={  },},},},
     cameradist={
       { 0, 1, { eventtype="cameradist", param={ cut=true, dist=15.0, duration=1,},},},
       {
@@ -40,7 +39,6 @@ return {
         },
       },
     },
-    cameraoffset={  },
     camerapitch={
       { 0, 1, { eventtype="camerapitch", param={ cut=true, duration=1, pitch=16.0,},},},
       {
@@ -115,9 +113,7 @@ return {
         },
       },
     },
-    cameratargetoverride={  },
-    detachswipefx={  },
-    disableplayinput={ { 0, 151.0, { eventtype="disableplayinput", param={ duration=151,},},},},
+    disableplayinput={ { 0, 151, { eventtype="disableplayinput", param={ duration=151,},},},},
     facing={
       {
         0,
@@ -136,7 +132,6 @@ return {
         { eventtype="fade", param={ duration=60, fade_in=true, fade_type="black",},},
       },
     },
-    gameevent={  },
     gotostate={
       {
         170,
@@ -145,30 +140,7 @@ return {
       },
     },
     letterbox={ { 0, 42, { eventtype="letterbox", param={ duration=42,},},},},
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
-    musicbossstart={  },
-    musicbossstop={  },
-    playcountedsound={  },
-    playfoleysound={  },
     playsound={
-      {
-        0,
-        10,
-        {
-          eventtype="playsound",
-          param={
-            autostop=true,
-            duration=10,
-            name="Snapshot_MainQuest_Intro",
-            sound_max_count=1.0,
-            soundevent="Snapshot_MainQuest_Intro",
-            stopatexitstate=true,
-          },
-          target_role="lead",
-        },
-      },
       {
         10,
         20,
@@ -179,7 +151,6 @@ return {
         },
       },
     },
-    playsound_window={  },
     pushanim={
       {
         1,
@@ -236,20 +207,6 @@ return {
         },
       },
     },
-    runintoscene={  },
-    setsoundparameter={  },
-    setvisible={  },
-    shakecamera={  },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
-    stopsound={  },
-    teleport={  },
-    titlecard={  },
-    uibosshealthbar={  },
-    uihidehud={  },
   },
   use_lead_actor_pos=true,
 }

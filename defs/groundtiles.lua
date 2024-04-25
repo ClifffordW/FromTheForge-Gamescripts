@@ -24,6 +24,7 @@ local audio_surface_tileset_translation_map = {
 	tree = "grass",
 	blank = "dirt",
 	hauntedforest = "dirt",
+	slime = "goo",
 }
 
 local function AddTile(name, tileset, texture, overhang)
@@ -216,6 +217,7 @@ AddTile("MOLD", "goo", "bandiforest_mold", 0.3)
 AddTile("MOLDCOOT", "goo", "bandiforest_moldcoot", 0.3)
 AddTile("MOLDDIRT", "goo", "bandiforest_molddirt", 0.3)
 AddTile("MOLDSLIMY", "goo", "bandiforest_moldslimy", 0.3)
+AddTile("ACIDPOOL", "slime", "thatcher_acidpool", 0.1)
 
 AddTile("SNOW", "snow", "tundra_snow", 1.2)
 AddTile("SNOWHEAVY", "snow", "tundra_snowheavy", 1.2)
@@ -338,6 +340,7 @@ AddTileGroup("all_tiles",
 	"SNOWHEAVY",
 	"ROCK",
 	"ROCKSNOW",
+	"ACIDPOOL",
 	--
 	"STARTINGFOREST_CLIFF",
 })
@@ -349,6 +352,7 @@ AddTileGroup("startingforest",
 	"DIRTROT",
 	"GRASSROT",
 	"STONEFLOOR",
+	"ACIDPOOL",
 	--
 	"STARTINGFOREST_CLIFF",
 })
@@ -360,6 +364,7 @@ AddTileGroup("owlitzer_forest",
 	"OWLTREE",
 	"OWLSTONE",
 	"STONEFLOOR",
+	"ACIDPOOL",
 	--
 	"STARTINGFOREST_CLIFF",
 })
@@ -368,9 +373,10 @@ AddTileGroup("town",
 {
 	"GRASSTOWN",
 	"COBBLETOWN",
-	"STONETOWN",	
-	"DIRTTOWN",	
+	"STONETOWN",
+	"DIRTTOWN",
 	"GRASSDARKTOWN",
+	"ACIDPOOL",
 	--
 	"STARTINGFOREST_CLIFF",
 })
@@ -382,6 +388,7 @@ AddTileGroup("bandiforest",
 	"MOLDCOOT",
 	"FUZZCOOT",
 	"STONEFLOOR",
+	"ACIDPOOL",
 	--
 	"BANDIFOREST_CLIFF",
 })
@@ -393,6 +400,7 @@ AddTileGroup("thatcher_swamp",
 	"MOLDSLIMY",
 	"FUZZSLIMY",
 	"STONEFLOOR",
+	"ACIDPOOL",
 	--
 	"BANDIFOREST_CLIFFACID",
 })
@@ -404,6 +412,7 @@ AddTileGroup("sedament_tundra",
 	"ROCKSNOW",
 	"SNOWHEAVY",
 	"STONEFLOOR",
+	"ACIDPOOL",
 	--
 	"TUNDRASNOW_CLIFF",
 })

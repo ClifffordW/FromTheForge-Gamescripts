@@ -24,13 +24,14 @@ end
 local function MakeTextPopup(name, target, text)
 	-- TODO @chrisp #vend - copy-pasta from vendingmachine...should centralize style
 	local label = Text(FONTFACE.DEFAULT, FONTSIZE.DAMAGENUM_PLAYER, "", UICOLORS.INFO)
+		:SetClickable(false)
 		:SetShadowColor(UICOLORS.BLACK)
 		:SetShadowOffset(1, -1)
 		:SetOutlineColor(UICOLORS.BLACK)
 		:EnableShadow()
 		:EnableOutline()
 		:SetText(text)
-	local root = FollowPrompt() -- TODO: Pass player to make button icons match them
+	local root = FollowPrompt()
 		:SetName(name)
 	TheDungeon.HUD:AddWorldWidget(root)
 	root
@@ -41,7 +42,7 @@ local function MakeTextPopup(name, target, text)
 	return root
 end
 
-local function ExtendSinglePickupWithTextPopup(inst, text)	
+local function ExtendSinglePickupWithTextPopup(inst, text)
 	local show_popup_task
 	local _on_approach = function(inst, player)
 		if inst.popup then
@@ -91,7 +92,7 @@ local items = {
 			inst.sg.mem.use_alternate_anims = true
 			inst.sg:GoToState("spawn")
 
-			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.potion.name)
+			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.potion.pretty_name_fn())
 				:SetCanInteractFn(function(inst, player)
 					local potiondrinker = player.components.potiondrinker
 					if not potiondrinker then
@@ -123,7 +124,7 @@ local items = {
 		fn = function(inst)
 			inst:SetStateGraph("sg_shopitem")
 
-			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.upgrade.name)
+			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.upgrade.pretty_name_fn())
 				:SetCanInteractFn(function(inst, player)
 					local powermanager = player.components.powermanager
 					local eligible_powers = powermanager:GetUpgradeablePowers()
@@ -161,7 +162,7 @@ local items = {
 	shield_refill_single =
 	{
 		fn = function(inst)
-			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.shield.name)
+			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.shield.pretty_name_fn())
 				:SetCanInteractFn(function(inst, player)
 					local powermanager = player.components.powermanager
 					local shield_def = Power.Items.SHIELD.shield
@@ -201,26 +202,18 @@ local items = {
 			inst:SetStateGraph("sg_shopitem")
 			inst.sg.mem.use_alternate_anims = false
 
-			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.corestone.name)
+			inst:AddComponent("playerhighlight") -- For highlighting which player this is assigned to, if any.
+
+			ExtendSinglePickupWithTextPopup(inst, VendingMachineWares.corestone.pretty_name_fn())
 				:SetOnConsumedCallback(function(inst, consuming_player)
 					if consuming_player then
 						local item = Consumable.FindItem("konjur_soul_lesser")
 						consuming_player:PushEvent("get_loot", { item = item, count = 1 })
-						-- this stuff doesn't work
-						-- local faction
-						-- if consuming_player:IsLocal() then
-						-- 	faction = 1
-						-- else
-						-- 	faction = 2
-						-- end
 						soundutil.PlayCodeSound(
 							consuming_player,
 							fmodtable.Event.reward_corestone,
 							{
 								instigator = consuming_player,
-								-- fmodparams = {
-								-- 	faction = faction,
-								-- },
 							})
 					end
 					return PlayDespawnAnimLocally(inst)
@@ -270,11 +263,6 @@ local items = {
 			end
 
 			local _can_pickup = function(power_pickup, player)
-				local assigned_player = power_pickup.components.singlepickup:GetAssignedPlayer()
-				if assigned_player and assigned_player ~= player then
-					return false, STRINGS.UI.SHOP_ITEM.POWER.NOT_MINE
-				end
-
 				if not power_pickup.components.warevisualizer:IsInitialized() then
 					return false
 				end
@@ -307,7 +295,7 @@ local items = {
 					show_popup_task = nil
 				end
 			end
-				
+
 			inst.components.singlepickup
 				:SetOnGainFocusFn(_on_approach)
 				:SetCanInteractFn(_can_pickup)
@@ -322,7 +310,9 @@ local items = {
 							power_mgr:AddPower(power_mgr:CreatePower(power_def))
 						end
 						power_mgr:IncrementPowerDropsPickedUp()
-						consuming_player.sg:GoToState("powerup_accept")
+						consuming_player:UnlockFlag("pf_has_taken_power")
+						consuming_player:PushEvent("take_power_item", power_def)
+						consuming_player.sg:GoToState("powerup_accept", power_def.name)
 					end
 					return PlayDespawnAnimLocally(inst)
 				end)

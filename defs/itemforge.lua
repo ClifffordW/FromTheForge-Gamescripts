@@ -80,15 +80,34 @@ function ItemInstance:GetLifetime()
 	return self.lifetime
 end
 
-function ItemInstance:GetItemLevel()
+function ItemInstance:GetBaseItemLevel()
 	return self.ilvl or 1
 end
 
+-- Upgrade level starts at 1. That is, an item with no upgrades applied has an upgrade level of 1.
+function ItemInstance:GetUpgradeLevel()
+	if not self.upgrade_level then
+		self.upgrade_level = 1
+	end
+	return self.upgrade_level
+end
+
+function ItemInstance:GetEffectiveItemLevel()
+	-- Remember that upgrade level is 1-based. It is *not* the number of upgrades that have been applied.
+	-- Hence, we need to subtract one here.
+	return self:GetBaseItemLevel() + self:GetUpgradeLevel() - 1
+end
 function ItemInstance:GetUsageLevel()
 	return self.usagelvl or 1
 end
 
-function ItemInstance:SetItemLevel(level)
+function ItemInstance:InitializeItemLevel(level)
+	dbassert(self.ilvl == nil)
+	self.ilvl = level
+	self:RefreshItemStats()
+end
+
+function ItemInstance:DebugForceSetItemLevel(level)
 	self.ilvl = level
 	self:RefreshItemStats()
 end
@@ -107,18 +126,25 @@ function ItemInstance:UpgradeUsageLevel()
 end
 
 function ItemInstance:UpgradeItemLevel()
-	self:SetItemLevel(self.ilvl + 1)
+	self.upgrade_level = self:GetUpgradeLevel() + 1
+	self:RefreshItemStats()
+end
+
+function ItemInstance:SetItemLevel(level)
+	self.upgrade_level = level
+	self:RefreshItemStats()
 end
 
 function ItemInstance:GetMaxItemLevel()
+	local upgrades_remaining = 0
 	local def = self:GetDef()
 	if def and def.usage_data and def.usage_data.power_on_equip then
 		local power_def = Power.FindPowerByName(def.usage_data.power_on_equip)
 		if power_def.stacks_per_usage_level then
-			return #power_def.stacks_per_usage_level
+			upgrades_remaining = #power_def.stacks_per_usage_level - 1
 		end
 	end
-	return 1
+	return self:GetBaseItemLevel() + upgrades_remaining
 end
 
 function ItemInstance:GetMaxUsageLevel()
@@ -269,6 +295,9 @@ local power_var_remap = {
 	pull_factor                   = "powerdesc_pullstrength",
 	speed_bonus_per_second        = "powerdesc_speed_bonus",
 	damage_mod                    = "powerdesc_weapon_damage_bonus",
+	heal_on_enter   			  = "powerdesc_heal_on_enter",
+	dodge_speed 				  = "powerdesc_roll_speed_bonus",
+
 }
 local function GetStandardPowerDescVarPrettyName(var)
 	local key = power_var_remap[var] or "powerdesc_".. var
@@ -307,7 +336,7 @@ local function _AddStatsForGem(gem, stats)
 	-- local function _ApplyStatMods(item, gem)
 	if def.stat_mods then
 		for stat, data in pairs(def.stat_mods) do
-			local mod = data[gem.ilvl]
+			local mod = data[gem:GetEffectiveItemLevel()]
 			if stats[stat] then
 				stats[stat] = stats[stat] + mod
 			else
@@ -320,7 +349,7 @@ local function _AddStatsForGem(gem, stats)
 	-- local function _ApplyStatMults(item, gem)
 	if def.stat_mults then
 		for stat, data in pairs(def.stat_mults) do
-			local mult = data[gem.ilvl]
+			local mult = data[gem:GetEffectiveItemLevel()]
 			local bonus = stats[stat] * mult
 			stats[stat] = stats[stat] + bonus
 		end
@@ -366,17 +395,29 @@ function ItemInstance:MakeWeaponStats()
 	dbassert(self.slot == Equipment.Slots.WEAPON)
 	local def = self:GetDef()
 	local base_weapon = TUNING.GEAR.WEAPONS[def.weapon_type]
-	local weapon_modifiers = TUNING:GetWeaponModifiers(def.weapon_type, self.ilvl, def.weight, def.rarity)
+	local weapon_modifiers = TUNING:GetWeaponModifiers(self:GetEffectiveItemLevel(), def.weight,
+		def.rarity)
 
-	return {
+	local stats =
+	{
 		[EQUIPMENT_STATS.s.DMG] = base_weapon.BASE_DAMAGE * weapon_modifiers.DamageMult,
 		[EQUIPMENT_STATS.s.CRIT] = base_weapon.BASE_CRIT + weapon_modifiers.CritChance,
 		[EQUIPMENT_STATS.s.CRIT_MULT] = weapon_modifiers.CritDamageMult,
 		[EQUIPMENT_STATS.s.FOCUS_MULT] = weapon_modifiers.FocusMult,
 		[EQUIPMENT_STATS.s.SPEED] = weapon_modifiers.SpeedMult,
 		[EQUIPMENT_STATS.s.WEIGHT] = Weight.EquipmentWeight_to_WeightMod[def.weight],
-		AMMO = base_weapon.AMMO and math.ceil(base_weapon.AMMO * weapon_modifiers.AmmoMult) or 0,
 	}
+
+	if def.weapon_type == WEAPON_TYPES.CANNON then
+		stats["AMMO"] = def.ammo or base_weapon.AMMO
+		stats["FOCUS_SEQUENCE"] = def.focus_sequence or base_weapon.DEFAULT_FOCUS_SEQUENCE
+		stats["MORTAR_FOCUS_SEQUENCE"] = def.mortar_focus_sequence or base_weapon.DEFAULT_MORTAR_FOCUS_SEQUENCE
+
+	elseif def.weapon_type == WEAPON_TYPES.SHOTPUT then
+		stats["AMMO"] = def.ammo or base_weapon.AMMO
+		stats["REBOUND_HITBOX_RADIUS"] = def.rebound_hitbox_radius or base_weapon.REBOUND_HITBOX_RADIUS
+	end
+	return stats
 end
 
 function ItemInstance:MakeArmourStats()
@@ -386,7 +427,7 @@ function ItemInstance:MakeArmourStats()
 		or self.slot == Equipment.Slots.WAIST
 	)
 	local def = self:GetDef()
-	local armour_modifiers = TUNING:GetArmourModifiers(self.ilvl, def.weight, def.rarity)
+	local armour_modifiers = TUNING:GetArmourModifiers(self:GetEffectiveItemLevel(), def.weight, def.rarity)
 	local slot_multiplier = TUNING.GEAR.STAT_ALLOCATION_PER_SLOT[self.slot]
 	return {
 		[EQUIPMENT_STATS.s.ARMOUR] = lume.round(armour_modifiers.DungeonTierDamageReductionMult * slot_multiplier, 0.005), -- Round to nearest 0.5 for reliable presentation.
@@ -450,7 +491,7 @@ function itemforge.CreateEquipment(slot, def)
 	local item,data = itemforge._CreateItem(slot, def)
 
 	if not def.tags["food"] then
-			item.ilvl = itemforge.GetILvl(def)
+		item:InitializeItemLevel(itemforge.GetILvl(def))
 
 		if def.usage_data then
 			item.usagelvl = 1
@@ -543,11 +584,13 @@ function itemforge.SortItemsByStat(stat, a, b)
 		local a_rarity = ITEM_RARITY.id[a_def.rarity]
 		local b_rarity = ITEM_RARITY.id[b_def.rarity]
 
+		local a_ilvl = a:GetEffectiveItemLevel()
+		local b_ilvl = b:GetEffectiveItemLevel()
 		if a_rarity == b_rarity then
-			if a.ilvl == b.ilvl then
+			if a_ilvl == b_ilvl then
 				return a_def.pretty.name < b_def.pretty.name
 			else
-				return a.ilvl > b.ilvl
+				return a_ilvl > b_ilvl
 			end
 		else
 			return a_rarity > b_rarity
@@ -558,8 +601,8 @@ function itemforge.SortItemsByStat(stat, a, b)
 end
 
 function itemforge.SortItemsByILvl(a, b)
-	local a_ilvl = a.ilvl or 1
-	local b_ilvl = b.ilvl or 1
+	local a_ilvl = a:GetEffectiveItemLevel()
+	local b_ilvl = b:GetEffectiveItemLevel()
 
 	if a_ilvl == b_ilvl then
 		-- If ilvl is the same, then sort by rarity.
@@ -572,11 +615,7 @@ function itemforge.SortItemsByILvl(a, b)
 		local b_rarity = ITEM_RARITY.id[b_def.rarity]
 
 		if a_rarity == b_rarity then
-			if a.ilvl == b.ilvl then
-				return a_def.pretty.name < b_def.pretty.name
-			else
-				return a.ilvl > b.ilvl
-			end
+			return a_def.pretty.name < b_def.pretty.name
 		else
 			return a_rarity > b_rarity
 		end
@@ -596,9 +635,7 @@ function itemforge.CreateStack(slot, def)
 		item:SetRarity(def.rarity)
 	end
 
-	if def.ilvl then
-		item.ilvl = def.ilvl or 1
-	end
+	item:InitializeItemLevel(def.ilvl or 1)
 
 	if def.stats then
 		item:RefreshItemStats()
@@ -620,10 +657,12 @@ function itemforge.SortItemsBySource(a, b)
 		local b_rarity = ITEM_RARITY.id[b_def.rarity]
 
 		if a_rarity == b_rarity then
-			if a.ilvl == b.ilvl then
+			local a_ilvl = a:GetEffectiveItemLevel()
+			local b_ilvl = b:GetEffectiveItemLevel()
+			if a_ilvl == b_ilvl then
 				return a_def.pretty.name < b_def.pretty.name
 			else
-				return a.ilvl > b.ilvl
+				return a_ilvl > b_ilvl
 			end
 		else
 			return a_rarity > b_rarity
@@ -688,5 +727,13 @@ function itemforge.CreatePower(def, rarity, stacks)
 end
 
 --------  --------
+
+function itemforge.CreateMastery(def)
+	local slot = def.slot
+	local mastery = itemforge._CreateItem(slot, def)
+	mastery:SetRarity(def.rarity) -- the tuning system expects a rarity
+
+	return mastery
+end
 
 return itemforge

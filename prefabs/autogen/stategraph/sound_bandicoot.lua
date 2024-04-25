@@ -178,6 +178,11 @@ return {
           param={ soundevent="bandicoot_foley", volume=52.0,},
         },
         { eventtype="playsound", name="sfx-tell", param={ soundevent="bandicoot_tell",},},
+        {
+          eventtype="playsound",
+          name="sfx-rage_short",
+          param={ soundevent="bandicoot_rage_short",},
+        },
       },
     },
   },

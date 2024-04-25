@@ -13,6 +13,9 @@ return {
             param={
               duration=90.0,
               ischild=true,
+              offx=0.0,
+              offy=1.2000000476837,
+              offz=0.0,
               particlefxname="projectile_generic_trail",
               use_entity_facing=true,
             },

@@ -4,6 +4,7 @@ return {
   anim="idle",
   bloom=52.0,
   clip_at_worldedge=true,
+  group="player_skills",
   layer="bg",
   looping=true,
   onground=true,

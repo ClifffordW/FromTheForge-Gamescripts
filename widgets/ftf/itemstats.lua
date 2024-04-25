@@ -11,6 +11,7 @@ local itemutil = require "util.itemutil"
 local Equipment = require "defs.equipment"
 local EquipmentGem = require "defs.equipmentgems"
 local Consumable = require "defs.consumable"
+local Constructable = require "defs.constructable"
 local Power = require"defs.powers"
 local lume = require "util.lume"
 
@@ -85,7 +86,7 @@ function ItemStats:Refresh()
 	elseif slot == Equipment.Slots.FOOD then
 		self:_ShowFoodDetails(itemData)
 	elseif slot == Consumable.Slots.MATERIALS
-		or slot == Consumable.Slots.PLACEABLE_PROP
+		or Constructable.HasSlot(slot)
 		or slot == Consumable.Slots.KEY_ITEMS
 		or slot == EquipmentGem.Slots.GEMS then
 		self:_ShowMaterialDetails(itemData)
@@ -117,6 +118,7 @@ function ItemStats:_ShowEquipmentDetails(itemData, slot)
 		stats = itemData:GetStats()
 	end
 	local statsData = itemutil.BuildStatsTable(stats_delta, stats, slot)
+
 	self:AddStats(statsData)
 
 	self:Layout()
@@ -162,7 +164,7 @@ end
 
 function ItemStats:AddHeader(text)
 	self.header_bg = self.header_container:AddChild(Image("images/ui_ftf_inventory/ItemDetailsComparisonBg.tex"))
-	-- TODO(dbriscoe): Use a larger size for potion descriptions (and not equipment changes).
+	-- TODO(ui): Use a larger size for potion descriptions (and not equipment changes).
 	self.header_label = self.header_bg:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.ROOMBONUS_TEXT * 0.7))
 		:SetGlyphColor(UICOLORS.LIGHT_TEXT_DARK)
 		:SetText(text)
@@ -185,9 +187,9 @@ end
 
 function ItemStats:AddStats(statsData)
 	local max_width = self.width * 0.7
-	local icon_size = 55 * HACK_FOR_4K
-	local text_size = 50 * HACK_FOR_4K
-	local delta_size = 25 * HACK_FOR_4K
+	local icon_size = 110
+	local text_size = 100
+	local delta_size = 60
 
 	local index = 1
 	local count = table.numkeys(statsData)
@@ -229,7 +231,7 @@ function ItemStats:Layout()
 	else
 		self.stats_container:LayoutChildrenInGrid(self.stats_columns, {h = 30 * HACK_FOR_4K, v = 12 * HACK_FOR_4K})
 			:LayoutBounds("center", "center", self)
-			:Offset(0, -10 * HACK_FOR_4K)
+			--:Offset(0, -10 * HACK_FOR_4K)
 	end
 	return self
 end

@@ -338,6 +338,23 @@ function imgui:_ColorHex4_Int(...)
 	return newhex
 end
 
+-- Visualize a PiecewiseFn. Draws the exact line segments that make up the function.
+function imgui:DrawPiecewiseFn(name, data_table, test_val, overlay_text)
+	overlay_text = overlay_text or ""
+	local ui = self
+	local points = {}
+	for i,t in ipairs(data_table) do
+		table.insert(points, PiecewiseFn(t[1], data_table))
+	end
+	ui:PlotLines(name, overlay_text, points, nil, nil, nil, 70)
+	if test_val then
+		local min = data_table[1][1]
+		local max = data_table[#data_table][1]
+		test_val = ui:_SliderFloat("Test Input", test_val, min, max)
+		ui:Value("Test Result", PiecewiseFn(test_val, data_table))
+		return test_val
+	end
+end
 
 -- Combo, but if you want to store the string value instead of the index.
 --
@@ -345,6 +362,16 @@ end
 -- store_first_as_nil is useful to skip storing anything when it's the default
 -- (useful for editor combos).
 function imgui:ComboAsString(label, current, items, store_first_as_nil, ...)
+	local current_live, current_confirmed, changed, confirmed, closed = self:_ComboAsString_Raw(label, current, items, store_first_as_nil, ...)
+	if not closed and confirmed then
+		current_confirmed = current_live
+	end
+	return changed, current_confirmed, closed
+end
+
+-- Like _ComboAsString, but first returned value is the hovered item instead of
+-- the confirmed one. Useful to show tooltips while hovering the combo items.
+function imgui:_ComboAsString_Raw(label, current, items, store_first_as_nil, ...)
 	local ui = self
 
 	local original = current
@@ -367,23 +394,33 @@ function imgui:ComboAsString(label, current, items, store_first_as_nil, ...)
 		end
 	end
 
-	local changed, new_idx, closed = ui:Combo(label, current_idx, items, ...)
+	-- Unlike other widgets, Combo's first return value is whether the user
+	-- *confirmed* the selection (which implies change) rather than it was
+	-- different.
+	local confirmed, new_idx, closed = ui:Combo(label, current_idx, items, ...)
+
+	local current_live = current
 
 	-- If the Combo is closed, no other valid info is returned from it.
-	if not closed and changed then
+	if not closed then
 		current_idx = new_idx
 		if current_idx == 1 and store_first_as_nil then
-			current = nil
+			current_live = nil
 		else
-			current = items[current_idx]
+			current_live = items[current_idx]
 		end
+	end
+
+	if confirmed then
+		current = current_live
 	end
 
 	-- 'current' may have changed due to:
 	-- 1) initialization, if it was passed in as nil and store_first_as_nil is off
 	-- 2) re-initialization, if it was not found in 'items'
-	-- 3) user edit as effected by Combo()
-	return current ~= original, current, closed
+	-- 3) user edit from Combo()
+	local changed = current ~= original
+	return current_live, current, changed, confirmed, closed
 end
 
 function imgui:_ComboAsString(label, current, items, store_first_as_nil, ...)
@@ -485,7 +522,7 @@ function imgui:MultiColumnList(id, data, columns, DrawRow, MakeRow, OnAddButtonH
 	-- If there are no rows yet, explicitly show one Add Item button.
 	if numrows == 0 then
 		changed = ui:Button(ui.icon.add .. id)
-		if ui:IsItemHovered() and OnAddButtonHovered then OnAddButtonHovered(i) end
+		if ui:IsItemHovered() and OnAddButtonHovered then OnAddButtonHovered(-1) end
 		if changed then
 			table.insert(data, MakeRow())
 			result = ui.MultiColumnListResult.id.Add

@@ -134,6 +134,15 @@ function DebugHistory:RenderPanel( ui, node, dt )
 		end
 	end
 
+	if ui:Checkbox("Enabled", self.history.enabled) then
+		self.history:ToggleHistoryRecording()
+	end
+	ui:SetTooltipIfHovered({
+		"History recording allocates a lot of memory and can cause perf hitches,",
+		"but is useful for debugging gameplay.",
+	})
+
+	ui:SameLineWithSpace()
 	local camera_changed, should_lock_camera = ui:Checkbox("Lock Camera", self.should_lock_camera)
 	if camera_changed then
 		self:SetLockCamera(should_lock_camera)
@@ -305,6 +314,12 @@ function DebugHistory:RenderPanel( ui, node, dt )
 	end
 
 	local debug_entity = GetDebugEntity() or AllPlayers[1]
+
+	if not debug_entity then
+		-- May not have a player yet if we drag and dropped.
+		return
+	end
+
 	local sg_data = self.history:GetSGHistory():GetFrame(self.sim_tick_selected, debug_entity)
 	local debug_name = debug_entity.components.replayproxy and string.format("proxy of %s", debug_entity.components.replayproxy:GetRealEntityPrefabName()) or tostring(debug_entity)
 	if ui:CollapsingHeader( string.format("Stategraph (%s)", debug_name), ui.TreeNodeFlags.DefaultOpen ) then

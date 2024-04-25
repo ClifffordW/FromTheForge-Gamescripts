@@ -1,4 +1,3 @@
-local PICKUP_MESSAGE <const> = STRINGS.UI.ACTIONS.TAKE_POWERITEM
 local INTERACTOR_KEY <const> = "SinglePickup"
 
 local function SetOnGainFocusFn(self, on_gain_focus_fn)
@@ -11,7 +10,7 @@ local function SetOnGainFocusFn(self, on_gain_focus_fn)
 				can = true
 			end
 			self.canpickup[player.Network:GetPlayerID()] = can
-			local status = can and PICKUP_MESSAGE or reasons
+			local status = can and STRINGS.UI.ACTIONS.TAKE_POWERITEM or reasons
 			player.components.interactor:SetStatusText(INTERACTOR_KEY, status)
 			if on_gain_focus_fn then
 				on_gain_focus_fn(inst, player)
@@ -32,7 +31,15 @@ local function SetOnLoseFocusFn(self, on_lose_focus_fn)
 end
 
 local function SetCanInteractFn(self, can_interact_fn)
-	self.can_interact_fn = can_interact_fn
+	self.can_interact_fn = function(inst, player)
+		if not self:FilterAssignedPlayer(player)  then
+			return false, STRINGS.UI.SHOP_ITEM.POWER.NOT_MINE
+		end
+		if can_interact_fn then
+			return can_interact_fn(inst, player)
+		end
+		return true
+	end
 	return self
 end
 
@@ -54,9 +61,9 @@ local SinglePickup = Class(function(self, inst)
 		:SetOnInteractFn(function(_inst, player) self:_OnPickedUp(player) end)
 	SetOnGainFocusFn(self)
 	SetOnLoseFocusFn(self)
+	SetCanInteractFn(self)
 end)
 
-SinglePickup.PICKUP_MESSAGE = PICKUP_MESSAGE
 SinglePickup.SetOnGainFocusFn = SetOnGainFocusFn
 SinglePickup.SetOnLoseFocusFn = SetOnLoseFocusFn
 SinglePickup.SetCanInteractFn = SetCanInteractFn
@@ -117,6 +124,13 @@ function SinglePickup:UpdateAssignedPlayer(newplayer)
 	end
 end
 
+function SinglePickup:FilterAssignedPlayer(player)
+	if not self.assignedplayer then
+		return true
+	end
+	return self.assignedplayer.Network:GetPlayerID() == player.Network:GetPlayerID()
+end
+
 function SinglePickup:CanPickUp(interacting_player)
 	local playerid = interacting_player.Network:GetPlayerID()
 	return self.canpickup[playerid]
@@ -126,29 +140,30 @@ end
 function SinglePickup:_OnPickedUp(interacting_player)
 	local playerid = interacting_player.Network:GetPlayerID()
 	TheLog.ch.InteractSpam:printf("SinglePickup:_OnPickedUp interacting_player = %d", playerid)
-	if not self:CanPickUp(interacting_player) then
-		return
-	end
-	if self.inst.Network then
+	if self.inst.Network and self:CanPickUp(interacting_player) then
 		TheNetEvent:RequestSinglePickup(self.inst.Network:GetEntityID(), playerid)
 	end
 end
 
--- Callback from TheNetEvent:RequestSinglePickup(), received by all but only processed by the host.
+-- Callback from TheNetEvent:RequestSinglePickup(), received by all but only processed by the Local Authority.
 -- Set self.pickedupbyplayer if it is unset, and this value will be subsequently replicated.
 -- That is, this function effectively arbitrates between multiple players attempting to pick up the same item by 
 -- choosing the first player's request to be received, and discarding all subsequent requests.
 function SinglePickup:OnNetPickup(player)
 	TheLog.ch.InteractSpam:printf("SinglePickup:OnNetPickup...")
 	TheLog.ch.InteractSpam:indent()
-	if not TheNet:IsHost() then	
-		TheLog.ch.InteractSpam:printf("...but not Host so ignore it.")
+	if not self.inst.Network:IsLocal() then	
+		TheLog.ch.InteractSpam:printf("...but not Local Authority so ignore it.")
 		TheLog.ch.InteractSpam:unindent()
 		return
 	end
 	if not self.pickedupbyplayer then
-		if self.assignedplayer and self.assignedplayer.Network:GetPlayerID() ~= player.Network:GetPlayerID() then
-			TheLog.ch.InteractSpam:printf("...player %d wants to pick up but it is assigned to player %d", player.Network:GetPlayerID(), self.assignedplayerid)
+		if not self.FilterAssignedPlayer(player) then
+			TheLog.ch.InteractSpam:printf(
+				"...player %d wants to pick up but it is assigned to player %d", 
+				player.Network:GetPlayerID(), 
+				self.assignedplayerid
+			)
 		else
 			TheLog.ch.InteractSpam:printf("...picked up by player = %d", player.Network:GetPlayerID())
 			self.pickedupbyplayer = player
@@ -203,8 +218,8 @@ function SinglePickup:OnUpdate(_dt)
 		cleaned_up = self.consumed_cb(self.inst, consuming_player)
 	end
 
-	-- The host is responsible for cleaning up the pickup.
-	if not cleaned_up and TheNet:IsHost() then
+	-- The Local Authority is responsible for cleaning up the pickup.
+	if not cleaned_up and self.inst.Network:IsLocal() then
 		-- Delay removal so that the update function still runs on remote clients.
 		self.inst:DelayedRemove()
 	end

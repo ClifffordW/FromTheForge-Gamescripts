@@ -32,7 +32,12 @@ local EMOTE_STATES =
 	agree = "nod",
 	disagree = "shake_head",
 
-	wavelunn = "wavelunn"
+	wavelunn = "wavelunn",
+	wink = "wink",
+	cough = "cough",
+	very_sick = "very_sick",
+
+	over_here = "over_here",
 }
 
 local EMOTE_TO_MOUTH_ANIM =
@@ -162,6 +167,29 @@ local function ChooseEmote(inst, emote)
 	return false
 end
 
+local function IsMarked(inst)
+	local convo_target = inst.components.conversation:GetTarget()
+	return convo_target == nil and TheWorld.components.npcmarkmanager:IsNPCMarked(inst)
+end
+
+local function GetWaveTarget(inst)
+	local marker = TheWorld.components.npcmarkmanager:IsNPCMarked(inst)
+	if marker ~= nil then
+		local wave_targets = marker.components.npcmarker:GetPlayers()
+		wave_targets = lume.keys(wave_targets)
+		wave_targets = lume.filter(wave_targets, function(a) return a:HasTag("player") end)
+
+		if #wave_targets == 0 then
+			-- The world must be the only thing supplying a quest mark in this case.
+			-- Any player can do world quests, so just wave at the closest player.
+			wave_targets = shallowcopy(AllPlayers)
+		end
+
+		local best_target = GetClosest(inst, wave_targets)
+		return best_target
+	end
+end
+
 local events =
 {
 	SGCommon.Events.OnLocomote({ walk = true, turn = true }),
@@ -198,7 +226,16 @@ local states =
 				if inst.sg.statemem.loops > 1 then
 					inst.sg.statemem.loops = inst.sg.statemem.loops - 1
 				else
-					inst.sg:GoToState("idle_blink")
+					if IsMarked(inst) then
+						local target = GetWaveTarget(inst)
+						if target ~= nil then
+							SGCommon.Fns.TurnAndActOnTarget(inst, target, false, "over_here")
+						else
+							inst.sg:GoToState("over_here")
+						end
+					else
+						inst.sg:GoToState("idle_blink")
+					end
 				end
 			end),
 		},
@@ -975,6 +1012,73 @@ local states =
 
 		onenter = function(inst)
 			PlayAnimation(inst, "shake_head")
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+	}),
+
+
+	State({
+		name = "over_here",
+		tags = { "busy" },
+
+		onenter = function(inst)
+			PlayAnimation(inst, "over_here_pre")
+			PushAnimation(inst, "over_here_loop")
+			PushAnimation(inst, "over_here_pst")
+		end,
+
+		events =
+		{
+			EventHandler("animqueueover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+	}),
+
+	State({
+		name = "cough",
+		tags = { "busy" },
+
+		onenter = function(inst)
+			PlayAnimation(inst, "cough")
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+	}),
+
+	State({
+		name = "very_sick",
+		tags = { "busy" },
+
+		onenter = function(inst)
+			PlayAnimation(inst, "very_sick")
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+	}),
+
+	State({
+		name = "wink",
+		tags = { "busy" },
+
+		onenter = function(inst)
+			PlayAnimation(inst, "sexy_wink")
 		end,
 
 		events =

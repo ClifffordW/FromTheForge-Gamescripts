@@ -24,6 +24,10 @@ end
 local function CanInteract(inst, player, is_focused)
 	if is_focused then
 		return true
+	elseif player.components.playercontroller:IsPlacingOrRemoving() then
+		return false, "placing or removing prop"
+	elseif inst:HasTag("INLIMBO") then
+		return false, "in limbo"
 	elseif TheDungeon:GetDungeonMap():IsDebugMap() then
 		return false, "debug map"
 	elseif inst.components.interactable.force_disable then
@@ -38,7 +42,7 @@ local function PerformInteract(inst, player)
 	if not prompt_target or not convo_target then
 		-- Prompt was cleared, but we're trying to continue activation so
 		-- restart it.
-		-- TODO(dbriscoe): Re-evaluate this decision along with always calling
+		-- TODO(convo): Re-evaluate this decision along with always calling
 		-- DeactivatePrompt in Conversation:_EndConversation.
 		OnActivate(inst, player)
 	end
@@ -59,10 +63,11 @@ local function PerformInteract(inst, player)
 	-- Before this point, the npc had attract text above them but the player
 	-- wasn't locked into the convo.
 
-	inst.components.conversation:BeginModalConversation()
-
-	-- Clear us from interactable so we never rely on the interaction target.
-	player.components.playercontroller:SetInteractTarget(nil)
+	local success = inst.components.conversation:BeginModalConversation()
+	if success then
+		-- Clear us from interactable so we never rely on the interaction target.
+		player.components.playercontroller:SetInteractTarget(nil)
+	end
 end
 
 ---------------------------------------------------------------------------------------
@@ -72,12 +77,12 @@ local function OnHomeChanged(inst, home)
 	local npc = inst.components.npc
 	local role = npc.role
 
-	if not npc.exiled and not npc:HasDesiredHome() then
-		role = Npc.Role.s.visitor
-	end
-
 	assert(inst:IsValid())
-	TheWorld:PushEvent("registernpc", { npc = inst, role = role })
+	-- don't fire off registernpc events during TransitionLevel world destruction
+	-- otherwise invalid references will be held by TheDungeon's castmanager
+	if not TheWorld.is_destroying then
+		TheWorld:PushEvent("registernpc", { npc = inst, role = role })
+	end
 end
 
 ---------------------------------------------------------------------------------------
@@ -90,7 +95,8 @@ local function CreateMouth(prefabname, bank, build)
 	inst.entity:AddAnimState()
 	inst.entity:AddFollower()
 
-	inst:AddTag("FX")
+	inst:AddTag("YESCLICK")
+	inst:AddTag("FX")  -- return body when doing mouse over checks
 	inst.persists = false
 
 	inst.Transform:SetTwoFaced()
@@ -109,6 +115,7 @@ local function CreateHead(bank, build)
 	inst.entity:AddAnimState()
 	inst.entity:AddFollower()
 
+	inst:AddTag("YESCLICK")
 	inst:AddTag("FX")
 	inst.persists = false
 
@@ -152,12 +159,17 @@ end
 function MakeAutogenNpc(name, params, is_debug)
 	local assets =
 	{
+		Asset("PKGREF", "scripts/prefabs/autogen/npc/".. name ..".lua"),
+		Asset("PKGREF", "scripts/prefabs/npc_autogen.lua"),
 		Asset("PKGREF", "scripts/prefabs/npc_autogen_data.lua"),
 		Asset("ANIM", "anim/npc_template.zip"),
 		Asset("ANIM", "anim/npc_template_mouth.zip"),
 		Asset("ANIM", "anim/npc_character_specific.zip"),
 	}
-	local prefabs = {}
+
+	local prefabs = {
+		"npcmarker"
+	}
 
 	local body_build = params.build or name
 	local body_bank = params.bank or "npc_template"
@@ -196,7 +208,11 @@ function MakeAutogenNpc(name, params, is_debug)
 		inst:AddTag("character")
 
 		inst.Transform:SetTwoFaced()
-
+		-- copy the initial rotation/facing, then let npc facing directions be desynced based on local interactions
+		inst:DoTaskInTicks(0, function()
+			inst.Transform:SetNetworkHistoryIgnoreFlags(NETHISTORYIGNOREFLAG_ROTATION)
+		end)
+	
 		inst.AnimState:SetBank(body_bank)
 		inst.AnimState:SetBuild(body_build)
 		inst.AnimState:PlayAnimation("idle", true)
@@ -250,12 +266,12 @@ function MakeAutogenNpc(name, params, is_debug)
 		inst:AddComponent("conversation")
 
 		inst:AddComponent("npc")
+			:SetSpecies(params.species)
 		inst.components.npc:SetOnHomeChangedFn(OnHomeChanged)
-		if placer_prefab then
-			inst.components.npc:SetDesiredHomeData(params.home, placer_prefab)
-		end
 		inst.components.npc.role = params.role
 		inst.components.npc.initial_state = params.initial_state or "VISITOR"
+
+		inst:AddComponent("markablenpc")
 
 		inst:AddComponent("talkaudio")
 		inst:AddComponent("foleysounder")
@@ -292,27 +308,13 @@ function MakeAutogenNpc(name, params, is_debug)
 end
 
 local ret = {}
-local groups = {}
 
 for name, params in pairs(NpcAutogenData) do
-	if params.group ~= nil and string.len(params.group) > 0 then
-		local npclist = groups[params.group]
-		if npclist ~= nil then
-			npclist[#npclist + 1] = name
-		else
-			groups[params.group] = { name }
-		end
-	end
 	ret[#ret + 1] = MakeAutogenNpc(name, params)
 	ret[#ret + 1] = MakeAutogenMouth(name, params)
 end
 
 -- Don't need group prefabs for npcs
---[[
-for groupname, npclist in pairs(groups) do
-	--Dummy prefab (no fn) for loading dependencies
-	ret[#ret + 1] = Prefab(GroupPrefab(groupname), nil, nil, npclist)
-end
-]]
+--prefabutil.CreateGroupPrefabs(NpcAutogenData, ret)
 
 return table.unpack(ret)

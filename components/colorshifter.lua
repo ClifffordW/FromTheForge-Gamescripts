@@ -72,7 +72,7 @@ function ColorShifter:CalculateColorInternal()
 	local work = self._scratch_hsb
 	work.h, work.s, work.b = 0, 1, 1
 
-	-- TODO(dbriscoe): Does this valuestack make sense for hsb?
+	-- I *think* this valuestack makes sense for hsb.
 	for _, v in pairs(self.valuestack) do
 		MergeHsb(work, v)
 	end

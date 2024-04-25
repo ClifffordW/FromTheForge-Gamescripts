@@ -63,16 +63,16 @@ function soundutil.FindSoundTracker(instigator)
 end
 
 local function FmodEventFromParams(params)
-	-- TODO(dbriscoe): Consider rewriting all the data to change soundevent -> soundkey.
+	-- TODO(audio): Consider rewriting all the data to change soundevent -> soundkey.
 	dbassert(params.fmodevent or params.soundevent, "Must specify a sound to play.")
 	dbassert(not params.fmodevent or not params.soundevent, "Cannot specify both fmodevent and soundevent. Use fmodevent from code.")
 	return params.fmodevent or fmodtable.Event[params.soundevent] or ""
 end
 
-function soundutil.AddSGAutogenStopSound(inst, param)
+local function AddSGAutogenStopSound(inst, name, param)
 	inst.sg.mem.autogen_stopsounds = inst.sg.mem.autogen_stopsounds or {}
 	-- if no name is supplied we start it as the soundeventname
-	local name = param.name or param.soundevent
+	name = name or param.name or param.soundevent or param.fmodevent
 	inst.sg.mem.autogen_stopsounds[name] = true
 	return name
 end
@@ -101,9 +101,10 @@ end
 --       })
 --
 -- TODO:
--- Luca also asked for support for these:
+-- Support for these:
 --         add_groundtile = true or nil,
 function soundutil.PlayCodeSound(inst, fmodevent, args)
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
 	args = args or {}
 	dbassert(args.sound_max_count == nil, "Correct parameter name: max_count.")
 	dbassert(args.autostop == nil, "Correct parameter name: is_autostop.")
@@ -111,6 +112,7 @@ function soundutil.PlayCodeSound(inst, fmodevent, args)
 	local data = {
 		fmodevent = fmodevent or "", -- Silent failure if we removed a sound from fmod.
 		sound_max_count = args.max_count,
+		stopatexitstate = args.stopatexitstate,
 		volume = args.volume,
 		autostop = args.is_autostop,
 		event_source = "PlayCodeSound",
@@ -127,6 +129,31 @@ function soundutil.PlayCodeSound(inst, fmodevent, args)
 	return handle
 end
 
+function soundutil.PlayLocalCodeSound(inst, fmodevent, args)
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
+	args = args or {}
+	dbassert(args.sound_max_count == nil, "Correct parameter name: max_count.")
+	dbassert(args.autostop == nil, "Correct parameter name: is_autostop.")
+
+	local data = {
+		fmodevent = fmodevent or "", -- Silent failure if we removed a sound from fmod.
+		sound_max_count = args.max_count,
+		stopatexitstate = args.stopatexitstate,
+		volume = args.volume,
+		autostop = args.is_autostop,
+		event_source = "PlayCodeSound",
+	}
+	local handle = soundutil.PlayLocalSoundData(inst, data, args.name, args.instigator)
+	-- PlaySoundData may silently fail and return nil. It assumes the other
+	-- player successfully played the sound and we'll receive it over the
+	-- network.
+	if handle and args.fmodparams then
+		for key, val in pairs(args.fmodparams) do
+			soundutil.SetInstanceParameter(inst, handle, key, val)
+		end
+	end
+	return handle
+end
 
 -- Runtime version of EventFuncEditor:SoundData.
 -- This function is intended for use by generated code. See PlayCodeSound for
@@ -146,9 +173,12 @@ end
 -- Returns the handle/name for the played sound so you can set parameters on
 -- it. (If you pass nil for name, it generates a unique handle.)
 function soundutil.PlaySoundData(inst, params, name, instigator)
+	if params.stopatexitstate then
+		name = AddSGAutogenStopSound(inst, name, params)
+	end
 	if inst:ShouldSendNetEvents() then
 		if not name then
-			-- this needs to match what is done by soundutil.PlaySoundData
+			-- must match name generation by soundutil.HandlePlaySoundData
 			local soundtracker = soundutil.FindSoundTracker(instigator)
 			name = soundtracker:GenerateSoundHandle()
 		end
@@ -187,7 +217,7 @@ function soundutil.PlayRemoveItemSound(inst, item_remove_sound, quantity)
 end
 
 function soundutil.HandlePlaySoundData(inst, params, name, instigator)
-	-- @LUCA Turn this on to see debug code
+	-- Turn this on to see debug code
 	-- print("PlaySoundData.params =", table.inspect(params, { depth = 5, }))
 	assert(inst, "Need a sound emitter.")
 	kassert.typeof("table", params)
@@ -205,8 +235,6 @@ function soundutil.HandlePlaySoundData(inst, params, name, instigator)
 		name = soundtracker:PlayLimitedSound(eventname, volume, inst, max_count, name, is_autostop)
 		-- soundtracker applied faction.
 	else
-		-- TODO(dbriscoe): Figure out consequences of generating handles for
-		-- all emb sounds.
 		name = name or soundtracker:GenerateSoundHandle()
 		inst.SoundEmitter:PlaySound(eventname, name, volume, is_autostop)
 		soundtracker:SetFactionOnSound(inst, name)
@@ -223,9 +251,9 @@ end
 -- instigator: the entity that created inst or caused it to make sound. See
 -- PlaySoundData.
 function soundutil.PlayWindowedSound(inst, params, instigator)
-	-- @luca turn on to see debug code
+	-- turn on to see debug code
 	-- print("PlaySoundData.params =", table.inspect(params, { depth = 5, }))
-	assert(inst, "Need a sound emitter.")
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
 	kassert.typeof("table", params)
 	local eventname = FmodEventFromParams(params)
 	local volume = soundutil.ConvertVolume(params.volume) or 1
@@ -238,7 +266,11 @@ function soundutil.PlayWindowedSound(inst, params, instigator)
 	end
 end
 
+-- On play, send current count to the FMOD event as the parameter "Count".
+-- Doesn't limit how of this sound are played! See "Play Windowed Sound" or
+-- "Play Sound" to limit simultaneous sounds.
 function soundutil.PlayCountedSound(inst, param)
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
 	if inst.Network then
 		TheNetEvent:PlayCountedSound(inst.GUID, param)
 		return param.fallthrough
@@ -250,12 +282,8 @@ end
 function soundutil.HandlePlayCountedSound(inst, param)
 	local name = param.name
 	if param.stopatexitstate then
-		inst.sg.mem.autogen_stopsounds = inst.sg.mem.autogen_stopsounds or {}
-		-- if no name is supplied we start it as the soundeventname
-		name = name or param.soundevent
-		inst.sg.mem.autogen_stopsounds[name] = true
+		name = AddSGAutogenStopSound(inst, name, param)
 	end
-	TheLog.ch.AudioSpam:print("Play Counted Sound:", param.soundevent, param.maxcount)
 	if inst.sg.mem.counted_sounds == nil then
 		inst.sg.mem.counted_sounds = {}
 	end
@@ -272,6 +300,7 @@ function soundutil.HandlePlayCountedSound(inst, param)
 
 	-- Stored count is count-1 for nice modulo math, but need actual count for fmod.
 	soundcount = soundcount + 1
+	TheLog.ch.AudioSpam:print("Play Counted Sound:", param.soundevent, soundcount, param.maxcount)
 	local fmodevent = fmodtable.Event[param.soundevent] or ""
 	local volume = soundutil.ConvertVolume(param.volume)
 	if name then
@@ -308,7 +337,22 @@ function soundutil.HandlePlaySoundWithParams(inst, eventname, params, volume, is
 	inst.SoundEmitter:PlaySoundWithParams(eventname, params, volume, is_autostop)
 end
 
+function soundutil.CoerceFmodParamToNumber(value)
+	-- Minimal autoconversion to simplify audio code writing and make inputs
+	-- net-friendly.
+	if type(value) == "boolean" then
+		return value and 1 or 0
+	elseif type(value) == "string" then
+		-- hash() will produce the same number for the same string, but they
+		-- won't be sequential. See DebugAudio's Hasher to copypaste numbers.
+		return hash(value)
+	end
+	return value
+end
+
 function soundutil.SetInstanceParameter(inst, handle, param_name, value)
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
+	value = soundutil.CoerceFmodParamToNumber(value)
 	if inst:ShouldSendNetEvents() then
 		TheNetEvent:SetSoundInstanceParam(inst.GUID, handle, param_name, value)
 	else
@@ -317,14 +361,29 @@ function soundutil.SetInstanceParameter(inst, handle, param_name, value)
 end
 
 function soundutil.SetLocalInstanceParameter(inst, handle, param_name, value)
+	value = soundutil.CoerceFmodParamToNumber(value)
 	soundutil.HandleSetInstanceParameter(inst, handle, param_name, value)
 end
 
 function soundutil.HandleSetInstanceParameter(inst, handle, param_name, value)
+	dbassert(type(value) == "number", "Don't call HandleSetInstanceParameter directly. See SetInstanceParameter.")
 	inst.SoundEmitter:SetParameter(handle, param_name, value)
 end
 
+function soundutil.NilCheckAndKillSound(inst, name)
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
+	if not name then
+		return
+	end
+	if inst.Network then
+		TheNetEvent:KillSound(inst.GUID, name)
+	else
+		inst.SoundEmitter:KillSound(name)
+	end
+end
+
 function soundutil.KillSound(inst, name)
+	dbassert(EntityScript.is_instance(inst), "First argument must be an entity.")
 	if inst.Network then
 		TheNetEvent:KillSound(inst.GUID, name)
 	else

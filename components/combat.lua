@@ -39,6 +39,7 @@ local Combat = Class(function(self, inst)
 	self.vulnerableknockdownonly = false
 	self.knockdownduration = 3
 	self.knockdownlengthmodifier = 1
+	self.knockdownbecomesprojectile = false -- make any attack coming from this entity upgrade to "knockdown becomes projectile"
 	self.blockknockback = false
 	self.hasblockdir = false
 	self.target = nil
@@ -53,8 +54,7 @@ local Combat = Class(function(self, inst)
 	self.pvpmode = PVPMODE_HIT_REACTIONS_ONLY
 	self.ignoredamage = false
 
-	self.current_hitstun_pressure_frames = 0
-	self.hitstun_pressure_frames = nil
+	self.hitstun_pressure_frames = math.huge
 
 	self.damagenumbers = {} -- handles of UI elements
 
@@ -64,7 +64,12 @@ local Combat = Class(function(self, inst)
 	self.hitstreak = 0 -- The amount of hits in a short succession
 	self.hitstreakdecaytime = 0 -- The amount of time left before this hitstreak dies
 	self.hitstreakattackids = {} -- A table of all the attack ids
+	self.hitstreaktargets = {} -- A table of all the attack targets
 	self.hitstreakdamagetotal = 0 -- The total amount of damage dealt within this hitstreak
+
+	self.hitstreakdecaytimemult = AddSourceModifiers(inst)
+
+	self.knockdowndistancemult = MultSourceModifiers(inst) -- When we knock something down, does it go farther? Or less far? etc
 
 	-- TODO @chrisp #meta - if SourceModifiers operated against tables rather than numbers, it might be easier to
 	-- work/dev with
@@ -258,23 +263,18 @@ function Combat:GetHitStunPressureFrames()
 	return self.hitstun_pressure_frames
 end
 
-function Combat:GetCurrentHitstunPressureFrames()
-	return self.current_hitstun_pressure_frames
-end
-
-function Combat:AddToCurrentHitStunPressureFrames(frames)
-	self.current_hitstun_pressure_frames = self.current_hitstun_pressure_frames + frames
-end
-
-function Combat:ResetCurrentHitStunPressureFrames()
-	self.current_hitstun_pressure_frames = 0
-end
-
 function Combat:HitStunPressureFramesExceeded()
 	if not self.hitstun_pressure_frames then
 		return false
 	end
-	return self.current_hitstun_pressure_frames >= self.hitstun_pressure_frames
+
+	local hitstun_pressure_pwr = self.inst.components.powermanager and self.inst.components.powermanager:GetPowerByName("hitstunpressure")
+	if not hitstun_pressure_pwr then
+		return
+	end
+
+	local current_hitstun_pressure_frames = hitstun_pressure_pwr.mem.current_hitstun_frames
+	return current_hitstun_pressure_frames >= self.hitstun_pressure_frames
 end
 
 function Combat:SetDamageReceivedMult(source, mult)
@@ -348,6 +348,30 @@ end
 
 function Combat:GetTotalCritDamageMult()
 	return self.critdamagemult:Get()
+end
+
+function Combat:SetHitStreakDecayTimeMult(source, mult)
+	self.hitstreakdecaytimemult:SetModifier(source, mult)
+end
+
+function Combat:RemoveHitStreakDecayTimeModifier(source)
+	self.hitstreakdecaytimemult:RemoveModifier(source)
+end
+
+function Combat:GetTotalHitStreakDecayTimeMult()
+	return self.hitstreakdecaytimemult:Get()
+end
+
+function Combat:SetKnockdownDistanceMult(source, mult)
+	self.knockdowndistancemult:SetModifier(source, mult)
+end
+
+function Combat:RemoveKnockdownDistanceModifier(source)
+	self.knockdowndistancemult:RemoveModifier(source)
+end
+
+function Combat:GetTotalKnockdownDistanceMult()
+	return self.knockdowndistancemult:Get()
 end
 
 function Combat:SetFocusDamageMult(source, mult)
@@ -457,6 +481,12 @@ function Combat:CanFriendlyTargetEntity(ent)
 	return cantarget
 end
 
+function Combat:SetKnockdownBecomesProjectile(toggle)
+	self.knockdownbecomesprojectile = toggle
+end
+function Combat:GetKnockdownBecomesProjectile()
+	return self.knockdownbecomesprojectile
+end
 ----
 
 function Combat:SuggestTarget(target)
@@ -609,7 +639,8 @@ function Combat:DeltaHitStreakDecay(delta, silent)
 		return
 	end
 
-	self.hitstreakdecaytime = math.clamp(self.hitstreakdecaytime + delta, 0, TUNING.PLAYER.HIT_STREAK.MAX_TIME)
+	local maxtime = TUNING.PLAYER.HIT_STREAK.MAX_TIME * (self:GetTotalHitStreakDecayTimeMult())
+	self.hitstreakdecaytime = math.clamp(self.hitstreakdecaytime + delta, 0, maxtime)
 
 	if self.hitstreakdecaytime <= 0 and not silent then
 		self:KillHitStreak()
@@ -648,13 +679,17 @@ function Combat:AddHitStreak(attack)
 		return
 	end
 
+	-- print("AddHitStreak:\n" .. debugstack())
+
 	self.hitstreakdamagetotal = self.hitstreakdamagetotal + attack:GetDamage()
 	table.insert(self.hitstreakattackids, attack:GetNameID())
+	table.insert(self.hitstreaktargets, attack:GetTarget())
 	self:DeltaHitStreak(1)
 
+	local total_decay = TUNING.PLAYER.HIT_STREAK.BASE_DECAY * (self:GetTotalHitStreakDecayTimeMult())
 	-- If the hitstreak has decayed at all already, then set it to the max amount of decay
-	if self.hitstreakdecaytime < TUNING.PLAYER.HIT_STREAK.BASE_DECAY then
-		self:SetHitStreakDecay(TUNING.PLAYER.HIT_STREAK.BASE_DECAY)
+	if self.hitstreakdecaytime < total_decay then
+		self:SetHitStreakDecay(total_decay)
 	end
 
 	if not self.updating_hitstreaks then
@@ -681,6 +716,7 @@ function Combat:KillHitStreak()
 		-- Reset everything
 		self.hitstreakdamagetotal = 0
 		lume.clear(self.hitstreakattackids)
+		lume.clear(self.hitstreaktargets)
 
 		-- Stop updating if we shouldn't be.
 		self.updating_hitstreaks = false
@@ -700,6 +736,10 @@ end
 
 function Combat:GetHitStreakAttackIDs()
 	return self.hitstreakattackids
+end
+
+function Combat:GetHitStreakTargets()
+	return self.hitstreaktargets
 end
 
 function Combat:CheckDamageChain(data, source)
@@ -728,6 +768,9 @@ function Combat:CalculateProcessedDamage(attack)
 
 		local attacker = attack:GetAttacker().components.combat
 		local dungeon_tier_damage_mult = attacker.dungeontierdamagemult:Get() - self.dungeontierdamagereductionmult:Get()
+
+		dungeon_tier_damage_mult = math.max(TUNING.GEAR.MINIMUM_DUNGEONTIER_DAMAGE_MULT, dungeon_tier_damage_mult)
+
 		TheLog.ch.CombatSpam:printf(
 			"attacker.dungeontierdamagemult - defender.dungeontierdamagereductionmult = %.2f - %.2f = X %.2f",
 			attacker.dungeontierdamagemult:Get(),
@@ -803,8 +846,8 @@ function Combat:GetHealed(heal)
 		local amount = 0
 
 		heal:GetAttacker():PushEvent("do_heal", heal)
-		heal:GetTarget():PushEvent("take_heal", heal)
 		amount = heal:GetTarget().components.health:DoDelta(heal:GetHeal(), false, heal)
+
 
 		--For display purposes, re-configure the heal to only show the delta
 		if amount > 0 then
@@ -815,6 +858,9 @@ function Combat:GetHealed(heal)
 			end
 			self:PlayHealFx(heal:GetTarget(), heal)
 		end
+
+		-- Send this after the actual amount has been resolved
+		heal:GetTarget():PushEvent("take_heal", heal)
 
 		if self.inst.components.lucky and self.inst.components.lucky:DoLuckRoll() and not heal:SourceIsLuck() then
 			--sound
@@ -932,7 +978,10 @@ function DoNetEventApplyDamage(attack, event)
 
 	local was_alive = not target:IsDead()
 	target.components.combat:TakeDamage(attack)
-	local death = was_alive and target:IsDead()
+	local death = was_alive and
+		(target:IsDead() -- Normal mobs / entities
+		or target:HasTag("boss") and target:IsDying()) -- Bosses don't go into Dead immediately.
+
 	local attacker = attack:GetAttacker()
 
 	if event and target ~= attacker then
@@ -969,9 +1018,9 @@ function SendAttackOverNetwork(attack, event)
 	local attacker = attack:GetAttacker()
 	local target = attack:GetTarget()
 
-	if attacker:IsMinimal() then 
+	if attacker:IsMinimal() then
 		-- Minimal entities can ONLY attack local entities. They don't take control of remote entities.
-		-- This is to fix a bug where minimal traps would trigger on all machines, and then hurt enemies multiple times over the network. 
+		-- This is to fix a bug where minimal traps would trigger on all machines, and then hurt enemies multiple times over the network.
 		if target:IsLocal() then
 			DoNetEventApplyDamage(attack, event)
 			SGCommon.Fns.ApplyHitConfirmEffects(attack)
@@ -1426,6 +1475,10 @@ function Combat:DoKnockingAttackInternal(attack)
 				-- your attack is supposed to knock the target down, and your target can be knocked down, so do it.
 				event = "knockdown"
 				attack:SetKnockdownDuration(self:GetKnockdownDuration())
+
+				local old_pushback = attack:GetPushback()
+				attack:SetPushback(old_pushback * self.inst.components.combat:GetTotalKnockdownDistanceMult())
+
 			elseif hasknockback then
 				self:Log("hasknockback")
 
@@ -1508,6 +1561,10 @@ end
 
 function Combat:DebugDrawEntity(ui, panel, colors)
 	local target = self.inst.components.combat:GetTarget()
+	if self:SupportsHitStreak() then
+		ui:Text("HitStreak: " .. self.hitstreak)
+		ui:Text(string.format("HitStreak Decay: %1.1f", self.hitstreakdecaytime))
+	end
 	ui:Text("Target:")
 	ui:SameLineWithSpace()
 	if ui:Button(tostring(target)) then

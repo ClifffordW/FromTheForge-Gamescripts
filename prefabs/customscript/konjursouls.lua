@@ -25,7 +25,7 @@ end
 
 local function GetLoot(inst, player, opts)
 	local item = Consumable.FindItem(opts.soul_type)
-	player:PushEvent("get_loot", { item = item, count = 1 })
+	player:PushEvent("get_loot", { item = item, count = inst.core_drop.components.souldrop.soul_count })
 end
 
 function konjursouls.ConfigureKonjurSoul(inst, opts)
@@ -49,12 +49,14 @@ function konjursouls.ConfigureKonjurSoul(inst, opts)
 
 			inst:AddComponent("rotatingdrop")
 			inst.components.rotatingdrop:SetBuildDropsFn(opts.build_drops_fn)
+			inst.components.rotatingdrop:SetOnDropSpawnFn(function(_player, drop, drop_count)
+				drop.core_drop.components.souldrop.soul_count = drop_count
+			end)
 
 			inst:AddComponent("souldrop")
 			inst.components.souldrop:SetOnPrepareToShowGem(function()
 				inst.components.rotatingdrop:PrepareToShowDrops()
 			end)
-
 
 			inst:ListenForEvent("took_drop", function(_, player)
 				inst.components.rotatingdrop:ConsumeDrop(player)

@@ -34,7 +34,7 @@ local function OnProximityHitBoxTriggered(inst, data)
 	local triggered = false
 	for i = 1, #data.targets do
 		local v = data.targets[i]
-		if v.entity:HasTag("player") then
+		if v.entity:HasTag("player") and not v.sg:HasStateTag("airborne") and not v.sg:HasStateTag("airborne_high") then
 			triggered = true
 			break
 		end

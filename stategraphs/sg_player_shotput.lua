@@ -23,23 +23,12 @@ local soundutil = require "util.soundutil"
 local combatutil = require "util.combatutil"
 local Weight = require "components.weight"
 
--- jambell: a bit misleading PRESENTLY, these just determine combo states -- not initial presses. Fix to (probably) come.
+-- NOTE: a bit misleading PRESENTLY, these just determine combo states -- not initial presses. Fix to (probably) come.
 local MELEE_BUTTON = "lightattack"
 local THROW_BUTTON = "heavyattack"
 
 local ATTACKS =
 {
--- NW: Moved to player_shotput_projectile
---	THROW =
---	{
---		DMG_NORM = 1.33,
---		DMG_FOCUS = 2,
---		HITSTUN = 3,
---		PB_NORM = 0,
---		PB_FOCUS = 0,
---		HS_NORM = HitStopLevel.MEDIUM,
---		HS_FOCUS = HitStopLevel.HEAVY,
---	},
 	PUNCH1 =
 	{
 		DMG_NORM = 0.53,
@@ -76,6 +65,13 @@ local ATTACKS =
 		PB_NORM = 3,
 		HS_NORM = HitStopLevel.HEAVY,
 	},
+	LOB_SLAP =
+	{
+		DMG_NORM = 0.01,
+		HITSTUN = 0,
+		PB_NORM = 0,
+		HS_NORM = HitStopLevel.HEAVY,
+	},
 }
 
 
@@ -100,6 +96,7 @@ local PUNCH1_HEIGHT_THRESHOLD = 2
 local PUNCH2_HEIGHT_THRESHOLD_LOW = 2.5
 local PUNCH2_HEIGHT_THRESHOLD_HIGH = 3.5
 local PUNCH3_HEIGHT_THRESHOLD = 2.5
+local LOBSLAP_HEIGHT_THRESHOLD = 3.5
 
 local WEAPON_PREFIX = "shotput"
 
@@ -116,9 +113,29 @@ local function PrintActiveProjectiles(inst)
 	end
 end
 
-local function CreateProjectile(inst)
-	local projectile = SpawnPrefab("player_shotput_projectile", inst)
+local function GetActiveProjectileCount(inst)
+	if not inst.sg.mem.active_projectiles then
+		return 0
+	end
 
+	local count = 0
+	for _k,_v in pairs(inst.sg.mem.active_projectiles) do
+		count = count + 1
+	end
+	dbassert(count <= inst.sg.mem.ammo_max, "Why do we have more projectiles than expected?")
+	return count
+end
+
+local function GetAmmo(inst)
+	return math.max(0, inst.sg.mem.ammo_max - GetActiveProjectileCount(inst))
+end
+
+local function HasAmmo(inst)
+	return inst.sg.mem.ammo_max - GetActiveProjectileCount(inst) > 0
+end
+
+local function CreateProjectile(inst, lobbed)
+	local projectile = SpawnPrefab("player_shotput_projectile", inst)
 
 	projectile.sg.mem.facing = inst.Transform:GetFacing()
 
@@ -129,18 +146,17 @@ local function CreateProjectile(inst)
 		projectile.Transform:SetPosition(pos.x - 2, pos.y, pos.z)
 	end
 	projectile.focusthrow = inst.sg.statemem.focusthrow
-	inst.sg.mem.attack_type = "heavy_attack" -- this matches hardcode in player_shotput_projectile Setup function
+	inst.sg.mem.attack_type = lobbed and "skill" or "heavy_attack" -- this matches hardcode in player_shotput_projectile Setup function
 
-	projectile:Setup(inst)
+	projectile:Setup(inst, lobbed and { lobbed = lobbed } or nil)
 
 	return projectile
 end
 
-
 -- Visual helper functions
 local function UpdateAmmoSymbols(inst)
 	-- Visualization of player's ammo on their character
-	if inst.sg.mem.ammo == inst.sg.mem.ammo_max then
+	if GetAmmo(inst) == inst.sg.mem.ammo_max then
 		inst.AnimState:ShowSymbol("feature01")
 		inst.AnimState:ShowSymbol("shadow_untex")
 
@@ -148,10 +164,10 @@ local function UpdateAmmoSymbols(inst)
 		inst.AnimState:ShowLayer("ARMED")
 		inst.AnimState:HideLayer("UNARMED")
 		inst.AnimState:ShowLayer("ATTACH")
-	elseif inst.sg.mem.ammo > 0 then
+	elseif HasAmmo(inst) then
 		inst.AnimState:ShowSymbol("feature01")
 		inst.AnimState:ShowSymbol("shadow_untex")
-		
+
 		inst.AnimState:ShowSymbol("weapon_back01")
 		inst.AnimState:ShowLayer("ARMED")
 		inst.AnimState:HideLayer("UNARMED")
@@ -225,7 +241,7 @@ local motorvel_to_xoffset =
 local function PlayCatchFX(inst, ball)
 	local pos = inst:GetPosition()
 
-	-- TODO(jambell): this catch offset is messed up for catching ball while moving, because at the time this is evaluated, motorvel still thinks we're moving.
+	-- TODO: this catch offset is messed up for catching ball while moving, because at the time this is evaluated, motorvel still thinks we're moving.
 	--				  currently working on adding "can keep moving while catching", which will change this
 	-- 			      works in other cases, going to check this in for now and revisit once we assess "can keep moving while catching"
 	local x_offset = inst.Physics:GetMotorVel() > 0 and PiecewiseFn(inst.Physics:GetMotorVel(), motorvel_to_xoffset) or 0 -- if moving, offset it by 1 unit
@@ -236,18 +252,37 @@ end
 -------------------------------------------------
 -- Event Handlers
 
+local function OnJuggle(inst, delta)
+	if inst.cancel_juggle_task then
+		inst.cancel_juggle_task:Cancel()
+		inst.cancel_juggle_task = nil
+	end
+
+	if delta == 0 then
+		-- reset
+		inst.sg.mem.juggle_count = 0
+		-- printf_world(inst, "Reset Juggle")
+	else
+		inst.sg.mem.juggle_count = (inst.sg.mem.juggle_count or 0) + delta
+		inst:PushEvent("do_shotput_juggle", inst.sg.mem.juggle_count)
+		-- printf_world(inst, "Juggle: %s", inst.sg.mem.juggle_count)
+	end
+end
+
 local function OnThrow(inst, projectile)
-	if inst.sg.mem.ammo <= 0 then
+	if not HasAmmo(inst) then
+		dbassert(false, "Tried to throw shotput when no ammo available.")
 		return
 	end
 	inst:PushEvent("projectile_launched", { projectile })
-	inst.sg.mem.ammo = inst.sg.mem.ammo - 1
-	UpdateAmmoSymbols(inst)
-	StopFocusParticles(inst)
 
 	inst.sg.mem.active_projectiles[projectile] = true
-
 	PrintActiveProjectiles(inst)
+	UpdateAmmoSymbols(inst)
+
+	StopFocusParticles(inst)
+
+	OnJuggle(inst, 1)
 end
 
 local function OnCatch(inst, projectile)
@@ -256,23 +291,29 @@ local function OnCatch(inst, projectile)
 	projectile:SetPermanentFlags(PFLAG_JOURNALED_REMOVAL)
 	projectile:Remove()
 
-	inst.sg.mem.ammo = math.min(inst.sg.mem.ammo + 1, inst.sg.mem.ammo_max)
+	inst.sg.mem.active_projectiles[projectile] = nil
+	PrintActiveProjectiles(inst)
+
 	UpdateAmmoSymbols(inst)
 	PlayCatchFX(inst, projectile)
 
 	inst.sg.mem.lastcatchtime = GetTick()
 
-	inst.sg.mem.active_projectiles[projectile] = nil
-	PrintActiveProjectiles(inst)
-
 	if not inst.sg:HasStateTag("busy") then
 		inst.sg:GoToState("catch")
 	else
-		--sound
-		local params = {}
-		params.fmodevent = fmodtable.Event.Shotput_roll_pickup
-		local handle = soundutil.PlaySoundData(inst, params)
-		soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
+		soundutil.PlayCodeSound(
+			inst,
+			fmodtable.Event.Shotput_roll_pickup,
+			{
+				fmodparams = {
+					shotputAmmo = GetAmmo(inst),
+				},
+			})
+	end
+
+	if not inst.cancel_juggle_task then
+		inst.cancel_juggle_task = inst:DoTaskInTime(2, function() OnJuggle(inst, 0) end)
 	end
 end
 
@@ -299,27 +340,28 @@ local function OnPickup(inst, projectile)
 	projectile:SetPermanentFlags(PFLAG_JOURNALED_REMOVAL)
 	projectile:Remove()
 
-	inst.sg.mem.ammo = math.min(inst.sg.mem.ammo + 1, inst.sg.mem.ammo_max)
-	UpdateAmmoSymbols(inst)
-	PlayCatchFX(inst, projectile)
-
 	inst.sg.mem.active_projectiles[projectile] = nil
 	PrintActiveProjectiles(inst)
 
+	UpdateAmmoSymbols(inst)
+	PlayCatchFX(inst, projectile)
+
+	local fmodevent
 	if not inst.sg:HasStateTag("busy") then
-		local params = {}
-		params.fmodevent = fmodtable.Event.Shotput_pickup
-		params.sound_max_count = 1
-		local handle = soundutil.PlaySoundData(inst, params)
-		soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
 		inst.sg:GoToState("pickup_shotput")
+		fmodevent = fmodtable.Event.Shotput_pickup
 	else
-		local params = {}
-		params.fmodevent = fmodtable.Event.Shotput_roll_pickup
-		params.sound_max_count = 1
-		local handle = soundutil.PlaySoundData(inst, params)
-		soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
+		fmodevent = fmodtable.Event.Shotput_roll_pickup
 	end
+	soundutil.PlayCodeSound(
+		inst,
+		fmodevent,
+		{
+			max_count = 1,
+			fmodparams = {
+				shotputAmmo = GetAmmo(inst),
+			},
+		})
 end
 
 local function CheckForBallHit(inst, target, height_threshold)
@@ -353,6 +395,18 @@ local function TryPlayTackleSound(inst, victim)
 		params.sound_max_count = 1
 		soundutil.PlaySoundData(inst, params)
 	end
+end
+
+local function _get_attack_id(inst)
+	-- local attack_id = ("shotput_melee_%s"):format(inst.sg:GetCurrentState()):upper()
+	local attack_id = "SHOTPUT_PLAYER_MELEE"
+	if inst.sg.statemem.attack_id then
+		-- can be overridden by manually setting a statemem.attack_id
+		-- did not automatically :upper() this string because it is manually set
+		attack_id = inst.sg.statemem.attack_id
+	end
+	-- printf_world(inst, attack_id)
+	return attack_id
 end
 
 local function OnTackleHitBoxTriggered(inst, data)
@@ -401,26 +455,30 @@ local function OnTackleHitBoxTriggered(inst, data)
 			attack:SetPushback(attackdata.PB_NORM)
 			attack:SetFocus(focushit)
 			attack:SetID(inst.sg.mem.attack_type)
+			attack:SetNameID(_get_attack_id(inst))
+			attack:SetHitFlags(inst.sg.statemem.hitflags or Attack.HitFlags.LOW_ATTACK)
 
-			inst.components.combat:DoBasicAttack(attack)
+			local hit_v = inst.components.combat:DoBasicAttack(attack)
 
-			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+			if hit_v then
+				hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-			local hitfx_x_offset = 2.75
-			local hitfx_y_offset = 1.5
+				local hitfx_x_offset = 2.75
+				local hitfx_y_offset = 1.5
 
-			inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+				inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-			TryPlayTackleSound(inst, v)
+				TryPlayTackleSound(inst, v)
 
-			-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-			if v.sg ~= nil and v.sg:HasStateTag("block") then
-			else
-				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+				if v.sg ~= nil and v.sg:HasStateTag("block") then
+				else
+					SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				end
+
+				inst.sg.statemem.tackletargets[v] = true
+				hit = true
 			end
-
-			inst.sg.statemem.tackletargets[v] = true
-			hit = true
 		end
 	end
 
@@ -459,7 +517,7 @@ local function OnTackleHitBoxTriggered(inst, data)
 end
 
 local function OnFadingTackleHitBoxTriggered(inst, data)
-	--JAMBELL: lots of boilerplate here while prototyping, clean this up
+	--TODO: lots of boilerplate here while prototyping, clean this up
 	local attackdata = ATTACKS[inst.sg.statemem.attackid]
 	local hitstoplevel = attackdata.HS_NORM or HitStopLevel.HEAVY
 
@@ -505,31 +563,35 @@ local function OnFadingTackleHitBoxTriggered(inst, data)
 			attack:SetPushback(attackdata.PB_NORM)
 			attack:SetFocus(focushit)
 			attack:SetID(inst.sg.mem.attack_type)
+			attack:SetNameID(_get_attack_id(inst))
+			attack:SetHitFlags(inst.sg.statemem.hitflags or Attack.HitFlags.LOW_ATTACK)
 
-			inst.components.combat:DoBasicAttack(attack)
+			local hit_v = inst.components.combat:DoBasicAttack(attack)
 
-			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+			if hit_v then
+				hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-			local hitfx_x_offset = 2.5
+				local hitfx_x_offset = 2.5
 
-			local minheight = inst.sg.statemem.minheight or 1.5
-			local maxheight = inst.sg.statemem.maxheight or 2
+				local minheight = inst.sg.statemem.minheight or 1.5
+				local maxheight = inst.sg.statemem.maxheight or 2
 
-			local hitfx_y_offset = math.max(minheight, v:GetPosition().y)
-			hitfx_y_offset = math.min(maxheight, hitfx_y_offset)
+				local hitfx_y_offset = math.max(minheight, v:GetPosition().y)
+				hitfx_y_offset = math.min(maxheight, hitfx_y_offset)
 
-			inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+				inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-			TryPlayTackleSound(inst, v)
+				TryPlayTackleSound(inst, v)
 
-			-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-			if v.sg ~= nil and v.sg:HasStateTag("block") then
-			else
-				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+				if v.sg ~= nil and v.sg:HasStateTag("block") then
+				else
+					SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				end
+
+				inst.sg.statemem.tackletargets[v] = true
+				hit = true
 			end
-
-			inst.sg.statemem.tackletargets[v] = true
-			hit = true
 		end
 	end
 
@@ -602,38 +664,43 @@ local function OnPunchHitBoxTriggered(inst, data)
 			attack:SetPushback(attackdata.PB_NORM)
 			attack:SetFocus(focushit)
 			attack:SetID(inst.sg.mem.attack_type)
+			attack:SetNameID(_get_attack_id(inst))
+			attack:SetHitFlags(inst.sg.statemem.hitflags or Attack.HitFlags.LOW_ATTACK)
 
+			local hit_v
 			if attackdata.KNOCKDOWN then
-				inst.components.combat:DoKnockdownAttack(attack)
+				hit_v = inst.components.combat:DoKnockdownAttack(attack)
 			elseif attackdata.KNOCKBACK then
-				inst.components.combat:DoKnockbackAttack(attack)
+				hit_v = inst.components.combat:DoKnockbackAttack(attack)
 			else
-				inst.components.combat:DoBasicAttack(attack)
+				hit_v = inst.components.combat:DoBasicAttack(attack)
 			end
 
-			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+			if hit_v then
+				hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-			local hitfx_x_offset = 2
-			local hitfx_y_offset = 1.5
+				local hitfx_x_offset = 2
+				local hitfx_y_offset = 1.5
 
-			inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+				inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-			if attackdata.KNOCKDOWN == true then
-				local params = {}
-				params.fmodevent = fmodtable.Event.Hit_headbutt
-				params.sound_max_count = 1
-				soundutil.PlaySoundData(inst, params)
-			else TryPlayTackleSound(inst, v)
+				if attackdata.KNOCKDOWN == true then
+					local params = {}
+					params.fmodevent = fmodtable.Event.Hit_headbutt
+					params.sound_max_count = 1
+					soundutil.PlaySoundData(inst, params)
+				else TryPlayTackleSound(inst, v)
+				end
+
+				-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+				if v.sg ~= nil and v.sg:HasStateTag("block") then
+				else
+					SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				end
+
+				inst.sg.statemem.tackletargets[v] = true
+				hit = true
 			end
-		
-			-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-			if v.sg ~= nil and v.sg:HasStateTag("block") then
-			else
-				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
-			end
-
-			inst.sg.statemem.tackletargets[v] = true
-			hit = true
 		end
 	end
 
@@ -700,15 +767,25 @@ local function IsFocusThrow(inst)
 end
 
 local function MakeThrownProjectile(inst)
-	OnThrow(inst, CreateProjectile(inst))
+	if HasAmmo(inst) then
+		OnThrow(inst, CreateProjectile(inst))
+	end
+end
+
+local function MakeLobbedProjectile(inst)
+	if HasAmmo(inst) then
+		OnThrow(inst, CreateProjectile(inst, true))
+	end
 end
 
 local function RemoveProjectiles(sg)
 	if sg.mem.active_projectiles then
 		for proj, _ in pairs(sg.mem.active_projectiles) do
-			proj:TakeControl()
-			proj:SetPermanentFlags(PFLAG_JOURNALED_REMOVAL)
-			proj:Remove()
+			if proj:IsValid() then
+				proj:TakeControl()
+				proj:SetPermanentFlags(PFLAG_JOURNALED_REMOVAL)
+				proj:Remove()
+			end
 		end
 		table.clear(sg.mem.active_projectiles)
 	end
@@ -719,6 +796,7 @@ end
 local events = {
 	EventHandler("shotput_caught", OnCatch),
 	EventHandler("shotput_pickuped", OnPickup),
+	EventHandler("shotput_juggled", OnJuggle),
 }
 SGPlayerCommon.Events.AddAllBasicEvents(events)
 
@@ -735,7 +813,6 @@ local states =
 		name = "init",
 		onenter = function(inst)
 			inst.sg.mem.ammo_max = TUNING.GEAR.WEAPONS.SHOTPUT.AMMO
-			inst.sg.mem.ammo = TUNING.GEAR.WEAPONS.SHOTPUT.AMMO
 			inst.sg.mem.throw_anims = { "shotput_atk1", "shotput_atk1_b" }
 			inst.sg.mem.throw_focus_anims = { "shotput_focus_atk1", "shotput_focus_atk2" }
 			assert(#inst.sg.mem.throw_anims == #inst.sg.mem.throw_focus_anims)
@@ -754,7 +831,6 @@ local states =
 
 				-- Also reset the internal state of the shotput weapon:
 				inst.sg.mem.ammo_max = TUNING.GEAR.WEAPONS.SHOTPUT.AMMO
-				inst.sg.mem.ammo = TUNING.GEAR.WEAPONS.SHOTPUT.AMMO
 				inst.sg.mem.throw_anims = { "shotput_atk1", "shotput_atk1_b" }
 				inst.sg.mem.throw_focus_anims = { "shotput_focus_atk1", "shotput_focus_atk2" }
 				assert(#inst.sg.mem.throw_anims == #inst.sg.mem.throw_focus_anims)
@@ -778,7 +854,7 @@ local states =
 	State({
 		name = "default_heavy_attack",
 		onenter = function(inst)
-			if inst.sg.mem.ammo > 0 then
+			if HasAmmo(inst) then
 				inst.sg:GoToState("throw")
 			else
 				inst.sg:GoToState("noammo", THROW_BUTTON)
@@ -861,12 +937,16 @@ local states =
 
 			-- SOUNDS
 			FrameEvent(1, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Shotput_whoosh_light
-				params.sound_max_count = 1
-				local handle = soundutil.PlaySoundData(inst, params)
-				soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", inst.sg.statemem.focusthrow and 1 or 0)
-				soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
+				soundutil.PlayCodeSound(
+					inst,
+					fmodtable.Event.Shotput_whoosh_light,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = inst.sg.statemem.focusthrow and 1 or 0,
+							shotputAmmo = GetAmmo(inst),
+						},
+					})
 			end),
 		},
 
@@ -899,11 +979,11 @@ local states =
 		tags = { "busy", "heavy_attack" },
 
 		onenter = function(inst)
-			if inst.sg.mem.ammo > 0 then
+			if HasAmmo(inst) then
 				inst:FlipFacingAndRotation()
 				inst.sg:GoToState("throw_from_rolling_pst", true)
 			else
-				inst.sg:GoToState("roll_pst") -- TODO @jambell #weight figure out what to do with these
+				inst.sg:GoToState("roll_pst") -- TODO #weight figure out what to do with these
 			end
 		end,
 	}),
@@ -912,7 +992,7 @@ local states =
 		tags = { "busy", "heavy_attack" },
 
 		onenter = function(inst, flip)
-			if inst.sg.mem.ammo > 0 then
+			if HasAmmo(inst) then
 				inst.sg.statemem.focusthrow = IsFocusThrow(inst)
 
 				if inst.sg.statemem.focusthrow then
@@ -930,7 +1010,7 @@ local states =
 				end
 				SGCommon.Fns.SetMotorVelScaled(inst, velocity * runspeed)
 			else
-				inst.sg:GoToState("roll_pst") -- TODO @jambell #weight figure out what to do with these
+				inst.sg:GoToState("roll_pst") -- TODO #weight figure out what to do with these
 			end
 		end,
 
@@ -963,12 +1043,16 @@ local states =
 			FrameEvent(6 , SGPlayerCommon.Fns.SetCanDodge),
 
 			FrameEvent(1, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Shotput_whoosh_light
-				params.sound_max_count = 1
-				local handle = soundutil.PlaySoundData(inst, params)
-				soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", inst.sg.statemem.focusthrow and 1 or 0)
-				soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
+				soundutil.PlayCodeSound(
+					inst,
+					fmodtable.Event.Shotput_whoosh_light,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = inst.sg.statemem.focusthrow and 1 or 0,
+							shotputAmmo = GetAmmo(inst),
+						},
+					})
 			end),
 		},
 
@@ -993,11 +1077,11 @@ local states =
 		tags = { "busy", "heavy_attack" },
 
 		onenter = function(inst)
-			if inst.sg.mem.ammo > 0 then
+			if HasAmmo(inst) then
 				inst:FlipFacingAndRotation()
 				inst.sg:GoToState("throw_from_rolling_loop", true)
 			else
-				inst.sg:GoToState("roll_pst") -- TODO @jambell #weight figure out what to do with these
+				inst.sg:GoToState("roll_pst") -- TODO #weight figure out what to do with these
 			end
 		end,
 	}),
@@ -1006,7 +1090,7 @@ local states =
 		tags = { "busy", "heavy_attack" },
 
 		onenter = function(inst, flip)
-			if inst.sg.mem.ammo > 0 then
+			if HasAmmo(inst) then
 				inst.sg.statemem.focusthrow = IsFocusThrow(inst)
 				inst.sg.statemem.flip = flip
 				if inst.sg.statemem.focusthrow then
@@ -1025,7 +1109,7 @@ local states =
 				end
 				SGCommon.Fns.SetMotorVelScaled(inst, mult * runspeed)
 			else
-				inst.sg:GoToState("roll_pst") -- TODO @jambell #weight figure out what to do with these
+				inst.sg:GoToState("roll_pst") -- TODO #weight figure out what to do with these
 			end
 		end,
 
@@ -1059,12 +1143,16 @@ local states =
 			FrameEvent(6 , SGPlayerCommon.Fns.SetCanDodge),
 
 			FrameEvent(1, function(inst)
-				local params = {}
-				params.fmodevent = fmodtable.Event.Shotput_whoosh_light
-				params.sound_max_count = 1
-				local handle = soundutil.PlaySoundData(inst, params)
-				soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", inst.sg.statemem.focusthrow and 1 or 0)
-				soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
+				soundutil.PlayCodeSound(
+					inst,
+					fmodtable.Event.Shotput_whoosh_light,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = inst.sg.statemem.focusthrow and 1 or 0,
+							shotputAmmo = GetAmmo(inst),
+						},
+					})
 			end),
 		},
 
@@ -1101,10 +1189,12 @@ local states =
 		{
 			--sounds
 			FrameEvent(1, function(inst)
-				local params = {}
-				params.soundevent = "Shotput_punch_whoosh_1"
-				params.sound_max_count = 1
-				inst.sound_handle = soundutil.PlaySoundData(inst, params)
+				inst.sound_handle = soundutil.PlayCodeSound(
+					inst,
+					fmodtable.Event.Shotput_punch_whoosh_1,
+					{
+						max_count = 1,
+					})
 			end),
 			--
 
@@ -1392,59 +1482,126 @@ local states =
 		end,
 	}),
 
-	-- State({
-	-- 	name = "heavy_attack_throw",
-	-- 	tags = { "busy" },
+	State({
+		name = "lob_throw",
+		tags = { "busy" },
 
-	-- 	onenter = function(inst, overridefocus)
-	-- 		inst.AnimState:PlayAnimation("shotput_atk2")
-	-- 		if overridefocus ~= nil then
-	-- 			inst.sg.statemem.focusthrow = overridefocus
-	-- 		else
-	-- 			inst.sg.statemem.focusthrow = IsFocusThrow(inst)
-	-- 		end
+		onenter = function(inst, overridefocus)
+			inst.AnimState:PlayAnimation("shotput_skill_lob_pre")
+			inst.AnimState:PushAnimation("shotput_skill_lob")
+			inst.AnimState:PushAnimation("shotput_skill_lob_pst")
+			if overridefocus ~= nil then
+				inst.sg.statemem.focusthrow = overridefocus
+			else
+				inst.sg.statemem.focusthrow = IsFocusThrow(inst)
+			end
 
-		-- if inst.sg.statemem.focusthrow then
-		-- 	StartFocusParticles(inst)
-		-- end
-	-- 		inst:PushEvent("attack_state_start")
-	-- 	end,
+			if inst.sg.statemem.focusthrow then
+				StartFocusParticles(inst)
+			end
 
-	-- 	timeline =
-	-- 	{
-	-- 		FrameEvent(1, function(inst) inst.SoundEmitter:PlaySoundWithParams(THROW_HEAVY_SOUND, { isFocusAttack = inst.sg.statemem.focusthrow and 1 or 0, shotputAmmo = inst.sg.mem.ammo }, nil, 1) end),
-	-- 		FrameEvent(15, function(inst)
-	--			local params = {}
-	--			params.fmodevent = fmodtable.Event.Shotput_whoosh_light
-	--			params.sound_max_count = 1
-	--			local handle = soundutil.PlaySoundData(inst, params)
-	-- soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", inst.sg.statemem.focusthrow and 1 or 0)
-	-- soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
-	--		end),
+			SGPlayerCommon.Fns.SetCanDodge(inst)
 
-	-- 		FrameEvent(21, function(inst)
-	-- 			MakeHeavyAttackProjectile(inst)
+			inst:PushEvent("attack_state_start")
+		end,
 
-	-- 		end),
-	-- 	},
+		timeline =
+		{
+			FrameEvent(1, function(inst)
+				local params = {}
+				params.fmodevent = fmodtable.Event.Shotput_whoosh_heavy
+				params.sound_max_count = 1
+				soundutil.PlaySoundData(inst, params)
+			end),
 
-	-- 	events =
-	-- 	{
-	-- 		EventHandler("animover", function(inst)
-	-- 			inst.sg:GoToState("idle")
-	-- 		end),
+			-- 2 to 8
+			FrameEvent(2, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2) end),
+			FrameEvent(4, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 4) end),
+			FrameEvent(6, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2.5) end),
+			FrameEvent(9, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 1) end),
+			
+			FrameEvent(10, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 0.5) end),
 
-	-- 		EventHandler("shotput_caught", function(inst, projectile)
-	-- 			OnCatch(inst, projectile)
+			FrameEvent(12, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2) end),
+			FrameEvent(13, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 4) end),
+			FrameEvent(15, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2.5) end),
+			FrameEvent(17, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 1) end),
+			FrameEvent(18, function(inst) inst.Physics:Stop() end),
 
-	-- 			-- Catching the shotput while in startup frames, we pressed the button a little early -- provide a buffer
-	-- 			SwitchToFocusMidthrow(inst, projectile)
-	-- 		end),
-	-- 	},
+			-- 10 to 15
+			-- FrameEvent(10, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 8) end),
+			-- FrameEvent(15, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 4) end),
+			-- FrameEvent(17, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 2) end),
+			-- FrameEvent(18, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 1) end),
+			-- FrameEvent(19, function(inst) inst.Physics:Stop() end),
 
-	-- 	onexit = function(inst)
-	-- 	end,
-	-- }),
+			FrameEvent(15, function(inst)
+				soundutil.PlayCodeSound(
+					inst,
+					fmodtable.Event.Shotput_whoosh_light,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = inst.sg.statemem.focusthrow and 1 or 0,
+							shotputAmmo = GetAmmo(inst),
+						},
+					})
+			end),
+
+			FrameEvent(8, function(inst)
+				if not HasAmmo(inst) then
+					combatutil.StartMeleeAttack(inst)
+					inst.components.hitbox:StartRepeatTargetDelay()
+					inst.sg.statemem.tackletargets = {}
+					inst.sg.statemem.attackid = "LOB_SLAP"
+					inst.sg.statemem.ballhit_height_threshold = LOBSLAP_HEIGHT_THRESHOLD 
+					inst.components.hitbox:PushBeam(0, 2.25, 1, HitPriority.PLAYER_DEFAULT)
+				end
+			end),
+			FrameEvent(9, function(inst)
+				combatutil.EndMeleeAttack(inst)
+				inst.components.hitbox:StopRepeatTargetDelay()
+			end),
+
+			FrameEvent(18, function(inst)
+				if HasAmmo(inst) then
+					MakeLobbedProjectile(inst)
+				else
+					combatutil.StartMeleeAttack(inst)
+					inst.components.hitbox:StartRepeatTargetDelay()
+					inst.sg.statemem.tackletargets = {}
+					inst.sg.statemem.attackid = "LOB_SLAP"
+					inst.sg.statemem.ballhit_height_threshold = LOBSLAP_HEIGHT_THRESHOLD 
+					inst.components.hitbox:PushBeam(0, 2.25, 1, HitPriority.PLAYER_DEFAULT)
+				end
+			end),
+			FrameEvent(19, function(inst)
+				combatutil.EndMeleeAttack(inst)
+				inst.components.hitbox:StopRepeatTargetDelay()
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animqueueover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+
+			EventHandler("hitboxtriggered", OnPunchHitBoxTriggered),
+
+			EventHandler("shotput_caught", function(inst, projectile)
+				OnCatch(inst, projectile)
+
+				-- Catching the shotput while in startup frames, we pressed the button a little early -- provide a buffer
+				SwitchToFocusMidthrow(inst, projectile)
+			end),
+		},
+
+		onexit = function(inst)
+			combatutil.EndMeleeAttack(inst)
+			inst.components.hitbox:StopRepeatTargetDelay()
+		end,
+	}),
 
 	State({
 		name = "rolling_tackle_early",
@@ -1508,7 +1665,7 @@ local states =
 
 			--ATTACK
 			FrameEvent(0, function(inst)
-				--TODO(jambell): try adding a head hitbox that extends past the attack hitbox
+				--TODO: try adding a head hitbox that extends past the attack hitbox
 				inst.sg:AddStateTag("airborne")
 				combatutil.StartMeleeAttack(inst)
 
@@ -1637,6 +1794,7 @@ local states =
 			FrameEvent(3, function(inst)
 				inst.components.hitbox:PushBeam(-2, -1.5, .25, HitPriority.PLAYER_DEFAULT)
 				inst.components.hitbox:PushBeam(-2, -3, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitflags = Attack.HitFlags.DEFAULT
 
 			end),
 
@@ -1654,6 +1812,7 @@ local states =
 			FrameEvent(6, function(inst)
 				inst.components.hitbox:PushBeam(0, 2, 1.25, HitPriority.PLAYER_DEFAULT)
 				inst.components.hitbox:PushBeam(2, 3, 1.75, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitflags = nil
 			end),
 			FrameEvent(7, function(inst)
 				inst.components.hitbox:PushBeam(0, 2, 1.25, HitPriority.PLAYER_DEFAULT)
@@ -1714,6 +1873,17 @@ local states =
 
 		timeline =
 		{
+			FrameEvent(5, function(inst)
+				if not HasAmmo(inst) then
+					SGPlayerCommon.Fns.RecallOneShotput(inst)
+				end
+			end),
+			FrameEvent(12, function(inst)
+				if not HasAmmo(inst) then
+					SGPlayerCommon.Fns.RecallOneShotput(inst)
+				end
+			end),
+
 			--CANCELS
 			FrameEvent(7, SGPlayerCommon.Fns.SetCanDodge),
 			FrameEvent(10, SGPlayerCommon.Fns.RemoveBusyState),
@@ -1761,20 +1931,22 @@ local states =
 
 			-- Find the right anim + play it
 			local anim
-			if inst.sg.mem.ammo > 1 then
+			if GetAmmo(inst) > 1 then
 				anim = moving and "shotput_armed_moving_catch" or "shotput_armed_catch"
 			else
 				anim = moving and "shotput_moving_catch" or "shotput_catch"
 			end
 			inst.AnimState:PlayAnimation(anim)
 			StartFocusParticles(inst)
-			local params = {}
-			params.fmodevent = fmodtable.Event.Shotput_catch
-			params.sound_max_count = 1
-			local handle = soundutil.PlaySoundData(inst, params)
-			if inst.sg.mem.ammo then
-				soundutil.SetInstanceParameter(inst, handle, "shotputAmmo", inst.sg.mem.ammo)
-			end
+			soundutil.PlayCodeSound(
+				inst,
+				fmodtable.Event.Shotput_catch,
+				{
+					max_count = 1,
+					fmodparams = {
+						shotputAmmo = GetAmmo(inst),
+					},
+				})
 
 			SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
 		end,
@@ -1813,7 +1985,8 @@ local states =
 
 		onenter = function(inst)
 			-- Find the right anim + play it
-			local anim = inst.sg.mem.ammo > 1 and "shotput_armed_quick_pickup" or "shotput_quick_pickup"
+			-- TODO: ammo > 1 implies 2, which is ... full?  It will never play armed version?
+			local anim = GetAmmo(inst) > 1 and "shotput_armed_quick_pickup" or "shotput_quick_pickup"
 			inst.AnimState:PlayAnimation(anim)
 
 			-- See whether we're already moving or not, so we can keep the player moving

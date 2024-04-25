@@ -7,27 +7,12 @@ local Plot = Class(function(self, inst)
 	self.building = nil
 	self.spawn_flag = nil
 	self.npc_prefab = nil
+	self.building_prefab_locked = nil
+	self.building_prefab_unlocked = nil
 	self.range = 0
 
-	self.inst:ListenForEvent("startplacing", function(_, placer) self:OnStartPlacing(placer) end, TheWorld)
-	self.inst:ListenForEvent("stopplacing", function() self:OnStopPlacing() end, TheWorld)
+	self.inst:Hide()
 end)
-
-function Plot:OnStartPlacing(placer)
-	if self:IsOccupied() or not placer.components.placer.isbuilding then
-		return
-	end
-
-    local fx = SpawnPrefab("fx_low_health_ring")
-    assert(fx)
-    local x, y, z = self.inst.Transform:GetWorldPosition()
-    fx.Transform:SetPosition(x, y, z)
-    fx.Transform:SetScale(1.5, 1.5, 1.5)
-    fx.AnimState:PlayAnimation("pre_large")
-    fx.AnimState:PushAnimation("loop_large", true)
-
-    self.mark_fx = fx
-end
 
 function Plot:OnStopPlacing()
 	if self.mark_fx then
@@ -41,7 +26,8 @@ function Plot:IsOccupied()
 end
 
 function Plot:SetBuildingPrefab(prefab)
-	self.building_prefab = prefab
+	self.building_prefab_locked = ("%s_locked"):format(prefab)
+	self.building_prefab_unlocked = ("%s_unlocked"):format(prefab)
 end
 
 function Plot:SetSpawnFlag(flag)
@@ -55,70 +41,47 @@ function Plot:SetNPCPrefab(prefab)
 end
 
 function Plot:OnPostLoadWorld()
-	if self.spawn_flag and TheWorld:IsFlagUnlocked(self.spawn_flag) and TheNet:IsHost() and not self:IsOccupied() then
-		self:SpawnBuilding(true, true)
+	if TheDungeon:GetDungeonMap():IsDebugMap() then 
+		self.inst:Show()
+		return 
+	end
+
+	if not self.spawn_flag or not TheNet:IsHost() then return false end
+
+	if TheWorld:IsFlagUnlocked(self.spawn_flag) then
+		-- spawn unlocked building
+		self:SpawnUnlockedBuilding()
+	else
+		-- spawn locked building
+		self:SpawnLockedBuilding()
 	end
 end
 
-function Plot:SpawnBuilding(spawn_npc, silent)
-	local building = SpawnPrefab(self.building_prefab)
+function Plot:SpawnLockedBuilding()
+	self:_SpawnBuilding(self.building_prefab_locked)
+end
+
+function Plot:SpawnUnlockedBuilding()
+	self:_SpawnBuilding(self.building_prefab_unlocked)
+	self.building.components.npchome:OnPostLoadWorld() -- spawns and positions NPC
+end
+
+function Plot:_SpawnBuilding(building_prefab)
+	local building = SpawnPrefab(building_prefab)
 
 	if not building then
-		assert(false, string.format("[%s] tried to spawn building [%s] but failed", self.inst, self.building_prefab))
+		assert(false, string.format("[%s] tried to spawn building [%s] but failed", self.inst, building_prefab))
 	end
 
 	local x, z = self.inst.Transform:GetWorldXZ()
-	building.components.snaptogrid:MoveToNearestGridPos(x,0,z, true)
+	building.components.snaptogrid:MoveToNearestGridPos(x, 0, z, true)
 
-	if spawn_npc and self.npc_prefab then
-		local npc = SpawnPrefab(self.npc_prefab)
-		building.components.npchome:AddNpc(npc)
-		-- ParticleSystemHelper.MakeOneShot(building, "building_upgrade", nil, 1)
-	end
-
-	self:SetBuilding(building, silent)
+	self:SetBuilding(building)
 end
 
-function Plot:SetBuilding(building, silent)
+function Plot:SetBuilding(building)
 	self.building = building
-	self.inst:ListenForEvent("onremove",
-		function()
-				self:RemoveBuilding()
-				building.SoundEmitter:PlaySound(fmodtable.Event.remove_constructable)
-		end,
-		self.building)
-
-
-	if not silent then
-		building.SoundEmitter:PlaySound(fmodtable.Event.place_building)
-		TheWorld.components.ambientaudio:PlayMusicStinger(fmodtable.Event.Mus_miscStinger)
-	end
-
 	self.inst:Hide()
-end
-
-function Plot:RemoveBuilding()
-	self.building = nil
-	ParticleSystemHelper.MakeOneShot(self.inst, "building_upgrade", nil, 1)
-	self.inst:Show()
-	--sound
-end
-
-function Plot:HasBuilding()
-	return self.building ~= nil
-end
-
-function Plot:OnSave()
-	if self:IsOccupied() then
-		return { building_data = self.building:GetPersistData() }
-	end
-end
-
-function Plot:OnLoad(data)
-	if data and data.building_data and TheNet:IsHost() then
-		self:SpawnBuilding(false, true)
-		self.building:SetPersistData(data.building_data)
-	end
 end
 
 return Plot

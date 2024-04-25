@@ -1,3 +1,4 @@
+local Cosmetics = require "defs.cosmetics.cosmetics"
 local Equipment = require("defs.equipment")
 
 -- Player can equip emotes into different slots
@@ -20,6 +21,7 @@ end)
 
 
 function PlayerEmoter:EquipEmote(slot_index, emote_id)
+	dbassert(Cosmetics.PlayerEmotes[emote_id], emote_id)
 	self.emotes[slot_index] = emote_id
 end
 

@@ -8,9 +8,9 @@ local fmodtable = require "defs.sound.fmodtable"
 
 local easing = require "util.easing"
 
-local WIDTH = BUTTON_W * 1.9
+local WIDTH = BUTTON_W * 1.75
 local HEIGHT = BUTTON_H
-local FONT_SIZE = FONTSIZE.SPEECH_TEXT
+local FONT_SIZE = FONTSIZE.SPEECH_TEXT * .9
 
 local SpeechButton = Class(ActionButton, function(self, text, right_text)
 	ActionButton._ctor(self, "ActionButton")
@@ -32,6 +32,7 @@ local SpeechButton = Class(ActionButton, function(self, text, right_text)
 		:SetControlUpSound(nil)
 		:SetHoverSound(nil)
 		:SetGainFocusSound(fmodtable.Event.hover_speechBubble)
+		:SetImageDisabledColour(HexToRGB(0x999999ff))
 
 	return self
 end)
@@ -39,11 +40,15 @@ end)
 function SpeechButton:_UpdateTextColour(r,g,b,a)
 	SpeechButton._base._UpdateTextColour(self,r,g,b,a)
 	if self.right_text then
-		self.right_text:SetGlyphColor(self.focus and self.righttextfocuscolour or self.righttextcolour)
+		self.right_text:SetGlyphColor(self:HasFocus() and self.righttextfocuscolour or self.righttextcolour)
 	end
 	return self
 end
 
+function SpeechButton:OnDisable()
+	SpeechButton._base.OnDisable(self)
+	self.text:ApplyBrightness(0.7)
+end
 function SpeechButton:_Layout()
 	local y_padding = 30
 	local texture_y_offset = 6

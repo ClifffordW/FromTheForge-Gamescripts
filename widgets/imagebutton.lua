@@ -106,11 +106,7 @@ function ImageButton:_RefreshImageState()
 	if self:IsSelected() then
 		self:OnSelect()
 	elseif self:IsEnabled() then
-		if self.focus then
-			self:GainFocus()
-		else
-			self:LoseFocus()
-		end
+		self:RefreshFocus()
 	else
 		self:OnDisable()
 	end
@@ -132,6 +128,11 @@ function ImageButton:UseFocusOverlay(focus_selected_texture)
 	self.hover_overlay:SetTexture(focus_selected_texture)
 	self.hover_overlay:Hide()
 	self:_RefreshImageState()
+	return self
+end
+
+function ImageButton:SetOnGainFocusFn(fn)
+	self.ongainfocusfn = fn
 	return self
 end
 
@@ -163,6 +164,15 @@ function ImageButton:OnGainFocus()
 	if self.gainfocus_sound then
 		TheFrontEnd:GetSound():PlaySound(self.gainfocus_sound)
 	end
+
+	if self.ongainfocusfn then
+		self.ongainfocusfn()
+	end
+end
+
+function ImageButton:SetOnLoseFocusFn(fn)
+	self.onlosefocusfn = fn
+	return self
 end
 
 function ImageButton:OnLoseFocus()
@@ -189,10 +199,14 @@ function ImageButton:OnLoseFocus()
 	if self.selected and self.imageselectedcolour then
 		self.image:SetMultColor(self.imageselectedcolour[1], self.imageselectedcolour[2], self.imageselectedcolour[3], self.imageselectedcolour[4])
 	end
+
+	if self.onlosefocusfn then
+		self.onlosefocusfn()
+	end
 end
 
 function ImageButton:HandleControlDown(controls)
-	if not self:IsEnabled() or not self.focus then return end
+	if not self:IsEnabled() or not self:HasFocus() then return end
 
 	if self:IsSelected() and not self.AllowOnControlWhenSelected then return false end
 
@@ -247,11 +261,12 @@ function ImageButton:HandleControlDown(controls)
 	end
 end
 
-function ImageButton:HandleControlUp(controls, device_type, trace, device_id)
-	if not self:IsEnabled() or not self.focus then return end
+function ImageButton:HandleControlUp(controls, trace)
+	if not self:IsEnabled() or not self:HasFocus() then return end
 
 	if self:IsSelected() and not self.AllowOnControlWhenSelected then return false end
 
+	local input_device = controls:GetDevice()
 	if controls:Has(self.control) then
 		if self.down then
 			if self.has_image_down then
@@ -264,7 +279,7 @@ function ImageButton:HandleControlUp(controls, device_type, trace, device_id)
 
 			self.down = false
 			self:ResetPreClickPosition()
-			self:Click(device_type, device_id)
+			self:Click(input_device:unpack())
 			self:StopUpdating()
 		end
 		return true
@@ -282,7 +297,7 @@ function ImageButton:HandleControlUp(controls, device_type, trace, device_id)
 
 			self.down = false
 			self:ResetPreClickPosition()
-			self:ClickAlt(device_type, device_id)
+			self:ClickAlt(input_device:unpack())
 			self:StopUpdating()
 		end
 		return true
@@ -292,11 +307,7 @@ end
 
 function ImageButton:OnEnable()
 	ImageButton._base.OnEnable(self)
-	if self.focus then
-		self:GainFocus()
-	else
-		self:LoseFocus()
-	end
+    self:RefreshFocus()
 end
 
 function ImageButton:OnDisable()
@@ -359,7 +370,7 @@ function ImageButton:SetFocusScale(scaleX, scaleY, scaleZ)
 		self.focus_scale = {scaleX, scaleX, scaleX}
 	end
 
-	if self.focus and self.scale_on_focus and not self.selected then
+	if self:HasFocus() and self.scale_on_focus and not self.selected then
 		self.image:ScaleTo(nil, self.focus_scale[1], 0.1, easing.outQuad)
 	end
 	return self
@@ -372,7 +383,7 @@ function ImageButton:SetNormalScale(scaleX, scaleY, scaleZ)
 		self.normal_scale = {scaleX, scaleX, scaleX}
 	end
 
-	if not self.focus and self.scale_on_focus then
+	if not self:HasFocus() and self.scale_on_focus then
 		self.image:ScaleTo(nil, self.normal_scale[1], 0.15, easing.outQuad)
 	end
 	return self
@@ -385,7 +396,7 @@ function ImageButton:SetImageNormalColour(r,g,b,a)
 		self.imagenormalcolour = r
 	end
 
-	if self:IsEnabled() and not self.focus and not self.selected then
+	if self:IsEnabled() and not self:HasFocus() and not self.selected then
 		self.image:SetMultColor(self.imagenormalcolour[1], self.imagenormalcolour[2], self.imagenormalcolour[3], self.imagenormalcolour[4])
 	end
 	return self
@@ -398,7 +409,7 @@ function ImageButton:SetImageFocusColour(r,g,b,a)
 		self.imagefocuscolour = r
 	end
 
-	if self.focus and not self.selected then
+	if self:HasFocus() and not self.selected then
 		self.image:SetMultColor(table.unpack(self.imagefocuscolour))
 	end
 	return self

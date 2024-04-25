@@ -3,10 +3,10 @@ return {
   __displayName="forestkeeper",
   cosmetic_data={ title_key="FORESTKEEPER",},
   group="PLAYER_TITLE",
-  hidden=false,
-  locked=false,
-  mastery="NONE",
-  purchased=false,
-  rarity="LEGENDARY",
+  
+  locked=true,
+  
+  
+  
   
 }

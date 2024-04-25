@@ -116,9 +116,9 @@ end
 function LobbyChatQueue:DoFocusHookups()
     if self.scroll_list then 
         self.default_focus = self.scroll_list
-        self.scroll_list:SetFocusChangeDir(MOVE_RIGHT, self.nextWidget)
+        self.scroll_list:SetFocusChangeDir(FocusMove.s.right, self.nextWidget)
     else
-        self:SetFocusChangeDir(MOVE_RIGHT, self.nextWidget)
+        self:SetFocusChangeDir(FocusMove.s.right, self.nextWidget)
     end
 
 end
@@ -129,8 +129,8 @@ function LobbyChatQueue:ScrollToEnd()
     end
 end
 
-function LobbyChatQueue:OnControl(controls, down)
-    if not self:IsEnabled() or not self.focus then return false end
+function LobbyChatQueue:OnControl(controls, down, ...)
+    if not self:IsEnabled() or not self:HasFocus() then return false end
 
     if self.chatbox and controls:Has(Controls.Digital.ACCEPT) and TheInput:ControllerAttached() and not TheFrontEnd.tracking_mouse then
         return self.chatbox:OnControl(controls, down)
@@ -138,7 +138,7 @@ function LobbyChatQueue:OnControl(controls, down)
 
     if self.scroll_list and (controls:Has(Controls.Digital.MENU_SCROLL_BACK, Controls.Digital.MENU_SCROLL_FWD)) then
         return self.scroll_list:OnControl(controls, down, true)
-    elseif self.scroll_list and self.scroll_list.focus then
+    elseif self.scroll_list and self.scroll_list:HasFocus() then
         return self.scroll_list:OnControl(controls, down)
     end
 

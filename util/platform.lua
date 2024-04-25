@@ -34,6 +34,10 @@ function Platform.IsAndroid()
 	return PLATFORM == "ANDROID"
 end
 
+function Platform.IsIos()
+	return PLATFORM == "IOS"
+end
+
 function Platform.IsMac()
 	return PLATFORM == "OSX_STEAM"
 end

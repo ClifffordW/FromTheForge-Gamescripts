@@ -4,20 +4,22 @@ local Text = require "widgets.text"
 local lume = require "util.lume"
 local fmodtable = require "defs.sound.fmodtable"
 
-local STATUS_REVEAL_WAIT_TIME = 0.2
+local STATUS_REVEAL_WAIT_TIME = 1.0
+local STATUS_MIN_VISIBLE_TIME = 1.0
 
+-- Wait for other network players to be ready to start playing. Their player
+-- entities are not yet spawned.
 local WaitingForPlayersScreen = Class(Screen, function(self, finishedcallback, savedata, profile)
 	Screen._ctor(self, "WaitingForPlayersScreen")
 	self.callback = finishedcallback
 	self.savedata = savedata
 	self.profile = profile
 	self.close_started = false
-	self.real_time_start = 0
-	self.time_in_screen = 0.0
-	self.min_visible_time = 0
 	self:DoInit()
-	self:SetAudioEnterOverride(fmodtable.Event.ui_waitingForPlayersScreen_show)
-		:SetAudioCategory(Screen.AudioCategory.s.Fullscreen)
+	self:SetAudioCategory(Screen.AudioCategory.s.None)
+	-- self:SetAudioSnapshotOverride(fmodtable.Event.FullscreenOverlay_Instant_LP)
+	-- self:SetAudioEnterOverride(fmodtable.Event.ui_waitingForPlayersScreen_show)
+	-- self:SetAudioExitOverride(nil)
 end)
 
 function WaitingForPlayersScreen:DoInit()
@@ -48,51 +50,28 @@ function WaitingForPlayersScreen:Close()
 	if not self.close_started then
 		TheLog.ch.Networking:printf("All players are ready. Starting game.")
 		self.close_started = true
-		TheFrontEnd:Fade(FADE_OUT, 0, function()
-			-- TheLog.ch.Networking:printf("WaitingForPlayersScreen Fade Finished")
-			self.callback(self.savedata, self.profile)
-
-			-- the callback is expected to be OnAllPlayersReady, and that calls TheFrontEnd:ClearScreens()
-			-- if for some reason this screen is still active, remove it
-			if self.inst and self.inst:IsValid() then
-				TheFrontEnd:PopScreen(self)
-			end
-		end)
+		TheFrontEnd:PopScreen(self)
+		self.callback(self.savedata, self.profile)
 	end
 end
 
-function WaitingForPlayersScreen:OnClose()
-	WaitingForPlayersScreen._base.OnClose(self)
-	if TheFrontEnd:GetFadeLevel() == 1 then
-		local fade_delay = 0.1
-		TheFrontEnd:Fade(FADE_IN, SCREEN_FADE_TIME, nil, fade_delay)
-	end
+function WaitingForPlayersScreen:OnOpen()
+	self.end_time = TheSim:GetRealTime() + STATUS_REVEAL_WAIT_TIME
 end
 
-function WaitingForPlayersScreen:OnUpdate(dt)
-	-- peculiar logic to handle this screen being created at the end of a long load frame
-	if dt == 0.0 then
-		-- this update is called from TheFrontEnd:PushScreen
-		self.real_time_start = TheSim:GetRealTime()
-		return
-	elseif lume.approximately(dt, 0.2, 0.001) then
-		-- this is likely the first update after the long load frame
-		local real_time_since_start = TheSim:GetRealTime() - self.real_time_start
-		if real_time_since_start < 0.2 then
-			dt = real_time_since_start
+function WaitingForPlayersScreen:CheckReadyToProgress()
+	if not self.close_started then
+		if TheNet:GetNrRemotePlayers() > 0 and not self.status_text:IsVisible() and (TheSim:GetRealTime() > STATUS_REVEAL_WAIT_TIME) then
+			TheLog.ch.Networking:printf("WaitingForPlayersScreen: Showing waiting for players")
+			TheFrontEnd:SetFadeLevel(0)
+			self.status_text:Show()
+
+			self.end_time = self.end_time + STATUS_MIN_VISIBLE_TIME	-- extend the time by a bit so the text doesn't flicker on screen and then immediately disappear
 		end
-	end
-
-	self.time_in_screen = self.time_in_screen + dt
-	-- TheLog.ch.Networking:printf("WaitingForPlayersScreen time in screen = %1.3f dt=%1.3f", self.time_in_screen, dt)
-
-	if self.time_in_screen > self.min_visible_time and TheNet:IsReadyToStartRoom() then
-		self:Close()
-	elseif not self.close_started and self.time_in_screen > STATUS_REVEAL_WAIT_TIME and not self.status_text:IsVisible() then
-		TheLog.ch.Networking:printf("WaitingForPlayersScreen showing status...")
-		self.status_text:Show()
-		-- stay on this screen briefly if status is shown, otherwise it will flash and look like a bug.
-		self.min_visible_time = 1
+	
+		if TheNet:IsReadyToStartRoom() and (TheSim:GetRealTime() > self.end_time) then 
+			self:Close()
+		end
 	end
 end
 

@@ -392,18 +392,16 @@ function TrueScrollList:RefreshView()
 	TheFrontEnd:DoHoverFocusUpdate(true)
 end
 
-function TrueScrollList:OnFocusMove(dir, down)
-	-- ignore down. it's always true?!
-
+function TrueScrollList:OnFocusMove(dir, input_device)
 	-- Instead of changing focus to the next widget (calling base), we are
 	-- scrolling the widgets to move the above/below item into the current widget!
-	if dir == MOVE_UP then
+	if dir == FocusMove.s.up then
 		local is_past_first_row = self.current_scroll_pos > 1.01
 		if is_past_first_row and self.focused_widget_row < 3 then
 			self:Scroll(-self:_GetScrollAmountPerRow())
 			return true
 		end
-	elseif dir == MOVE_DOWN then
+	elseif dir == FocusMove.s.down then
 		local can_scroll_more = self.current_scroll_pos < self.end_pos - 0.01
 		if can_scroll_more and self.focused_widget_row > (self.visible_rows - 1) then
 			self:Scroll(self:_GetScrollAmountPerRow())
@@ -412,23 +410,21 @@ function TrueScrollList:OnFocusMove(dir, down)
 	end
 
 	local prev_focus = self.widgets_to_update[self.focused_widget_index]
-	local did_parent_move = TrueScrollList._base.OnFocusMove(self, dir, down)
-	if prev_focus and did_parent_move then
+	local parent_pick = TrueScrollList._base.OnFocusMove(self, dir, input_device)
+	if prev_focus and parent_pick then
 		local focused_item_index = self.focused_widget_index + self.displayed_start_index
 		if not self.items[focused_item_index] then
-			-- New widget is empty, undo parent's move to focus valid widget.
-			prev_focus:SetFocus()
 			return false
 		end
 	end
 
-	return did_parent_move
+	return parent_pick
 end
 
-function TrueScrollList:OnControl(controls, down)
-	if TrueScrollList._base.OnControl(self, controls, down) then return true end
+function TrueScrollList:OnControl(controls, down, ...)
+	if TrueScrollList._base.OnControl(self, controls, down, ...) then return true end
 
-	if down and (self.focus and self.scroll_bar:IsVisible()) then
+	if down and (self:HasFocus() and self.scroll_bar:IsVisible()) then
 		if controls:Has(Controls.Digital.MENU_SCROLL_BACK) then
 			local scroll_amt = -self.scroll_per_click
 			if TheInput:ControllerAttached() then

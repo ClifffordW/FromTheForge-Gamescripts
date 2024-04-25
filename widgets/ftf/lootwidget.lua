@@ -19,7 +19,7 @@ local LootWidget =  Class(Widget, function(self, owner, data)
 	self.panel = self:AddChild(Panel("images/ui_ftf_dialog/dialog_content_bg.tex"))
 		:SetNineSliceCoords(100, 60, 110, 70)
 		:SetNineSliceBorderScale(0.5)
-		:SetMultColor(HexToRGB(0x221C1ABD))
+		:SetMultColor(HexToRGB(0x00000066))
 
 	self.content_root = self:AddChild(Widget())
 

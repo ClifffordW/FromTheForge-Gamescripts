@@ -9,40 +9,66 @@ local itemutil = require"util.itemutil"
 
 local Cosmetics = require "defs.cosmetics.cosmetics"
 local Power = require"defs.powers"
+local Flags = require"gen.flagslist"
+
+--
+-- C++ API for accessing player flags through ThePlayerData:
+--
+--  // Validity
+-- ThePlayerData:IsValidForAllPlayers()	--> Returns whether the data for ALL players is valid (loaded/synced)
+-- ThePlayerData:IsValid(PlayerID)		--> Returns whether the data for this player is valid (loaded/synced)
+--
+--  // UNLOCKS
+-- ThePlayerData:ResetUnlocks(PlayerID, (optional)"Category")			--> Resets all unlocks (optionally for just one category)
+-- ThePlayerData:SetIsUnlocked(PlayerID, "Category", "ID", true/false)	--> Set the unlock state
+-- ThePlayerData:IsUnlocked(PlayerID, "Category", "ID")					--> Returns true/false
+-- ThePlayerData:GetAllUnlocked(playerID, category)						--> Gets all unlocks in the given category
+--
+--	// ASCENSION
+-- ThePlayerData:ResetAscension(playerID)												--> Resets all ascension levels
+-- ThePlayerData:SetAscensionLevelCompleted(playerID, location, weapon_type, level )	--> Set the ascension level for the given location and weapon_type.
+-- ThePlayerData:GetCompletedAscensionLevel(playerID, location, weapon_type)			--> returns the Ascension level for the given location and weapon_type. -1 if not set. 
+-- ThePlayerData:GetAllAscensionData(playerID)											--> Returns player ascension data
+--
+--	// COSMETICS
+-- ThePlayerData:ResetCosmetics(PlayerID)												--> Resets all cosmetics
+-- ThePlayerData:SetCosmeticIsUnlocked(PlayerID, "Category", "ID", true/false)			--> Set the unlock state of a particular cosmetic
+-- ThePlayerData:IsCosmeticUnlocked(PlayerID, "Category", "ID")							--> Returns true/false
+-- ThePlayerData:GetAllUnlockedCosmetics(playerID, "Category")							--> Returns a table with the names of all unlocked cosmetics in the provided category
+--
+--	// HEARTLEVELS
+-- ThePlayerData:ResetHeartLevels(PlayerID)												--> Resets all heart levels
+-- ThePlayerData:SetHeartLevel(PlayerID, "Region", index, level)						--> Set the level of the heart
+-- ThePlayerData:GetHeartLevel(PlayerID, "Region", index)								--> Returns the level
+-- ThePlayerData:GetAllHeartLevelData(playerID)											--> Returns player heart level data
+--
+--	// LOAD & SAVE (combines Unlocks, Ascension and Cosmetics into one table
+-- ThePlayerData:GetSaveData(playerID)				--> Returns a table with all saved data
+-- ThePlayerData:SetLoadData(playerID, datatable)	--> Loads the save-data-table into the unlocks
+-- 
+-- ThePlayerData:GetSize(playerID)					--> Returns the size of the data for that player (for debug purposes)
+--
+--
+--  // CALLBACKS:
+--
+-- In addition to the API above, lua will received a callback in networking.lua whenever the player data changes. 
+--
+-- (networking.lua)	OnNetworkPlayerDataChanged(playerID, isRemoteData) --> callback that happens when the data changes for the given playerID. isRemoteData signifies whether the data came from a remote machine, or a local machine (for example when loading player settings)
+--
 
 
-
--- defaultunlocks.lua for powers
--- default_unlocked tag for equipment
-local function create_default_data()
-	local data =
-	{
-		[UNLOCKABLE_CATEGORIES.s.RECIPE] = {},
-		[UNLOCKABLE_CATEGORIES.s.ENEMY] = {},
-		[UNLOCKABLE_CATEGORIES.s.CONSUMABLE] = {},
-		[UNLOCKABLE_CATEGORIES.s.ARMOUR] = {},
-		[UNLOCKABLE_CATEGORIES.s.WEAPON_TYPE] = {},
-		[UNLOCKABLE_CATEGORIES.s.POWER] = {},
-		[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC] = {},
-		[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC] = {},
-		[UNLOCKABLE_CATEGORIES.s.FLAG] = {},
-		[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL] = {},
-		[UNLOCKABLE_CATEGORIES.s.LOCATION] = {},
-		[UNLOCKABLE_CATEGORIES.s.REGION] = {},
-	}
-	return data
-end
 
 -- Total collection of everything the player's unlocked
 local UnlockTracker = Class(function(self, inst)
 	self.inst = inst
-	self.data = create_default_data()
 
 	self.inst:ListenForEvent("location_unlocked", function(_, location) self:UnlockLocation(location) end, TheWorld)
 
 	local function OnSpawnEnemy(_, enemy)
 		local normal_prefab = nil
-		if enemy:HasTag("elite") then
+		if enemy:HasTag("miniboss") then
+			normal_prefab = string.gsub(enemy.prefab, "_miniboss", "")
+		elseif enemy:HasTag("elite") then
 			normal_prefab = string.gsub(enemy.prefab, "_elite", "")
 		end
 		self:UnlockEnemy(enemy.prefab)
@@ -53,47 +79,57 @@ local UnlockTracker = Class(function(self, inst)
 	end
 
 	self.inst:ListenForEvent("spawnenemy", OnSpawnEnemy, TheWorld)
+
+
+	local function OnEnterRoom()
+		if not TheWorld:HasTag("town") then
+			local room_type = TheWorld:GetCurrentRoomType()
+			local flag_string = ("pf_seen_room_%s"):format(room_type)
+			self:UnlockFlag(flag_string)
+		end
+	end
+
+	self.inst:ListenForEvent("enter_room", OnEnterRoom)
 end)
 
-
-function UnlockTracker:OnSave()
-	return self.data
-end
-
-function UnlockTracker:ValidateSaveData()
-	local default_data = create_default_data()
-
-	for k, _ in pairs(default_data) do
-		if self.data[k] == nil then
-			print ("UnlockTracker Data missing", k, "possible outdated save. Validating.")
-			self.data[k] = {}
-		end
-	end
-end
-
 function UnlockTracker:OnLoad(data)
-	assert(data)
-	self.data = data
-	self:ValidateSaveData()
-
-	-- The above line overrides the data table, so when we add new items that are supposed to unlocked by default they're locked
-	-- Hence the line below
-	self:GiveDefaultUnlocks()
-	for location, weapon_types in pairs(self:GetAllAscensionData()) do
-		local highest = -1
-		for weapon_type, level in pairs(weapon_types) do
-			if level > highest then
-				highest = level
-			end
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		-- Allow loading of legacy data, but it gets saved via other paths (see SaveSystem:LoadCharacterAsPlayerID, PlayerSave:Save)
+		-- TODO: networking2022, remove this before Early Access
+		if data then
+			local msg = string.format("Unlock Tracker has loaded legacy data for %s. Save game to store in new location.", self.inst:GetCustomUserName())
+			TheLog.ch.UnlockTracker:print("******************************************************************")
+			TheLog.ch.UnlockTracker:print("SaveSystem / OnLoad: " .. msg)
+			TheLog.ch.UnlockTracker:print("******************************************************************")
+			TheFrontEnd:ShowTextNotification("images/ui_ftf/warning.tex", nil, msg, 12)
+			ThePlayerData:SetLoadData(playerID, data)
 		end
-		self:_AlignUnlockLevels(location, highest)
-	end
 
+		-- The above line overrides the data table, so when we add new items that are supposed to unlocked by default they're locked
+		-- Hence the line below
+		self:GiveDefaultUnlocks()
+		for location, weapon_types in pairs(self:GetAllAscensionData()) do
+			local highest = -1
+			for weapon_type, level in pairs(weapon_types) do
+				if level > highest then
+					highest = level
+				end
+			end
+			self:_AlignUnlockLevels(location, highest)
+		end
+	end
 end
 
 function UnlockTracker:ResetUnlockTrackerToDefault()
-	self.data = create_default_data()
-	self:GiveDefaultUnlocks()
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		ThePlayerData:ResetUnlocks(playerID)
+		ThePlayerData:ResetAscensionLevels(playerID)
+		ThePlayerData:ResetCosmetics(playerID)
+		ThePlayerData:ResetHeartLevels(playerID)
+		self:GiveDefaultUnlocks()
+	end
 end
 
 -- Also Called directly in the player's load flow in OnSetOwner in player_side
@@ -112,10 +148,6 @@ function UnlockTracker:GiveDefaultUnlocks()
 	self:UnlockRecipe("armour_unlock_basic")
 
 	self:UnlockRegion("town")
-	self:UnlockRegion("forest")
-
-	self:UnlockLocation("treemon_forest")
-	self:UnlockFlag("treemon_forest_reveal") -- don't show reveal of first location
 
 	self:UnlockWeaponType(WEAPON_TYPES.HAMMER)
 	self:UnlockDefaultMetaProgress()
@@ -138,10 +170,6 @@ function UnlockTracker:UnlockDefaultCosmetics()
 
 			if not cosmetic_data.locked then
 				self:UnlockCosmetic(cosmetic_name, group_name)
-			end
-
-			if cosmetic_data.purchased then
-				self:PurchaseCosmetic(cosmetic_name, group_name)
 			end
 		end
 	end
@@ -202,25 +230,35 @@ end
 function UnlockTracker:SetIsUnlocked(id, category, unlocked)
 	assert(category ~= UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL, "Ascension levels should use the SetAscensionLevelCompleted flow instead")
 
-	if self.data[category] == nil then
-		self.data[category] = {}
-	end
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		ThePlayerData:SetIsUnlocked(playerID, category, id, unlocked);
 
-	if unlocked then
-		self.data[category][id] = true
-		self.inst:PushEvent("item_unlocked", {id = id, category = category})
-	else
-		self.data[category][id] = nil
-		self.inst:PushEvent("item_locked", {id = id, category = category})
+		if unlocked then
+			self.inst:PushEvent("item_unlocked", {id = id, category = category})
+		else
+			self.inst:PushEvent("item_locked", {id = id, category = category})
+		end
 	end
 end
 
 function UnlockTracker:IsUnlocked(id, category)
-	return self.data[category] ~= nil and self.data[category][id]
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		return ThePlayerData:IsUnlocked(playerID, category, id);
+	end
+
+	return false
 end
 
 function UnlockTracker:GetAllUnlocked(category)
-	return deepcopy(self.data[category])
+
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		local result = ThePlayerData:GetAllUnlocked(playerID, category)
+		assert(result)
+		return deepcopy(result)
+	end
 end
 
 ------------------------------------------------------------------------------------------------------------
@@ -322,79 +360,45 @@ end
 --------------------------------------------- COSMETICS ---------------------------------------------
 
 function UnlockTracker:GetAllUnlockedCosmetics(category)
-	local unlocked_cosmetics = {}
-	for name, _ in pairs(self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category]) do
-		table.insert(unlocked_cosmetics, name)
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		local cosmeticstable = ThePlayerData:GetAllUnlockedCosmetics(playerID, category)
+
+		-- Convert to a table of only names: (as that is what the code originally did)
+		if cosmeticstable then
+			local unlocked_cosmetics = {}
+			for name, _ in pairs(cosmeticstable) do
+				table.insert(unlocked_cosmetics, name)
+			end
+			return unlocked_cosmetics
+		end
 	end
-	return unlocked_cosmetics
 end
 
 function UnlockTracker:IsCosmeticUnlocked(id, category)
-	if not self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category] then
-		self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category] = {}
-		return false
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		return ThePlayerData:IsCosmeticUnlocked(playerID, category, id) or false -- Added or false to stop this from returning nil instead of false
 	end
-
-	-- Added ~= nil to stop this from returning nil instead of false
-	return self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category][id] ~= nil
+	return false
 end
 
 function UnlockTracker:UnlockCosmetic(id, category)
-	if not self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category] then
-		self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category] = {}
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		ThePlayerData:SetCosmeticIsUnlocked(playerID, category, id, true)
 	end
-	
-	self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category][id] = true
 	self.inst:PushEvent("cosmetic_unlocked", {id = id, category = category})
 end
 
 function UnlockTracker:LockCosmetic(id, category)
-	if not self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category] then
-		self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category] = {}
-		return
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		ThePlayerData:SetCosmeticIsUnlocked(playerID, category, id, false)
 	end
-	
-	self.data[UNLOCKABLE_CATEGORIES.s.UNLOCKABLE_COSMETIC][category][id] = nil
 	self.inst:PushEvent("cosmetic_locked", {id = id, category = category})
 end
 
-
-function UnlockTracker:IsCosmeticPurchased(id, category)
-	if not self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category] then
-		self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category] = {}
-		return false
-	end
-
-	-- Added ~= nil to stop this from returning nil instead of false
-	return self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category][id] ~= nil
-end
-
-function UnlockTracker:PurchaseCosmetic(id, category)
-	if not self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category] then
-		self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category] = {}
-	end
-	
-	self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category][id] = true
-	self.inst:PushEvent("cosmetic_purchased", {id = id, category = category})
-end
-
-function UnlockTracker:UnpurchaseCosmetic(id, category)
-	if not self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category] then
-		self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category] = {}
-		return
-	end
-	
-	self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category][id] = nil
-	self.inst:PushEvent("cosmetic_locked", {id = id, category = category})
-end
-
-function UnlockTracker:GetAllPurchasedCosmetics(category)
-	local purchased_cosmetics = {}
-	for name, _ in pairs(self.data[UNLOCKABLE_CATEGORIES.s.PURCHASABLE_COSMETIC][category]) do
-		table.insert(purchased_cosmetics, name)
-	end
-	return purchased_cosmetics
-end
 
 --------------------------------------------- FLAG ---------------------------------------------
 
@@ -419,18 +423,12 @@ end
 function UnlockTracker:UnlockLocation(location)
 	self:SetIsUnlocked(location, UNLOCKABLE_CATEGORIES.s.LOCATION, true)
 	TheWorld:UnlockLocation(location)
-	self:OnLocationUnlocked(location)
 end
 
 function UnlockTracker:LockLocation(location)
 	self:SetIsUnlocked(location, UNLOCKABLE_CATEGORIES.s.LOCATION, false)
 end
 
-function UnlockTracker:OnLocationUnlocked(location)
-	for _, weapon_type in ipairs(self.data[UNLOCKABLE_CATEGORIES.s.WEAPON_TYPE]) do
-		self:SetAscensionLevelCompleted(location, weapon_type, -1)
-	end
-end
 
 --------------------------------------------- REGIONS ---------------------------------------------
 
@@ -451,20 +449,22 @@ end
 function UnlockTracker:_AlignUnlockLevels(location, level)
 	-- If the level you just unlocked is BELOW the threshold for super frenzy, we want it to be completed for all weapon types.
 	-- Once you being doing super frenzies, we no longer want the levels to be aligned across all weapons.
-	level = math.min(level, NORMAL_FRENZY_LEVELS)
-	for _, weapon_type in pairs(WEAPON_TYPES) do
-		self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapon_type] = level
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		level = math.min(level, NORMAL_FRENZY_LEVELS)
+		for _, weapon_type in pairs(WEAPON_TYPES) do
+			ThePlayerData:SetAscensionLevelCompleted(playerID, location, weapon_type, level)
+		end
 	end
 end
 
 function UnlockTracker:SetAscensionLevelCompleted(location, weapon_type, level)
 	-- TheLog.ch.UnlockTracker:printf("SetAscensionLevelCompleted: location %s weapon_type %s level %d",
 	-- 	location, weapon_type, level)
-	-- I strongly dislike how verbose this is and I'm sorry
-	if not self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location] then
-		self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location] = {}
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		ThePlayerData:SetAscensionLevelCompleted(playerID, location, weapon_type, level)
 	end
-	self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapon_type] = level
 	self:_AlignUnlockLevels(location, level)
 end
 
@@ -472,18 +472,46 @@ function UnlockTracker:GetCompletedAscensionLevel(location, weapon_type)
 	assert(WEAPON_TYPES[weapon_type], "Invalid weapon type: check WEAPON_TYPES in constants.lua")
 	-- print ("UnlockTracker:GetCompletedAscensionLevel", UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL, location, weapon_type)
 
-	-- TEMP SOLUTION, we wanna actually pull all unlocked locations from the world and populated it then
-	if self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location] == nil then
-		self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location] = { [weapon_type] = -1 }
-	elseif self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapon_type] == nil then
-		self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapon_type] = -1
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		return ThePlayerData:GetCompletedAscensionLevel(playerID, location, weapon_type)
 	end
 
-	return self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapon_type]
+	return -1;
 end
 
 function UnlockTracker:GetAllAscensionData()
-	return self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL]
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		return ThePlayerData:GetAllAscensionData(playerID)
+	end
+end
+
+
+--------------------------------------------- HEART LEVEL ---------------------------------------------
+function UnlockTracker:SetHeartLevel(region, index, level)
+	-- TheLog.ch.UnlockTracker:printf("SetAscensionLevelCompleted: location %s weapon_type %s level %d",
+	-- 	location, weapon_type, level)
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		ThePlayerData:SetHeartLevel(playerID, region, index, level)
+	end
+end
+
+function UnlockTracker:GetHeartLevel(region, index)
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		return ThePlayerData:GetHeartLevel(playerID, region, index)
+	end
+
+	return 0;
+end
+
+function UnlockTracker:GetAllHeartLevelData()
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		return ThePlayerData:GetAllHeartLevelData(playerID)
+	end
 end
 
 ------------------------------------------------------------------------------------------------------------
@@ -502,223 +530,15 @@ function UnlockTracker:GetHighestSeenAscension()
 	return highest_completed + 1
 end
 
--- NETWORKING
-local sortedLocations
-local sortedLocationsNrBits
-local sortedRegions
-local sortedRegionsNrBits
-local sortedWeaponTypes
-local sortedWeaponTypesNrBits
-local sortedPowerItems	-- table of tables
 
-local powerCategoriesToInclude = 
-{
-	Power.Slots.PLAYER,
-	Power.Slots.ELECTRIC,
-	Power.Slots.SHIELD,
-	Power.Slots.SUMMON,
-}
+function UnlockTracker:DebugDrawEntity(ui, panel, colors)
+	local networkui = require "dbui.debug_network"
 
-local function SortLocationsRegionsAndWeapons()
-	-- This creates DETERMINISTIC location and weapon type lists. Should be the same array on all clients, so we can communicate using bits, rather than strings
-	if not sortedLocations then
-		local Biomes = require"defs.biomes"
-		sortedLocations = {}
-		local index = 1
-
-		for key, def in pairs(biomes.locations) do
-			if def.type == biomes.location_type.DUNGEON then
-				sortedLocations[index] = key
-				index = index + 1
-			end
-		end
-		sortedLocationsNrBits = index-1
-		
-		table.sort(sortedLocations)
-	end
-
-	if not sortedRegions then
-		local Biomes = require"defs.biomes"
-		sortedRegions = {}
-		local index = 1
-		for key, def in pairs(biomes.regions) do
-			sortedRegions[index] = key
-			index = index + 1
-		end
-		sortedRegionsNrBits = index-1
-		
-		table.sort(sortedRegions)
-	end
-
-
-	if not sortedWeaponTypes then
-		sortedWeaponTypes = {}
-		local index = 1
-
-		for key in pairs(WEAPON_TYPES) do
-			sortedWeaponTypes[index] = key
-			index = index + 1
-		end
-		sortedWeaponTypesNrBits = index-1
-
-		table.sort(sortedWeaponTypes)
-	end
-
-	if not sortedPowerItems then
-		sortedPowerItems = {}
-		for _, category in pairs(powerCategoriesToInclude) do
-			local index = 1
-
-			for id, def in pairs(itemcatalog.Power.Items[category]) do
-				sortedPowerItems[index] = id
-				index = index + 1
-			end
-			table.sort(sortedPowerItems)
-		end
+	local playerID = self.inst.Network:GetPlayerID()
+	if playerID ~= nil then
+		networkui:RenderNetworkPlayerDataUnlocksForPlayer(ui, playerID)
 	end
 end
-
-local function GetLocationBits(locations_table)
-	local bits = 0;
-
-	for idx, val in ipairs(sortedLocations) do
-		if locations_table[val] then	-- If this location exists in our table
-			bits = bits | (1 << (idx-1))						-- Set the bit
-		end
-	end 
-	return bits
-end
-
-local function GetRegionBits(regions_table)
-	local bits = 0;
-
-	for idx, val in ipairs(sortedRegions) do
-		if regions_table[val] then	-- If this region exists in our table
-			bits = bits | (1 << (idx-1))						-- Set the bit
-		end
-	end 
-	return bits
-end
-
-local function GetWeaponTypeBits(weapon_type_table)
-	local bits = 0;
-
-	for idx, val in ipairs(sortedWeaponTypes) do
-		if weapon_type_table[val] and weapon_type_table[val]>=0 then	-- If the value for the weapon is higher than 0 (not -1)
-			bits = bits | (1 << (idx-1))		-- Set the bit
-		end
-	end 
-	return bits
-end
-
-function UnlockTracker:SerializePowerItems(e, powertable)
-	for _, power in ipairs(sortedPowerItems) do	-- use ipairs to make sure the order is deterministic
-		e:SerializeBoolean(self:IsPowerUnlocked(power))
-	end
-end
-
-function UnlockTracker:DeserializePowerItems(e, powertable)
-	for _, power in ipairs(sortedPowerItems) do	-- use ipairs to make sure the order is deterministic
-		local unlocked = e:DeserializeBoolean()
-
-		if unlocked ~= nil then
-			self:SetIsUnlocked(power, UNLOCKABLE_CATEGORIES.s.POWER, unlocked)
-		end
-	end
-end
-
-local AscensionNrBits <const> = 6	-- max 1<<6 = 64
-function UnlockTracker:OnNetSerialize()
-	local e = self.inst.entity
-
-	SortLocationsRegionsAndWeapons()
-
-	-- Figure out which locations are in the data as a bitlist:
-	local locationBits = GetLocationBits(self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL])
-	e:SerializeUInt(locationBits, sortedLocationsNrBits)
-
-	for locationidx, location in ipairs(sortedLocations) do
-		if (locationBits & (1<<(locationidx-1))) ~= 0 then
-
-			local weapontypeBits = GetWeaponTypeBits(self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location])
-			e:SerializeUInt(weapontypeBits, sortedWeaponTypesNrBits)
-
-			for weaponidx, weapontype in ipairs(sortedWeaponTypes) do
-				if (weapontypeBits & (1<<(weaponidx-1))) ~= 0 then
-					local value = self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapontype]
-					e:SerializeUInt(value, AscensionNrBits)
-				end
-			end
-		end
-	end
-
-	-- Serialize Locations:
-	locationBits = GetLocationBits(self.data[UNLOCKABLE_CATEGORIES.s.LOCATION])
-	e:SerializeUInt(locationBits, sortedLocationsNrBits)
-
-	-- Serialize Regions:
-	local regionBits = GetRegionBits(self.data[UNLOCKABLE_CATEGORIES.s.REGION])
-	e:SerializeUInt(regionBits, sortedRegionsNrBits)
-
-	-- Serialize Power items:
-	e:PushSerializationMarker("Unlocked Power Items")
-	self:SerializePowerItems(e, self.data[UNLOCKABLE_CATEGORIES.s.POWER])
-	e:PopSerializationMarker()
-end
-
-function UnlockTracker:OnNetDeserialize()
-	local e = self.inst.entity
-
-	SortLocationsRegionsAndWeapons()
-
-	local locationBits = e:DeserializeUInt(sortedLocationsNrBits)
-
-	for locationidx, location in ipairs(sortedLocations) do
-		if (locationBits & (1<<(locationidx-1))) ~= 0 then
-			if not self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location] then
-				self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location] = {}
-			end
-
-			local weapontypeBits = e:DeserializeUInt(sortedWeaponTypesNrBits)
-
-			for weaponidx, weapontype in ipairs(sortedWeaponTypes) do
-				if (weapontypeBits & (1<<(weaponidx-1))) ~= 0 then
-
-					local value = e:DeserializeUInt(AscensionNrBits)	-- 0-64
-
-					self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapontype] = value
-				else
-					self.data[UNLOCKABLE_CATEGORIES.s.ASCENSION_LEVEL][location][weapontype] = -1	-- If the weapon type does not exist, set it to -1
-				end
-			end
-		end
-	end
-
-	-- Locations:
-	locationBits = e:DeserializeUInt(sortedLocationsNrBits)
-	for locationidx, location in ipairs(sortedLocations) do
-		if (locationBits & (1<<(locationidx-1))) ~= 0 then
-			self.data[UNLOCKABLE_CATEGORIES.s.LOCATION][location] = true
-		else
-			self.data[UNLOCKABLE_CATEGORIES.s.LOCATION][location] = nil
-		end
-	end
-
-	-- Region:
-	local regionBits = e:DeserializeUInt(sortedRegionsNrBits)
-	for regionidx, region in ipairs(sortedRegions) do
-		if (regionBits & (1<<(regionidx-1))) ~= 0 then
-			self.data[UNLOCKABLE_CATEGORIES.s.REGION][region] = true
-		else
-			self.data[UNLOCKABLE_CATEGORIES.s.REGION][region] = nil
-		end
-	end
-		
-	-- Deserialize Power items:
-	self:DeserializePowerItems(e, self.data[UNLOCKABLE_CATEGORIES.s.POWER])
-
-end
-
 
 
 ------------------------------------------------------------------------------------------------------------

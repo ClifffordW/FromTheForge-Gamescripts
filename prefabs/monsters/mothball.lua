@@ -23,6 +23,7 @@ local prefabs =
 	GroupPrefab("drops_mothball"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "mothball")
+prefabutil.SetupDeathFxPrefabs(prefabs, "mothball_elite")
 
 local attacks =
 {
@@ -65,6 +66,8 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local MONSTER_SIZE = 0.9
 
@@ -82,7 +85,7 @@ local function fn(prefabname)
 	inst.AnimState:SetBuild("mothball_build")
 	inst.AnimState:PlayAnimation("idle", true)
 	inst.AnimState:SetFrame(math.random(inst.AnimState:GetCurrentAnimationNumFrames()) - 1)
-	inst:AddTag("ACID_IMMUNE")
+	--inst:AddTag("ACID_IMMUNE")
 
 	inst:SetStateGraph("sg_mothball")
 	inst:SetBrain("brain_basic_melee")

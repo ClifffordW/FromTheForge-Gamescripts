@@ -2,7 +2,7 @@
 return {
   __displayName="fx_groak_elite",
   isfinal=true,
-  prefab={ "groak_elite",},
+  prefab={ "groak_elite", "groak_miniboss",},
   stategraphs={
     sg_groak={
       events={
@@ -147,22 +147,6 @@ return {
           },
         },
         {
-          eventtype="spawnparticles",
-          name="vfx-swallow_loop",
-          param={
-            detachatexitstate=true,
-            duration=90.0,
-            ischild=true,
-            offx=0.0,
-            offy=0.0,
-            offz=-0.10000000149012,
-            particlefxname="groak_air_suck",
-            render_in_front=true,
-            stopatexitstate=true,
-            use_entity_facing=true,
-          },
-        },
-        {
           eventtype="spawnimpactfx",
           name="vfx-burrow_dust1",
           param={
@@ -248,6 +232,35 @@ return {
             inheritrotation=true,
             offx=0.0,
             offz=-0.059999998658895,
+          },
+        },
+        {
+          eventtype="spawneffect",
+          name="vfx-swallow_loop",
+          param={
+            fxname="fx_groak_swallow_loop",
+            inheritrotation=true,
+            ischild=true,
+            offx=0.0,
+            offy=0.0,
+            offz=-0.10000000149012,
+            stopatexitstate=true,
+          },
+        },
+        {
+          eventtype="spawnparticles",
+          name="vfx-swallow_loop-decoupled",
+          param={
+            detachatexitstate=true,
+            duration=90.0,
+            ischild=true,
+            offx=0.0,
+            offy=0.0,
+            offz=-0.10000000149012,
+            particlefxname="groak_air_suck",
+            render_in_front=true,
+            stopatexitstate=true,
+            use_entity_facing=true,
           },
         },
       },

@@ -2,15 +2,11 @@
 return {
   __displayName="mer_red_ornament_color_1",
   cosmetic_data={
-    color={ 0.95833333333333, 0.5, 0.89,},
+    color={ 0.98455595970154, 0.86486488580704, 0.58687257766724,},
     color_species="mer",
     colorgroup="ORNAMENT_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

@@ -85,7 +85,6 @@ function EquipmentPanel:Refresh(player)
 end
 
 function EquipmentPanel:RefreshPuppet()
-	local data = self.player.components.charactercreator:OnSave()
 	self.puppet:CloneCharacterWithEquipment(self.player)
 
 	-- Position puppet
@@ -240,6 +239,7 @@ function EquipmentPanel:EquipItem(slot, itemData)
 
 	-- Update slots
 	self.equipmentSlots:EquipItem(slot, itemData)
+	self.equipmentSlots:UpdateByListOfWeights(slot)
 
 	if item_def and item_def.sound_events and item_def.sound_events.equip then
 		TheFrontEnd:GetSound():PlaySound(fmodtable.Event[item_def.sound_events.equip])

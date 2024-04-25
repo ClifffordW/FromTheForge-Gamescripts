@@ -22,11 +22,23 @@ DebugQuestManager.PANEL_HEIGHT = 1000
 
 
 
+local function BuildNotReadyToTranslate()
+	local quests = contentutil.GetContentDB():GetFiltered(Quest)
+	local collected = {}
+	for _,q in ipairs(quests) do
+		local t = q:Debug_CollectNotReadyToTranslate()
+		if next(t) then
+			collected[q:GetContentID()] = t
+		end
+	end
+	return collected
+end
+
 local function GetPlayerFromPanel(panel)
 	local current_node = panel:GetNode()
 	local player = nil
-	if current_node and current_node._GetPlayer then
-		player = current_node:_GetPlayer()
+	if current_node and current_node._GetQuestOwner then
+		player = current_node:_GetQuestOwner()
 	end
 	return player or ConsoleCommandPlayer()
 end
@@ -70,6 +82,14 @@ DebugQuestManager.QUEST_MENU = {
 				params.panel:PushNode(new_node)
 			end,
 		},
+		-- Maybe not useful enough to show.
+		--~ {
+		--~ 	name = "View NotReadyToTranslate",
+		--~ 	fn = function(params)
+		--~ 		local new_node = DebugNodes.DebugTable(BuildNotReadyToTranslate(), "NotReadyToTranslate")
+		--~ 		params.panel:PushNode(new_node)
+		--~ 	end,
+		--~ },
 	},
 }
 DebugQuestManager.MENU_BINDINGS = {
@@ -92,10 +112,10 @@ end
 
 -------
 -- Quest Menu API
-function DebugQuestManager:_GetPlayer()
+function DebugQuestManager:_GetQuestOwner()
 	local questcentral = self.questmanager:GetQC()
-	local player = questcentral:GetPlayer()
-	return player
+	local quester = questcentral:GetQuestOwner()
+	return quester
 end
 -- /end API
 
@@ -120,8 +140,8 @@ function DebugQuestManager:_AssignQuestManager(questmanager)
 	self.spawn_quest_params = { debug = true }
 
 	self.on_remove_npc_talker = function()
-		local player = self:_GetPlayer()
-		self.npc_talker.components.conversation:Debug_ForceEndConvo(player)
+		local quester = self:_GetQuestOwner()
+		self.npc_talker.components.conversation:Debug_ForceEndConvo(quester)
 		self.npc_talker = nil
 		self.talk_err_msg = nil
 		if self.talk_quest then
@@ -161,15 +181,39 @@ function DebugQuestManager:RenderPanel( ui, panel )
 		return
 	end
 
-	local player = self:_GetPlayer()
-	ui:Value("Owning Player", player)
-	ui:SameLineWithSpace()
-	local next_player = playerutil.GetNextPlayer(player, true)
-	if ui:Button(ui.icon.playback_step_fwd, ui.icon.width, nil, next_player == nil) then
-		self:_ClearQuestManager()
-		local questcentral = next_player.components.questcentral
-		self:_AssignQuestManager(questcentral:GetQuestManager())
+	local quester = self:_GetQuestOwner()
+	ui:Value("Quest Owner", quester)
+
+	if quester:HasTag("player") then
+		-- show button to see world's QM
+		local next_player = playerutil.GetNextPlayer(quester, true)
+		if next_player ~= quester then
+			ui:SameLineWithSpace()
+			if ui:Button(ui.icon.playback_step_fwd, ui.icon.width, nil, next_player == nil) then
+				self:_ClearQuestManager()
+				local questcentral = next_player.components.questcentral
+				self:_AssignQuestManager(questcentral:GetQuestManager())
+			end
+		end
+
+		-- ui:SameLineWithSpace()
+		if ui:Button("See World Quests") then
+			self:_ClearQuestManager()
+			local questcentral = TheDungeon.progression.components.questcentral
+			self:_AssignQuestManager(questcentral:GetQuestManager())
+		end
+	else
+		-- show button to see player QMs
+		-- ui:SameLineWithSpace()
+		if ui:Button("See Player Quests") then
+			local next_player = playerutil.GetNextPlayer(nil, true)
+			self:_ClearQuestManager()
+			local questcentral = next_player.components.questcentral
+			self:_AssignQuestManager(questcentral:GetQuestManager())
+		end
 	end
+
+
 
 	ui:Separator()
 
@@ -221,6 +265,17 @@ function DebugQuestManager:RenderPanel( ui, panel )
 		ui:Columns( 1, "reset" )
 		ui:Separator()
 		ui:TextColored( WEBCOLORS.DARKTURQUOISE, string.format( "%d quests shown", #self.spawn_quests ))
+	end
+
+	if ui:CollapsingHeader("Player Flags") then
+		local player = GetDebugPlayer()
+		if player == nil then
+			ui:Text("No debug player")
+		else
+			local playerID = player.Network:GetPlayerID()
+			local data = ThePlayerData:GetSaveData(playerID);
+			panel:AppendKeyValues(ui, data.Unlocks.FLAG)
+		end
 	end
 
 	local active_quests = shallowcopy(self.questmanager:GetQuests())
@@ -278,37 +333,29 @@ function DebugQuestManager:RenderPanel( ui, panel )
 	if ui:CollapsingHeader("Old Quests", ui.TreeNodeFlags.DefaultOpen) then
 		local old_quests = shallowcopy( self.questmanager.old_quests )
 
-		ui:Columns( 3 )
-		ui:SetColumnWidth(0, ui:GetWindowSize()*.5)
-		ui:SetColumnWidth(1, ui:GetWindowSize()*.25)
-		ui:SetColumnWidth(2, ui:GetWindowSize()*.25)
-
 		if ui:Selectable( "Quest###OLDQUESTID", false ) then
 			self.old_sort_order = SORT.id.BY_ID
 		end
-		ui:NextColumn()
-
-		if ui:Selectable( "Type###OLDQUESTTYPE", false ) then
-			self.old_sort_order = SORT.id.BY_TYPE
-		end
-		ui:NextColumn()
-		if ui:Selectable( "Type###OLDQUESTSTATUS", false ) then
-			self.old_sort_order = SORT.id.BY_STATUS
-		end
-		ui:NextColumn()
 
 		ui:Separator()
 
-		self:RefreshSortOrder( old_quests, self.old_sort_order )
-		for _, quest in ipairs(old_quests) do
-			panel:AppendTable( ui, quest, quest:GetContentID() )
-			ui:NextColumn()
-			ui:Text(quest:GetType())
-			ui:NextColumn()
-			ui:TextColored( Quest.GetStatusColour(quest:GetStatus()), quest:GetStatus() )
-			ui:NextColumn()
+		for id, quests in pairs(old_quests) do
+			panel:AppendTable( ui, quests, id )
 		end
-		ui:Columns( 1 )
+
+		ui:TextColored(self.colorscheme.header, "Lost Quests")
+		ui:SetTooltipIfHovered({
+				"Lost quests are ones that failed to load and were discarded.",
+				"If we get reports about broken quest state, this section shows",
+				"which failed to load at any previous point in time.",
+			})
+		panel:AppendTableInline(ui, self.questmanager.lost_quests, "Lost Quest Names##Lost Quests")
+	end
+
+
+	if ui:CollapsingHeader("NotReadyToTranslate") then
+		local collected = BuildNotReadyToTranslate()
+		panel:AppendTableInline(ui, collected, "Quests and their Convos that are flagged NotReadyToTranslate")
 	end
 
 	self:AddFilteredAll(ui, panel, self.questmanager)
@@ -473,7 +520,7 @@ function DebugQuestManager:RenderSpawnQuest( ui, panel )
 end
 
 function DebugQuestManager:_SpawnTalker(prefab)
-	local player = self:_GetPlayer()
+	local player = self:_GetQuestOwner()
 	if player then
 		local npc_node = self.questmanager:GetQC():GetNpcCastForPrefab(prefab)
 		if npc_node and npc_node.inst then

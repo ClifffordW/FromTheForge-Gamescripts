@@ -28,7 +28,7 @@ return {
   },
   destructible_owlrock_tall={ { x=1.0, z=1.0,}, { x=-23.0,}, { x=22.0, z=-1.0,},},
   fog_night_billboard_bg={ { param_id="", x=-25.19, z=31.47,}, { param_id="", x=27.46, z=32.02,},},
-  fog_night_ground_narrow={ { param_id="", x=-13.27, z=4.56,}, { param_id="", x=13.56, z=-15.47,},},
+  fog_night_ground_narrow={ { param_id="", x=-13.27, z=4.56,}, { param_id="", x=13.44, z=-15.29,},},
   fog_night_ground_side={ { param_id="", x=-39.09, z=-2.75,}, { param_id="", x=29.75, z=1.35,},},
   forest_bg_closeowltree={
     { variation=1, x=-32.64, z=27.67,},
@@ -361,6 +361,7 @@ return {
     { variation=2, x=-35.26, y=5.0, z=-9.14,},
     { variation=4, x=-30.58, y=4.5, z=-1.21,},
   },
+  spawner_npc_dungeon={ { x=13.0, z=-7.0,},},
   stars={
     { param_id="", x=-44, y=-2, z=29,},
     { param_id="", x=44, y=-2, z=29,},

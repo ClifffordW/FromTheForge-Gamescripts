@@ -8,8 +8,9 @@ local assets = {
         -- TODO: Rename this file deps_global.lua and use GroupPrefab.
 
 
-        Asset("PKGREF", "sound/Master.bank"), -- Master.bank is loaded manually in fromtheforge.cpp
-        Asset("PKGREF", "sound/Master.strings.bank"), -- Master.bank.strings is loaded manually in fromtheforge.cpp
+        Asset("PKGREF", "sound/Master.bank"), -- Reference because Master.bank is loaded manually in fromtheforge.cpp
+        Asset("PKGREF", "sound/Master.strings.bank"), -- Also Master.bank.strings loaded manually in fromtheforge.cpp
+        Asset("PKGREF", "images/startup_logo.tex"), -- Loaded in main.cpp
         Asset("SOUND", "sound/UI.bank"),
         Asset("SOUND", "sound/Ambiences.bank"),
         Asset("SOUND", "sound/Music.bank"),
@@ -19,6 +20,7 @@ local assets = {
         Asset("SOUND", "sound/Skills.bank"),
         Asset("SOUND", "sound/Weapons.bank"),
         Asset("SOUND", "sound/Emote.bank"),
+		Asset("SOUND", "sound/Town.bank"),
 
         -- Loading screens
         Asset("DYNAMIC_ATLAS", "images/bg_loading.xml"),

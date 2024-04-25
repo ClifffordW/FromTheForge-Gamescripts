@@ -23,7 +23,7 @@ local ON_HIT_LIGHTATTACK_WINDOW_FRAMES = 8 -- When the shove connects, how many 
 local ON_HIT_HEAVYATTACK_WINDOW_FRAMES = 5 -- When the shove connects, how many frames can we cancel into a dodge?
 
 local function OnShoveHitBoxTriggered(inst, data)
-	--TODO(jambell): commonize?
+	--TODO: commonize?
 	local ATTACK_DATA = ATTACKS.SHOVE
 
 	local hit = false
@@ -42,31 +42,35 @@ local function OnShoveHitBoxTriggered(inst, data)
 		attack:SetPushback(pushback)
 		attack:SetHitstunAnimFrames(hitstun)
 		attack:SetID(inst.sg.mem.attack_type)
+		attack:SetHitFlags(Attack.HitFlags.LOW_ATTACK)
 
-		inst.components.combat:DoKnockdownAttack(attack)
+		local hit_v = inst.components.combat:DoKnockdownAttack(attack)
 
-		hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+		if hit_v then
+			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-		local hitfx_x_offset = 1.25
-		local hitfx_y_offset = 1.5
+			local hitfx_x_offset = 1.25
+			local hitfx_y_offset = 1.5
 
-		local distance = inst:GetDistanceSqTo(v)
-		if distance >= 30 then
-			hitfx_x_offset = hitfx_x_offset + 1.5
-		elseif distance >= 25 then
-			hitfx_x_offset = hitfx_x_offset + 1
+			local distance = inst:GetDistanceSqTo(v)
+			if distance >= 30 then
+				hitfx_x_offset = hitfx_x_offset + 1.5
+			elseif distance >= 25 then
+				hitfx_x_offset = hitfx_x_offset + 1
+			end
+
+			if v.sg ~= nil and v.sg:HasStateTag("block") then
+				SpawnHitFx("hits_player_block", inst, v, 0, 0, dir, hitstoplevel)
+			else
+				SpawnHitFx("hits_player_unarmed", inst, v, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel) -- replace with .statemem.attackfx, set it per state
+			end
+
+			SpawnHurtFx(inst, v, 0, dir, hitstoplevel)
+			hit = true
 		end
-
-		if v.sg ~= nil and v.sg:HasStateTag("block") then
-			SpawnHitFx("hits_player_block", inst, v, 0, 0, dir, hitstoplevel)
-		else
-			SpawnHitFx("hits_player_unarmed", inst, v, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel) -- replace with .statemem.attackfx, set it per state
-		end
-
-		SpawnHurtFx(inst, v, 0, dir, hitstoplevel)
-		hit = true
 	end
 
+	-- If we hit anything:
 	if hit then
 		inst.SoundEmitter:PlaySound(fmodtable.Event.Hit_shove)
 		inst.components.playercontroller:OverrideControlQueueTicks("dodge", ON_HIT_DODGE_WINDOW_FRAMES * ANIM_FRAMES)

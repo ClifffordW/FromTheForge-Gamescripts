@@ -310,7 +310,6 @@ function UpgradeableItemDetails:_AddItem(itemdef, hotkey)
 			TheFrontEnd:GetSound():PlaySound(fmodtable.Event.hover)
 		end)
 		:SetOnLoseFocus(function()
-			--@luca
 		end)
 
 

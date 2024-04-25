@@ -26,7 +26,22 @@ return {
         {
           eventtype="playfoleysound",
           name="sfx-footstep",
-          param={ soundtag="Footstep", volume=35.0,},
+          param={ soundtag="Footstep", volume=58.0,},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-whoosh_q",
+          param={ soundevent="Player_swish_light", volume=8.0,},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-whoosh",
+          param={ soundevent="Player_swish", volume=13.0,},
+        },
+        {
+          eventtype="playsound",
+          name="sfx_vo",
+          param={ soundevent="Emote_VO_fistPump_01", volume=5.0,},
         },
       },
     },

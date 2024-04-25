@@ -2,10 +2,12 @@ local Enum = require "util.enum"
 local Image = require "widgets.image"
 local Panel = require "widgets.panel"
 local Widget = require "widgets.widget"
+local ease = require "util.ease"
 local easing = require "util.easing"
 local fmodtable = require "defs.sound.fmodtable"
 local kassert = require "util.kassert"
 local lume = require "util.lume"
+local playerutil = require "util.playerutil"
 local strict = require "util.strict"
 
 
@@ -17,6 +19,7 @@ local Screen = Class(Widget, function(self, name)
 	--self.inst:Hide()
 	self.is_screen = true
 	self.flush_inputs = true
+	self.last_focus = {}
 
 	-- Partial overlays are the most common, so default to that.
 	self:SetAudioCategory(self.AudioCategory.s.PartialOverlay)
@@ -55,39 +58,32 @@ function Screen:SetOwningPlayer(owningplayer)
 	-- TheLog.ch.FrontEnd:print("Screen:SetOwningPlayer=" .. tostring(owningplayer))
 	self.owningplayer = self:ChangeTrackedEntity(owningplayer, "owningplayer")
 	assert(not self.owningplayer or not self.owningplayer:IsLocal() or self.owningplayer.components.playercontroller:HasInputDevice(), "SetOwningPlayer requires an associated input device for local players.")
+	return self
 end
 
+-- Check ownership with Widget:CanDeviceInteract. Get player if you actually
+-- need them.
 function Screen:GetOwningPlayer()
 	-- Ignore Widget:GetOwningPlayer. Buck stops here.
 	-- TheLog.ch.FrontEnd:print("Screen:GetOwningPlayer=" .. tostring(self.owningplayer))
 	return self.owningplayer
 end
 
-function Screen:SetOwningDevice(device_type, device_id)
+function Screen:SetOwningDevice(input_device)
 	assert(self.owningplayer == nil)
-	assert(device_type and device_id, "Clearing owning device not yet supported.")
+	assert(input_device, "Clearing owning device not yet supported.")
+	local device_type, device_id = input_device:unpack()
 	self.owningdevice = {
 		device_type = device_type,
 		device_id = device_id,
 	}
 end
 
-function Screen:CanDeviceInteract(device_type, device_id, device_owner)
-	assert(device_type and device_id)
-	if self.owningplayer then
-		return self.owningplayer == device_owner
-
-	elseif self.owningdeviceid then
-		return (self.owningdeviceid.device_type == device_type
-			and self.owningdeviceid.device_id == device_id)
-	end
-	return true
-end
-
-function Screen:IsRelativeNavigation()
-	if self.owningplayer then
-		local last_device = self.owningplayer.components.playercontroller:GetLastInputDeviceType()
-		return last_device ~= "mouse"
+-- Returns true for both keyboard and gamepad navigation.
+function Screen:IsRelativeNavigation(hunter_id)
+	local player = playerutil.GetByHunterId(hunter_id) or self.owningplayer
+	if player then
+		return player.components.playercontroller:IsRelativeNavigation()
 	end
 	return TheFrontEnd:IsRelativeNavigation()
 end
@@ -102,6 +98,34 @@ function Screen:IsUsingGamepad()
 	return TheInput:WasLastGlobalInputGamepad()
 end
 
+function Screen:HandleControlDown(controls, trace)
+	if not TheFrontEnd:IsScreenInStack(self) then
+		-- Some screens are used as widgets and aren't pushed. We don't want
+		-- them to handle focus move.
+		return
+	end
+
+	local dir
+	if controls:Has(Controls.Digital.MENU_LEFT) then
+		dir = FocusMove.s.left
+	elseif controls:Has(Controls.Digital.MENU_RIGHT) then
+		dir = FocusMove.s.right
+	elseif controls:Has(Controls.Digital.MENU_UP) then
+		dir = FocusMove.s.up
+	elseif controls:Has(Controls.Digital.MENU_DOWN) then
+		dir = FocusMove.s.down
+	end
+
+	if dir then
+		-- Pass back to frontend. This back and forth through OnControlDown allows us to:
+		-- * use input's repeat filtering
+		-- * skip focus move if a widget handles direction
+		-- * and limit input handling to the screen owner.
+		local input_device = controls:GetDevice()
+		return TheFrontEnd:FocusMove(self, dir, input_device)
+	end
+end
+
 function Screen:SetAudioCategory(cat)
 	dbassert(Screen.AudioCategory:Contains(cat))
 	-- Audio people: Setup defaults for each category here:
@@ -112,15 +136,15 @@ function Screen:SetAudioCategory(cat)
 			-- Careful here. This is only okay because fullscreen is not the default.
 			:PushAudioParameterWhileOpen(fmodtable.GlobalParameter.Music_InMenu)
 
-	elseif cat == Screen.AudioCategory.s.Popup then
-		self:SetAudioSnapshotOverride(fmodtable.Event.PopUp_LP)
-			:SetAudioEnterOverride(fmodtable.Event.ui_popup_enter)
-			:SetAudioExitOverride(fmodtable.Event.ui_popup_exit)
-
 	elseif cat == Screen.AudioCategory.s.PartialOverlay then
 		self:SetAudioSnapshotOverride(fmodtable.Event.PartialOverlay_LP)
 			:SetAudioEnterOverride(fmodtable.Event.ui_overlay_enter)
 			:SetAudioExitOverride(fmodtable.Event.ui_overlay_exit)
+
+	elseif cat == Screen.AudioCategory.s.Popup then
+		self:SetAudioSnapshotOverride(fmodtable.Event.PopUp_LP)
+			:SetAudioEnterOverride(fmodtable.Event.ui_popup_enter)
+			:SetAudioExitOverride(fmodtable.Event.ui_popup_exit)
 
 	elseif cat == Screen.AudioCategory.s.None then
 		self:SetAudioSnapshotOverride(nil)
@@ -154,6 +178,11 @@ end
 -- So long as this screen is open (but maybe not active or visible), we'll keep
 -- this parameter set.
 function Screen:PushAudioParameterWhileOpen(param)
+	--allow audio to pass nothing if they don't want the music filtered
+	if param == nil then
+		return self
+	end
+
 	assert(param and type(param) == "string", "Should be an fmodtable entry: fmodtable.GlobalParameter.Music_InMenu")
 	self.audio_params_while_open = self.audio_params_while_open or {}
 	table.insert(self.audio_params_while_open, param)
@@ -199,7 +228,7 @@ function Screen:OnClose()
 		self.snapshot_handle = nil
 	end
 	if self.close_cb then
-		self.close_cb()
+		self.close_cb(self)
 	end
 end
 
@@ -214,11 +243,13 @@ function Screen:OnUpdate(dt)
 end
 
 function Screen:OnBecomeInactive()
-	self.last_focus = self:GetDeepestFocus()
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		self.last_focus[hunter_id] = self:GetDeepestFocus(hunter_id)
+	end
 
 	-- If this screen lost top, and has brackets, hide them
-	if self.selection_brackets then
-		self.selection_brackets:Hide()
+	if self.bracket_root then
+		self.bracket_root:Hide()
 	end
 
 	TheInput:UnregisterForDeviceChanges(self.on_notify_input_mode_changed)
@@ -227,19 +258,19 @@ end
 -- Called every time this instance is displayed. See OnOpen.
 function Screen:OnBecomeActive()
 	TheSim:SetUIRoot(self.inst.entity)
-	if self.last_focus and self.last_focus.inst.entity:IsValid() then
-		self.last_focus:SetFocus()
-	else
-		self.last_focus = nil
-		if self.default_focus then
-			self.default_focus:SetFocus()
+
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		local w = self.last_focus[hunter_id]
+		if w and w.inst:IsValid() then
+			w:SetFocus(hunter_id)
+		else
+			self:SetDefaultFocus(hunter_id)
 		end
 	end
 
 	-- If this screen regained top, and should be showing brackets, do it
-	if self.selection_brackets
-	and (self.focus_brackets_mouse_enabled or TheFrontEnd:IsRelativeNavigation()) then
-		self.selection_brackets:Show()
+	if self.bracket_root then
+		self.bracket_root:Show()
 	end
 
 	TheInput:RegisterForDeviceChanges(self.on_notify_input_mode_changed)
@@ -270,10 +301,27 @@ function Screen:HandleEvent(type, ...)
 	end
 end
 
-function Screen:SetDefaultFocus()
-	if self.default_focus then
-		self.default_focus:SetFocus()
-		return true
+function Screen:FindDefaultFocus(hunter_id)
+	return self.default_focus
+end
+
+function Screen:SetDefaultFocus(hunter_id)
+	if hunter_id then
+		local default_focus = self:FindDefaultFocus(hunter_id)
+		if default_focus then
+			default_focus:SetFocus(hunter_id)
+			return true
+		end
+	else
+		local found_focus = false
+		for h_id=1,MAX_PLAYER_COUNT do
+			local default_focus = self:FindDefaultFocus(h_id)
+			if default_focus then
+				default_focus:SetFocus(h_id)
+				found_focus = true
+			end
+		end
+		return found_focus
 	end
 end
 
@@ -282,15 +330,19 @@ function Screen:SetNonInteractive()
 	return self
 end
 
-function Screen:OnFocusMove(dir, down)
-	-- Never do super. We want to push focus moving down to the focus widget.
+-- OnFocusMove gets the widget to focus and ApplyFocusMove changes the focus.
+function Screen:ApplyFocusMove(dir, input_device)
 	if self.is_noninteractive then
 		return false
 	end
-	local focus = self:GetFE():GetFocusWidget()
+
+	local hunter_id = input_device:GetOwnerId_strict()
+
+	local fe = self:GetFE()
+	local focus = fe:GetFocusWidget(hunter_id)
 	if not focus or focus == self then
-		self:SetDefaultFocus()
-		focus = self:GetFE():GetFocusWidget()
+		self:SetDefaultFocus(hunter_id)
+		focus = fe:GetFocusWidget(hunter_id) or fe:GetFocusWidget()
 		kassert.assert_fmt(
 			focus,
 			"Failed to find a focus widget. Set default_focus or implement SetDefaultFocus on '%s'.",
@@ -302,25 +354,34 @@ function Screen:OnFocusMove(dir, down)
 			self._widgetname
 		)
 	end
-	return focus:OnFocusMove(dir, down)
+	-- OnFocusMove returns one of three values:
+	-- * widget: give focus to this widget
+	-- * true: ignore the focus move
+	-- * false: didn't handle the focus move
+	local new_focus = focus:OnFocusMove(dir, input_device)
+	if new_focus and new_focus ~= true then
+		if new_focus:HasMatchingFocusOwner(focus, input_device:GetPlayer()) then
+			new_focus:SetFocus(hunter_id)
+		else
+			new_focus = nil
+		end
+	end
+	return new_focus
 end
 
 -- show_immediately makes the focus brackets display on this widget straight away, no animation to it
-function Screen:OnFocusChanged(new_focus, show_immediately)
-	if self.focus_brackets_enabled
-	and new_focus
-	and new_focus.can_focus_with_nav
+function Screen:OnFocusChanged(new_focus, hunter_id, show_immediately)
+	if self.focus_brackets
+		and new_focus
+		and new_focus.can_focus_with_nav
+		and new_focus:IsVisible()
 	then
-		if self.focus_brackets_mouse_enabled or TheFrontEnd:IsRelativeNavigation() then
-			-- Give focus with mouse or direction keys
-			if self.selection_brackets:IsShown() == false then
-				-- The player moved the gamepad joystick for the first time. Focus on the button
-				self.selection_brackets:Show()
-			end
+		local selection_brackets = self:GetSelectionBracketsForPlayer(hunter_id)
+		if self.focus_brackets_mouse_enabled or self:IsRelativeNavigation(hunter_id) then
 			-- Move brackets to the focused element
-			self:_UpdateSelectionBrackets(new_focus, show_immediately)
+			self:_UpdateSelectionBrackets(new_focus, show_immediately, selection_brackets)
 		else
-			self.selection_brackets:Hide()
+			selection_brackets:Hide()
 		end
 	end
 end
@@ -477,13 +538,12 @@ end
 
 
 ----------------------------------------------------------------------
--- Selection brackets                                              {{{
+-- Focus brackets                                                  {{{
 
-function Screen:_EnableFocusBrackets(texture, minx, miny, maxx, maxy, border_scale)
-	if self.selection_brackets then
-		-- Don't add more brackets
-		return self
-	end
+local FocusBrackets = Class(Widget, function(self, hunter_id, texture, minx, miny, maxx, maxy, border_scale)
+	Widget._ctor(self, "FocusBrackets")
+
+	self.hunter_id = hunter_id
 
 	minx = minx or 78
 	miny = miny or 94
@@ -491,67 +551,194 @@ function Screen:_EnableFocusBrackets(texture, minx, miny, maxx, maxy, border_sca
 	maxy = maxy or 96
 	border_scale = border_scale or 0.8
 
-	self.selection_brackets = self:AddChild(Panel(texture or "images/ui_ftf_runsummary/selection_brackets.tex"))
-		:SetName("Selection brackets")
-		:SetNineSliceCoords(minx, miny, maxx, maxy)
-		:SetNineSliceBorderScale(border_scale)
+	self
 		:SetHiddenBoundingBox(true)
 		:IgnoreInput(true)
 		:Hide()
 
+	self.bottom = self:AddChild(Panel(texture.color_bg or "images/ui_ftf/selection_brackets_fill.tex"))
+		:SetNineSliceCoords(minx, miny, maxx, maxy)
+		:SetNineSliceBorderScale(border_scale)
+		:SetMultColor(UICOLORS.PLAYERS[hunter_id])
+	self.top = self:AddChild(Panel(texture.black_fg or "images/ui_ftf/selection_brackets_overlay.tex"))
+		:SetNineSliceCoords(minx, miny, maxx, maxy)
+		:SetNineSliceBorderScale(border_scale)
+
+	self.brackets_w = 100
+	self.brackets_h = 100
 	-- Animate them too
-	local speed = 1.35
-	local amplitude = 14
-	self.selection_brackets_w = 100
-	self.selection_brackets_h = 100
-	self.selection_brackets:RunUpdater(
+	local speed = 1.35 * 2
+	self:RunUpdater(
 		Updater.Loop({
-			Updater.Ease(function(v) self.selection_brackets:SetSize(self.selection_brackets_w + v, self.selection_brackets_h + v) end, amplitude, 0, speed, easing.inOutQuad),
-			Updater.Ease(function(v) self.selection_brackets:SetSize(self.selection_brackets_w + v, self.selection_brackets_h + v) end, 0, amplitude, speed, easing.inOutQuad),
+				Updater.Ease(function(v) self:SetAnimProgress(v) end, 0, 1, speed, easing.linear),
 		}))
+end)
+
+local anim_offset = {
+	0,
+	0.5, -- biggest offset for 2p
+	0.25,
+	0.75,
+}
+function FocusBrackets:SetAnimProgress(t)
+	local amplitude = 14
+	-- Offset anim for each player so they don't hide each other.
+	local offset = anim_offset[self.hunter_id]
+	t = t + offset
+	t = lume.pingpong(t * 2)
+	t = ease.quadinout(t)
+	local s = t * amplitude
+	self:SetSize(self.brackets_w + s, self.brackets_h + s)
 	return self
 end
 
+function FocusBrackets:SetSize(...)
+	self.bottom:SetSize(...)
+	self.top:SetSize(...)
+	return self
+end
+
+function FocusBrackets:HasValidPlayer()
+	if InGamePlay() then
+		local player = playerutil.GetByHunterId(self.hunter_id)
+		return player and player:IsLocal()
+	else
+		return self.hunter_id == 1
+	end
+end
+
+function Screen:GetSelectionBracketsForPlayer(player_id)
+	dbassert(player_id)
+	return self.focus_brackets and self.focus_brackets[player_id]
+end
+
+-- If you SetOwningPlayer on this widget or its parent, then we'll get their
+-- selection brackets.
+function Screen:GetSelectionBracketsForWidget(widget)
+	dbassert(widget)
+	local player = widget:GetOwningPlayer()
+	local player_id = player and player:GetHunterId() or 1
+	return self:GetSelectionBracketsForPlayer(player_id)
+end
+
+-- I don't see a good reason to destroy them outside of debug.
+function Screen:Debug_DestroyFocusBrackets()
+	self.bracket_root:Remove()
+	self.bracket_root = nil
+	self.focus_brackets = nil
+end
+
+function Screen:_CreateFocusBrackets(texture, minx, miny, maxx, maxy, border_scale)
+	if self.focus_brackets then
+		-- Don't add more brackets
+		return self
+	end
+	texture = texture or table.empty
+
+	self.focus_brackets = {}
+	self.bracket_root = self:AddChild(Widget("bracket_root"))
+
+	for hunter_id=1,MAX_PLAYER_COUNT do
+		self.focus_brackets[hunter_id] = self.bracket_root:AddChild(FocusBrackets(hunter_id, texture, minx, miny, maxx, maxy, border_scale))
+	end
+
+	return self
+end
+
+-- Usually you call one of these *after* you animate the screen in. That
+-- presents nicely and ensures we have our owner setup.
+--
+-- Calling too early may assert about invalid ancestor.
 function Screen:EnableFocusBracketsForGamepad(texture, minx, miny, maxx, maxy, border_scale)
-	self.focus_brackets_enabled = true
-	self:_EnableFocusBrackets(texture, minx, miny, maxx, maxy, border_scale)
-	self:OnFocusChanged(self.default_focus, true)
+	self:_CreateFocusBrackets(texture, minx, miny, maxx, maxy, border_scale)
+	self:_ImmediatelyShowFocusBrackets()
 	return self
 end
 
 function Screen:EnableFocusBracketsForGamepadAndMouse(texture, minx, miny, maxx, maxy, border_scale)
-	self.focus_brackets_enabled = true
 	self.focus_brackets_mouse_enabled = true
-	self:_EnableFocusBrackets(texture, minx, miny, maxx, maxy, border_scale)
-	self:OnFocusChanged(self.default_focus, true)
+	self:EnableFocusBracketsForGamepad(texture, minx, miny, maxx, maxy, border_scale)
 	return self
+end
+
+function Screen:HideFocusBracketsUntilMove(hunter_id)
+	dbassert(self.focus_brackets, "Did you call EnableFocusBracketsForGamepad yet?")
+	local owner = self:GetOwningPlayer()
+	hunter_id = hunter_id or owner and owner:GetHunterId()
+	local h_min = 1
+	local h_max = MAX_PLAYER_COUNT
+	if hunter_id then
+		h_min = hunter_id
+		h_max = hunter_id
+	end
+	for h_id=h_min,h_max do
+		local brackets = self:GetSelectionBracketsForPlayer(h_id)
+		kassert.assert_fmt(brackets, "Did this screen make its own self.focus_brackets? player=%s", h_id)
+		brackets:Hide()
+	end
+	return self
+end
+
+-- TODO: Do we need this? Maybe if a scroll list scrolls, then we need to refresh positions?
+--~ function Screen:RefreshFocusBrackets(show_immediately)
+--~ 	for hunter_id=1,MAX_PLAYER_COUNT do
+--~ 		local w = TheFrontEnd:GetFocusWidget(hunter_id)
+--~ 		self:OnFocusChanged(w, hunter_id, show_immediately)
+--~ 	end
+--~ end
+
+function Screen:_ImmediatelyShowFocusBrackets()
+	dbassert(self.focus_brackets, "Did you call EnableFocusBracketsForGamepad yet?")
+	local owner = self:GetOwningPlayer()
+	if owner then
+		local hunter_id = owner:GetHunterId()
+		self:OnFocusChanged(TheFrontEnd:GetFocusWidget(hunter_id), hunter_id, true)
+	else
+		for hunter_id=1,MAX_PLAYER_COUNT do
+			self:OnFocusChanged(TheFrontEnd:GetFocusWidget(hunter_id), hunter_id, true)
+		end
+	end
 end
 
 -- If show_immediately, then the brackets will show on the target_widget
 -- straight away, with no animation. Used when opening a screen
-function Screen:_UpdateSelectionBrackets(target_widget, show_immediately)
-	if not self.focus_brackets_enabled then return self end
+function Screen:_UpdateSelectionBrackets(target_widget, show_immediately, selection_brackets)
+	selection_brackets = selection_brackets or self:GetSelectionBracketsForWidget(target_widget)
+	if not self.focus_brackets
+		or not selection_brackets:NeedsUpdate(target_widget)
+	then
+		return self
+	end
 
-	if self.last_target_widget == target_widget then return self end
+	if selection_brackets:HasValidPlayer() then
+		selection_brackets:MoveToWidget(target_widget, show_immediately)
+	end
+end
 
+function FocusBrackets:MoveToWidget(target_widget, snap)
 	-- Get the brackets' starting position
-	local start_pos = self.selection_brackets:GetPositionAsVec2()
+	local start_pos = self:GetPositionAsVec2()
 	-- Get starting size
-	local start_w, start_h = self.selection_brackets:GetSize()
+	local start_w, start_h = self:GetSize()
 
 	-- Align them with the target
-	self.selection_brackets:LayoutBounds("center", "center", target_widget)
+	self:LayoutBounds("center", "center", target_widget)
 		:Offset(target_widget:GetFocusBracketsOffset())
 
 	-- Get the new position
-	local end_pos = self.selection_brackets:GetPositionAsVec2()
+	local end_pos = self:GetPositionAsVec2()
+
 	-- And the new size
-	local w, h = target_widget:GetScaledSize()
+	local w, h = target_widget:GetBracketSizeOverride()
+	if w == nil or h == nil then
+		w, h = target_widget:GetScaledSize()
+	end
+
 	local end_w, end_h = w + 60, h + 60
 
-	-- If we're starting the brackets right now, don't animate them into place
-	-- Just start them at the end position
-	if show_immediately then
+	-- If we're starting the brackets right now, don't animate them into place.
+	-- Just start them at the end position.
+	if snap then
 		start_pos = end_pos
 		start_w, start_h = end_w, end_h
 	end
@@ -565,17 +752,28 @@ function Screen:_UpdateSelectionBrackets(target_widget, show_immediately)
 	dir = mid_pos + dir*250
 
 	-- Move them back and animate them in
-	self.selection_brackets:SetPos(start_pos.x, start_pos.y)
+	self:SetPos(start_pos.x, start_pos.y)
 		:CurveTo(end_pos.x, end_pos.y, dir.x, dir.y, 0.35, easing.outElasticUI)
 		:Ease2dTo(function(w, h)
-			self.selection_brackets_w = w
-			self.selection_brackets_h = h
+			self.brackets_w = w
+			self.brackets_h = h
 		end, start_w, end_w, start_h, end_h, 0.1, easing.linear)
 
 	self.last_target_widget = target_widget
+	self.last_pos = target_widget:GetPositionAsVec2()
+	self:Show()
 	return self
 end
 
+function FocusBrackets:NeedsUpdate(target_widget)
+	return (target_widget ~= self.last_target_widget
+		or not self.last_pos
+		or self.last_pos.x ~= target_widget.x
+		or self.last_pos.y ~= target_widget.y)
+end
+
 ----------------------------------------------------------------------{{{
+
+Screen.FocusBrackets = FocusBrackets
 
 return Screen

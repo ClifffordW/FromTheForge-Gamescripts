@@ -439,6 +439,21 @@ function vec3.from_table(v, a)
 	return v
 end
 
+--- Assign a vec3 from values.
+--
+-- Simplify caching vectors instead of creating per-frame:
+--   pos:assign_values(inst.Transform:GetWorldPosition())
+-- @tparam vec3 a Vector to receive the values
+-- @tparam x,y,z the component values
+-- @treturn vec3
+function vec3.assign_values(v, x, y, z)
+	assert(x and y and z, "from_values: Wrong argument type for right hand operand.")
+	v.x = x
+	v.y = y
+	v.z = z
+	return v
+end
+
 vec3_mt.__index    = vec3
 vec3_mt.__tostring = vec3.to_string
 

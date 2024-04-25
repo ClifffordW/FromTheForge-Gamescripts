@@ -2,9 +2,12 @@
 return {
   __displayName="pergola",
   clickable=true,
-  gridsize={ { h=2, w=2,},},
-  group="town_decor",
+  gridsize={ { h=4, w=4,},},
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
   looping=true,
+  networked=1,
   parallax={
     { anim="front", dist=-1, shadow=true,},
     { anim="mid", shadow=true,},

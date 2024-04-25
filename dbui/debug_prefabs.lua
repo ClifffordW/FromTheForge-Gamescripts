@@ -15,6 +15,9 @@ local autogen_categories = {
 
 local no_category = "uncategorized"
 
+-- List the prefabs that exist in the game. Doesn't include all prefabs.
+--
+-- See also PrefabBrowser.
 local DebugPrefabs = Class(DebugNodes.DebugNode, function(self)
 	DebugNodes.DebugNode._ctor(self, "Debug Prefabs")
 	self.filter = nil

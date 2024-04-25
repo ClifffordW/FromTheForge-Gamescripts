@@ -5,7 +5,6 @@ local easing = require "util.easing"
 local playerutil = require "util.playerutil"
 local monsterutil = require "util.monsterutil"
 local soundutil = require "util.soundutil"
-local fmodtable = require "defs.sound.fmodtable"
 
 local KNOCKDOWN_SPEED = 10
 
@@ -27,6 +26,7 @@ local function OnSwipeHitBoxTriggered(inst, data)
 		end,
 		hit_fx = monsterutil.defaultAttackHitFX,
 		hit_fx_offset_x = 0.5,
+		hitflags = Attack.HitFlags.LOW_ATTACK,
 	})
 
 	if inst.sg.statemem.currentattack == "swipe4" and inst.sg.statemem.connected then
@@ -47,6 +47,7 @@ local function OnWindmillHitBoxTriggered(inst, data)
 		pushback = 1.25,
 		combat_attack_fn = "DoKnockdownAttack",
 		hit_fx = monsterutil.defaultAttackHitFX,
+		hitflags = Attack.HitFlags.LOW_ATTACK,
 	})
 
 	local velocity = inst.Physics:GetMotorVel()
@@ -905,7 +906,7 @@ SGCommon.States.AddSpawnBattlefieldStates(states,
 	timeline =
 	{
 		FrameEvent(42, function(inst)
-			printf("[%s] leave_spawner", inst)
+			printf("<%s> leave_spawner", inst)
 			inst:PushEvent("leave_spawner")
 		end),
 		FrameEvent(42, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, 6) end),

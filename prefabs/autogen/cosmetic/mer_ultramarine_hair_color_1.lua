@@ -2,16 +2,11 @@
 return {
   __displayName="mer_ultramarine_hair_color_1",
   cosmetic_data={
-    color={ 0.625, 0.78, 0.4,},
-    colorgroup="HAIR_COLOR",
+    color={ 0.64092665910721, 0.72972971200943, 0.36679536104202,},
     color_species="mer",
+    colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

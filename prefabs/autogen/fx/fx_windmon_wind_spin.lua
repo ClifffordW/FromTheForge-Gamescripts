@@ -5,5 +5,6 @@ return {
   bank="fx_windmon",
   bloom=100.0,
   build="fx_windmon",
+  group="creatures",
   multcolor="FFFFFF40",
 }

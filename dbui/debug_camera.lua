@@ -15,9 +15,10 @@ local DebugCamera = Class(DebugNodes.DebugNode, function(self)
 		:Option("zoom_scale", 0.2)
 		:Option("pan_scale", 0.2)
 		:Option("gamepad_id", 0 )
+		:Option("force_1p_camera", false)
 end)
 
-DebugCamera.PANEL_WIDTH = 500
+DebugCamera.PANEL_WIDTH = 550
 DebugCamera.PANEL_HEIGHT = 400
 
 function DebugCamera:Update()
@@ -50,7 +51,8 @@ function DebugCamera:Update()
 		self.saved.gamepad_id = 0
 	end
 
-	if TheInput:IsControlDown(Controls.Digital.RADIAL_ACTION, "gamepad", self.saved.gamepad_id) then
+	local input_device = TheInput:GetGamepad(self.saved.gamepad_id)
+	if TheInput:IsControlDown(Controls.Digital.RADIAL_ACTION, input_device) then
 		if not self.pan_toggle_down then
 			self:TogglePanMode()
 		end
@@ -72,14 +74,14 @@ function DebugCamera:Update()
 
 	if self.pan_mode then
 		self:PanCamera(
-			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_UP, "gamepad", self.saved.gamepad_id),
-			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_DOWN, "gamepad", self.saved.gamepad_id),
-			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_LEFT, "gamepad", self.saved.gamepad_id),
-			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_RIGHT, "gamepad", self.saved.gamepad_id)
+			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_UP, input_device),
+			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_DOWN, input_device),
+			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_LEFT, input_device),
+			TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_RIGHT, input_device)
 			)
 	else
-		local input_up = TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_UP, "gamepad", self.saved.gamepad_id)
-		local input_down = TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_DOWN, "gamepad", self.saved.gamepad_id)
+		local input_up = TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_UP, input_device)
+		local input_down = TheInput:GetAnalogControlValue(Controls.Analog.RADIAL_DOWN, input_device)
 		input_up, input_down = TheInput:ApplyDeadZone(input_up, input_down)
 
 		if input_up ~= 0 then
@@ -95,10 +97,10 @@ function DebugCamera:Update()
 
 	if self.camera_helper_mode then
 		self:PanCamera(
-			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_UP, "gamepad", self.saved.gamepad_id),
-			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_DOWN, "gamepad", self.saved.gamepad_id),
-			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_LEFT, "gamepad", self.saved.gamepad_id),
-			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_RIGHT, "gamepad", self.saved.gamepad_id)
+			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_UP, input_device),
+			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_DOWN, input_device),
+			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_LEFT, input_device),
+			TheInput:GetAnalogControlValue(Controls.Analog.MOVE_RIGHT, input_device)
 			)
 	end
 end
@@ -121,14 +123,14 @@ function DebugCamera:PanCamera( up, down, left, right )
 		offset.x = offset.x + right*right*self.saved.pan_scale
 	end
 
-	TheCamera:SetOffset(offset.x, offset.y, offset.z)
+	TheCamera:SetOffset(self, offset.x, offset.y, offset.z)
 end
 
 function DebugCamera:ToggleFreeCamera()
 	if self.free_camera then
 		self.free_camera = false
 		TheCamera:SetTarget(GetDebugPlayer())
-		TheCamera:SetOffset(0,0,0)
+		TheCamera:SetOffset(self, 0,0,0)
 		TheCamera:Snap()
 	else
 		self.free_camera = true
@@ -139,7 +141,7 @@ end
 
 function DebugCamera:Reset()
 	TheCamera:SetZoom(0)
-	TheCamera:SetOffset(0,0,0)
+	TheCamera:ClearOffsetFrom(self)
 	TheCamera:SetPitch(self.default_pitch)
 	TheCamera:SetFOV(self.default_fov)
 	TheCamera:SetTarget(GetDebugPlayer())
@@ -204,9 +206,20 @@ function DebugCamera:RenderPanel( ui, panel )
 	if changed then
 		self:ToggleFreeCamera()
 	end
-
 	if ui:IsItemHovered() then
 		ui:SetTooltip("Makes it so the camera is no longer following an entity.")
+	end
+
+	ui:SameLineWithSpace()
+	changed = self.saved:Toggle(ui, "Focus P1", "force_1p_camera")
+	ui:SetTooltipIfHovered({
+			"When checked, only focus on p1 and don't adjust camera for other players.",
+			"Applies until you close the game."})
+	local target_player = self.saved.force_1p_camera and 1 or nil
+	if changed or TheSaveSystem.cheats:GetValue("force_camera_focus_player") ~= target_player then
+		TheSaveSystem.cheats:SetValue("force_camera_focus_player", target_player)
+			:Save()
+		TheFocalPoint.components.focalpoint:ResetDesiredDistanceToDefault()
 	end
 
 	local gamepad_ids = {}

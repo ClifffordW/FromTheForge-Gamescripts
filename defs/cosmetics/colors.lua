@@ -89,10 +89,6 @@ function Cosmetic.AddColor(name, data)
 	if cosmetic_data.is_default_color then
         table.insert(filtertags, "default")
     end
-	
-	if #filtertags == 0 then
-		filtertags = nil
-	end
 
 	def.filtertags = Cosmetic.AddTagsToDict(def.filtertags, filtertags)
 
@@ -109,7 +105,6 @@ AddColorGroup("MOUTH_COLOR", HSB(350, 50, 100))
 AddColorGroup("ORNAMENT_COLOR", HSB(40, 60, 90))
 AddColorGroup("SHIRT_COLOR", HSB(30, 20, 80))
 AddColorGroup("UNDIES_COLOR", HSB(30, 20, 80))
-AddColorGroup("SMEAR_SKIN_COLOR", HSB(180, 40, 65))
 AddColorGroup("SMEAR_WEAPON_COLOR", HSB(180, 50, 100))
 AddColorGroup("EARRING", HSB(180, 40, 65))
 

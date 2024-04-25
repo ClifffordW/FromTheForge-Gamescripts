@@ -100,8 +100,8 @@ function Menu:SetTextSize(size)
 end
 
 function Menu:DoFocusHookups()
-    local fwd = self.horizontal and ( self.offset > 0 and MOVE_RIGHT or MOVE_LEFT) or (self.offset > 0 and MOVE_UP or MOVE_DOWN)
-    local back = self.horizontal and ( self.offset > 0 and MOVE_LEFT or MOVE_RIGHT) or (self.offset > 0 and MOVE_DOWN or MOVE_UP)
+    local fwd = self.horizontal and ( self.offset > 0 and FocusMove.s.right or FocusMove.s.left) or (self.offset > 0 and FocusMove.s.up or FocusMove.s.down)
+    local back = self.horizontal and ( self.offset > 0 and FocusMove.s.left or FocusMove.s.right) or (self.offset > 0 and FocusMove.s.down or FocusMove.s.up)
 
     for k,v in ipairs(self.items) do
         if k > 1 then

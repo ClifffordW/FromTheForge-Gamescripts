@@ -2,23 +2,22 @@
 return {
   __displayName="sound_cabbagerolls",
   anim_events={
-    cabbagerolls_bank={
-      behavior1={ done=true, events={ { frame=6, name="sfx-behavior1",},},},
+    cabbageroll4_bank={
       body_slam_hold={ done=true, events={ { frame=1, name="sfx-hold",},},},
       bodyslam={
         done=true,
         events={
           { frame=1, name="sfx-whoosh",},
-          { frame=15, name="sfx-vo",},
           { frame=21, name="sfx-groundslam",},
           { frame=19, name="sfx-groundslam_quiet",},
+          { frame=13, name="sfx-vo",},
+          { frame=15, name="sfx-vo",},
+          { frame=14, name="sfx-vo_pitched",},
         },
       },
       bodyslam_pre={ done=true,},
-      catapult={ done=true, events={ { frame=1, name="sfx-throw",},},},
-      catapult_hold={ done=true,},
-      catapult_pre={ done=true, events={ { frame=1, name="sfx-hold",},},},
-      combine3={
+      cabbageroll3_behavior1={ done=true, events={ { frame=6, name="sfx-behavior1",},},},
+      cabbageroll3_combine3={
         done=true,
         events={
           { frame=1, name="sfx-bodyfall",},
@@ -28,6 +27,20 @@ return {
           { frame=18, name="sfx-footstep",},
         },
       },
+      cabbageroll3_hit_back_hold={ done=true, events={ { frame=0, name="sfx-hit",},},},
+      cabbageroll3_hit_back_pst={ done=true,},
+      cabbageroll3_hit_hold={ events={ { frame=0, name="sfx-hit",},},},
+      cabbageroll3_hit_pst={ done=true, events={ { frame=1, name="sfx-vo_pitched",},},},
+      cabbageroll3_knockdown={ done=true, events={ { frame=1, name="sfx-knock",},},},
+      cabbageroll3_walk_loop={
+        done=true,
+        events={ { frame=4, name="sfx-footstep",}, { frame=12, name="sfx-footstep",},},
+      },
+      cabbageroll3_walk_pre={ done=true,},
+      cabbageroll3_walk_pst={ done=true, events={ { frame=5, name="sfx-footstep",},},},
+      catapult={ done=true, events={ { frame=1, name="sfx-throw",},},},
+      catapult_hold={ done=true,},
+      catapult_pre={ done=true, events={ { frame=1, name="sfx-hold",},},},
       flinch_hold={ done=true,},
       flinch_pst={
         done=true,
@@ -37,11 +50,6 @@ return {
           { frame=0, name="sfx-knock",},
         },
       },
-      hit_back_hold={ done=true, events={ { frame=0, name="sfx-hit",},},},
-      hit_back_pst={ done=true,},
-      hit_hold={ events={ { frame=0, name="sfx-hit",},},},
-      hit_pst={ done=true, events={ { frame=1, name="sfx-vo_pitched",},},},
-      knockdown={ done=true, events={ { frame=1, name="sfx-knock",},},},
       smash={
         done=true,
         events={
@@ -69,12 +77,6 @@ return {
           { frame=28, name="sfx-groundslam",},
         },
       },
-      walk_loop={
-        done=true,
-        events={ { frame=4, name="sfx-footstep",}, { frame=12, name="sfx-footstep",},},
-      },
-      walk_pre={ done=true,},
-      walk_pst={ done=true, events={ { frame=5, name="sfx-footstep",},},},
     },
   },
   prefab={ { prefab="cabbagerolls",},},

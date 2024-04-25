@@ -2,15 +2,11 @@
 return {
   __displayName="mer_yellow_eye_color_1",
   cosmetic_data={
-    color={ 0.13333333333333, 0.5, 1.0,},
+    color={ 0.16602316498756, 0.47104248404503, 1.0,},
     color_species="mer",
     colorgroup="EYE_COLOR",
     multi_species=true,
   },
   group="PLAYER_COLOR",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

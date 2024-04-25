@@ -3,7 +3,6 @@ local CharacterPreviewScreen = require "screens.character.characterpreviewscreen
 local CharacterScreen = require "screens.character.characterscreen"
 local Cosmetic = require "defs.cosmetics.cosmetics"
 local DebugNodes = require "dbui.debug_nodes"
-local Mastery = require "defs.mastery.mastery"
 local PrefabEditorBase = require "debug.inspectors.prefabeditorbase"
 local lume = require "util.lume"
 require "prefabs.prop_autogen" --Make sure our util functions are loaded
@@ -17,14 +16,14 @@ local CosmeticEditor = Class(PrefabEditorBase, function(self)
 	self.prefab_label = "Cosmetic"
 	self.test_enabled = false
 
+	TheSim:LoadPrefabs({ GroupPrefab("deps_player_cosmetics_dev"), })
+
 	self:LoadLastSelectedPrefab("cosmeticeditor")
 end)
 
 CosmeticEditor.PANEL_WIDTH = 670
 CosmeticEditor.PANEL_HEIGHT = 800
 
-local MASTERY_SLOTS = shallowcopy(Mastery.GetOrderedSlots())
-table.insert(MASTERY_SLOTS, 1, "NONE")
 local COSMETIC_SLOTS = Cosmetic.GetOrderedSlots()
 
 local COLORGROUPS = lume.keys(Cosmetic.ColorGroups)
@@ -122,19 +121,19 @@ function CosmeticEditor:RenderTitle(ui, params)
 			self:SetDirty()
 		end
 	
-		if ui:Button("Gen from batch") then
-			local batch = require "defs.cosmetics.batchtitles"
+		-- if ui:Button("Gen from batch") then
+		-- 	local batch = require "defs.cosmetics.batchtitles"
 	
-			for _, title in pairs(batch) do
-				local name = title.name
-				title.name = nil
-				title.group = title.slot
-				self.static.data[name] = title
-			end
+		-- 	for _, title in pairs(batch) do
+		-- 		local name = title.name
+		-- 		title.name = nil
+		-- 		title.group = title.slot
+		-- 		self.static.data[name] = title
+		-- 	end
 	
-			self:SetDirty()
-			self:Save()
-		end
+		-- 	self:SetDirty()
+		-- 	self:Save()
+		-- end
 	end
 
 end
@@ -161,7 +160,7 @@ function CosmeticEditor:RenderColor(ui, params)
 		end
 		
 
-		if params.cosmetic_data["colorgroup"] ~= "SMEAR_SKIN_COLOR" and params.cosmetic_data["colorgroup"] ~= "SMEAR_WEAPON_COLOR" then
+		if params.cosmetic_data["colorgroup"] ~= "SMEAR_WEAPON_COLOR" then
 			self:CosmeticDataDropDown(ui, params, "Species##species", "color_species", SPECIES)
 		else
 			if params.cosmetic_data["species"] ~= nil then
@@ -212,14 +211,14 @@ function CosmeticEditor:RenderBodyPart(ui, params)
 		end
 		self:CosmeticDataDropDown(ui, params, "Color Group##bodypart_colorgroup", "colorgroup", COLORGROUPS)
 	
-		if params.cosmetic_data["bodypart_group"] ~= "SMEAR" and params.cosmetic_data["bodypart_group"] ~= "SMEAR_WEAPON" then
-			self:CosmeticDataDropDown(ui, params, "Species##bodyspecies", "bodypart_species", SPECIES)
-		else
-			if params.cosmetic_data["bodypart_species"] ~= nil then
-				params.cosmetic_data["bodypart_species"] = nil
-				self:SetDirty()
-			end
-		end
+		--if params.cosmetic_data["bodypart_group"] ~= "SMEAR" and params.cosmetic_data["bodypart_group"] ~= "SMEAR_WEAPON" then
+		self:CosmeticDataDropDown(ui, params, "Species##bodyspecies", "bodypart_species", SPECIES)
+		-- else
+		-- 	if params.cosmetic_data["bodypart_species"] ~= nil then
+		-- 		params.cosmetic_data["bodypart_species"] = nil
+		-- 		self:SetDirty()
+		-- 	end
+		-- end
 	
 		local current_value = params.cosmetic_data["build"] or ""
 		local changed, newvalue = ui:InputText("Build##build", current_value)
@@ -381,10 +380,7 @@ function CosmeticEditor:AddEditableOptions(ui, params)
 		end
 	end
 
-	if ui:CollapsingHeader("General Data", ui.TreeNodeFlags.DefaultOpen) then
-		DropDown(ui, params, "Rarity##rarity", "rarity", Cosmetic.Rarities)
-		DropDown(ui, params, "Mastery##mastery", "mastery", MASTERY_SLOTS)
-	
+	if ui:CollapsingHeader("General Data", ui.TreeNodeFlags.DefaultOpen) then	
 		if params["locked"] == nil then
 			params["locked"] = true
 			self:SetDirty()
@@ -395,54 +391,9 @@ function CosmeticEditor:AddEditableOptions(ui, params)
 		changed, locked = ui:Checkbox("Locked", locked)
 		if changed then
 			params["locked"] = locked
-			if locked then
-				params["purchased"] = false
-			end
-	
+
 			self:SetDirty()
-		end
-	
-		if params["purchased"] == nil then
-			params["purchased"] = false
-			self:SetDirty()
-		end
-	
-		if params["hidden"] == nil then
-			params["hidden"] = false
-			self:SetDirty()
-		end
-	
-	
-		local purchased = params["purchased"]
-		changed = false
-		changed, purchased = ui:Checkbox("Purchased", purchased)
-		if changed then
-			params["purchased"] = purchased
-			if purchased then
-				params["locked"] = false
-			end
-	
-			self:SetDirty()
-		end
-	
-		if ui:TreeNode("Deprecated/Hidden", ui.TreeNodeFlags.DefaultClosed) then
-			local hidden = params["hidden"]
-			changed = false
-			changed, hidden = ui:Checkbox("Hidden", hidden)
-			if changed then
-				params["hidden"] = hidden
-				self:SetDirty()
-			end
-		
-			local deprecated = params["deprecated"]
-			changed = false
-			changed, deprecated = ui:Checkbox("Deprecated", deprecated)
-			if changed then
-				params["deprecated"] = deprecated
-				self:SetDirty()
-			end
-			self:AddTreeNodeEnder(ui)
-		end
+		end	
 	end
 
 	-- Keeping this here in case we need to iterate through all the data
@@ -503,26 +454,13 @@ function CosmeticEditor:RenderGenerateFromUnlockTracker(ui)
 				for name, data in pairs(self.static.data) do
 					if data.group == category and not data.deprecated then
 						local is_locked = not ThePlayer.components.unlocktracker:IsCosmeticUnlocked(name, category)
-						local is_purchased = ThePlayer.components.unlocktracker:IsCosmeticPurchased(name, category)
 
 						self.static.data[name].locked = is_locked
-						self.static.data[name].purchased = is_purchased
 						
-						if ThePlayer.sg.mem.hidden_cosmetics~= nil and ThePlayer.sg.mem.hidden_cosmetics[name] ~= nil then
-							self.static.data[name].hidden = ThePlayer.sg.mem.hidden_cosmetics[name]
-						end
-
-						if ThePlayer.sg.mem.rarity_changes ~= nil and ThePlayer.sg.mem.rarity_changes[category] ~= nil and 
-						   ThePlayer.sg.mem.rarity_changes[category][name] ~= nil then
-							self.static.data[name].rarity = ThePlayer.sg.mem.rarity_changes[category][name]
-						end
-
 						self:SetDirty()
 					end
 				end
 			end
-
-			ThePlayer.sg.mem.hidden_cosmetics = nil
 		end
 		self:PopButtonColor(ui)
 	end

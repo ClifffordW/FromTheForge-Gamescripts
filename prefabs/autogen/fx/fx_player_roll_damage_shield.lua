@@ -7,7 +7,7 @@ return {
   bloom=100.0,
   build="fx_player_rolling_damage",
   finaloffset=1,
-  group="fx_polearm_basic",
+  group="player_skills",
   hue=-180.0,
   multcolor="80FFFFFF",
   scalex=1.1000000238419,

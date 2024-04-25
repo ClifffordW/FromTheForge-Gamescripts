@@ -219,7 +219,7 @@ local states =
 			end),
 			FrameEvent(23, function(inst)
 				-- caninterrupt needed if this is meant to cause a knockdown because nointerrupt entity tag exists
-				-- inst.sg:AddStateTag("caninterrupt") 	-- jambell: I think the OnKnockdown and OnKnockback states in sg_common could be modified to let this tag override nointerrupt
+				-- inst.sg:AddStateTag("caninterrupt") 	-- I think the OnKnockdown and OnKnockback states in sg_common could be modified to let this tag override nointerrupt
 				inst.sg:AddStateTag("vulnerable")   	-- but it sounds a bit like a hairy mess of tags... not that this isn't! to be more explicit I'm going to just remove nointerrupt
 				inst.sg:RemoveStateTag("nointerrupt") 	-- as well for now, but I think caninterrupt is used in some other places I don't want to break. To revisit after discussion
 			end),
@@ -644,7 +644,19 @@ SGCommon.States.AddAttackHold(states, "elite_butt_slam",
 
 SGCommon.States.AddAttackPre(states, "buff",
 {
-	tags = { "attack", "busy", "castingseed" }
+	tags = { "attack", "busy", "castingseed" },
+	onexit_fn = function(inst)
+		-- Add a delayed check for other gourdos casting healseed again to exit out incase two started on the same frame due to being hitstunned
+		local x,z = inst.Transform:GetWorldXZ()
+		local possible_targets = FindTargetTagGroupEntitiesInRange(x, z, 60, inst.components.combat:GetFriendlyTargetTags())
+		for _, ent in pairs(possible_targets) do
+			if (ent ~= inst and ent.sg:HasStateTag("castingseed")) then
+				inst.components.attacktracker:CompleteActiveAttack()
+				inst.sg:GoToState("idle")
+				return
+			end
+		end
+	end
 })
 SGCommon.States.AddAttackHold(states, "buff",
 {

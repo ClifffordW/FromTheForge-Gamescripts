@@ -37,6 +37,10 @@ local PowerIconWidget = Class(Widget, function(self)
 		:SetSize(self.base_width, self.base_width)
 
 	self.border = self.icon_container:AddChild(Image("images/ui_ftf_powers/common_damage.tex"))
+	self.border_highlight = self.icon_container:AddChild(Image("images/ui_ftf_powers/common_damage.tex"))
+		:SetScale(1.1, 1.1)
+		:SendToBack()
+		:Hide()
 
 	self.power_pips_widget = self:AddChild(PowerPipsWidget())
 		:SetHiddenBoundingBox(true)
@@ -63,8 +67,8 @@ function PowerIconWidget:SetPower(power)
 	self.def = power:GetDef()
 	self.power_pips_widget:SetPower(power)
 
-	local current_rarity_idx = lume.find(Power.RarityIdx, self.power:GetRarity())
 	self.border:SetTexture( self:BuildTextureName(self.power) )
+	self.border_highlight:SetTexture( self:BuildTextureName(self.power) )
 	self.icon_bg_fill:SetMultColor(CATEGORY_TO_BG_COLOUR[self.def.power_category])
 	self.icon:SetTexture(self.def.icon)
 	return self
@@ -72,8 +76,16 @@ end
 
 function PowerIconWidget:UpdatePower()
 	self.power_pips_widget:UpdatePips()
-	local current_rarity_idx = lume.find(Power.RarityIdx, self.power:GetRarity())
 	self.border:SetTexture( self:BuildTextureName(self.power) )
+end
+
+function PowerIconWidget:AssignToPlayer(player)
+	if player ~= nil and player:IsValid() and player.uicolor then
+		local color = player.uicolor
+		self.border_highlight:SetMultColor(0, 0, 0, 1)
+		self.border_highlight:SetAddColor(color[1], color[2], color[3], 1)
+		self.border_highlight:Show()
+	end
 end
 
 return PowerIconWidget

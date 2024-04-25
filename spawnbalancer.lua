@@ -94,6 +94,15 @@ end
 function SpawnBalancer:StartSpawningFromHidingPlaces()
 end
 
+function SpawnBalancer:ClaimSoleOccupancy()
+end
+
+function SpawnBalancer.EnforceSoleOccupancy()
+end
+
+function SpawnBalancer:DoEnforceSoleOccupancy()
+end
+
 function SpawnBalancer:SpawnStationaryEnemies(wave, data)
 	self:_RequireFirstWave("Stationary")
 	self:_TrackWave("Stationary", wave, Scenario.id.InitialSetup)
@@ -264,6 +273,10 @@ function SpawnBalancer:GetWaveStats(wave)
 	end
 
 	return total_health, total_enemies, wave_enemy_counts, wave_enemy_health_totals
+end
+
+function SpawnBalancer:CleanUpRemainingEnemies()
+	-- intentionally empty function
 end
 
 

@@ -208,7 +208,7 @@ function HitCounter:UpdateText()
 	local hits_text = string.format("%d", self.hitstreak)
 	local hits_fontsize_new = self.fontsize_number + math.min(48, math.floor(self.hitstreak / 5 * 6))
 
-	local dmg = math.floor(self.damagetotal) -- jambell: sometimes this is crashing from no integer representation... try rounding to fix crash?
+	local dmg = math.floor(self.damagetotal) -- NOTE: sometimes this is crashing from no integer representation... try rounding to fix crash?
 											 -- This may show incorrect information, be careful.
 	local damage_text = string.format("%d", dmg)
 	local damage_fontsize_new = self.fontsize_damagecount + math.min(self.fontsize_dmg_max_addition, math.floor(self.damagetotal / 5 * 6))

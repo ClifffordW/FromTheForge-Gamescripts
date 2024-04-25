@@ -136,7 +136,7 @@ function Cooker:PlayCookingSong(player, sequence)
 	end
 
 	self.player = player
-	self.player.components.playercontroller:SetInputStealer(self)
+	self.player.components.playercontroller:AddInputStealer(self)
 	self.inst:ListenForEvent("minigame_complete", self._onminigame_complete, player)
 
 	for i,v in ipairs(AllPlayers) do
@@ -173,7 +173,7 @@ function Cooker:StopCookingSong(percentComplete)
 			end
 		end
 
-		self.player.components.playercontroller:SetInputStealer(nil)
+		self.player.components.playercontroller:RemoveInputStealer(self)
 		self.player = nil
 	end
 	if self.stop_task then
@@ -186,7 +186,7 @@ function Cooker:StopCookingSong(percentComplete)
 end
 
 
-function Cooker:OnControl(controls, down)
+function Cooker:OnControl(controls, down, ...)
 	if not down then
 		return
 	end

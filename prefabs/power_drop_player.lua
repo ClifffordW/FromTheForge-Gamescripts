@@ -27,7 +27,7 @@ local function DEBUG_SpawnDrops(inst, num)
 	local drops = {}
 
 	for i = 1, num do
-		drops[i] = inst.drop_prefabs[i]
+		drops[i] = {prefab = inst.drop_prefabs[i], count = 1}
 	end
 
 	inst.components.powerdrop.appear_delay = TUNING.POWERS.DROP_SPAWN_INITIAL_DELAY_FRAMES
@@ -48,7 +48,7 @@ local function _BuildDropsTable(inst)
 	local players = TheNet:GetPlayersOnRoomChange()
 	local drops = {}
 	for i, player in ipairs(players) do
-		drops[player] = inst.drop_prefabs[i]
+		drops[player] = {prefab = inst.drop_prefabs[i], count = 1}
 	end
 	return drops
 end

@@ -6,6 +6,7 @@ local camerautil = require "util.camerautil"
 local easing = require "util.easing"
 local lume = require"util.lume"
 local Consumable = require "defs.consumable"
+local Constructable = require "defs.constructable"
 local Equipment = require("defs.equipment")
 local fmodtable = require "defs.sound.fmodtable"
 
@@ -49,6 +50,7 @@ function InventoryScreen:SetOwningPlayer(owningplayer)
 	self.player = owningplayer -- need this for existing logic
 	InventoryScreen._base.SetOwningPlayer(self, owningplayer)
 	self:Refresh()
+	return self
 end
 
 InventoryScreen.CONTROL_MAP =
@@ -113,8 +115,6 @@ function InventoryScreen:OnBecomeActive()
 
 	--sound snapshot
 	TheAudio:StartFMODSnapshot(fmodtable.Snapshot.MenuOverlay)
-
-	-- JAMBELL: capture current stats
 
 	if not self.animatedIn then
 		-- Animate in the first time the screen shows up
@@ -296,23 +296,7 @@ function InventoryScreen:OnItemClicked(itemData, idx)
 
 	if itemData.slot == Consumable.Slots.MATERIALS then
 
-	elseif itemData.slot == Consumable.Slots.PLACEABLE_PROP then
-		local function on_cancel(placer, placed_ent)
-			-- open screen again
-			TheFrontEnd:PushScreen(InventoryScreen(self.player))
-		end
-
-		local function on_success(placer, placed_ent)
-			-- open screen again
-			-- remove from inventory
-			local def = Consumable.FindItem(itemData.id)
-			self.player.components.inventoryhoard:RemoveStackable(def, 1)
-			TheFrontEnd:PushScreen(InventoryScreen(self.player))
-		end
-
-		self:OnCloseButton()
-		-- close inventory screen
-		self.player.components.playercontroller:StartPlacer(itemData.id.."_placer", nil, on_success, on_cancel)
+	elseif Constructable.HasSlot(itemData.slot) then
 	else
 		-- only try to equip an item if it's equipment.
 		if itemData == equippedItem and itemData == previewItem then
@@ -363,7 +347,7 @@ function InventoryScreen:OnItemTooltip(itemData, idx)
 	local equippedItem = self.inventoryPanel:_GetEquippedItem(slot)
 	local previewItem = self.equipmentPanel:GetSelectedItem(slot)
 	
-	if itemData.slot ~= Consumable.Slots.MATERIALS and itemData.slot ~= Consumable.Slots.PLACEABLE_PROP then
+	if itemData.slot ~= Consumable.Slots.MATERIALS and not Constructable.HasSlot(itemData.slot) then
 		if itemData == equippedItem and itemData == previewItem then
 			if not Equipment.SlotDescriptor[slot].tags.required then -- not a required item
 				return STRINGS.UI.INVENTORYSCREEN.UNEQUIP_TT

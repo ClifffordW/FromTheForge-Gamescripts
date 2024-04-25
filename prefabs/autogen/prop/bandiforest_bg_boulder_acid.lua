@@ -16,6 +16,5 @@ return {
     },
   },
   proptype=1,
-  randomize=true,
   variations=4,
 }

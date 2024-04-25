@@ -15,6 +15,8 @@ local prefabs =
 {
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
+	"fx_acid_projectile",
+	GroupPrefab("fx_acid"),
 	"battoad_spit",
 	"battoad_aoe",
 
@@ -23,6 +25,9 @@ local prefabs =
 	GroupPrefab("drops_battoad"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "battoad")
+prefabutil.SetupDeathFxPrefabs(prefabs, "battoad_air")
+prefabutil.SetupDeathFxPrefabs(prefabs, "battoad_elite")
+prefabutil.SetupDeathFxPrefabs(prefabs, "battoad_elite_air")
 
 local LocoState = MakeEnum{ "GROUND", "AIR" }
 
@@ -50,7 +55,7 @@ local function IsAirborne(inst)
 	return not inst.components.battoadsync.on_ground
 end
 
-local FLIGHT_THRESHOLD = 0 --0.60 jambell: making this state impossible to simplify this mob for now.
+local FLIGHT_THRESHOLD = 0 --0.60 making this state impossible to simplify this mob for now.
 
 local function OnHealthChanged(inst, data)
 	if data.old/data.max > FLIGHT_THRESHOLD and data.new/data.max <= FLIGHT_THRESHOLD then
@@ -82,8 +87,8 @@ local attacks =
 	slash =
 	{
 		damage_mod = 1,
-		startup_frames = 20,
-		cooldown = 4.5,
+		startup_frames = 15,
+		cooldown = 4.2,
 		initialCooldown = 0,
 		pre_anim = "slash_pre",
 		hold_anim = "slash_hold",
@@ -95,7 +100,7 @@ local attacks =
 	slash2 =
 	{
 		damage_mod = 1.2,
-		startup_frames = 15,
+		startup_frames = 8,
 		cooldown = 3.33,
 		initialCooldown = 0,
 		pre_anim = "slash2_pre",
@@ -111,9 +116,9 @@ local attacks =
 	{
 		priority = 8,
 		damage_mod = 0.5,
-		startup_frames = 10,
-		cooldown = 3.33,
-		initialCooldown = 3,
+		startup_frames = 4,
+		cooldown = 2,
+		initialCooldown = 1,
 		pre_anim = "tongue_pre",
 		hold_anim = "tongue_hold",
 		start_conditions_fn = function(inst, data, trange)
@@ -137,7 +142,7 @@ local attacks =
 
 	swallow =
 	{
-		startup_frames = 75,
+		startup_frames = 70,
 		cooldown = 0, -- limited by how fast you can steal konjur with the tongue attack
 		pre_anim = "swallow_pre",
 		hold_anim = "swallow_loop",
@@ -147,6 +152,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -167,6 +173,8 @@ local elite_attacks =
 	-- 	end
 	-- },
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local MONSTER_SIZE = 1.2
 
@@ -225,6 +233,7 @@ local function elite_fn(prefabname)
 
 	inst.components.attacktracker:AddAttacks(elite_attacks)
 	inst.apply_on_lick = "confused"
+	inst.stacks_on_lick = 4
 
 	monsterutil.ExtendToEliteMonster(inst)
 
@@ -253,7 +262,7 @@ local function spit_fn(prefabname)
 		name = prefabname,
 		hits_targets = true,
 		stategraph = "sg_battoad_spit",
-		fx_prefab = "fx_battoad_projectile"
+		fx_prefab = "fx_acid_projectile"
 	})
 
 	inst.components.complexprojectile:SetHorizontalSpeed(30)

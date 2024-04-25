@@ -48,10 +48,13 @@ function DropShadow:GetDropShadow()
 end
 
 function DropShadow:OnUpdate(dt)
+	-- TODO: may need to remove drop_shadow entity, or hide it if the parent (component owner) goes invisible/invalid/etc.
     -- ensure shadow is grounded no matter where the parents position is
-    local parent_x, parent_y, parent_z = self.inst.Transform:GetWorldPosition()
-    self.drop_shadow.Transform:SetWorldPosition(parent_x, 0, parent_z)
-    --self.drop_shadow.Transform:SetPosition(0, -parent_y, 0) -- sets local position when shadow is parented
+	if self.inst:IsValid() and self.drop_shadow:IsValid() then
+		local parent_x, parent_y, parent_z = self.inst.Transform:GetWorldPosition()
+		self.drop_shadow.Transform:SetWorldPosition(parent_x, 0, parent_z)
+		--self.drop_shadow.Transform:SetPosition(0, -parent_y, 0) -- sets local position when shadow is parented
+	end
 end
 
 return DropShadow

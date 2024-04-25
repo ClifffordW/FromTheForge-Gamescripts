@@ -1,19 +1,14 @@
 local ChaseAndAttack = require("behaviors/chaseandattack")
 local KnockdownRecovery = require("behaviors/knockdownrecovery")
-local StandStill = require "behaviors.standstill"
 local Wander = require("behaviors/wander")
-
-local function IsDormant(inst)
-	return inst.sg:HasStateTag("dormant")
-end
+local TargetLastAttacker = require ("behaviors.targetlastattacker")
 
 local BrainThatcher = Class(Brain, function(self, inst)
 	Brain._ctor(self, inst, PriorityNode({
 		KnockdownRecovery(inst),
+		TargetLastAttacker(inst),
 		ChaseAndAttack(inst),
-		IfNode(inst, IsDormant, "IsDormant",
-			StandStill(inst)),
-		Wander(inst, Vector3(0, 0, 0), 12),
+		Wander(inst),
 	}, .1))
 end)
 

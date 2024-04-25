@@ -5,14 +5,14 @@ local MainScreen = require "screens.mainscreen"
 local ProfanityFilter = require "util.profanityfilter"
 local SceneGen = require "components.scenegen"
 local WaitingForPlayersScreen = require "screens.waitingforplayersscreen"
+local WaitingForSpawnScreen = require "screens.waitingforspawnscreen"
 local kassert = require "util.kassert"
-require "builtinusercommands"
+local Placer = require "components.placer"
 require "constants"
-require "emotes"
 require "knownerrors"
 require "perfutil"
-require "usercommands"
 
+local Neighborhoods = Enum { "town", "dungeon" }
 
 if Platform.IsRail() then
 	TheSim:SetMemInfoTrackingInterval(5*60)
@@ -37,7 +37,8 @@ function ForceAuthenticationDialog()
 		if active_screen ~= nil and active_screen._widgetname == "MainScreen" then
 			active_screen:OnLoginButton(false)
 		elseif MainScreen then
-			local main_screen = MainScreen(Profile)
+			local skip_start = not RUN_GLOBAL_INIT
+			local main_screen = MainScreen(Profile, skip_start)
 			TheFrontEnd:ShowScreen( main_screen )
 			main_screen:OnLoginButton(false)
 		end
@@ -235,7 +236,7 @@ end
 --Only valid during PopulateWorld
 populating_world_ents = nil
 
-local function PopulateWorld(savedata, profile)
+local function PopulateWorld(savedata, profile, savetype)
 	assert(savedata ~= nil)
 	TheSystemService:SetStalling(true)
 
@@ -249,6 +250,10 @@ local function PopulateWorld(savedata, profile)
 	assert(TheWorld == world)
 
 	world:SetPersistData(savedata.map.data)
+
+	if savetype == Neighborhoods.s.town then
+		InitializeWorldViaSceneList(world)
+	end
 
 	local dungeon_progress = world:GetDungeonProgress()
 	local suppress_environment = false
@@ -277,15 +282,29 @@ local function PopulateWorld(savedata, profile)
 		--Instantiate static, authored props
 		world.components.propmanager:SpawnStaticProps(layout)
 
-		if TheSceneGen
-			and not Profile:GetValue("suppress_decor_props", false)
-			and world:ProcGenEnabled()
-		then
-			local authored_prop_placements = world.components.propmanager
-				and CollectPropPlacements(world.components.propmanager.filenames)
-				or {}
-			TheSceneGen.components.scenegen:BuildScene(world, dungeon_progress, authored_prop_placements)
-			suppress_environment = true
+		-- If this is not the first load of a town, remove all decor from the town as placeable decor is persisted in
+		-- the town save.
+		if savedata.map.data and savetype == Neighborhoods.s.town then
+			for i = 1, #populating_world_ents do
+				local newent = populating_world_ents[i]
+				if newent.inst:HasTag(Placer.DECOR_TAG) then
+					newent.inst:Remove(true)
+				end
+			end
+		end
+
+		if TheSceneGen then
+			if not Profile:GetValue("suppress_decor_props", false)
+				and world:ProcGenEnabled()
+			then
+				local authored_prop_placements = world.components.propmanager
+					and CollectPropPlacements(world.components.propmanager.filenames)
+					or {}
+				TheSceneGen.components.scenegen:BuildScene(world, dungeon_progress, authored_prop_placements)
+				suppress_environment = true
+			else
+				TheSceneGen.components.scenegen:InstallZoneGrid(world)
+			end
 		end
 	end
 
@@ -309,7 +328,12 @@ local function PopulateWorld(savedata, profile)
 	if savedata.ents ~= nil then
 		for prefab, ents in pairs(savedata.ents) do
 			for i = 1, #ents do
-				SpawnSaveRecord(prefab, ents[i])
+				local inst = SpawnSaveRecord(prefab, ents[i])
+
+				-- Mark all entities from the town save data as decor.
+				if inst and savetype == Neighborhoods.s.town then
+					world.components.decormanager:OnDecorSpawned(inst)
+				end
 			end
 		end
 	end
@@ -322,7 +346,6 @@ local function PopulateWorld(savedata, profile)
 		end
 	end
 	world:PostLoadWorld(savedata.map.data)
-	TheDungeon:PostLoadWorld()
 
 	populating_world_ents = nil
 
@@ -330,49 +353,24 @@ local function PopulateWorld(savedata, profile)
 	TheSystemService:SetStalling(false)
 end
 
-function DeactivateWorld()
-	-- TODO: networking2022: this is no longer called in typical flows
-	if TheWorld ~= nil and not TheWorld.isdeactivated then
-		TheWorld.isdeactivated = true
-		TheWorld:PushEvent("deactivateworld")
-		TheMixer:PopMix("normal")
-		SetPause(true)
-	end
-end
-
-local function ActivateWorld()
-	if TheWorld ~= nil and not TheWorld.isdeactivated then
-		SetPause(false)
-		TheMixer:SetLevel("master", 1)
-		TheMixer:PushMix("normal")
-	end
-end
-
 local function OnPlayerActivated(world, inst)
 	if not world.isdeactivated then
 		start_game_time = GetTime()
-		TheCamera:Snap()
-
-		-- Don't fade in if the player is playing a cutscene.
-		if not (inst.components.cineactor and inst.components.cineactor:IsInCine()) then
-			TheFrontEnd:Fade(FADE_IN, 0.5, ActivateWorld)
-		end
 	end
 end
 
 local function OnPlayerDeactivated(world, player)
-	-- TODO: networking2022 - doesn't appear to get executed in current workflow
-	-- if not world.isdeactivated then
-	--     TheFrontEnd:ClearScreens()
-	--     TheFrontEnd:SetFadeLevel(1)
-	--     TheMixer:PopMix("normal")
-	--     SetPause(true)
-	-- end
 end
 
 local OnAllPlayersReady = function(savedata, profile)
 	--OK, we have our savedata and a profile. Instantiate everything and start the game!
-	TheLog.ch.Boot:printf("OnAllPlayersReady called. IsHost[%s] GetNrPlayersOnRoomChange[%s]", TheNet:IsHost(), TheNet:GetNrPlayersOnRoomChange())
+	if not TheNet:IsInGame() then
+		TheLog.ch.Boot:printf("Skipping OnAllPlayersReady: No longer in an active network game");
+		return
+	end
+
+	TheLog.ch.Boot:printf("OnAllPlayersReady called. IsHost[%s] GetNrPlayersOnRoomChange[%s]", TheNet:IsHost(),
+		TheNet:GetNrPlayersOnRoomChange())
 	TheFrontEnd:ClearScreens()
 
 	TheMixer:SetLevel("master", 0)
@@ -388,6 +386,7 @@ local OnAllPlayersReady = function(savedata, profile)
 		-- This will start the encounter coroutine on the net host.
 		assert(TheWorld)
 		TheDungeon:StartRoom()
+		TheFrontEnd:PushScreen(WaitingForSpawnScreen())
 
 		SetPause(true, "InitGame")
 
@@ -399,13 +398,14 @@ local OnAllPlayersReady = function(savedata, profile)
 
 	inGamePlay = true
 
-	TheNet:StartingRoom()	-- Signal the networking systems that the room is starting
+	TheNet:StartingRoom() -- Signal the networking systems that the room is starting
 end
 
-local function BeginRoom(savedata, profile, was_traveling)
+local function BeginRoom(savedata, profile, savetype)
 	print("BeginRoom called")
 	LoadAssets("BACKEND", savedata)
 
+	local should_post_load_dungeon = false
 	if not TheDungeon then
 		-- Simpler to let dungeon be a prefab which means putting it after LoadAssets.
 		TheDungeon = SpawnPrefab("dungeon")
@@ -413,14 +413,26 @@ local function BeginRoom(savedata, profile, was_traveling)
 		-- populate it.
 
 		TheDungeon:SetPersistData({})
+
+		should_post_load_dungeon = true
 	end
 
-	if was_traveling then
+	if savetype == Neighborhoods.s.dungeon then
 		TheDungeon:GetDungeonMap():OnCompletedTravel()
 	end
 
+	if TheDungeon.HUD then
+		TheFrontEnd:PopScreen(TheDungeon.HUD)
+		TheDungeon.HUD = nil
+	end
+
 	-- Each room is a world.
-	PopulateWorld(savedata, profile)
+	PopulateWorld(savedata, profile, savetype)
+
+	if should_post_load_dungeon then
+		-- Only call this if TheDungeon was newly created.
+		TheDungeon:PostLoadWorld()
+	end
 
 	print("Confirming that loading is complete...")
 	TheNet:ConfirmRoomLoadReady()	-- Tell the host we're ready to go.
@@ -436,53 +448,59 @@ local function BeginRoom(savedata, profile, was_traveling)
 	end
 end
 
-
-
-
 ------------------------THESE FUNCTIONS HANDLE STARTUP FLOW
 
 -- We call this if we don't have savedata for the world we're loading.
-local function DoGenerateWorld(worldprefab, scenegenprefab, was_traveling)
-	local savedata =
-	{
-		map =
-		{
+local function DoGenerateWorld(worldprefab, scenegenprefab, savetype)
+	local savedata = {
+		map = {
 			prefab = worldprefab,
 			scenegenprefab = scenegenprefab,
 		},
 	}
-
-	BeginRoom(savedata, Profile, was_traveling)
+	BeginRoom(savedata, Profile, savetype)
 end
 
-local Neighborhoods = Enum{ "town", "dungeon" }
 local function LoadRoomFromSave(savetype, worldprefab, scenegenprefab, roomid)
 	dbassert(Neighborhoods:Contains(savetype))
 	dbassert(worldprefab)
 	dbassert(roomid)
 	local was_traveling = savetype == Neighborhoods.s.dungeon
-	TheSaveSystem[savetype]:LoadRoom(roomid, function(savedata)
+
+	local save = TheSaveSystem[savetype]
+
+	if savetype == Neighborhoods.s.town then
+		save = TheSaveSystem:GetActiveTownSave()
+	end
+
+	save:LoadRoom(roomid, function(savedata)
 		if savedata ~= nil then
 			local prefab = savedata.map ~= nil and savedata.map.prefab or nil
 			if prefab == worldprefab then
-				BeginRoom(savedata, Profile, was_traveling)
+				BeginRoom(savedata, Profile, savetype)
 				return
-
 			else
-				-- SAVE-MIGRATION: If we want to migrate a player town's, here's the place to do it.
+				-- SAVE-MIGRATION: We want to migrate to a new town prefab! Here's where we do it!
 				-- However, it doesn't make much sense for a dungeon room to mismatch.
 				local msg = ("WARNING: Saved %s room [%d:%s] prefab mismatch: %s. Can't load savedata."):format(savetype, roomid, tostring(prefab), worldprefab)
 				TheLog.ch.WorldGen:print(msg)
 				dbassert(savetype == Neighborhoods.s.town and worldprefab == TOWN_LEVEL, msg)
+
+				-- Load the new town prefab with the existing saved placeables.
+				savedata.map.prefab = worldprefab
+				savedata.map.data = nil
+				BeginRoom(savedata, Profile, savetype)
 			end
+		else
+			TheLog.ch.WorldGen:printf("Generating new %s room [%d:%s].", savetype, roomid, worldprefab)
+			DoGenerateWorld(worldprefab, scenegenprefab, savetype)
 		end
-		TheLog.ch.WorldGen:printf("Generating new %s room [%d:%s].", savetype, roomid, worldprefab)
-		DoGenerateWorld(worldprefab, scenegenprefab, was_traveling)
 	end)
 end
 local function DoLoadTownRoom(worldprefab, roomid)
 	return LoadRoomFromSave(Neighborhoods.s.town, worldprefab, nil, roomid)
 end
+
 local function DoLoadDungeonRoom(worldprefab, scenegenprefab, roomid)
 	return LoadRoomFromSave(Neighborhoods.s.dungeon, worldprefab, scenegenprefab, roomid)
 end
@@ -490,12 +508,17 @@ end
 ----------------LOAD THE PROFILE AND THE SAVE INDEX, AND START THE FRONTEND
 
 function LoadWorld(settings)
+	if DEV_MODE and settings.is_debug_room then
+		-- Dev worlds won't have their placements in the list, so load
+		-- everything to get their contents.
+		d_allprefabs()
+	end
 	if settings.reset_action == RESET_ACTION.LOAD_TOWN_ROOM then
 		DoLoadTownRoom(settings.world_prefab, settings.room_id)
 	elseif settings.reset_action == RESET_ACTION.LOAD_DUNGEON_ROOM then
 		DoLoadDungeonRoom(settings.world_prefab, settings.scenegen_prefab, settings.room_id)
 	elseif settings.reset_action == RESET_ACTION.DEV_LOAD_ROOM then
-		DoGenerateWorld(settings.world_prefab, settings.scenegen_prefab, false)
+		DoGenerateWorld(settings.world_prefab, settings.scenegen_prefab, nil)
 	else
 		error("Unknown reset action ".. tostring(settings.reset_action))
 	end
@@ -512,7 +535,8 @@ local function DoResetAction()
 	then
 		LoadAssets("FRONTEND")
 		if MainScreen then
-			TheFrontEnd:ShowScreen(MainScreen(Profile))
+			local skip_start = not RUN_GLOBAL_INIT
+			TheFrontEnd:ShowScreen(MainScreen(Profile, skip_start))
 		end
 		TheNet:EndGame()
 	elseif settings.reset_action == RESET_ACTION.JOIN_GAME and not TheNet:IsInGame() then
@@ -526,7 +550,8 @@ local function DoResetAction()
 		else
 			print("No reconnection data! Moving to main menu instead.")
 			if MainScreen then
-				TheFrontEnd:ShowScreen(MainScreen(Profile))
+				local skip_start = not RUN_GLOBAL_INIT
+				TheFrontEnd:ShowScreen(MainScreen(Profile, skip_start))
 			end
 		end
 	else
@@ -561,11 +586,4 @@ TheNetUtils.ProfanityFilter:AddDictionary("default", require("wordfilter"))
 TheLog.ch.SaveLoad:print("[Loading profile and save index]")
 Profile:Load(OnFilesLoaded) -- this causes a chain of continuations in sequence that eventually result in DoResetAction being called
 
-require "platformpostload" --Note(Peter): The location of this require is currently only dependent on being after the built in usercommands being loaded
-
---Online servers will call StartDedicatedServer after authentication
--- NW: networking2022: Removed dedicated server stuff
---if TheNet:IsDedicated() and not TheNet:GetIsServer() then
---	StartDedicatedServer()
---end
-
+require "platformpostload"

@@ -47,6 +47,7 @@ function DebugSpawn(prefab, options)
 						inst.Transform:SetPosition(x, 0, z)
 					end
 				end
+				inst:AddTag("created_by_debugspawn")
 				inst:PushEvent("created_by_debugspawn")
 				return inst
 			end
@@ -790,6 +791,7 @@ local function ParseImageInformation( attr )
 	local lowerattr = string.lower(attr)
 	local img = string.match(lowerattr, [[img=['’]([^'’]+)]])
 	local scale = string.match(lowerattr, [[scale=([%d.]+)]])
+	local rotation = string.match(lowerattr, [[rotation=(-?[%d.]+)]])
 	local rpad = string.match(lowerattr, [[rpad=([%d.]+)]])
 	rpad = EvaluateNbspPad(rpad)
 	local colortag = string.match(attr, [[color=([(%w_).]+)]])
@@ -797,7 +799,7 @@ local function ParseImageInformation( attr )
 	if colortag then
 		color = ParseFormattingColour( "#"..colortag )
 	end
-	return img, scale, color, rpad
+	return img, scale, color, rotation, rpad
 end
 
 local function ParseFontScale( attr )
@@ -866,7 +868,7 @@ function ApplyFormatting( textnode, str, player )
 				-- p (picture) doesn't need a </> to close the span, it just inserts
 				-- example options:
 				-- <p img=folder/image.tex scale=1.0 rpad=1>
-				local img, scale, color, rpad = ParseImageInformation( attr )
+				local img, scale, color, rotation, rpad = ParseImageInformation( attr )
 				local bind = string.match(attr, [[bind=['’]([^'’]+)]]) -- case sensitive
 				if bind then
 					img = playercontroller and playercontroller:GetTexForControlName(bind, player)
@@ -885,7 +887,7 @@ function ApplyFormatting( textnode, str, player )
 						--~ print("img:",img)
 						--~ print("scale:",scale)
 						--~ print("color:",color)
-						textnode:AddMarkup( utf8_start_idx, utf8_start_idx, MARKUP_IMAGE, img, scale, color )
+						textnode:AddMarkup( utf8_start_idx, utf8_start_idx, MARKUP_IMAGE, img, scale, rotation, color )
 					end
 
 					-- also insert a '\a' character into the string, so that the bitmap font renderer knows to render an image:
@@ -896,7 +898,7 @@ function ApplyFormatting( textnode, str, player )
 				-- prefer <p bind='Controls.Digital.MENU_ACCEPT'> to show buttons.
 				-- <c> allows you to force a specific gamepad button.
 				-- replace <c img='r' scale=1.0>
-				local img, scale, color, rpad = ParseImageInformation( attr )
+				local img, scale, color, rotation, rpad = ParseImageInformation( attr )
 				local img_path = playercontroller and playercontroller:GetInputImageAtlas()
 				if not img_path then
 					local device_id = 1
@@ -914,7 +916,7 @@ function ApplyFormatting( textnode, str, player )
 
 
 						if textnode then
-							textnode:AddMarkup( utf8_start_idx, utf8_start_idx, MARKUP_IMAGE, img_path, scale, color )
+							textnode:AddMarkup( utf8_start_idx, utf8_start_idx, MARKUP_IMAGE, img_path, scale, rotation, color )
 						end
 
 						-- also insert a '\a' character into the string, so that the bitmap font renderer knows to render an image:
@@ -1032,7 +1034,30 @@ end
 
 
 function printf(s,...)
-	print(s:format(...))
+	local test_var = select('#', ...)
+	if not test_var then
+		print(s)
+	else
+		print(s:format(...))
+	end
+end
+
+function printf_world(inst, s, ...)
+
+	if not TheDungeon.HUD then return end
+
+	s = s or "NO STRING"
+
+	if type(s) ~= "string" then
+		s = tostring(s)
+	end
+
+	local test_var = select('#', ...)
+	if test_var then
+		s = s:format(...)
+	end
+
+	TheDungeon.HUD:MakePopText({ target = inst, button = s, color = UICOLORS.KONJUR, size = 66, fade_time = 2 })
 end
 
 -------
@@ -1056,6 +1081,18 @@ function GetAtlasTex(atlas_tex, tex)
 	end
 end
 
+-- Use a table of x,y pairs to define your function:
+--  local data = { -- cooldown progress, bloom
+--  	{0.0,  1},
+--  	{0.25, 0.5},
+--  	{0.50, 0.25},
+--  	{0.75, 0.15},
+--  	{1.0,  0},
+--  }
+--  bloom = PiecewiseFn(time, data)
+-- Input values for x that are between values are linearly interpolated between
+-- them.
+-- Use ui:DrawPiecewiseFn to visualize.
 function PiecewiseFn(x, data_table)
 	local p1 = nil
 	local p2 = nil
@@ -1157,4 +1194,25 @@ function GetEntitySizeSuffix(inst)
 	else
 		return "_lrg"
 	end
+end
+
+-- Given an integer that is the expected maximum of some unsigned integer field, return the minimum number of bits
+-- necessary to represent that number.
+-- This function's main intent is to compute the bit count for fields over the net.
+function RequiredBitCount(number)
+    if number == 0 then
+        return 1 -- Edge case: 0 can be represented with 1 bit
+    end
+
+    return math.floor(math.log(number, 2)) + 1
+end
+
+--use like:
+--local p <close> = ScopedProfiler("<profile_section>")
+ScopedProfiler = Class(function(self, name)
+	TheSim:ProfilerPush(name)
+end)
+
+function ScopedProfiler:__close()
+	TheSim:ProfilerPop()
 end

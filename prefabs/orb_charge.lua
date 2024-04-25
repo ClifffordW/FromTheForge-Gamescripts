@@ -9,7 +9,7 @@ local assets =
 
 local prefabs =
 {
-	--jambell entity sizes
+	-- entity sizes
 	"hits_electric_med",
 	"hits_electric_ground",
 	"electric_orb_pre",

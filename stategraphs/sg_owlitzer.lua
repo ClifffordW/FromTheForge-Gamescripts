@@ -123,11 +123,6 @@ local function OnDodgingHitBoxTriggered(inst, data)
 	end
 end
 
-local function RemoveStatusEffects(inst)
-	inst.components.powermanager:ResetData()
-	inst.components.powermanager:SetCanReceivePowers(false)
-end
-
 local MELEE_RANGE = 6
 
 local events =
@@ -152,7 +147,7 @@ local events =
 			SGCommon.Fns.FaceActionTarget(inst, target, true)
 		end
 		bossutil.DoEventTransition(inst, "dive_bomb_pre")
-		soundutil.PlayCodeSound(inst, fmodtable.Event.Mus_Owlitzer_SwoopStinger_Dive)
+		-- soundutil.PlayCodeSound(inst, fmodtable.Event.Mus_Owlitzer_SwoopStinger_Dive)
 	end),
 
 	EventHandler("superflap", function(inst)
@@ -171,13 +166,14 @@ local events =
 		bossutil.DoEventTransition(inst, "float_to_barf_pre")
 	end),
 
-	EventHandler("do_phase_change", function(inst)
+	EventHandler("boss_phase_changed", function(inst)
+		inst.components.attacktracker:CancelActiveAttack()
+		inst.boss_coro:SetMusicPhase(inst.boss_coro.phase + 1)
 		if inst.sg:HasStateTag("knockdown") then
 			inst.sg:GoToState("phase_transition_pre_getup")
 		elseif inst.sg:GetCurrentState() == "super_flap_to_float_pre" then
 			-- Owlitzer is already super flapping, do another transition
 			inst.sg:GoToState("float_to_super_flap_pre", true)
-			inst.boss_coro:SetMusicPhase(inst.boss_coro.phase + 1) -- manually incrementing because .phase is happening on a delay
 		else
 			inst.sg:GoToState("phase_transition_pre_fly")
 		end
@@ -424,8 +420,7 @@ local states =
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("phase_transition")
-			inst.boss_coro:SetMusicPhase(inst.boss_coro.phase + 1) -- manually incrementing because .phase is happening on a delay
-			RemoveStatusEffects(inst)
+			monsterutil.RemoveStatusEffects(inst)
 		end,
 
 		events =
@@ -775,6 +770,42 @@ local states =
 	}),
 
 	State({
+		name = "wind_gust_reposition",
+		tags = { "attack", "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.Physics:Stop()
+
+			-- Check the positioning of owlitzer to its target & determine what state to play:
+			local target = inst.components.combat:GetTarget()
+			if target then
+				local minx, minz, maxx, maxz = TheWorld.Map:GetWalkableBounds()
+				local targetpos = target:GetPosition()
+				local pos = inst:GetPosition()
+				local is_left_side_closer = pos.x - minx < maxx - pos.x
+
+				if is_left_side_closer then
+					-- In between the side of the level & target; fly through the player & turn around.
+					if (pos.x >= minx and pos.x <= targetpos.x) then
+						inst.sg:GoToState("turn_fly_forward_ground", target)
+					-- The target is in between owlitzer & the side of the level, but too close to the side; jump backwards.
+					elseif (targetpos.x >= minx and targetpos.x <= pos.x) then
+						inst.sg:GoToState("fly_back_ground", target)
+					end
+				else -- right side is closer
+					if (pos.x <= maxx and pos.x >= targetpos.x) then
+						inst.sg:GoToState("turn_fly_forward_ground", target)
+					elseif (targetpos.x <= maxx and targetpos.x >= pos.x) then
+						inst.sg:GoToState("fly_back_ground", target)
+					end
+				end
+			else
+				inst.sg:GoToState("wind_gust_pre")
+			end
+		end,
+	}),
+
+	State({
 		name = "wind_gust",
 		tags = { "attack", "busy", "nointerrupt" },
 
@@ -852,7 +883,7 @@ local states =
 
 	State({
 		name = "snatch",
-		tags = { "attack", "busy", "flying", "nointerrupt" },
+		tags = { "attack", "busy", "flying", "flying_high", "nointerrupt" },
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("snatch")
@@ -865,6 +896,7 @@ local states =
 		timeline =
 		{
 			FrameEvent(1, function(inst)
+				inst.sg:RemoveStateTag("flying_high")
 				inst.Physics:SetMotorVel(SNATCH_SPEED)
 			end),
 			FrameEvent(11, function(inst)
@@ -947,7 +979,8 @@ local states =
 			FrameEvent(5, function(inst)
 				inst.Physics:Stop()
 				inst.Physics:StopPassingThroughObjects()
-				inst.Physics:SetEnabled(false)
+				inst.Physics:SetEnabled(true)
+				inst.HitBox:SetEnabled(true)
 				inst.sg:RemoveStateTag("flying_high")
 
 				--RemoveLandFX(inst)
@@ -987,7 +1020,7 @@ local states =
 
 	State({
 		name = "dive_bomb",
-		tags = { "attack", "busy", "flying", "nointerrupt" },
+		tags = { "attack", "busy", "flying_high", "nointerrupt" },
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("dive_bomb")
@@ -1009,6 +1042,8 @@ local states =
 		timeline =
 		{
 			FrameEvent(8, function(inst)
+				inst.sg:RemoveStateTag("flying_high")
+				inst.sg:AddStateTag("flying")
 				inst.components.hitbox:PushBeam(0.00, 3.50, 2.50, HitPriority.BOSS_DEFAULT)
 				inst.components.hitbox:PushOffsetBeam(-2.00, 0.00, 1.50, 0.50, HitPriority.BOSS_DEFAULT)
 			end),
@@ -1061,6 +1096,11 @@ local states =
 			inst.components.hitbox:StopRepeatTargetDelay()
 			inst.Physics:StopPassingThroughObjects()
 			inst.Physics:Stop()
+
+			if inst.sg.mem.target_indicator then
+				inst.sg.mem.target_indicator:PushEvent("done_attack")
+				inst.sg.mem.target_indicator = nil
+			end
 		end,
 	}),
 
@@ -1400,7 +1440,7 @@ local states =
 			inst.sg.statemem.skip_wait = skip_wait
 			inst.Physics:Stop()
 			inst.AnimState:PlayAnimation("return_fly")
-			TheAudio:SetPersistentSoundParameter(audioid.persistent.boss_music, "Music_Owlitzer_IsFlapping", .5)
+			TheAudio:SetPersistentSoundParameter(audioid.persistent.boss_music, "Music_Owlitzer_IsFlapping", 1)
 		end,
 
 		timeline =
@@ -1410,7 +1450,7 @@ local states =
 				inst.HitBox:SetEnabled(false)
 				inst.sg:AddStateTag("flying_high")
 
-				RemoveStatusEffects(inst)
+				monsterutil.RemoveStatusEffects(inst)
 			end),
 		},
 
@@ -1560,8 +1600,6 @@ local states =
 					fmodtable.Event.owlitzer_super_flap_LP,
 					{
 						max_count = 1,
-						is_autostop = true,  -- stop the sound when the thing's destroyed
-						stopatexitstate = true, -- TODO(luca): stopatexitstate is for PlayCountedSound?
 						fmodparams = {
 							Music_BossPhase = inst.boss_coro.phase,
 						},
@@ -1858,6 +1896,9 @@ local states =
 		end,
 
 		onenter = function(inst)
+			-- Snap rotation angle to straight left or right, to have fly by FX positioned correctly.
+			inst:SnapToFacingRotation()
+
 			inst.HitBox:SetInvincible(true)
 			inst.HitBox:SetEnabled(false)
 			inst.AnimState:PlayAnimation("fly_by_loop", true)
@@ -1983,7 +2024,7 @@ local states =
 			inst.Physics:SetEnabled(true)
 			inst.Physics:SetSnapToGround(true)
 
-			inst.components.powermanager:SetCanReceivePowers(true)
+			monsterutil.ReinitializeStatusEffects(inst)
 		end,
 	}),
 }
@@ -2041,39 +2082,8 @@ SGCommon.States.AddAttackHold(states, "slash2_air", { alwaysforceattack = true }
 SGCommon.States.AddAttackPre(states, "wind_gust",
 {
 	alwaysforceattack = true,
+	reposition_state = "wind_gust_reposition",
 	onenter_fn = function(inst)
-		inst.Physics:Stop()
-
-		-- Check the positioning of owlitzer to its target & determine what state to play:
-		local target = inst.components.combat:GetTarget()
-		if target and not inst.sg.mem.in_position then
-			local minx, minz, maxx, maxz = TheWorld.Map:GetWalkableBounds()
-			local targetpos = target:GetPosition()
-			local pos = inst:GetPosition()
-			local is_left_side_closer = pos.x - minx < maxx - pos.x
-
-			if is_left_side_closer then
-				-- In between the side of the level & target; fly through the player & turn around.
-				if (pos.x >= minx and pos.x <= targetpos.x) then
-					inst.sg:GoToState("turn_fly_forward_ground", target)
-				-- The target is in between owlitzer & the side of the level, but too close to the side; jump backwards.
-				elseif (targetpos.x >= minx and targetpos.x <= pos.x) then
-					inst.sg:GoToState("fly_back_ground", target)
-				end
-			else -- right side is closer
-				if (pos.x <= maxx and pos.x >= targetpos.x) then
-					inst.sg:GoToState("turn_fly_forward_ground", target)
-				elseif (targetpos.x <= maxx and targetpos.x >= pos.x and maxx - pos.x) then
-					inst.sg:GoToState("fly_back_ground", target)
-				end
-			end
-
-			inst.sg.mem.in_position = true
-			return
-		else
-			inst.sg.mem.in_position = nil
-		end
-
 		if inst.sg.laststate.tags["flying"] then
 			inst.AnimState:PlayAnimation("wind_gust_fly_pre")
 		else
@@ -2098,6 +2108,7 @@ SGCommon.States.AddAttackPre(states, "snatch",
 SGCommon.States.AddAttackHold(states, "snatch",
 {
 	alwaysforceattack = true,
+	addtags = lume.concat(FLYING_TAGS, { "flying_high" }),
 	timeline =
 	{
 		-- Code Generated by PivotTrack.jsfl
@@ -2199,7 +2210,25 @@ SGCommon.States.AddAttackHold(states, "dive_bomb",
 		-- spawn "eyes" fx on that target
 		inst.sg.mem.target_indicator = SGCommon.Fns.SpawnAtDist(target, "owlitzer_target", 0)
 		inst.sg.statemem.tracking_target = true
-		inst.sg.statemem.warning_ticks = 77 * 2 -- make sure this equals the FrameEvent in timeline that locks in the target
+
+		-- Get the number of startup frames remaining on this attack, taking into account startup modifiers (e.g. frenzy mods)
+		local startup_frames_remaining = inst.components.attacktracker:GetRemainingStartupFrames()
+
+		-- Owlitzer spends 85 frames in hold state, signaling at 81 frames gives 4 frames before attack state starts.
+		inst.sg.statemem.warning_ticks = math.ceil((startup_frames_remaining - 4) * 2) -- make sure this equals the FrameEvent in timeline that locks in the target
+		inst.sg.statemem.lock_on_task = inst:DoTaskInTicks(inst.sg.statemem.warning_ticks, function()
+			-- lock in the target position
+			if inst.sg.statemem.tracking_target then
+				inst.sg.statemem.tracking_target = false
+				inst.sg.mem.target_indicator:PushEvent("lock_on")
+				--soundutil.PlayCodeSound(inst, fmodtable.Event.owlitzer_divebomb_vo)
+				if inst.sg.statemem.warningsound then
+					soundutil.SetInstanceParameter(inst.sg.mem.target_indicator, inst.sg.statemem.warningsound,"owlitzer_lockOn_progress",1)
+				end
+				inst.sg.mem.dive_pos = inst.sg.mem.target_indicator:GetPosition()
+			end
+		end)
+
 		--sound
 		local params = {}
 		params.fmodevent = fmodtable.Event.owlitzer_targetLock_LP
@@ -2227,23 +2256,6 @@ SGCommon.States.AddAttackHold(states, "dive_bomb",
 		end
 	end,
 
-	timeline =
-	{
-		-- Owlitzer spends 85 frames in hold state, signaling at 77 frames gives 8 frames before attack state starts.
-		FrameEvent(77, function(inst)
-			-- lock in the target position
-			if inst.sg.statemem.tracking_target then
-				inst.sg.statemem.tracking_target = false
-				inst.sg.mem.target_indicator:PushEvent("lock_on")
-				--soundutil.PlayCodeSound(inst, fmodtable.Event.owlitzer_divebomb_vo)
-				if inst.sg.statemem.warningsound then
-					soundutil.SetInstanceParameter(inst.sg.mem.target_indicator, inst.sg.statemem.warningsound,"owlitzer_lockOn_progress",1)
-				end
-				inst.sg.mem.dive_pos = inst.sg.mem.target_indicator:GetPosition()
-			end
-		end),
-	},
-
 	onexit_fn = function(inst)
 		inst.HitBox:SetInvincible(false)
 		inst.HitBox:SetEnabled(true)
@@ -2251,6 +2263,11 @@ SGCommon.States.AddAttackHold(states, "dive_bomb",
 		if inst.sg.statemem.warningsound then
 			soundutil.KillSound(inst.sg.mem.target_indicator, inst.sg.statemem.warningsound)
 			inst.sg.statemem.warningsound = nil
+		end
+
+		if inst.sg.statemem.lock_on_task then
+			inst.sg.statemem.lock_on_task:Cancel()
+			inst.sg.statemem.lock_on_task = nil
 		end
 	end,
 })
@@ -2282,52 +2299,104 @@ SGCommon.States.AddAttackHold(states, "phase_transition_get_off_me",
 
 SGCommon.States.AddMonsterDeathStates(states)
 
+-- Lerp function to ensure owlitzer is on the ground when killed.
+-- Consider making this a common function for future bosses that can potentially be killed in the air.
+function MoveToGround(inst, duration, ease_fn)
+	local start_pos = inst:GetPosition()
+	ease_fn = ease_fn or easing.linear
+
+	local fn = function(_, progress)
+		local current_pos = inst:GetPosition()
+		local dest = Vector3(current_pos.x, 0, current_pos.z)
+
+		local y = ease_fn(progress, start_pos.y, dest.y - start_pos.y, 1)
+
+		inst.Transform:SetPosition(current_pos.x, y, current_pos.z)
+		if progress >= 1 then
+			inst:PushEvent("movetopoint_complete")
+		end
+	end
+
+	inst:ListenForEvent("movetopoint_complete", function(inst)
+		inst:RemoveEventCallback("movetopoint_complete")
+	end)
+
+	return inst:DoDurationTaskForTicks(duration / TICKS, fn)
+end
+
 SGBossCommon.States.AddBossStates(states,
 {
 	cine_timeline =
 	{
+		FrameEvent(0, function(inst)
+			-- Move in-bounds if outside:
+			local pos = inst:GetPosition()
+			local isPointOnGround = TheWorld.Map:IsGroundAtPoint(pos)
+			if not isPointOnGround then
+				local newPos = TheWorld.Map:FindClosestWalkablePoint(pos)
+				inst.Transform:SetPosition(newPos.x, pos.y, pos.z)
+			end
+		end),
+
 		-- Code Generated by PivotTrack.jsfl
-		FrameEvent(2, function(inst) inst.Physics:MoveRelFacing(-160/150) end),
-		FrameEvent(4, function(inst) inst.Physics:MoveRelFacing(-206/150) end),
-		FrameEvent(7, function(inst) inst.Physics:MoveRelFacing(-120/150) end),
-		FrameEvent(10, function(inst) inst.Physics:MoveRelFacing(-120/150) end),
-		FrameEvent(13, function(inst) inst.Physics:MoveRelFacing(-92/150) end),
-		FrameEvent(16, function(inst) inst.Physics:MoveRelFacing(-20/150) end),
-		FrameEvent(20, function(inst) inst.Physics:MoveRelFacing(20/150) end),
-		FrameEvent(22, function(inst) inst.Physics:MoveRelFacing(44/150) end),
-		FrameEvent(23, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(45, function(inst) inst.Physics:MoveRelFacing(24/150) end),
-		FrameEvent(47, function(inst) inst.Physics:MoveRelFacing(92/150) end),
-		FrameEvent(49, function(inst) inst.Physics:MoveRelFacing(102/150) end),
-		FrameEvent(51, function(inst) inst.Physics:MoveRelFacing(100/150) end),
-		FrameEvent(54, function(inst) inst.Physics:MoveRelFacing(76/150) end),
-		FrameEvent(56, function(inst) inst.Physics:MoveRelFacing(58/150) end),
-		FrameEvent(58, function(inst) inst.Physics:MoveRelFacing(56/150) end),
-		FrameEvent(60, function(inst) inst.Physics:MoveRelFacing(56/150) end),
-		FrameEvent(62, function(inst) inst.Physics:MoveRelFacing(60/150) end),
-		FrameEvent(64, function(inst) inst.Physics:MoveRelFacing(84/150) end),
-		FrameEvent(66, function(inst) inst.Physics:MoveRelFacing(68/150) end),
-		FrameEvent(68, function(inst) inst.Physics:MoveRelFacing(48/150) end),
-		FrameEvent(70, function(inst) inst.Physics:MoveRelFacing(52/150) end),
-		FrameEvent(72, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(74, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(76, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(78, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(80, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(82, function(inst) inst.Physics:MoveRelFacing(40/150) end),
-		FrameEvent(84, function(inst) inst.Physics:MoveRelFacing(56/150) end),
-		FrameEvent(87, function(inst) inst.Physics:MoveRelFacing(56/150) end),
-		FrameEvent(90, function(inst) inst.Physics:MoveRelFacing(64/150) end),
-		FrameEvent(94, function(inst) inst.Physics:MoveRelFacing(52/150) end),
-		FrameEvent(98, function(inst) inst.Physics:MoveRelFacing(36/150) end),
-		FrameEvent(101, function(inst) inst.Physics:MoveRelFacing(52/150) end),
-		FrameEvent(104, function(inst) inst.Physics:MoveRelFacing(48/150) end),
-		FrameEvent(107, function(inst) inst.Physics:MoveRelFacing(60/150) end),
-		FrameEvent(110, function(inst) inst.Physics:MoveRelFacing(64/150) end),
-		FrameEvent(112, function(inst) inst.Physics:MoveRelFacing(76/150) end),
-		FrameEvent(114, function(inst) inst.Physics:MoveRelFacing(76/150) end),
-		FrameEvent(116, function(inst) inst.Physics:MoveRelFacing(48/150) end),
-		FrameEvent(117, function(inst) inst.Physics:MoveRelFacing(80/150) end),
+		FrameEvent(1, function(inst)
+			inst.Physics:SetEnabled(true)
+			inst.Physics:StartPassingThroughObjects()
+		end),
+		FrameEvent(2, function(inst) inst.Physics:SetMotorVel(-16) end),
+		FrameEvent(4, function(inst) inst.Physics:SetMotorVel(-13.7) end),
+		FrameEvent(7, function(inst) inst.Physics:SetMotorVel(-8.0) end),
+		FrameEvent(10, function(inst) inst.Physics:SetMotorVel(-8.0) end),
+		FrameEvent(13, function(inst) inst.Physics:SetMotorVel(-6.1) end),
+		FrameEvent(16, function(inst) inst.Physics:SetMotorVel(-1.3) end),
+		FrameEvent(20, function(inst) inst.Physics:SetMotorVel(2.0) end),
+		FrameEvent(22, function(inst) inst.Physics:SetMotorVel(8.8) end),
+		FrameEvent(23, function(inst) inst.Physics:SetMotorVel(8.0) end),
+		FrameEvent(24, function(inst) inst.Physics:Stop() end),
+
+		FrameEvent(45, function(inst) inst.Physics:SetMotorVel(2.4) end),
+		FrameEvent(47, function(inst) inst.Physics:SetMotorVel(9.2) end),
+		FrameEvent(49, function(inst) inst.Physics:SetMotorVel(10.2) end),
+		FrameEvent(51, function(inst) inst.Physics:SetMotorVel(6.7) end),
+		FrameEvent(54, function(inst) inst.Physics:SetMotorVel(7.6) end),
+		FrameEvent(56, function(inst) inst.Physics:SetMotorVel(5.8) end),
+		FrameEvent(58, function(inst) inst.Physics:SetMotorVel(5.6) end),
+		FrameEvent(60, function(inst) inst.Physics:SetMotorVel(5.6) end),
+		FrameEvent(62, function(inst) inst.Physics:SetMotorVel(6.0) end),
+		FrameEvent(64, function(inst) inst.Physics:SetMotorVel(8.4) end),
+		FrameEvent(66, function(inst) inst.Physics:SetMotorVel(6.8) end),
+		FrameEvent(68, function(inst) inst.Physics:SetMotorVel(4.8) end),
+		FrameEvent(70, function(inst) inst.Physics:SetMotorVel(5.2) end),
+		FrameEvent(72, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(74, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(76, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(78, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(80, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(82, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(84, function(inst) inst.Physics:SetMotorVel(3.7) end),
+		FrameEvent(87, function(inst) inst.Physics:SetMotorVel(3.7) end),
+		FrameEvent(90, function(inst) inst.Physics:SetMotorVel(3.2) end),
+		FrameEvent(94, function(inst) inst.Physics:SetMotorVel(2.6) end),
+		FrameEvent(98, function(inst) inst.Physics:SetMotorVel(2.4) end),
+		FrameEvent(101, function(inst) inst.Physics:SetMotorVel(3.5) end),
+		FrameEvent(104, function(inst) inst.Physics:SetMotorVel(3.2) end),
+		FrameEvent(107, function(inst) inst.Physics:SetMotorVel(4.0) end),
+		FrameEvent(110, function(inst) inst.Physics:SetMotorVel(6.4) end),
+		FrameEvent(112, function(inst) inst.Physics:SetMotorVel(7.6) end),
+		FrameEvent(114, function(inst) inst.Physics:SetMotorVel(7.6) end),
+		FrameEvent(116, function(inst) inst.Physics:SetMotorVel(9.6) end),
+		FrameEvent(117, function(inst) inst.Physics:SetMotorVel(16) end),
+		FrameEvent(118, function(inst) inst.Physics:Stop() end),
+
+		FrameEvent(118, function(inst)
+			inst.Physics:StopPassingThroughObjects()
+			inst.Physics:SetEnabled(false)
+		end),
+
+		-- Lerp to ground if in the air:
+		FrameEvent(47, function(inst)
+			MoveToGround(inst, 71 * ANIM_FRAMES / SECONDS)
+		end)
 	},
 })
 

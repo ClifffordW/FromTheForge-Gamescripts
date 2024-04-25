@@ -103,7 +103,7 @@ function SGBossCommon.States.AddBossStates(states, data)
 		{
 			EventHandler("animover", function(inst)
 				-- Bosses stay on screen after they die, so don't push the "done_dying" event - it will remove them!
-				inst:PushEvent("done_dying")
+				--inst:PushEvent("done_dying")
 
 				-- Disable eye bloom
 				inst.AnimState:SetSymbolBloom("eye_untex", 0, 0, 0, 0)

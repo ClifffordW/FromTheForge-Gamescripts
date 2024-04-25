@@ -6,8 +6,12 @@ local THROW_HOLD_TIME = 0.1
 local THROW_RETURN_TIME = 0.66
 local SPIRAL_SPEED = 18
 local SPIRAL_TIME = 5.25
-local HITBOX_RADIUS = 0.8
+local HITBOX_RADIUS = 1
 local HITBOX_ELITE_RADIUS = 1.2
+
+local HITBEAM_X_START = -1.2
+local HITBEAM_X_END = 1.2
+local HITBEAM_X_THICKNESS = 0.4
 
 local function OnHitBoxTriggered(inst, data)
 	SGCommon.Events.OnProjectileHitboxTriggered(inst, data, {
@@ -23,7 +27,7 @@ local function OnHitBoxTriggered(inst, data)
 end
 
 local function OwnerLost(inst)
-	return (inst.owner and (not inst.owner:IsAlive() or not inst.owner:IsLocal())) or not inst.owner
+	return (GetDebugEntity() ~= inst) and ((inst.owner and (not inst.owner:IsAlive() or not inst.owner:IsLocal())) or not inst.owner)
 end
 
 local states =
@@ -42,6 +46,7 @@ local states =
 
 			local hit_radius = inst:HasTag("elite") and HITBOX_ELITE_RADIUS or HITBOX_RADIUS
 			inst.components.hitbox:PushCircle(0, 0, hit_radius, HitPriority.MOB_PROJECTILE)
+			inst.components.hitbox:PushBeam(HITBEAM_X_START, HITBEAM_X_END, HITBEAM_X_THICKNESS, HitPriority.MOB_PROJECTILE)
 
 			if (OwnerLost(inst)) then --Owner(totolili) was knocked down and taken by another player or killed, remove projectile
 				inst.sg:GoToState("death")
@@ -65,6 +70,7 @@ local states =
 		onupdate = function(inst)
 			local hit_radius = inst:HasTag("elite") and HITBOX_ELITE_RADIUS or HITBOX_RADIUS
 			inst.components.hitbox:PushCircle(0, 0, hit_radius, HitPriority.MOB_PROJECTILE)
+			inst.components.hitbox:PushBeam(HITBEAM_X_START, HITBEAM_X_END, HITBEAM_X_THICKNESS, HitPriority.MOB_PROJECTILE)
 
 			if (OwnerLost(inst)) then
 				inst.sg:GoToState("death")
@@ -95,6 +101,7 @@ local states =
 
 			local hit_radius = inst:HasTag("elite") and HITBOX_ELITE_RADIUS or HITBOX_RADIUS
 			inst.components.hitbox:PushCircle(0, 0, hit_radius, HitPriority.MOB_PROJECTILE)
+			inst.components.hitbox:PushBeam(HITBEAM_X_START, HITBEAM_X_END, HITBEAM_X_THICKNESS, HitPriority.MOB_PROJECTILE)
 
 			if (OwnerLost(inst)) then
 				inst.sg:GoToState("death")
@@ -124,6 +131,7 @@ local states =
 		onupdate = function(inst)
 			local hit_radius = inst:HasTag("elite") and HITBOX_ELITE_RADIUS or HITBOX_RADIUS
 			inst.components.hitbox:PushCircle(0, 0, hit_radius, HitPriority.MOB_PROJECTILE)
+			inst.components.hitbox:PushBeam(HITBEAM_X_START, HITBEAM_X_END, HITBEAM_X_THICKNESS, HitPriority.MOB_PROJECTILE)
 
 			local time_remaining = inst.sg:GetTimeoutTicks() / SECONDS
 			local time_factor = math.clamp(1 - (time_remaining / SPIRAL_TIME), 0, 1)
@@ -174,7 +182,9 @@ local states =
 		events =
 		{
 			EventHandler("animover", function(inst)
-				SGCommon.Fns.RemoveProjectile(inst) -- remove in onenter for now, eventually can do it after an anim
+				if (GetDebugEntity() ~= inst) then
+					SGCommon.Fns.RemoveProjectile(inst) -- remove in onenter for now, eventually can do it after an anim
+				end
 			end),
 		},
 	}),

@@ -5,6 +5,7 @@ return {
   bank="fx_acid",
   bloom=100.0,
   build="fx_acid",
+  disabledebughistory=true,
   glowcolor="B9FF00FF",
   group="fx_acid",
   multcolor="80FF80FF",

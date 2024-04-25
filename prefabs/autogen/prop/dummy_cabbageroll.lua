@@ -8,6 +8,6 @@ return {
   parallax_use_baseanim_for_idle=true,
   physicssize=0.8,
   physicstype="dec",
-  placer=true,
   script="dummies",
+  sound=true,
 }

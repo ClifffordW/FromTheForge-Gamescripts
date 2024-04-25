@@ -165,7 +165,17 @@ end
 function PlayerSpawner:_EnterTown(player)
 	if TheSaveSystem.cheats:GetValue("town_spawn_pos") then
 		local pos = TheSaveSystem.cheats:GetValue("town_spawn_pos")
-		player.Physics:Teleport(pos[1], 0, pos[2])
+		if type(pos) == "string" then
+			local prefab = pos
+			local ent = c_find(prefab, 9999, TheWorld)
+			if ent then
+				player.Physics:Teleport(ent.Transform:GetWorldPosition())
+			else
+				TheLog.ch.Cheat:printf("Failed to find prefab [%s] for town_spawn_prefab.", prefab)
+			end
+		else
+			player.Physics:Teleport(pos[1], 0, pos[2])
+		end
 	else
 		local portal = self:GetEntrancePortal(player)
 		if portal then
@@ -179,7 +189,6 @@ function PlayerSpawner:_EnterTown(player)
 			TheLog.ch.WorldMap:print("Didn't find entrance for player spawn. Using room centre:", portal)
 		end
 	end
-	player:PushEvent("enter_town")
 end
 
 function PlayerSpawner:_EnterDungeonRoom(player, dungeon_map)

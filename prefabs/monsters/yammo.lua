@@ -68,6 +68,7 @@ local attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -115,6 +116,7 @@ local elite_attacks =
 		start_conditions_fn = function(inst, data, trange) return false end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 1.8
 
@@ -177,7 +179,16 @@ local function elite_fn(prefabname)
 	return inst
 end
 
+local function miniboss_fn(prefabname)
+	local inst = elite_fn(prefabname)
+	monsterutil.MakeMiniboss(inst)
+	inst:AddComponent("boss")
+
+	return inst
+end
+
 ---------------------------------------------------------------------------------------
 
 return Prefab("yammo", normal_fn, assets, prefabs, nil, NetworkType_SharedHostSpawn)
 	, Prefab("yammo_elite", elite_fn, elite_assets, elite_prefabs, nil, NetworkType_SharedHostSpawn)
+	, Prefab("yammo_miniboss", miniboss_fn, elite_assets, elite_prefabs, nil, NetworkType_SharedHostSpawn)

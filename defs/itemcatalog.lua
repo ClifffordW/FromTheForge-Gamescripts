@@ -7,6 +7,7 @@ local itemcatalog = {
 		Items = {},
 		Slots = {},
 		SlotDescriptor = {},
+		slot_string_keys = {},
 	},
 	Constructable = require "defs.constructable",
 	Consumable = require "defs.consumable",
@@ -16,6 +17,10 @@ local itemcatalog = {
 	Mastery = require"defs.masteries",
 	EquipmentGem = require "defs.equipmentgems",
 }
+
+for key,val in pairs(itemcatalog.Power.Slots) do
+	itemcatalog.All.slot_string_keys[key] = "POWERS"
+end
 
 for cat_name,cat in pairs(itemcatalog) do
 	if cat_name ~= "All" then

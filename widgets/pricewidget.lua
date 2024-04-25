@@ -48,7 +48,7 @@ function PriceWidget:SetPrice(price)
 	self.price:SetText(string.format(STRINGS.UI.INVENTORYSCREEN.KONJUR, self.current_price))
 
 	if self:GetCurrentKonjur() < price then
-		--self.price:SetGlyphColor(212/255, 11/255, 28/255, 1) -- jambell: disabling this, because sometimes this widget is desaturated and sometimes it's not. the rest of the screen is clear enough, and this Red was inconsistent across screens!
+		--self.price:SetGlyphColor(212/255, 11/255, 28/255, 1) -- NOTE: disabling this, because sometimes this widget is desaturated and sometimes it's not. the rest of the screen is clear enough, and this Red was inconsistent across screens!
 		self:SetToolTip(STRINGS.UI.PRICEWIDGET.NOT_ENOUGH)
 	else
 		--self.price:SetGlyphColor(1, 1, 1, 1)

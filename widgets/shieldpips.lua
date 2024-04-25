@@ -47,10 +47,12 @@ local ShieldPips = Class(Widget, function(self, owner)
 	self.shield_bar_icon = self.shield_icon_root:AddChild(Image("images/ui_ftf_ingame/ui_shield_bar_icon.tex"))
 		:LayoutBounds("center", "center", self.shield_bar_icon_bg)
 		:SetBrightness(self.shield_icon_disabled_brightness)
+		:SetHiddenBoundingBox(true)
 
 	self.shield_bar_icon_broken = self.shield_icon_root:AddChild(Image("images/ui_ftf_ingame/ui_shield_bar_icon_broken.tex"))
 		:LayoutBounds("center", "center", self.shield_bar_icon_bg)
 		:SetBrightness(self.shield_icon_disabled_brightness)
+		:SetHiddenBoundingBox(true)
 		:Hide()
 
 	self.shield_icon_root:LayoutBounds("center", "bottom", self.shield_bar_frame)

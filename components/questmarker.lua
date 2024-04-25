@@ -12,6 +12,10 @@ local QuestMarker = Class(function(self, inst)
 	self.players = {}
 end)
 
+function QuestMarker:GetPlayers()
+	return self.players
+end
+
 function QuestMarker:GetAnimString()
 	return TYPE_TO_STRING[self.importance]
 end

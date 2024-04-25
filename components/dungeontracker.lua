@@ -11,7 +11,6 @@
 
 -- currency collected
 -- currency spent
--- glitz generated (end of dungeon screen presentation)
 
 -- ascension level completed (is it your first time)
 -- any unlocks you might have achieved
@@ -20,7 +19,6 @@ local StatTracker = require "components.stattracker"
 local fresh_data =
 {
 	-- general data
-
 	perfect_dodges = 0,
 	total_damage_done = 0,
 	total_damage_taken = 0,
@@ -28,13 +26,14 @@ local fresh_data =
 	total_deaths = 0,
 
 	-- detailed data
-
 	deaths = {}, -- how many times you have died
 	kills = {}, -- which enemies you have killed
 	damage_taken = {}, -- how much damage you have taken
 	damage_done = {}, -- how much damage you have done
 	loot = {}, -- what you have picked up
 	hitstreaks = {}, -- hitstreak numbers
+
+	mastery_progressed = {}, --progress on masteries during this run
 }
 
 local DungeonTracker = Class(StatTracker, function(self, inst)
@@ -54,6 +53,7 @@ local DungeonTracker = Class(StatTracker, function(self, inst)
 	self._on_get_loot = function(_, data) self:OnGetLoot(data) end
 	self._on_hitbox_collided_invincible = function(_, data) self:OnHitboxCollidedInvincible(data) end
 	self._on_hitstreak_killed = function(_, data) self:OnHitStreakKilled(data) end
+	self._on_mastery_progressed = function(_, data) self:OnMasteryProgressed(data) end
 
     self.inst:ListenForEvent("healthchanged", self._on_health_delta)
     self.inst:ListenForEvent("dying", self._on_death) -- Listen for 'dying' instead of 'death' because of multiplayer reviving.
@@ -62,6 +62,7 @@ local DungeonTracker = Class(StatTracker, function(self, inst)
 	self.inst:ListenForEvent("get_loot", self._on_get_loot)
 	self.inst:ListenForEvent("hitboxcollided_invincible", self._on_hitbox_collided_invincible)
 	self.inst:ListenForEvent("hitstreak_killed", self._on_hitstreak_killed)
+	self.inst:ListenForEvent("mastery_progressed", self._on_mastery_progressed)
 end)
 
 function DungeonTracker:StartNewRun()
@@ -132,8 +133,29 @@ end
 
 function DungeonTracker:OnHitStreakKilled(data)
 	local tbl = self:GetValue("hitstreaks")
-	table.insert(tbl, data)
+	table.insert(tbl, { damage = data.damage_total or 0, streak = data.hitstreak or 0 })
 	self:SetValue("hitstreaks", tbl)
+end
+
+function DungeonTracker:OnMasteryProgressed(data)
+	local tbl = self:GetValue("mastery_progressed")
+
+	--see if I have this mastery logged, if not, need to register what I started with
+	local def = data.mastery_instance:GetDef()
+
+	-- print("OnMasteryProgressed")
+	-- print(string.format("def: %s\nprev: %d\nnew: %d", def.name, data.prev_progress, data.new_progress))
+
+	if tbl[def.name] == nil then
+		tbl[def.name] = 
+		{
+			starting_progress = data.prev_progress
+		}
+	end
+
+	tbl[def.name].current_progress = data.new_progress
+
+	self:SetValue("mastery_progressed", tbl)
 end
 
 return DungeonTracker

@@ -11,9 +11,9 @@ local function OnRollHitBoxTriggered(inst, data)
 		custom_attack_fn = function(attacker, attack)
 			local hit = false
 			if attacker.sg.statemem.knockbackonly then
-				hit = attacker.components.combat:DoKnockbackAttack(attack) --JAMBELLHITSTUN
+				hit = attacker.components.combat:DoKnockbackAttack(attack)
 			else
-				hit = attacker.components.combat:DoKnockdownAttack(attack) --JAMBELLHITSTUN
+				hit = attacker.components.combat:DoKnockdownAttack(attack)
 			end
 
 			if hit then
@@ -28,7 +28,7 @@ local function OnRollHitBoxTriggered(inst, data)
 	if inst.sg.statemem.connected then
 		local velocity = inst.Physics:GetMotorVel()
 		SGCommon.Fns.SetMotorVelScaled(inst, (velocity * 0.25))
-		-- TODO(dbriscoe): I think this is incorrect because it's doing ticks %
+		-- TODO(combat): dbriscoe thinks this is incorrect because it's doing ticks %
 		-- animframes. Probably should use GetAnimFramesInState
 		if inst.sg:GetCurrentState() == "roll_loop" and inst.sg:GetTicksInState() % inst.AnimState:GetCurrentAnimationNumFrames() < inst.AnimState:GetCurrentAnimationNumFrames() * 0.5 then --if we just started the anim, stop rolling sooner and pop into the _pst
 			inst.sg:GoToState("roll_pst")

@@ -33,7 +33,7 @@ DebugAudio.Draw3DFlagsDefault =
 
 function DebugAudio:SetEnabled(enabled)
 	self.enabled = enabled
-	-- TODO: victorc -- chicken/egg issue with this
+	-- TODO: debugaudio - chicken/egg issue with this
 	self.draw3dflags = DebugAudio.Draw3DFlagsDefault
 	TheAudio:SetDebugVisualize3DSound(enabled)
 end

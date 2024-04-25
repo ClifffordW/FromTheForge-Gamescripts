@@ -33,6 +33,16 @@ local ArenaLoader = Class(DebugSettings, function(self, context)
 	if worldmap and worldmap.nav then
 		self:Set("desired_progress", worldmap.nav:GetProgressThroughDungeon())
 	end
+	
+	self:UpdateDesiredProgress(nil, function(current_desired_progress)
+		return current_desired_progress ~= self.desired_progress, self.desired_progress
+	end)
+	self:UpdateLocation(function(current_location)
+		return current_location ~= self.location, self.location
+	end)
+	self:UpdateRoomType(function(current_roomtype)
+		return current_roomtype ~= self.roomtype, self.roomtype
+	end)
 end)
 
 ArenaLoader.default = default
@@ -70,6 +80,7 @@ end
 local function GetEntranceRoomDepth(depth_max)
 	return 0
 end
+
 function ArenaLoader:StartArena(force_reload)
 	if not self:CanStartArena() then
 		return false
@@ -136,7 +147,8 @@ function ArenaLoader:GetValidRoomTypes()
 	return valid_room_types
 end
 
-function ArenaLoader:Ui(ui, id, suppress_location)
+-- update_fn(current_desired_progress) -> (changed, new_desired_progress)
+function ArenaLoader:UpdateDesiredProgress(ui, update_fn)
 	local hype = self:GetRoomType() == "hype"
 	local boss = self:GetRoomType() == "boss"
 	local entrance = self:GetRoomType() == "entrance"
@@ -147,33 +159,53 @@ function ArenaLoader:Ui(ui, id, suppress_location)
 	elseif entrance then
 		implicit_dungeon_progress = 0
 	end
-	if implicit_dungeon_progress then
+	if ui and implicit_dungeon_progress then
 		ui:PushDisabledStyle()
 	end
-	local changed, new_desired_progress = ui:SliderFloat(
-		"Dungeon Progress",
-		implicit_dungeon_progress or self.desired_progress,
-		0.0,
-		1.0
-	)
-	self:SaveIfChanged("desired_progress", changed, new_desired_progress)
-	if implicit_dungeon_progress then
+	self:SaveIfChanged("desired_progress", update_fn(implicit_dungeon_progress or self.desired_progress))
+	if ui and implicit_dungeon_progress then
 		ui:PopDisabledStyle()
 	end
+end
+
+-- update_fn(current_location, locations) -> (changed, new_location)
+function ArenaLoader:UpdateLocation(update_fn)
+	local locations = scenegenutil.GetAllLocations()
+	if #locations == 0 then
+		self.location = nil
+		self:Save()
+	else
+		if not lume(locations):find(self.location):result() then
+			self.location = locations[1]
+			self:Save()
+		end
+		self:SaveIfChanged("location", update_fn(self.location, locations))
+	end
+end
+
+-- update_fn(current_roomtype, valid_room_types) -> (changed, new_roomtype)
+function ArenaLoader:UpdateRoomType(update_fn)
+	local valid_room_types = self:GetValidRoomTypes()
+	if not lume(valid_room_types):find(self.roomtype):result() then
+		self:Set("roomtype", valid_room_types[1])
+	end
+	if #valid_room_types > 1 then
+		self:SaveIfChanged("roomtype", update_fn(self.roomtype, valid_room_types))
+	end
+end
+
+function ArenaLoader:Ui(ui, id, suppress_location)
+	self:UpdateDesiredProgress(ui, function(current_desired_progress)
+		return ui:SliderFloat("Dungeon Progress", current_desired_progress,	0.0, 1.0)
+	end)
 
 	if not suppress_location then
 		ui:PushItemWidth(150)
-		local locations = scenegenutil.GetAllLocations()
-		if #locations == 0 then
+		self:UpdateLocation(function(current_location, locations)
+			return ui:ComboAsString("##Location", current_location, locations)
+		end)
+		if not self.location then
 			ui:Text("No Locations are using world " .. self.levelname)
-			self.location = nil
-			self:Save()
-		else
-			if not lume(locations):find(self.location):result() then
-				self.location = locations[1]
-				self:Save()
-			end
-			self:SaveIfChanged("location", ui:ComboAsString("##Location", self.location, locations))
 		end
 		ui:PopItemWidth()
 		ui:SameLineWithSpace()
@@ -183,19 +215,16 @@ function ArenaLoader:Ui(ui, id, suppress_location)
 
 	local same_line = false
 
-	local valid_room_types = self:GetValidRoomTypes()
-	if not lume(valid_room_types):find(self.roomtype):result() then
-		self:Set("roomtype", valid_room_types[1])
-	end
-	if #valid_room_types > 1 then
-		self:SaveIfChanged("roomtype", ui:ComboAsString("##RoomType", self.roomtype, valid_room_types))
-		same_line = true
-	end
+	self:UpdateRoomType(function(current_roomtype, valid_room_types)
+		same_line = #valid_room_types > 1
+		return ui:ComboAsString("##RoomType", current_roomtype, valid_room_types)
+	end)
 
 	local is_ranger = self:GetRoomType() == "ranger"
 	local is_wanderer = self:GetRoomType() == "wanderer"
-	hype = self:GetRoomType() == "hype"
-	boss = self:GetRoomType() == "boss"
+	local hype = self:GetRoomType() == "hype"
+	local boss = self:GetRoomType() == "boss"
+	local entrance = self:GetRoomType() == "entrance"
 	if is_ranger or is_wanderer then
 		local target_category = is_ranger and SpecialEventRoom.Types.MINIGAME or SpecialEventRoom.Types.CONVERSATION
 		local names = lume(SpecialEventRoom.Events)

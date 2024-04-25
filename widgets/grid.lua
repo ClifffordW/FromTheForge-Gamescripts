@@ -72,10 +72,10 @@ function Grid:DoFocusHookups()
 					if r == self.rows then down = self:GetItemInSlot(c,1) end
 				end
 
-				if up then item:SetFocusChangeDir(MOVE_UP, up) end
-				if down then item:SetFocusChangeDir(MOVE_DOWN, down) end
-				if left then item:SetFocusChangeDir(MOVE_LEFT, left) end
-				if right then item:SetFocusChangeDir(MOVE_RIGHT, right) end
+				if up then item:SetFocusChangeDir(FocusMove.s.up, up) end
+				if down then item:SetFocusChangeDir(FocusMove.s.down, down) end
+				if left then item:SetFocusChangeDir(FocusMove.s.left, left) end
+				if right then item:SetFocusChangeDir(FocusMove.s.right, right) end
 			end
 		end
 	end

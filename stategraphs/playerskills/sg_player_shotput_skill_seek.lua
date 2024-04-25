@@ -5,7 +5,7 @@ local PlayerSkillState = require "playerskillstate"
 local combatutil = require "util.combatutil"
 local soundutil = require "util.soundutil"
 
--- TODO(jambell): ONCE THIS IS PROVEN OUT, commonize this with the other stategraph
+-- TODO: ONCE THIS IS PROVEN OUT, commonize this with the other stategraph
 
 
 -- BIG BIG BIG TO-DO!
@@ -119,26 +119,28 @@ local function OnTackleHitBoxTriggered(inst, data)
 			attack:SetPushback(attackdata.PB_NORM)
 			attack:SetFocus(focushit)
 			attack:SetID(inst.sg.mem.attack_type)
+			attack:SetHitFlags(Attack.HitFlags.LOW_ATTACK)
 
-			inst.components.combat:DoBasicAttack(attack)
+			local hit_v = inst.components.combat:DoBasicAttack(attack)
+			if hit_v then
+				-- hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-			-- hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+				local hitfx_x_offset = 2.75
+				local hitfx_y_offset = 1.5
 
-			local hitfx_x_offset = 2.75
-			local hitfx_y_offset = 1.5
+				inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-			inst.components.combat:SpawnHitFxForPlayerAttack(attack, hitfx, v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+				TryPlayTackleSound(inst, v)
 
-			TryPlayTackleSound(inst, v)
+				-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+				if v.sg ~= nil and v.sg:HasStateTag("block") then
+				else
+					SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				end
 
-			-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-			if v.sg ~= nil and v.sg:HasStateTag("block") then
-			else
-				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+				inst.sg.statemem.tackletargets[v] = true
+				hit = true
 			end
-
-			inst.sg.statemem.tackletargets[v] = true
-			hit = true
 		end
 	end
 
@@ -223,7 +225,7 @@ local states =
 
 			--ATTACK
 			FrameEvent(0, function(inst)
-				--TODO(jambell): try adding a head hitbox that extends past the attack hitbox
+				--TODO: try adding a head hitbox that extends past the attack hitbox
 				inst.sg:AddStateTag("airborne")
 				combatutil.StartMeleeAttack(inst)
 

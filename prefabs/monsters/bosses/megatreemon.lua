@@ -2,6 +2,7 @@ local bossutil = require "prefabs.bossutil"
 local prefabutil = require "prefabs.prefabutil"
 local monsterutil = require "util.monsterutil"
 local spawnutil = require "util.spawnutil"
+local SGCommon = require "stategraphs.sg_common"
 
 local assets =
 {
@@ -11,15 +12,21 @@ local assets =
 	-- for debris FX
 	Asset("ANIM", "anim/treemon_bank.zip"),
 	Asset("ANIM", "anim/treemon_build.zip"),
+
+	Asset("PKGREF", "scripts/prefabs/monsters/bosses/megatreemonshared.lua"),
 }
 
 local prefabs =
 {
-	"cine_megatreemon_intro",
 	"fx_hurt_woodchips",
 	"megatreemon_growth_root",
 	"megatreemon_bomb_projectile",
 	"trap_bomb_pinecone",
+
+	"cine_boss_death_hit_hold",
+	"cine_megatreemon_death",
+	"cine_megatreemon_intro",
+
 	--Drops
 	GroupPrefab("drops_megatreemon"),
 	GroupPrefab("fx_warning"),
@@ -31,6 +38,7 @@ local attacks =
 	{
 		cooldown = 3.33,
 		startup_frames = 35,
+		is_hitstun_pressure_attack = true,
 		start_conditions_fn = function(inst, data, trange)
 			if trange:TestCone45(0, 8, 8) and inst.components.rootattacker:IsIdle() then
 				return true
@@ -50,6 +58,8 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local function OnCombatTargetChanged(inst, data)
 	if data.old == nil and data.new ~= nil then
@@ -74,7 +84,7 @@ local function fn(prefabname)
 	local inst = CreateEntity()
 	inst:SetPrefabName(prefabname)
 
-	monsterutil.MakeStationaryMonster(inst, 1.75, monsterutil.MonsterSize.GIANT) -- TODO: Needs a different physics shape
+	monsterutil.MakeStationaryMonster(inst, 0, monsterutil.MonsterSize.GIANT) -- TODO: Needs a different physics shape
 	monsterutil.ExtendToBossMonster(inst)
 	inst.HitBox:SetNonPhysicsRect(2)
 	inst:AddTag("giant")
@@ -91,7 +101,6 @@ local function fn(prefabname)
 
 	TheFocalPoint.components.focalpoint:StartFocusSource(inst, FocusPreset.BOSS)
 
-	inst:AddComponent("prop")
 	inst:AddComponent("snaptogrid")
 	inst.components.snaptogrid:SetDimensions(3, 3, 0) --3x3 trunk on the ground
 	inst.components.snaptogrid:SetDimensions(5, 5, 1) --5x5 leaves in the air
@@ -106,12 +115,26 @@ local function fn(prefabname)
 	bossutil.SetupLastPlayerDeadEventHandlers(inst)
 
 	monsterutil.AddOffsetHitbox(inst, 2.75)
+	monsterutil.AddOffsetPhysicsCollider(inst, 2.75)
+	monsterutil.AddOffsetPhysicsCollider(inst, 2.5, nil, "offsetphysicscollider2")
 
 	inst:DoPeriodicTicksTask(1, function()
 		local offsethitbox = inst.components.offsethitboxes:Get("offsethitbox")
 		local size = offsethitbox.HitBox:GetSize() * 0.9
 		local theta = math.rad(-inst.Transform:GetRotation() - 90 )
 		offsethitbox.Transform:SetPosition(size * math.cos(theta), 0, -size * math.sin(theta))
+
+		-- Reposition the physics collider if it teleports, otherwise remove it when it dies.
+		if inst:IsAlive() then
+			local pos = inst:GetPosition()
+			inst["offsetphysicscollider"].Transform:SetPosition(pos.x, pos.y, pos.z + 1.65)
+			inst["offsetphysicscollider2"].Transform:SetPosition(pos.x, pos.y, pos.z + 0.85)
+		elseif inst["offsetphysicscollider"] then
+			inst["offsetphysicscollider"]:Remove()
+			inst["offsetphysicscollider"] = nil
+			inst["offsetphysicscollider2"]:Remove()
+			inst["offsetphysicscollider2"] = nil
+		end
 	end)
 
 	inst:DoTaskInTicks(1, function()
@@ -131,6 +154,20 @@ local function fn(prefabname)
 	inst.components.cineactor:QueueIntro("cine_megatreemon_intro")
 
 	inst.DebugDrawEntity = DebugDrawEntity
+
+	-- If you teleport megatreemon, do something special...
+	inst:ListenForEvent("teleport_start", function(_, old_target_pos)
+		-- Only spawn it once
+		if inst.spawned_corestone then return end
+
+		local corestone = SpawnPrefab("corestone_pickup_single") -- Spawn a corestone for now
+		if corestone then
+			local spawn_pos = old_target_pos or Vector3.zero
+			corestone.Transform:SetPosition(spawn_pos:Get())
+		end
+
+		inst.spawned_corestone = true
+	end)
 
 	return inst
 end
@@ -231,8 +268,7 @@ local function rootplayerfn(prefabname)
 	inst.AnimState:SetRimEnabled(true)
 	inst.AnimState:SetRimSize(3)
 	inst.AnimState:SetRimSteps(3)
-	inst.serializeHistory = true -- TODO: networking2022, roots -- check bandwidth use
-
+	inst.serializeHistory = true -- TODO: networking2022, ~81 bytes per root
 	inst:AddComponent("bloomer")
 	inst:AddComponent("colormultiplier")
 	inst:AddComponent("coloradder")

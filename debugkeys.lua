@@ -526,6 +526,20 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 						return CreateBiomeLocationLauncher(d_startmarket)
 					end,
 				},
+				{
+					name = "Start Mini Hype Room",
+					isEnabled = DebugNodes.EditableEditor.IsLevelPristine,
+					fn = function()
+						return CreateBiomeLocationLauncher(d_startmetaunlock)
+					end,
+				},
+				{
+					name = "Return to Town",
+					isEnabled = DebugNodes.EditableEditor.IsLevelPristine,
+					fn = function()
+						d_returntotown()
+					end,
+				},
 			}
 			return t
 		end)()
@@ -646,6 +660,7 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 					name = "Hammer",
 					fn = function()
 						c_give("weapon", "hammer_basic")
+						c_unlockweapontype(WEAPON_TYPES.HAMMER)
 						TheSaveSystem:SaveAll()
 					end
 				},
@@ -653,6 +668,7 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 					name = "Polearm (Spear)",
 					fn = function()
 						c_give("weapon", "polearm_basic")
+						c_unlockweapontype(WEAPON_TYPES.POLEARM)
 						TheSaveSystem:SaveAll()
 					end
 				},
@@ -660,6 +676,7 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 					name = "Shotput",
 					fn = function()
 						c_give("weapon", "shotput_basic")
+						c_unlockweapontype(WEAPON_TYPES.SHOTPUT)
 						TheSaveSystem:SaveAll()
 					end
 				},
@@ -667,6 +684,7 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 					name = "Cannon",
 					fn = function()
 						c_give("weapon", "cannon_basic")
+						c_unlockweapontype(WEAPON_TYPES.CANNON)
 						TheSaveSystem:SaveAll()
 					end
 				},
@@ -674,6 +692,7 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 					name = "Greatsword",
 					fn = function()
 						c_give("weapon", "cleaver_basic")
+						c_unlockweapontype(WEAPON_TYPES.GREATSWORD)
 						TheSaveSystem:SaveAll()
 					end
 				},
@@ -694,12 +713,14 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 						local t = {
 							{
 								name = "No Damage - 0x",
+								binding = { key = InputConstants.Keys.G, CTRL = true, SHIFT = true },
 								fn = function()
 									c_godmodeall(0, true)
 								end,
 							},
 							{
 								name = "Normal Damage - 1x",
+								binding = { key = InputConstants.Keys.G, ALT = true, SHIFT = true },
 								fn = function()
 									c_godmodeall(1, true)
 								end,
@@ -716,12 +737,14 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 							},
 							{
 								name = "Bigger Damage - 100x",
+								binding = { key = InputConstants.Keys.G, SHIFT = true },
 								fn = function()
 									c_godmodeall(100, true)
 								end,
 							},
 							{
 								name = "MEGA UBER Damage - 1000x",
+								binding = { key = InputConstants.Keys.G, CTRL = true, ALT = true, SHIFT = true },
 								fn = function()
 									c_godmodeall(1000, true)
 								end,
@@ -885,11 +908,20 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 						for _,p in ipairs(AllPlayers) do
 							local inventoryhoard = p.components.inventoryhoard
 							inventoryhoard:Debug_GiveRelevantEquipment()
+							for _, v in pairs(WEAPON_TYPES) do
+								p.components.unlocktracker:UnlockWeaponType(v)
+							end
 						end
 					end,
 				},
 
 
+				{
+					name = "Unlock All Decor",
+					fn = function(params)
+						d_unlock_all_playercraftables()
+					end,
+				},
 				{
 					name = "Unlock All Cosmetics",
 					fn = function(params)
@@ -897,12 +929,17 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 					end,
 				},
 				{
-					name = "Purchase All Cosmetics",
+					name = "Unlock All Masteries",
 					fn = function(params)
-						d_purchase_all_cosmetics()
+						d_unlock_all_masteries()
 					end,
 				},
-
+				{
+					name = "Complete All Masteries",
+					fn = function(params)
+						d_complete_all_masteries()
+					end,
+				},
 				{
 					name = "Give Materials",
 					fn = function()
@@ -937,12 +974,12 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 
 						local quests = { "twn_shop_apothecary", "twn_armorsmith_arrival", "twn_shop_weapon", "twn_shop_cook", "twn_shop_research" }
 
-						playerutil.DoForAllLocalPlayers(function(player)
-							local qm = player.components.questcentral:GetQuestManager()
-							for _, v in ipairs(quests) do
-								qm:SpawnQuest(v)
-							end
-						end)
+						-- playerutil.DoForAllLocalPlayers(function(player)
+						-- 	local qm = player.components.questcentral:GetQuestManager()
+						-- 	for _, v in ipairs(quests) do
+						-- 		qm:SpawnQuest(v)
+						-- 	end
+						-- end)
 
 						--Sorry this is ugly and hardcoded lol (I need the flags unlocked to test certain convos) --Kris
 						TheWorld:UnlockFlag("wf_town_has_blacksmith")
@@ -983,14 +1020,6 @@ GLOBAL_KEY_BINDINGS = -- Labelled "Actions" in imgui.
 	},
 
 	{ separator = true },
-	-- NW: Can't do this anymore. You need a valid input ID to add a player.
---	{
---		--binding = { key = InputConstants.Keys.F3 },
---		name = "Add a player",
---		fn = function()
---			net_addplayer()
---		end,
---	},
 	{
 		--binding = { key = InputConstants.Keys.F3 },
 		name = "Remove a player",
@@ -1070,9 +1099,22 @@ PROGRAMMER_KEY_BINDINGS =
 		end,
 	},
 	{
+		--binding = { key = InputConstants.Keys.KP_DIVIDE },
+		name = "Launch Profiler",
+		fn = function()
+			TheSim:LaunchProfiler()
+		end,
+	},
+	{
 		name = "Start Debuggee (Attach vscode)",
 		fn = function()
 			d_attachdebugger()
+		end,
+	},
+	{
+		name = "Lua Memory Profiler",
+		fn = function(params)
+			HotkeyShowDebugPanel( DebugNodes.DebugMemProf, params.from_hotkey)
 		end,
 	},
 	{
@@ -1456,6 +1498,13 @@ WINDOW_KEY_BINDINGS =
 		end,
 	},
 	{
+		--~ binding = { key = InputConstants.Keys.Q, ALT = true, SHIFT = true, },
+		name = "Quips",
+		fn = function(params)
+			HotkeyShowDebugPanel(DebugNodes.DebugQuips, params.from_hotkey)
+		end,
+	},
+	{
 		binding = { key = InputConstants.Keys.G, CTRL = true },
 		name = "Proc Gen",
 		fn = function(params)
@@ -1463,10 +1512,55 @@ WINDOW_KEY_BINDINGS =
 		end,
 	},
 	{
-		name = "Cosmetic Lister",
+		name = "Texture Viewer",
 		fn = function(params)
-			HotkeyShowDebugPanel(DebugNodes.CosmeticLister, params)
+			HotkeyShowDebugPanel( DebugNodes.DebugTexture, params.from_hotkey)
 		end,
+	},
+	{
+		name = "Lister",
+		isSubMenu = true,
+		menuItems = (function()
+			local actions = {
+				{
+					name = "Cosmetic Lister",
+					fn = function(params)
+						HotkeyShowDebugPanel(DebugNodes.CosmeticLister, params)
+					end,
+				},
+				{
+					name = "Power Lister",
+					fn = function(params)
+						HotkeyShowDebugPanel(DebugNodes.PowerLister, params)
+					end,
+				},
+				{
+					name = "Equipment Lister",
+					fn = function(params)
+						HotkeyShowDebugPanel(DebugNodes.EquipmentLister, params)
+					end,
+				},
+				{
+					name = "Constructables Lister",
+					fn = function(params)
+						HotkeyShowDebugPanel(DebugNodes.ConstructablesLister, params)
+					end,
+				},
+				{
+					name = "Mastery Lister",
+					fn = function(params)
+						HotkeyShowDebugPanel(DebugNodes.MasteryLister, params)
+					end,
+				},
+				{
+					name = "Materials Lister",
+					fn = function(params)
+						HotkeyShowDebugPanel(DebugNodes.MaterialLister, params)
+					end,
+				},
+			}
+			return actions
+		end)()
 	},
 }
 

@@ -3,7 +3,7 @@ return {
   __displayName="bandiforest_bg_tree_vine",
   bank="bandiforest_bg_tree",
   build="bandiforest_bg_tree",
-  fade={ bottom=-3.88, top=1.24,},
+  fade={ bottom=-2.72, top=1.05,},
   group="swamp_props",
   layer="auto",
   parallax={

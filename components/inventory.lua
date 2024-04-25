@@ -206,7 +206,7 @@ function Inventory:OverrideEquipSlotSymbols(slot, def, flags, active_dye)
 
 
 	if build == nil then
-		-- victorc: this call won't work (needs to be passed a def)
+		-- TODO: inventory - this call won't work (needs to be passed a def)
 		self:ClearEquipSlotSymbols(slot)
 		return
 	end

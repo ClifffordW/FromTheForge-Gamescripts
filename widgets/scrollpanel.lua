@@ -41,7 +41,7 @@ local ScrollPanel = Class(Widget, function(self)
 			end)
 	self:AddChildren { self.scroll_view, self.scroll_bar }
 
-	self:SetSize( 400 * HACK_FOR_4K, 200 )
+	self:SetSize( 800, 200 )
 
 	self.show_bar = SCROLLBAR.s.ALWAYS
 	self.can_page_updown = true
@@ -161,8 +161,8 @@ end
 function ScrollPanel:IsChildVisible( child )
 
 	local _, y1, _, y2 = child:GetBoundingBox()
-	local _, y1 = self.scroll_root:TransformFromWidget(child, 0, y1)
-	local _, y2 = self.scroll_root:TransformFromWidget(child, 0, y2)
+	_, y1 = self.scroll_root:TransformFromWidget(child, 0, y1)
+	_, y2 = self.scroll_root:TransformFromWidget(child, 0, y2)
 	local bottom_y, top_y, total_h = self:GetVirtualBounds()
 
 	local widget_min = math.min(y1, y2)
@@ -185,8 +185,8 @@ end
 function ScrollPanel:EnsureVisible( child, snap )
 
 	local _, y1, _, y2 = child:GetBoundingBox()
-	local _, y1 = self.scroll_root:TransformFromWidget(child, 0, y1)
-	local _, y2 = self.scroll_root:TransformFromWidget(child, 0, y2)
+	_, y1 = self.scroll_root:TransformFromWidget(child, 0, y1)
+	_, y2 = self.scroll_root:TransformFromWidget(child, 0, y2)
 	local bottom_y, top_y, total_h = self:GetVirtualBounds()
 
 	local widget_min = math.min(y1, y2)
@@ -399,20 +399,19 @@ function ScrollPanel:GetBoundingBox()
 	return -self.w/2, -self.h/2, self.w/2, self.h/2
 end
 
--- TODO(dbriscoe): This doesn't seem to work well. The FtF system doesn't use
+-- TODO(ui): This doesn't seem to work well. The FtF system doesn't use
 -- GetDefaultFocus so there's not focus forwarding happening here. Remove this
 -- so the default widget navigation system can take over.
 --
 -- I think this is trying to allow navigating up and down within the scroll
 -- panel, but the default widget OnFocusMove already does that.
---~ function ScrollPanel:OnFocusMove( dir )
+--~ function ScrollPanel:OnFocusMove(dir, input_device)
 --~ 	if dir == "down" or dir == "up" then
---~ 		local focus = self:GetFE():GetFocusWidget()
+--~ 		local focus = self:GetFocusForOwner()
 --~ 		if focus and self:IsAncestorOf( focus ) then
 --~ 			local next_focus = focus:GetFocusDir( dir )
 --~ 			if next_focus then
---~ 				next_focus:SetFocus()
---~ 				return true
+--~ 				return next_focus
 --~ 			end
 --~ 		end
 --~ 	end
@@ -430,7 +429,9 @@ function ScrollPanel:CheckMouseHover(x,y)
 
 	if self.hover_check or self.blocks_mouse then
 		local lx, ly = self:TransformFromWorld(x,y)
-		if lx >= -self.w/2 and lx <= self.w/2 and ly >= -self.h/2 and ly <= self.h/2 then
+		if	    lx >= -self.w/2 and lx <= self.w/2
+			and ly >= -self.h/2 and ly <= self.h/2
+		then
 			local h = self.h * 0.5
 			if TheFrontEnd:GetDragWidget() and math.abs(ly) > h * 0.85 then
 				if ly < 0 then
@@ -450,13 +451,13 @@ function ScrollPanel:CheckMouseHover(x,y)
 	end
 end
 
-function ScrollPanel:HandlePreControlDown( controls, device, trace, device_id )
+function ScrollPanel:HandlePreControlDown( controls, trace )
 	if controls:Has(Controls.Digital.MENU_SCROLL_FWD) then
 		self:ScrollDown()
-		-- return true
+		return true
 	elseif controls:Has(Controls.Digital.MENU_SCROLL_BACK) then
 		self:ScrollUp()
-		-- return true
+		return true
 	end
 	if self.can_page_updown then
 		if controls:Has(Controls.Digital.MENU_PAGE_DOWN) then
@@ -538,7 +539,7 @@ function ScrollPanel:OnUpdate( dt )
 	end
 	self.was_click_down = TheInput:IsControlDown(Controls.Digital.MENU_ACCEPT) and self:CheckHit( TheInput:GetMousePos() )
 
-	self:HandleGamepadSticks()
+	local scrolled_dir = self:_HandleGamepadSticks()
 
 	local _, cy = self.scroll_pos:GetPos()
 	if self.dest_scroll_pos then
@@ -556,24 +557,55 @@ function ScrollPanel:OnUpdate( dt )
 
 	-- Check if there is a focused widget in the scroll panel, and scroll to it if needed
 	-- Only if the focus was gained without the mouse (not hover)
-	local current_focused_widget = TheFrontEnd:GetFocusWidget()
-	if current_focused_widget and not current_focused_widget.hover and self:IsAncestorOf( current_focused_widget ) then
-		self:EnsureVisible( current_focused_widget, true )
+	local current_focused_widget = self:GetFocusForOwner()
+	if current_focused_widget
+		and not current_focused_widget.hover
+		and self:IsAncestorOf( current_focused_widget )
+	then
+		if scrolled_dir then
+			-- Can't snap back to focus while scrolling or we'll never get
+			-- anywhere. Instead, adjust the focus.
+			local children = self.focuschildrenfn and self.focuschildrenfn() or self.scroll_root:GetChildren()
+			for _,child in ipairs(children) do
+				if child.can_focus_with_nav
+					and child:IsVisible()
+					and self:IsChildVisible(child)
+				then
+					child:SetFocus()
+					break
+				end
+			end
+		else
+			self:EnsureVisible( current_focused_widget, true )
+		end
 	end
 end
 
-function ScrollPanel:HandleGamepadSticks()
-	if TheFrontEnd:IsRelativeNavigation() and self.enabled and not self.ignore_stick_scroll then
+-- Scroll position snapping back after using gamepad to scroll? Use this function!
+--
+-- Set a function that the focusable children (widgets with can_focus_with_nav
+-- like a Button).
+function ScrollPanel:SetFocusableChildrenFn(fn)
+	self.focuschildrenfn = fn
+	return self
+end
 
+function ScrollPanel:_HandleGamepadSticks()
+	if TheFrontEnd:IsRelativeNavigation()
+		and self.enabled
+		and not self.ignore_stick_scroll
+	then
 		-- TODO(dbriscoe): How are widgets supposed to know which device to use? Can we handle this with OnControl?
 		local device_id_hack = 1
-		local ry = TheInput:GetAnalogAxisValue(Controls.Analog.MENU_SCROLL_FWD, Controls.Analog.MENU_SCROLL_BACK, "gamepad", device_id_hack)
+		local input_device = TheInput:GetGamepad(device_id_hack)
+		local ry = TheInput:GetAnalogAxisValue(Controls.Analog.MENU_SCROLL_FWD, Controls.Analog.MENU_SCROLL_BACK, input_device)
 		local SPD = 50
 		if math.abs(ry) > 0.1 then
 			self:Scroll(SPD*ry)
+			return ry
 		end
 	end
-	return self
+	return nil
 end
 
 function ScrollPanel:OnVizChange(viz)

@@ -1,8 +1,9 @@
 local ConfirmDialog = require "screens.dialogs.confirmdialog"
 local ConnectingToGamePopup = require "screens/redux/connectingtogamepopup"
 local krandom = require "util.krandom"
-local UserCommands = require("usercommands")
 local DebugDraw = require "util.debugdraw"
+local SpawnCoordinator = require "components.spawncoordinator"
+local Constructable = require "defs.constructable"
 
 local LoadingInProgress = false
 
@@ -45,7 +46,12 @@ MESSAGETYPE_FEEDBACKREQUEST = 3
 SupportPFlags = true
 PFLAG_ALL = 0xFF
 PFLAG_JOURNALED_REMOVAL = 0x1 -- set when an entity begins removal; transferred owners should remove the entity if set
+PFLAG_CHARMED = 0x2 -- set when an entity is charmed
 
+-- Transform NetworkHistoryIgnoreFlags
+NETHISTORYIGNOREFLAG_POSITION = 0x1
+NETHISTORYIGNOREFLAG_ROTATION = 0x2
+NETHISTORYIGNOREFLAG_SCALE = 0x4
 
 function GetRunPlayerStatusDescription(status)
 	if status == RUNPLAYERSTATUS_ACTIVE then
@@ -123,21 +129,6 @@ function Networking_Announcement_GetDisplayName(name)
     return name
 end
 
--- TODO V2C: Call these appropriately from C
--- these should only run on the server. Could also call SendCommandMetricsEvent directly if you prefer.
-function Networking_KickMetricsEvent(caller, target) -- source) -- source is where the command was issued, i.e. console, slashcommand, vote
-    UserCommands.SendCommandMetricsEvent("kick", target, caller)
-end
-function Networking_BanMetricsEvent(caller, target) -- source) -- source is where the command was issued, i.e. console, slashcommand, vote
-    UserCommands.SendCommandMetricsEvent("ban", target, caller)
-end
-function Networking_RollbackMetricsEvent(caller) -- source) -- source is where the command was issued, i.e. console, slashcommand, vote
-    UserCommands.SendCommandMetricsEvent("rollback", nil, caller)
-end
-function Networking_RegenerateMetricsEvent(caller) -- source) -- source is where the command was issued, i.e. console, slashcommand, vote
-    UserCommands.SendCommandMetricsEvent("regenerate", nil, caller)
-end
-
 function Networking_Say(guid, userid, name, prefab, message, colour, whisper, isemote, user_vanity)
     if message ~= nil and message:utf8len() > MAX_CHAT_INPUT_LENGTH then
         return
@@ -208,7 +199,7 @@ function ValidateRecipeSkinRequest(user_id, prefab_name, skin)
 end
 
 
--- victorc: networking2022 -- current critical path to player spawning
+-- current critical path to player spawning
 function SpawnLocalPlayerFromSim(player_guid, playerID)
     local player = Ents[player_guid]
     if player ~= nil then
@@ -245,7 +236,6 @@ function RequestedLobbyCharacter(userid, prefab_name, skin_base, clothing_body, 
 	TheWorld:PushEvent("ms_requestedlobbycharacter", {userid=userid, prefab_name=prefab_name, skin_base=skin_base, clothing_body=clothing_body, clothing_hand=clothing_hand, clothing_legs=clothing_legs, clothing_feet=clothing_feet})
 end
 
--- TODO: networking2022 / this will need to be reconceptuallized
 function DownloadMods( server_listing )
 	assert(false, "Needs new implementation")
 end
@@ -299,6 +289,7 @@ function WorldResetFromSim()
 				StartNextInstance({
 					reset_action = RESET_ACTION.DEV_LOAD_ROOM,
 					world_prefab = TheWorld.prefab,
+					force_reset = true,
 				})
 			else
 				StartNextInstance({
@@ -306,6 +297,7 @@ function WorldResetFromSim()
 					world_prefab = TheWorld.prefab,
 					scenegen_prefab = TheSceneGen and TheSceneGen.prefab,
 					room_id = TheDungeon:GetDungeonMap():GetCurrentRoomId(),
+					force_reset = true,
 				})
 			end
 		elseif InstanceParams and InstanceParams.settings then
@@ -315,6 +307,7 @@ function WorldResetFromSim()
 				world_prefab = InstanceParams.settings.world_prefab,
 				scenegen_prefab = InstanceParams.settings.scenegen_prefab,
 				room_id = InstanceParams.settings.room_id,
+				force_reset = InstanceParams.settings.force_reset,
 			})
 		else
 			TheLog.ch.Networking:printf("Warning: TheWorld failed during initialization with no restart settings.  Returning to main menu...")
@@ -330,85 +323,35 @@ end
 
 
 --------------------------------------------------------------------------
-local _friendsmanager = nil
-
-local function UnregisterFriendsManager(inst)
-    _friendsmanager = nil
-end
-
-function RegisterFriendsManager(widg)
-    if _friendsmanager == nil then
-        _friendsmanager = widg
-        widg.inst:ListenForEvent("onremove", UnregisterFriendsManager)
-    end
-end
-
-function Networking_PartyInvite(inviter, partyid)
-    if _friendsmanager ~= nil then
-        _friendsmanager:ReceiveInvite(inviter, partyid)
-    end
-end
-
-function Networking_JoinedParty()
-    if _friendsmanager ~= nil then
-        _friendsmanager:SwitchToPartyTab()
-    end
-end
-
-function Networking_LeftParty()
-    if _friendsmanager ~= nil then
-        _friendsmanager:SwitchToFriendsTab()
-    end
-end
-
-function Networking_PartyChanged()
-    if _friendsmanager ~= nil then
-        _friendsmanager:RefreshPartyTab()
-    end
-end
-
-function Networking_PartyServer(ip, port)
-    print("Party server: "..ip..":"..tostring(port))
-end
-
-function Networking_PartyChat(chatline)
-    if _friendsmanager ~= nil then
-        _friendsmanager:ReceivePartyChat(chatline)
-    end
-end
 
 
--- example arenaWorldPrefab: "starting_forest_arena_nesw"
--- example regionID: "surrland"
--- example locationID: "brundle", "treemon_forest", etc.
--- altMapGenID is an optional index into alternate_mapgens for a biome (see biomes.lua)
-function OnNetworkClientStartRun(mode, arenaWorldPrefab, regionID, locationID, seed, altMapGenID, questParams)
+-- example arena_world_prefab: "starting_forest_arena_nesw"
+-- example region_id: "forest", "swamp", etc.
+-- example location_id: "treemon_forest", "owlitzer_forest", "bandi_swamp", etc.
+-- alt_mapgen_id is an optional index into alternate_mapgens for a biome (see biomes.lua)
+function OnNetworkClientStartRun(mode, dungeon_run_params, quest_params)
 	if TheNet:IsHost() then
 		return
 	end
 
 	TheAudio:StopAllSounds()
-	if mode == STARTRUNMODE_DEFAULT then
-		TheLog.ch.Networking:printf("OnNetworkClientStartRun: mode=%d regionID=%s locationID=%s motherseed=%d altMapGenID=%s questParams.wants_quest_room=%s",
-			mode, regionID, locationID, seed, tostring(altMapGenID), tostring(questParams.wants_quest_room))
+	TheLog.ch.Networking:printf("OnNetworkClientStartRun: mode=%d dungeon_run_params=%s quest_params=%s",
+		mode, tabletoordereddictstring(dungeon_run_params), tabletoordereddictstring(quest_params))
 
+	if mode == STARTRUNMODE_DEFAULT then
 		local RoomLoader = require "roomloader"
-		RoomLoader.ClientStartRun(regionID, locationID, seed, altMapGenID, questParams)
+		RoomLoader.ClientStartRun(dungeon_run_params, quest_params)
 
 	elseif mode == STARTRUNMODE_ARENA then
 		-- like debugcommands.lua start_specific_room()
-		local roomtype = regionID
 		local biomes = require "defs.biomes"
-		local biome_location = biomes.locations[locationID]
-
-		TheLog.ch.Networking:printf("OnNetworkClientStartRun: mode=%d roomtype=%s locationID=%s motherseed=%d worldPrefab=%s",
-			mode, roomtype, locationID, seed, arenaWorldPrefab)
+		local biome_location = biomes.locations[dungeon_run_params.location_id]
 
 		TheAudio:StopAllSounds() -- Not normal flow, so clean up sounds.
 		local WorldMap = require "components.worldmap"
-		WorldMap.GetDungeonMap_Safe():Debug_StartArena(arenaWorldPrefab,
+		WorldMap.GetDungeonMap_Safe():Debug_StartArena(dungeon_run_params.arena_world_prefab,
 			{
-				roomtype = roomtype,
+				roomtype = dungeon_run_params.roomtype,
 				location = biome_location.id,
 				is_terminal = false, -- terminal suppresses resource rooms
 			})
@@ -430,11 +373,16 @@ function OnNetworkClientLoadRoom(roomdata)
 
 	lastRoomCompleteAckSeqNr = 0 -- explicit reset needed when per-room sim reset goes away
 
-	TheLog.ch.Networking:printf("OnNetworkClientLoadRoom: actionID=%d worldPrefab=%s sceneGenPrefab=%s roomID=%d",
-		roomdata.actionID, roomdata.worldPrefab, roomdata.sceneGenPrefab, roomdata.roomID)
+	TheLog.ch.Networking:printf("OnNetworkClientLoadRoom: actionID=%d worldPrefab=%s sceneGenPrefab=%s roomID=%d forceReset=%s",
+		roomdata.actionID, roomdata.worldPrefab, roomdata.sceneGenPrefab, roomdata.roomID, roomdata.forceReset)
 
 	local RoomLoader = require "roomloader"
 	assert(RoomLoader.ClientLoadTownLevel ~= nil)
+
+	if roomdata.forceReset then
+		RoomLoader.ResetNextLoad()
+	end
+
 	-- similar to gamelogic.lua DoResetAction?
 	if roomdata.actionID == RESET_ACTION.LOAD_DUNGEON_ROOM then
 		-- TODO(roomtravel): test for TheWorld because it is eventually used in
@@ -543,6 +491,7 @@ local function UpdateGameplayClientHostState()
 end
 
 local RoomBonusScreen = require("screens.dungeon.roombonusscreen")
+local WaitingForPlayersScreen = require("screens.waitingforplayersscreen")
 local Power = require 'defs.powers'
 
 
@@ -552,6 +501,16 @@ function OnNetworkUpdate()
 	if not TheNet:IsHost() then
 		UpdateClientHostState()
 	end
+
+	-- If the waiting for players screen is up, call the CheckReadyToProgress function from here. The reason being that the OnUpdate() doesn't get called if another 
+	-- screen pops up over top of it. This logic can't wait as it's for networked games. So call it from there:
+
+	local screen = TheFrontEnd:FindScreen(WaitingForPlayersScreen)
+	if screen then
+		screen:CheckReadyToProgress()
+	end
+
+
 	if InGamePlay() and TheNet:IsInGame() then
 		if not TheNet:IsHost() then
 			UpdateGameplayClientHostState()
@@ -639,7 +598,6 @@ end
 
 ------------------------------------------------------------------------------
 
--- TODO: networking2022 -- move these into their own file?
 local EffectEvents = require "effectevents"
 local Enum = require "util.enum"
 local ParticleSystemHelper = require "util.particlesystemhelper"
@@ -647,7 +605,6 @@ local SGCommon = require("stategraphs.sg_common")
 local SGPlayerCommon = require("stategraphs.sg_player_common")
 local soundutil = require("util.soundutil")
 require("prefabs.fx_hits")
-local HitBox = require("components.hitbox")
 local monsterutil = require("util.monsterutil")
 
 function HandleNetEventPlaySound(emitterGUID, eventName)
@@ -859,9 +816,9 @@ function HandleNetEventPlayGroundImpact(parentGUID, param)
 end
 
 
-showHitboxDebug = false
+NetworkShowHitboxDebug = false
 
-function DrawDebugHitboxShape(inst, hitbox_data, did_hit)
+local function DrawDebugHitboxShape(inst, hitbox_data, did_hit)
 	local hitboxcomp = hitbox_data.params[1]
 
 	local col = WEBCOLORS.RED
@@ -871,7 +828,7 @@ function DrawDebugHitboxShape(inst, hitbox_data, did_hit)
 
 	if hitbox_data.triggerfnname == "TriggerCircle" then
 		local dist = hitbox_data.params[2]
-		local rotation = hitbox_data.params[3]
+		-- local rotation = hitbox_data.params[3]
 		local radius = hitbox_data.params[4]
 		local zoffset = hitbox_data.params[5] or 0.0
 
@@ -930,8 +887,8 @@ function HandleNetEventApplyDamage(attackerGUID, targetGUID, attackTable, event)
 	local attacker = Ents[attackerGUID]
 	local target = Ents[targetGUID]
 
-	if showHitboxDebug then
-		print("HandleNetEventApplyDamage. attacker = " .. attackerGUID .. " target = " .. targetGUID)
+	if NetworkShowHitboxDebug then
+		TheLog.ch.Networking:print("[HitboxDebug] HandleNetEventApplyDamage. attacker = " .. attackerGUID .. " target = " .. targetGUID)
 	end
 
 	if not attacker or not attacker:IsValid() or not target or not target:IsValid() then
@@ -973,47 +930,47 @@ function HandleNetEventApplyDamage(attackerGUID, targetGUID, attackTable, event)
 		local ents = triggerfn(table.unpack(hitbox_data.params))
 		hitbox_ent.components.hitbox.temp_allow_entity = nil
 
-		if showHitboxDebug then
-			print("Hit box check.")
+		if NetworkShowHitboxDebug then
+			TheLog.ch.Networking:printf("[HitboxDebug] Hit box check.")
 			dumptable(hitbox_data.params)
 
 			DrawDebugHitboxShape(hitbox_ent, hitbox_data, ents ~= nil)
 		end
 
 
-		if ents ~= nil then
-			if showHitboxDebug then
-				print("Detected hits with entities:")
+		if ents then
+			if NetworkShowHitboxDebug then
+				TheLog.ch.Networking:print("[HitboxDebug] Detected hits with entities:")
 				dumptable(ents)
 			end
 
 			for _i,ent in ipairs(ents) do
 				if ent and ent == target then
-					if showHitboxDebug then
-						print("Hitting the target!")
+					if NetworkShowHitboxDebug then
+						TheLog.ch.Networking:print("[HitboxDebug] Hitting the target!")
 					end
 
-					if ent.HitBox:IsInvincible() then -- TODO: handle utility hitboxes?
-						-- We now send the event seperately via the aptly named EffectEvents:MakeNetEventPushHitBoxInvincibleEventOnEntity()
+					if target.HitBox:IsInvincible() then -- TODO: handle utility hitboxes like HitBoxQueue:PostUpdate?
 						-- Leaving this so we can still follow the thread in the future
 						--ent:PushEvent("hitboxcollided_invincible", hitbox_ent.components.hitbox)
+						EffectEvents.MakeNetEventPushHitBoxInvincibleEventOnEntity(attacker, target)
 						is_hit_confirmed = false
 
-						if showHitboxDebug then
-							print("Invincible!")
+						if NetworkShowHitboxDebug then
+							TheLog.ch.Networking:print("[HitboxDebug] Invincible!")
 						end
 					else
 						is_hit_confirmed = not target.components.hitflagmanager or target.components.hitflagmanager:CanAttackHit(atk)
 					end
 					break
 				end
-			end
+			end -- for
 		end
 	end
 
 	if is_hit_confirmed then
-		if showHitboxDebug then
-			print("Hit Confirmed")
+		if NetworkShowHitboxDebug then
+			TheLog.ch.Networking:print("[HitboxDebug] Hit Confirmed")
 		end
 
 		DoNetEventApplyDamage(atk, event)	-- in combat.lua
@@ -1027,8 +984,8 @@ function HandleNetEventApplyDamage(attackerGUID, targetGUID, attackTable, event)
 		-- 	attacking_entity, attacking_entity.Network:GetEntityID(), target, target.Network:GetEntityID())
 		SGCommon.Fns.ApplyHitConfirmEffects(atk)
 	else
-		if showHitboxDebug then
-			print("NO HIT")
+		if NetworkShowHitboxDebug then
+			TheLog.ch.Networking:print("[HitboxDebug] NO HIT")
 		end
 	end
 end
@@ -1059,6 +1016,80 @@ function HandleNetEventApplyHeal(attackerGUID, targetGUID, heal)
 		target.components.combat:GetHealed(hl)
 	end
 	--	DoNetEventApplyHeal(hl, event)	-- in combat.lua
+end
+
+function HandleNetEventApplyPowerChargedDamage(attackerGUID, targetGUID, attackTable)
+	local attacker = Ents[attackerGUID]
+	local target = Ents[targetGUID]
+
+	if not attacker or not attacker:IsValid() or not target or not target:IsValid() then
+		return
+	elseif not target:IsLocalOrMinimal() then
+		-- early exit if this client is an observer to this combat interaction (3P+ games)
+		return
+	elseif target:IsInLimbo() then
+		TheLog.ch.Networking:printf("Warning: Attempted to apply power charged damage to a target in limbo GUID %d EntityID %d (%s)",
+			targetGUID, target.Network:GetEntityID(), target.prefab)
+		return
+	end
+
+	local atk = Attack(attacker, target)
+
+	for k, v in pairs(attackTable) do
+		if k ~= "_attacker" and k ~= "_target" then
+			atk[k] = v
+		end
+	end
+
+	-- TheLog.ch.Networking:printf("HandleNetEventApplyPowerChargedDamage attacker %s target %s", attacker, target)
+	target:PushEvent("power_charged_damage", atk)
+end
+
+function HandleNetEventApplyPower(attackerGUID, targetGUID, powerDefName, powerStacks)
+	local attacker = Ents[attackerGUID]
+	local target = Ents[targetGUID]
+
+	if not attacker or not attacker:IsValid() or not target or not target:IsValid() then
+		return
+	elseif not attacker:IsLocalOrMinimal() and not target:IsLocalOrMinimal() then
+		-- early exit if this client is an observer to this combat interaction (3P+ games)
+		return
+	elseif target:IsInLimbo() then
+		TheLog.ch.Networking:printf("Warning: Attempted to apply power to a target in limbo GUID %d EntityID %d (%s)",
+			targetGUID, target.Network:GetEntityID(), target.prefab)
+		return
+	end
+
+	local power_def = Power.FindPowerByName(powerDefName) --slow?
+	if power_def then
+		target.components.powermanager:AddPower(target.components.powermanager:CreatePower(power_def), powerStacks)
+		-- target.components.powermanager:AddPowerByName(powerDefName, powerStacks)
+	end
+end
+
+function HandleNetEventApplyPowerChargedDamage(attackerGUID, targetGUID, attackTable)
+	local attacker = Ents[attackerGUID]
+	local target = Ents[targetGUID]
+
+	if not attacker or not attacker:IsValid() or not target or not target:IsValid() then
+		return
+	elseif not target:IsLocalOrMinimal() then
+		return
+	elseif target:IsInLimbo() then
+		TheLog.ch.Networking:printf("Warning: Attempted to apply power charged damage to a target in limbo GUID %d EntityID %d (%s)",
+			targetGUID, target.Network:GetEntityID(), target.prefab)
+		return
+	end
+
+	local atk = Attack(attacker, target)
+
+	for k, v in pairs(attackTable) do
+		if k ~= "_attacker" and k ~= "_target" then
+			atk[k] = v
+		end
+	end
+
+	target:PushEvent("power_charged_damage", atk)
 end
 
 function HandleNetEventSetupProjectile(projectileGUID, ownerGUID, targetGUID)
@@ -1146,12 +1177,21 @@ function HandleNetEventPushEventOnMinimalEntity(parentGUID, eventname, parameter
 	end
 end
 
-function HandleNetEventPushHitBoxInvincibleEventOnEntity(parentGUID, targetGUID)
-	local inst = Ents[parentGUID]
+function HandleNetEventPushEventOnOwnerEntity(ownerGUID, projectileGUID, eventname, parameters)
+	local owner = Ents[ownerGUID]
+	local projectile = Ents[projectileGUID]
+	if owner and owner:IsValid() and owner:IsLocal() and projectile and projectile:IsValid() then
+		parameters.projectile = projectile
+		owner:PushEvent(eventname, parameters)
+	end
+end
+
+function HandleNetEventPushHitBoxInvincibleEventOnEntity(attackerGUID, targetGUID)
+	local attacker = Ents[attackerGUID]
 	local target = Ents[targetGUID]
 
-	if inst and inst:IsValid() and target and target:IsValid() then
-		EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(inst, target)
+	if attacker and attacker:IsValid() and target and target:IsValid() then
+		EffectEvents.HandleNetEventPushHitBoxInvincibleEventOnEntity(attacker, target)
 	end
 end
 
@@ -1251,10 +1291,12 @@ function HandleNetEventHitStreakUpdate(targetGUID, hitstreak, damagetotal)
 		return
 	end
 
+	-- TheLog.ch.Networking:printf("[Combat] HitStreakUpdate: target=%s hitstreak=%s damagetotal=%s", target, hitstreak, damagetotal)
 	target:PushEvent("hitstreak", { hitstreak = hitstreak, damagetotal = damagetotal })
 end
 
 local DUMMY_ATTACKIDS <const> = {}
+local DUMMY_TARGETS <const> = {}
 function HandleNetEventHitStreakKilled(targetGUID, hitstreak, damagetotal)
 	local target = Ents[targetGUID]
 	if not target or not target:IsValid() then
@@ -1266,7 +1308,10 @@ function HandleNetEventHitStreakKilled(targetGUID, hitstreak, damagetotal)
 			hitstreak = hitstreak,
 			damage_total = damagetotal,
 			-- attack ids are not synced and only used for player progression things like masteries
-			attacks = target:IsLocalOrMinimal() and target.components.combat:GetHitStreakAttackIDs() or DUMMY_ATTACKIDS
+			attacks = target:IsLocalOrMinimal() and target.components.combat:GetHitStreakAttackIDs() or DUMMY_ATTACKIDS,
+
+			-- attack targets are not synced and only used for player progression things like masteries
+			targets = target:IsLocalOrMinimal() and target.components.combat:GetHitStreakTargets() or DUMMY_TARGETS,
 		})
 end
 
@@ -1298,6 +1343,16 @@ function HandleNetEventRequestSinglePickup(pickupGUID, playerID)
 
 	local player = Ents[TheNet:FindGUIDForPlayerID(playerID)]
 	pickup.components.singlepickup:OnNetPickup(player)
+end
+
+
+function HandleNetEventSpawnPowerPopup(targetGUID, powername, hide_description, disable_tooltip, scale, offset_y)
+	local target = Ents[targetGUID]
+
+	if target then 
+		--inst.sg.mem.power_popup = 
+		TheDungeon.HUD:MakePowerPopup({ target = target, power = powername, hide_description = hide_description, scale = scale, offset_y = offset_y, disable_tooltip = disable_tooltip })
+	end
 end
 
 
@@ -1384,16 +1439,19 @@ function OnChatMessage(senderClientID, senderName, message, isWhisper)
 		color = sender.uicolor
 	end
 
-	local pretty_msg = string.format("<#%s>%s</>: %s", HexToStr(RGBToHex(color)), senderName, message)
-	TheDungeon.components.chathistory:ReceiveChatMessage(pretty_msg, sender)
+	message = message:sanitize_user_text()
+	senderName = senderName:sanitize_user_text()
+
+	if message:len() > 0 then
+		local pretty_msg = string.format("<#%s>%s</>: %s", HexToStr(RGBToHex(color)), senderName, message)
+		TheDungeon.components.chathistory:ReceiveChatMessage(pretty_msg, sender)
+	end
 
 	return true
 end
 
-
-
-function OnSoleOccupantsReceivedOnClient(circles)
-	-- TODO: On clients, handle the received list of sole occupant circles
+function OnSoleOccupantsReceivedOnClient(sole_occupants)
+	SpawnCoordinator.EnforceSoleOccupancy(sole_occupants)
 end
 
 ---- Helper Functions ----
@@ -1401,6 +1459,13 @@ end
 function GetPlayerEntityFromPlayerID(playerID)
     local playerGUID = TheNet:FindGUIDForPlayerID(playerID)
     return playerGUID and Ents[playerGUID] or nil
+end
+
+-- See also playerutil.GetFirstLocalPlayer()
+function GetFirstLocalPlayer()
+	local local_players = TheNet:GetLocalPlayerList()
+	local player = #local_players > 0 and GetPlayerEntityFromPlayerID(local_players[1])
+	return player
 end
 
 -- Return the difference between a local & remote network sequence number
@@ -1438,3 +1503,180 @@ function JoiningInvite()
 	ShowConnectingToGamePopup()
 end
 
+
+-- there is a native version of this that needs to stay updated
+PlayerDataChangedFlags =
+{
+	Unlocks = 0x1,
+	Ascension = 0x2,
+	Cosmetics = 0x4,
+	HeartLevels = 0x8,
+	CharacterCreator = 0x10,
+
+	All = 0xFF,
+}
+
+function OnNetworkPlayerDataChanged(playerID, isRemoteData, dataChangedFlags)
+	TheLog.ch.Networking:printf("Player data changed for player %s.  RemoteData=%s  Flags=0x%X",
+		playerID, tostring(isRemoteData), dataChangedFlags)
+
+	local ent = GetPlayerEntityFromPlayerID(playerID)
+	if ent and ent:IsValid() then
+		ent:PushEvent("playerdatachanged", dataChangedFlags)
+	end
+end
+
+function OnNetworkWorldDataChanged(isRemoteData)
+	TheLog.ch.Networking:print("World data changed. RemoteData = " .. tostring(isRemoteData))
+end
+
+
+function GetNetworkJoinCode()
+	local joincode = TheNet:GetJoinCode()
+
+	if joincode and joincode ~= "" and TheGameSettings:Get("network.streamer_mode") then
+		joincode = "*****"	-- Redacted
+	end
+	return joincode
+end
+
+
+
+-- Need to return the entityID of the spawned prop, or 0 if not valid
+function OnTownPropPlaceRequest(playerID, propname, x, z, flipped, variation)	-- Only called on host
+	print("OnTownPropPlaceRequest playerID=" .. playerID .. " Prop=" .. propname .. " X=" .. tostring(x) .. " Z=" .. tostring(z) .. " Flipped=" .. tostring(flipped) .. " Variation=" .. tostring(variation))
+
+	if TheWorld ~= nil and TheWorld:HasTag("town") then
+		local def = Constructable.FindItem(propname)
+		if def ~= nil then
+			-- Right now we have no way of retrieving the grid size of a prop without spawning it
+			-- so we're spawning a temp placer as a workaround
+			local placer = SpawnPrefab(propname .. "_placer")
+			placer.Transform:SetPosition(x, 0, z)
+			if placer.components.placer:CanPlace() then
+				local spawned = SpawnPrefab(propname)
+				spawned.Transform:SetPosition(x,0,z)
+				spawned:AddTag(placer.components.placer:GetDecorTag())
+				if flipped then
+					spawned.components.prop:FlipProp()
+				end
+				if variation then
+					spawned.components.prop:SetVariationOverride(variation)
+				end
+
+				placer:Remove()
+				return spawned.Network:GetEntityID()
+			end
+		end
+	end
+
+	return 0;
+end
+
+-- If resultEntityID == 0, the prop was NOT placed
+-- if resultEntityID != 0, the prop was placed using the given entityID. (Entity might not be spawned yet because of unreliable network packets, though)
+function OnTownPropPlaceResult(playerID, propname, resultEntityID)
+	print("OnTownPropPlaceResult playerID=" .. playerID .. " Prop=" .. propname .. " ID=" .. tostring(resultEntityID))
+	local player = Ents[TheNet:FindGUIDForPlayerID(playerID)]
+	if player then
+		if resultEntityID == 0 then
+			player:PushEvent("placement_failed")
+		else
+			player:PushEvent("placement_sucessful", { entityID = resultEntityID, propname = propname })
+		end
+	end
+end
+
+
+-- Need to return true if removed, false if not
+function OnTownPropRemoveRequest(playerID, propEntityID) -- Only called on host
+	print("OnTownPropRemoveRequest playerID=" .. playerID .. " PropEntityID=" .. tostring(propEntityID))
+	if TheWorld ~= nil and TheWorld:HasTag("town") then
+		-- TODO: Copied from revive component. Consider making this a common function.
+		local guid = TheNet:FindGUIDForEntityID(propEntityID)
+		if guid and guid ~= 0 and Ents[guid] and Ents[guid]:IsValid() then
+			local prop = Ents[guid]
+			prop:Remove()
+			return true
+		end
+	end
+
+	return false;
+end
+
+
+function OnTownPropRemoveResult(playerID, propEntityID, successBool)
+	print("OnTownPropRemoveResult playerID=" .. playerID .. " PropEntityID=" .. tostring(propEntityID) .. " Result=" .. tostring(successBool))
+	local player = Ents[TheNet:FindGUIDForPlayerID(playerID)]
+	if player then
+		if successBool then
+			player:PushEvent("onremovesuccessful", {entityID = propEntityID})
+		else
+			player:PushEvent("onremovefailed", {entityID = propEntityID})
+		end
+	end
+
+end
+
+
+
+
+
+-- Possible locations for rich presence:
+-- (if you want more, they will need to be added on the native side for security reasons)
+Location_None = 0
+Location_GreatRotwoodForest = 1
+Location_NocturneGrove = 2
+Location_BlisterbaneBog = 3
+Location_TheMoldedGrave = 4
+
+-- Possible roomtype for rich presence:
+RoomType_Normal = 0
+RoomType_Market = 1
+RoomType_Potion = 2
+
+-- Possible frenzy types for rich presence:
+-- (if you want more, they will need to be added on the native side for security reasons)
+FrenzyType_Frenzy0 = 0
+FrenzyType_Frenzy1 = 1
+FrenzyType_Frenzy2 = 2
+FrenzyType_Frenzy3 = 3
+		
+
+function GetRichPresenceDetails()
+	local loc = Location_None
+	local roomtype = RoomType_Normal
+	local frenzy = FrenzyType_Frenzy0
+	local progress = 0.0
+	local valid = TheWorld ~= nil
+
+	if TheDungeon and TheWorld then
+		if not TheDungeon:IsInTown() then
+			frenzy = TheDungeon.progression.components.ascensionmanager:GetCurrentLevel()	-- Should map to 0-3
+			
+			local locid = TheDungeon:GetCurrentLocationID()
+			if locid == "treemon_forest" then
+				loc = Location_GreatRotwoodForest
+			elseif locid == "owlitzer_forest" then
+				loc = Location_NocturneGrove
+			elseif locid == "bandi_swamp" then
+				loc = Location_BlisterbaneBog
+			elseif locid == "thatcher_swamp" then
+				loc = Location_TheMoldedGrave
+			end
+
+			local room_type = TheWorld:GetCurrentRoomType()
+			if room_type == "potion" then 
+				roomtype = RoomType_Potion
+			elseif room_type == "market" then 
+				roomtype = RoomType_Market
+			end
+		end
+	
+		if TheWorld then
+			progress = TheWorld:GetDungeonProgress()
+		end
+	end
+
+	return valid, loc, roomtype, frenzy, progress
+end

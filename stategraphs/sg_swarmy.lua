@@ -1,12 +1,13 @@
 local EffectEvents = require "effectevents"
 local SGCommon = require "stategraphs.sg_common"
 local monsterutil = require "util.monsterutil"
+local spawnutil = require "util.spawnutil"
 
 local function OnDashHitBoxTriggered(inst, data)
 	local hit = SGCommon.Events.OnHitboxTriggered(inst, data, {
-		attackdata_id = "dash",
+		attackdata_id = "acid_dash",
 		hitstoplevel = HitStopLevel.MEDIUM,
-		pushback = 1.5,
+		pushback = 0.3,
 		hitstun_anim_frames = 2,
 		hitflags = Attack.HitFlags.LOW_ATTACK,
 		combat_attack_fn = "DoKnockbackAttack",
@@ -20,17 +21,29 @@ local function OnDashHitBoxTriggered(inst, data)
 	--SpawnHitFx("hits_fire", inst, v, 0, 0, dir, hitstoplevel)
 	--SpawnHurtFx(inst, v, 0, dir, hitstoplevel)
 end
-
 local function OnBurstHitBoxTriggered(inst, data)
 	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		attackdata_id = "burst",
+		attackdata_id = "acid_burst",
 		hitstoplevel = HitStopLevel.LIGHT,
-		pushback = 1,
+		pushback = 1.2,
 		hitstun_anim_frames = 2,
 		hitflags = Attack.HitFlags.LOW_ATTACK,
 		combat_attack_fn = "DoKnockbackAttack",
 		hit_fx = monsterutil.defaultAttackHitFX,
 		hit_fx_offset_x = 0.5,
+	})
+end
+local function OnUppercutHitBoxTriggered(inst, data)
+	local bighit = inst.sg.statemem.lasthit
+	SGCommon.Events.OnHitboxTriggered(inst, data, {
+		attackdata_id = "uppercut",
+		hitstoplevel = bighit and HitStopLevel.HEAVIER or 0,
+		pushback = bighit and 2 or 0.5,
+		hitstun_anim_frames = bighit and 6 or 3,
+		combat_attack_fn = bighit and "DoKnockdownAttack" or "DoBasicAttack",
+		hit_fx = monsterutil.defaultAttackHitFX,
+		hit_fx_offset_x = 0.5,
+		bypass_posthit_invincibility = true,
 	})
 end
 
@@ -56,17 +69,6 @@ local function ChooseIdleBehavior(inst)
 	return false
 end
 
-local function SpawnAcid(inst, trap_size)
-	local trap = SGCommon.Fns.SpawnAtDist(inst, "trap_acid", 0)
-	local trapdata =
-	{
-		size = trap_size, -- small, medium, large
-		temporary = true,
-	}
-
-	EffectEvents.MakeNetEventPushEventOnMinimalEntity(trap, "acid_start", trapdata)
-end
-
 local events =
 {
 }
@@ -77,6 +79,7 @@ monsterutil.AddMonsterCommonEvents(events,
 monsterutil.AddOptionalMonsterEvents(events,
 {
 	idlebehavior_fn = ChooseIdleBehavior,
+	spawn_battlefield = true,
 	--battlecry_fn = function(inst) inst.sg:GoToState("battlecry") end,
 })
 SGCommon.Fns.AddCommonSwallowedEvents(events)
@@ -116,14 +119,14 @@ local states =
 			end),
 		},
 	}),
-
 	State({
 		name = "idlebehavior",
 		tags = { "busy", "caninterrupt" },
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("behavior2")
-			inst.components.timer:StartTimer("idlebehavior_cd", math.random(8, 16), true)
+			local cdtime = inst:HasTag("elite") and 90 or math.random(8, 16)
+			inst.components.timer:StartTimer("idlebehavior_cd", cdtime, true)
 		end,
 
 		timeline =
@@ -145,40 +148,8 @@ local states =
 			end),
 		},
 	}),
-
 	State({
-		name = "dash_pre",
-		tags = { "attack", "busy" },
-
-		onenter = function(inst, target)
-			local attack_data = inst.components.attacktracker:GetAttackData("dash")
-			inst.components.attacktracker:StartActiveAttack(attack_data.id)
-			inst.AnimState:PlayAnimation("acid_dash_pre") -- 2 frames
-			inst.AnimState:PushAnimation("acid_dash_hold") -- 31 frames
-			inst.sg.statemem.target = target
-		end,
-
-		timeline =
-		{
-			--hair sync
-			FrameEvent(0, SyncHair),
-			--early exit
-			FrameEvent(18, function(inst)
-				inst.sg:GoToState("dash", inst.sg.statemem.target)
-			end),
-		},
-
-		events =
-		{
-			EventHandler("animqueueover", function(inst)
-				inst.Physics:MoveRelFacing(-12 / 150)
-				inst.sg:GoToState("dash", inst.sg.statemem.target)
-			end),
-		},
-	}),
-
-	State({
-		name = "dash",
+		name = "acid_dash",
 		tags = { "attack", "busy" },
 
 		onenter = function(inst, target)
@@ -188,14 +159,13 @@ local states =
 
 		onupdate = function(inst)
 			if inst.sg.statemem.hitting then
-				inst.components.hitbox:PushBeam(0.5, 2.2, 0.5, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushBeam(0.1, 1.8, 0.5, HitPriority.MOB_DEFAULT)
+				inst.components.hitbox:PushBeam(0, 1, 1.2, HitPriority.MOB_DEFAULT)
 			end
 		end,
-
 		timeline =
 		{
-			--physics
-			FrameEvent(14, function(inst) inst.Physics:MoveRelFacing(16 / 150) end),
+			FrameEvent(0, SyncHair),
 			FrameEvent(17, function(inst)
 				local facingrot = inst.Transform:GetFacingRotation()
 				local target = inst.sg.statemem.target
@@ -215,19 +185,7 @@ local states =
 				inst.Transform:SetRotation(facingrot + diff)
 				inst.Physics:StartPassingThroughObjects()
 				inst.Physics:SetMotorVel(30)
-			end),
-			FrameEvent(24, function(inst) inst.Physics:SetMotorVel(12) end),
-			FrameEvent(30, function(inst) inst.Physics:SetMotorVel(2) end),
-			FrameEvent(35, function(inst)
-				inst.Physics:StopPassingThroughObjects()
-				inst.Physics:Stop()
-			end),
 
-			--hair sync
-			FrameEvent(0, SyncHair),
-			FrameEvent(33, SyncHair),
-			--attack
-			FrameEvent(17, function(inst)
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.sg.statemem.hitting = true
 				inst.sg.statemem.dashvar = math.random(3)
@@ -241,8 +199,14 @@ local states =
 				inst.sg.statemem.dashvar = (inst.sg.statemem.dashvar % 3) + 1
 				inst:SpawnDashTrail(inst.sg.statemem.dashvar)
 			end),
-			FrameEvent(26, function(inst)
-				inst.sg.statemem.hitting = false
+			FrameEvent(24, function(inst) inst.Physics:SetMotorVel(10) end),
+			FrameEvent(30, function(inst) inst.sg.statemem.hitting = false end),
+			FrameEvent(30, function(inst) inst.Physics:SetMotorVel(1) end),
+			FrameEvent(32, function(inst) inst.Physics:SetMotorVel(0.5) end),
+			FrameEvent(33, SyncHair),
+			FrameEvent(35, function(inst)
+				inst.Physics:StopPassingThroughObjects()
+				inst.Physics:Stop()
 			end),
 		},
 
@@ -250,45 +214,16 @@ local states =
 		{
 			EventHandler("hitboxtriggered", OnDashHitBoxTriggered),
 			EventHandler("animover", function(inst)
-				inst.sg:GoToState("burst_hold") --idle
+				inst.sg:GoToState("burst_hold")
 			end),
 		},
 
 		onexit = function(inst)
 			inst.Physics:Stop()
+			inst.Physics:StopPassingThroughObjects()
 			inst.components.hitbox:StopRepeatTargetDelay()
-			--inst.components.attacktracker:CompleteActiveAttack()
 		end,
 	}),
-
-	State({
-		name = "burst_pre",
-		tags = { "attack", "busy" },
-
-		onenter = function(inst)
-			local attack_data = inst.components.attacktracker:GetAttackData("burst")
-			inst.components.attacktracker:StartActiveAttack(attack_data.id)
-			inst.AnimState:PlayAnimation("acid_burst2_pre") -- 20 frames
-		end,
-
-		timeline =
-		{
-			--physics
-			FrameEvent(2, function(inst) inst.Physics:MoveRelFacing(16 / 150) end),
-			FrameEvent(4, function(inst) inst.Physics:MoveRelFacing(-16 / 150) end),
-			FrameEvent(6, function(inst) inst.Physics:MoveRelFacing(-44 / 150) end),
-			--hair sync
-			FrameEvent(0, SyncHair),
-		},
-
-		events =
-		{
-			EventHandler("animqueueover", function(inst)
-				inst.sg:GoToState("burst_hold")
-			end),
-		},
-	}),
-
 	State({
 		name = "burst_hold",
 		tags = { "attack", "busy" },
@@ -310,7 +245,6 @@ local states =
 			end),
 		},
 	}),
-
 	State({
 		name = "burst",
 		tags = { "attack", "busy" },
@@ -321,11 +255,9 @@ local states =
 
 		timeline =
 		{
-			--hair sync
 			FrameEvent(0, SyncHair),
-			--attack
-			FrameEvent(14, function(inst)
-				SpawnAcid(inst, "medium")
+			FrameEvent(11, function(inst)
+				spawnutil.SpawnAcidTrap(inst, "medium", 45)
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.components.hitbox:PushCircle(0, 0, 3, HitPriority.MOB_DEFAULT)
 			end)
@@ -344,7 +276,63 @@ local states =
 			inst.components.attacktracker:CompleteActiveAttack()
 		end,
 	}),
+	State({
+		name = "uppercut",
+		tags = { "attack", "busy" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("uppercut")
+			inst.components.hitbox:StartRepeatTargetDelay()
+			inst.sg.statemem.lasthit = false
+		end,
+
+		timeline =
+		{
+			FrameEvent(0, SyncHair),
+			FrameEvent(13, function(inst) inst.Physics:SetMotorVel(9) end),
+			FrameEvent(14, function(inst) inst.components.hitbox:PushBeam(0, 2.5, 1, HitPriority.MOB_DEFAULT) end),
+			FrameEvent(15, function(inst) inst.components.hitbox:PushBeam(0, 2, 1, HitPriority.MOB_DEFAULT) end),
+			FrameEvent(16, function(inst) inst.components.hitbox:PushBeam(0, 2, 1, HitPriority.MOB_DEFAULT) end),
+			FrameEvent(17, function(inst)
+				inst.sg.statemem.lasthit = true
+				inst.components.hitbox:StopRepeatTargetDelay()
+				inst.components.hitbox:StartRepeatTargetDelay()
+				inst.components.hitbox:PushBeam(0, 2.5, 1, HitPriority.MOB_DEFAULT)
+				inst.Physics:StartPassingThroughObjects()
+				inst.sg:AddStateTag("airborne")
+			end),
+			FrameEvent(18, function(inst)
+				inst.Physics:SetMotorVel(3)
+				inst.components.hitbox:PushBeam(0, 2.5, 1, HitPriority.MOB_DEFAULT)
+			end),
+			FrameEvent(34, function(inst)
+				inst.sg:RemoveStateTag("airborne")
+				inst.Physics:Stop()
+				inst.Physics:StopPassingThroughObjects()
+			end),
+		},
+
+		events =
+		{
+			EventHandler("hitboxtriggered", OnUppercutHitBoxTriggered),
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+
+		onexit = function(inst)
+			inst.Physics:Stop()
+			inst.Physics:StopPassingThroughObjects()
+			inst.components.hitbox:StopRepeatTargetDelay()
+			inst.components.attacktracker:CompleteActiveAttack()
+		end,
+	}),
 }
+
+SGCommon.States.AddAttackPre(states, "acid_dash")
+SGCommon.States.AddAttackHold(states, "acid_dash")
+SGCommon.States.AddAttackPre(states, "uppercut")
+SGCommon.States.AddAttackHold(states, "uppercut")
 
 SGCommon.States.AddHitStates(states)
 SGCommon.States.AddKnockbackStates(states,
@@ -356,6 +344,29 @@ SGCommon.States.AddKnockdownStates(states,
 	movement_frames = 12,
 })
 SGCommon.States.AddKnockdownHitStates(states)
+
+SGCommon.States.AddSpawnBattlefieldStates(states,
+{
+	anim = "spawn",
+	fadeduration = 0.33,
+	fadedelay = 0,
+	onenter_fn = function(inst)
+		local vel = math.random(5, 8)
+		SGCommon.Fns.SetMotorVelScaled(inst, vel)
+		inst:PushEvent("leave_spawner")
+	end,
+	timeline =
+	{
+		FrameEvent(18, function(inst)
+			inst.Physics:Stop()
+			inst.Physics:StopPassingThroughObjects()
+		end),
+	},
+	onexit_fn = function(inst)
+		inst.Physics:Stop()
+		inst.Physics:StopPassingThroughObjects()
+	end,
+})
 
 SGCommon.States.AddIdleStates(states)
 

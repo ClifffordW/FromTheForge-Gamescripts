@@ -43,11 +43,11 @@ local function OnHitBoxConfuseTriggered(inst, data)
 				-- If they already have the power, only try to add more if it's a stackable power
 				if pm:HasPower(def) then
 					if def.stackable then
-						pm:DeltaPowerStacks(def, 1)
+						pm:DeltaPowerStacks(def, 4)
 					end
 				-- If they don't already have it, then add a new instance.
 				else
-					pm:AddPowerByName("confused", 1)
+					pm:AddPowerByName("confused", 4)
 				end
 			end
 	end })

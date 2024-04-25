@@ -181,7 +181,7 @@ function GroakSync:Chew()
 		end
 	end
 
-	self.chew_sequence_num = self.chew_sequence_num and self.chew_sequence_num + 1 % 2 ^ nrChewSequenceNumBits or 0
+	self.chew_sequence_num = self.chew_sequence_num and (self.chew_sequence_num + 1) % (2 ^ nrChewSequenceNumBits) or 0
 end
 
 function GroakSync:SetStatusSpitOut(is_cinematic)

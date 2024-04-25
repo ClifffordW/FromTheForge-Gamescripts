@@ -77,9 +77,9 @@ function StatStackReading:UpdateValue(statstable)
 				-- Always show a +- sign to indicate that it's relative to the
 				-- normal amount (an extra 50%) and not just a total (100% is
 				-- no bonus).
-				text = string.format("%+.0f%%", val) --TODO(jambell): make localizable
+				text = string.format("%+.0f%%", val) --TODO: make localizable
 			else
-				text = val.."%" --TODO(jambell): make localizable
+				text = val.."%" --TODO: make localizable
 			end
 		end
 		self.current:SetText(text)

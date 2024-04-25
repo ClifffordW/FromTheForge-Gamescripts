@@ -7,6 +7,12 @@ return {
       acid_dash={
         events={ { frame=17, name="vfx-acid_dash",}, { frame=1, name="vfx-idle_test",},},
       },
+      uppercut={
+        events={
+          { frame=13, name="vfx-swarmy_uppercut",},
+          { frame=34, name="vfx-uppercut_land",},
+        },
+      },
     },
   },
   prefab={ { prefab="swarmy",},},

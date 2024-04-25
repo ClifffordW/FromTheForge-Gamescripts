@@ -2,6 +2,6 @@
 return {
   __displayName="npc_market_merchant",
   home="marketroom_shop",
-  role="dungeon_armorsmith",
+  role="market_merchant",
   default_feeling="happy",
 }

@@ -17,7 +17,6 @@ function QuestObjectiveDef:init(quest_class, id)
     self.id = id
     self.event_handlers = {}
     self.cast_event_handlers = {}
-    self.scenario_event_handlers = {}
     self.variable_callbacks = {}
 
     self.unlock_player_flags_on_complete = {}
@@ -167,12 +166,6 @@ function QuestObjectiveDef:AppearInTown_Visitor(fn, cast_id)
     return self
 end
 
-function QuestObjectiveDef:OnScenarioEvent(event, fn)
-    assert(self.scenario_event_handlers[event] == nil, "Duplicate event handler.")
-    self.scenario_event_handlers[event] = fn
-    return self
-end
-
 function QuestObjectiveDef:OnCastEvent(cast, event, fn)
     self.cast_event_handlers[cast] = self.cast_event_handlers[cast] or {}
     assert(self.cast_event_handlers[cast][event] == nil, "Duplicate event handler.")
@@ -181,7 +174,7 @@ function QuestObjectiveDef:OnCastEvent(cast, event, fn)
 end
 
 function QuestObjectiveDef:LockRoom()
-    --jambell: I'm making this so that writers have an easier time doing common things.
+    --         I'm making this so that writers have an easier time doing common things.
     --         However, this will break if they have a different thing added for "playerentered".
     --         In that case, they'll have to manually implement the function below in addition to the "playerentered" they wanted.
 
@@ -226,11 +219,6 @@ end
 
 function QuestObjectiveDef:OnFinish(fn)
     self.on_finish_fn = fn
-    return self
-end
-
-function QuestObjectiveDef:OnScenarioUpdate(fn)
-    self.scenario_update_fn = fn
     return self
 end
 
@@ -307,21 +295,6 @@ end
 function QuestObjectiveDef:InitialState( state )
     self.initial_state = state
     return self
-end
-
-function QuestObjectiveDef:SetRateLimited(bool)
-    -- call this to overwrite the default state of the quest
-    dbassert(bool ~= nil)
-    self.rate_limited = bool
-    return self
-end
-
-function QuestObjectiveDef:IsRateLimited()
-    if self.rate_limited ~= nil then
-        return self.rate_limited
-    else
-        return self.quest_class:IsRateLimited()
-    end
 end
 
 function QuestObjectiveDef:SetChatCost(num)

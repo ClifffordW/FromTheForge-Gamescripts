@@ -7,5 +7,6 @@ return {
   bloom=100.0,
   build="fx_hits_spike_trap",
   glowcolor="FF86FCFF",
+  group="player_skills",
   variations=3,
 }

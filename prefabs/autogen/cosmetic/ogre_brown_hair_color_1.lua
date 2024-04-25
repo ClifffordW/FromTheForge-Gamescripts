@@ -2,15 +2,11 @@
 return {
   __displayName="ogre_brown_hair_color_1",
   cosmetic_data={
-    color={ 0.030555555555556, 0.37, 0.7,},
+    color={ 0.030555555596948, 0.42084941267967, 0.66409265995026,},
     color_species="ogre",
     colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=true,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
+  locked=false,
 }

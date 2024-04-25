@@ -30,6 +30,7 @@ local prefabs =
 	GroupPrefab("drops_bulbug"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "bulbug")
+prefabutil.SetupDeathFxPrefabs(prefabs, "bulbug_elite")
 
 local attacks =
 {
@@ -76,6 +77,7 @@ local attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -136,6 +138,8 @@ local elite_attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local function ShouldFight(inst)
 	local x,z = inst.Transform:GetWorldXZ()
@@ -181,7 +185,6 @@ local function fn(prefabname)
 
 	inst:SetStateGraph("sg_bulbug")
 	inst:SetBrain("brain_bulbug")
-	inst:AddTag("ACID_IMMUNE")
 
 	inst.ShouldFight = ShouldFight
 
@@ -222,7 +225,7 @@ local function shield_hitbox(inst, data)
 	for i = 1, #data.targets do
 		local v = data.targets[i]
 		local pm = v.components.powermanager
-		if v ~= inst.owner and pm and (not apply_once or pm:GetPowerStacks(power_def) == 0) then
+		if v ~= inst.owner and pm and (not apply_once or pm:GetPowerStacks(power_def) == 0) and inst.owner and inst.owner.components.combat:CanFriendlyTargetEntity(v) then
 			inst.owner:DoTaskInAnimFrames(i, function(xinst)
 				if xinst ~= nil and xinst:IsValid() and pm ~= nil then
 					pm:AddPower(pm:CreatePower(power_def), power_stacks)
@@ -240,7 +243,7 @@ local function damage_hitbox(inst, data)
 	for i = 1, #data.targets do
 		local v = data.targets[i]
 		local pm = v.components.powermanager
-		if pm and (not apply_once or pm:GetPowerStacks(power_def) == 0) then
+		if pm and (not apply_once or pm:GetPowerStacks(power_def) == 0) and inst.owner and inst.owner.components.combat:CanFriendlyTargetEntity(v) then
 			inst.owner:DoTaskInAnimFrames(i, function(xinst)
 				if xinst ~= nil and xinst:IsValid() and pm ~= nil then
 					pm:AddPower(pm:CreatePower(power_def), power_stacks)

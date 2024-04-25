@@ -231,7 +231,7 @@ function UpgradeableItemWidget:Refresh()
 				:SetProgress(self.item:GetUsageLevel()/self.item:GetMaxUsageLevel())
 
 			-- Can they get an upgrade?
-			local recipe = recipes.FindUpgradeRecipeForItem(self.item)
+			local recipe = recipes.FindUsageUpgradeRecipeForItem(self.item)
 			self.recipe = recipe
 
 			if self.recipe and self.item:GetUsageLevel() + 1 <= self.item:GetMaxUsageLevel() then

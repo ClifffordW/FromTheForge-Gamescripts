@@ -87,7 +87,7 @@ function powerdrops.ConfigurePowerDrop(inst, opts)
 		if opts.build_drops_fn == nil then
 			local build_drops_fn = function()
 				local drops = {}
-				drops[1] = inst.prefab
+				drops[1] = {prefab = inst.prefab, count = 1}
 				return drops
 			end
 			inst.components.rotatingdrop:SetBuildDropsFn(build_drops_fn)

@@ -4,6 +4,9 @@ local DisplayStat = require("widgets/ftf/displaystat")
 ------------------------------------------------------------------------------------------
 --- Displays player character stats
 ----
+
+-- Deprecated, only used in older equipment panel
+
 local CharacterStats = Class(Widget, function(self, width, columns, column_spacing)
 	Widget._ctor(self, "CharacterStats")
 

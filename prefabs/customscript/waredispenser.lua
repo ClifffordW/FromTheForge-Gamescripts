@@ -40,6 +40,15 @@ local Super = WareDispenser._base
 
 WareDispenser.INDEX_MAXIMUM = 5
 
+function WareDispenser.CollectAssets(assets, script_args)
+	-- WareDispenser isn't a true customscript: it's not added via propeditor.
+	-- Normally this dependency would be handled by
+	-- CollectAssetsAndPrefabsForScript.
+	-- TODO: It should probably be a component instead?
+	table.insert(assets, Asset("PKGREF", "scripts/prefabs/customscript/waredispenser.lua"))
+	return assets
+end
+
 function WareDispenser:CustomInitImpl(inst)
 	inst.EditEditable = WareDispenser.EditEditable -- Assign this for handling editable UI for this
 end

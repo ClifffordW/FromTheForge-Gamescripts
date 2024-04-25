@@ -66,6 +66,9 @@ local function SpawnSpikeBalls(inst)
 		spikeball.Transform:SetPosition(pos.x, pos.y + SPAWN_OFFSET_Y, pos.z)
 		local angle = math.rad( angle_to_target + (math.random() - 0.5) * 2 * SPIKEBALL_ANGLE_VARIANCE )
 		local target_pos = pos + Vector3(math.cos(angle), 0, -math.sin(angle)) * ((math.random() - 0.5) * 2 + SPAWN_DISTANCE)
+		if not TheWorld.Map:IsWalkableAtXZ(target_pos.x, target_pos.z) then
+			target_pos = TheWorld.Map:FindClosestWalkablePoint(target_pos)
+		end
 		spikeball.sg:GoToState("thrown", target_pos)
 	end
 end
@@ -150,7 +153,7 @@ local states =
 
 				inst.components.auraapplyer:SetEffect("windmon_gust")
 				inst.components.auraapplyer:SetRadius(12)
-				inst.components.auraapplyer:EnableRampUp(true, 2)
+				inst.components.auraapplyer:EnableRampUp(true, 6)
 				inst.components.auraapplyer:Enable()
 
 				local wind_angle = inst.components.attackangle:GetAttackAngle()
@@ -217,7 +220,7 @@ local states =
 
 				inst.components.auraapplyer:SetEffect("elite_windmon_gust")
 				inst.components.auraapplyer:SetRadius(12)
-				inst.components.auraapplyer:EnableRampUp(true, 3.5)
+				inst.components.auraapplyer:EnableRampUp(true, 8)
 				inst.components.auraapplyer:Enable()
 
 				local fx_params =

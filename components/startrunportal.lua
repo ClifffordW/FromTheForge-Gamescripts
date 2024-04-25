@@ -3,6 +3,7 @@ local RoomLoader = require "roomloader"
 local playerutil = require "util.playerutil"
 local fmodtable = require "defs.sound.fmodtable"
 local soundutil = require "util.soundutil"
+-- local DebugDraw = require "util.debugdraw"
 
 local COUNTDOWN_LENGTH = 3 --SECONDS
 
@@ -33,36 +34,54 @@ function StartRunPortal:HideStatusLabel()
 	if self.waitingForAllPlayersLabel then 
 		self.waitingForAllPlayersLabel:Remove()
 		self.waitingForAllPlayersLabel = nil
-		self.inst:PushEvent("stop_heli")
+
+		if not self.traveling then
+			self.inst:PushEvent("stop_heli")
+		end
 	end
 end
 
-function StartRunPortal:UpdateWaitingForAllPlayers(current, total, locationID, ascensionLevel)
+function StartRunPortal:UpdateWaitingForAllPlayers(current, total, location_id, ascension)
 	if self.waitingForAllPlayersLabel then
-		local str = string.format(STRINGS.UI.HUD.RUN_DATA, STRINGS.NAMES[locationID], ascensionLevel)
+		local str = nil
+
+		if ascension > 0 then
+			str = string.format(STRINGS.UI.HUD.RUN_DATA_FRENZY, STRINGS.NAMES[location_id], ascension)
+		else
+			str = string.format(STRINGS.UI.HUD.RUN_DATA, STRINGS.NAMES[location_id])
+		end
+
 		str = str .."\n".. string.format(STRINGS.UI.HUD.WAITING_FOR_ALL_PLAYERS, current, total)
 		self.waitingForAllPlayersLabel:SetText(str)
 		self.inst:PushEvent("start_heli")
 	end
 end
 
-function StartRunPortal:UpdateCountdown(time, locationID, ascensionLevel)
+function StartRunPortal:UpdateCountdown(time, location_id, ascension)
 	if self.waitingForAllPlayersLabel then
-		local str = string.format(STRINGS.UI.HUD.RUN_DATA, STRINGS.NAMES[locationID], ascensionLevel)
+
+		local str = nil
+
+		if ascension > 0 then
+			str = string.format(STRINGS.UI.HUD.RUN_DATA_FRENZY, STRINGS.NAMES[location_id], ascension)
+		else
+			str = string.format(STRINGS.UI.HUD.RUN_DATA, STRINGS.NAMES[location_id])
+		end
+
 		str = str .."\n".. string.format(STRINGS.UI.HUD.START_RUN_COUNTDOWN, time)
 		self.waitingForAllPlayersLabel:SetText(str)
 		--TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_mpCountdownTick)
 	end
 end
 
-function StartRunPortal:SetRequestActive() 
+function StartRunPortal:SetRequestActive()
 	if not self.active then
 		self.inst:PushEvent("run_requested")
 		self.active = true
 	end
 end
 
-function StartRunPortal:SetRequestInactive() 
+function StartRunPortal:SetRequestInactive()
 	if self.active then
 		self.inst:PushEvent("run_cancelled")
 
@@ -75,7 +94,7 @@ function StartRunPortal:SetRequestInactive()
 end
 
 function StartRunPortal:OnUpdate(dt)
-	local playerID, mode, arenaWorldPrefab, regionID, locationID, seed, altMapGenID, ascensionLevel, seqNr, questParams = TheNet:GetRequestedRunData()
+	local playerID, _mode, _seqNr, dungeon_run_params, quest_params = TheNet:GetRequestedRunData()
 
 	if playerID then
 		-- Run request is active!
@@ -86,7 +105,7 @@ function StartRunPortal:OnUpdate(dt)
 		local players = playerutil.FindPlayersInRange(x, z, self.radius)
 
 		if not TheNet:IsHost() and not self.traveling then
-			if TheNet:IsStartRunImminent() then 
+			if TheNet:IsStartRunImminent() then
 				self.traveling = true
 				print("Host told us start run is imminent! Fading out")
 				TheFrontEnd:Fade(FADE_OUT, 0.5)	-- Fade out and wait for the host's start run update
@@ -101,13 +120,15 @@ function StartRunPortal:OnUpdate(dt)
 			COUNTDOWN_LENGTH = 3 --SECONDS
 		end
 
-
-
 		if not self.traveling then
 			local nrReadyPlayers = 0
 
+			-- DebugDraw.GroundCircle(x, z, self.radius, WEBCOLORS.HOTPINK, 5)
+
 			for k, player in pairs(players) do
-				if player:IsAlive() and not player.components.playerbusyindicator:IsBusy() then
+				if player:IsAlive() and 
+					not player.components.playerbusyindicator:IsBusy() and 
+					not player.components.playercontroller:IsPlacingOrRemoving() then
 					nrReadyPlayers = nrReadyPlayers + 1
 				end
 			end
@@ -127,24 +148,24 @@ function StartRunPortal:OnUpdate(dt)
 
 							-- networking2022: hack, host param false takes precedence until client progression data is synced
 							if TheDungeon and TheDungeon:GetDungeonMap() then
-								local hostQuestParams = TheDungeon:GetDungeonMap():BuildQuestParams(locationID)
-								if questParams.wants_quest_room and not hostQuestParams.wants_quest_room then
+								local host_quest_params = TheDungeon:GetDungeonMap():BuildQuestParams(dungeon_run_params.location_id)
+								if quest_params.wants_quest_room and not host_quest_params.wants_quest_room then
 									TheLog.ch.Networking:printf("Warning: Requested run wants_quest_room (%s) doesn't match host (%s).  Using host value.",
-										tostring(questParams.wants_quest_room),
-										tostring(hostQuestParams.wants_quest_room))
-									questParams.wants_quest_room = hostQuestParams.wants_quest_room
+										tostring(quest_params.wants_quest_room),
+										tostring(host_quest_params.wants_quest_room))
+									quest_params.wants_quest_room = host_quest_params.wants_quest_room
 								end
 							end
 
 							TheFrontEnd:Fade(FADE_OUT, 0.5, function()
 								self.inst:DoTaskInTime(0.5, function()	-- Delay for 0.5 more seconds
-									RoomLoader.StartRun(regionID, locationID, seed, altMapGenID, ascensionLevel, questParams)
+									RoomLoader.StartRun(dungeon_run_params, quest_params)
 								end)
 							end)
 						end
 						-- Clients check whether a room change is actually happening in the TheNet:IsStartRunImminent() check above this if statement block
 					else
-						self:UpdateCountdown(math.ceil(remaining), locationID, ascensionLevel)
+						self:UpdateCountdown(math.ceil(remaining), dungeon_run_params.location_id, dungeon_run_params.ascension)
 					end
 				else
 					-- We haven't started counting down yet. Start now!
@@ -158,7 +179,7 @@ function StartRunPortal:OnUpdate(dt)
 
 				-- We are waiting for players
 				self:ShowStatusLabel()
-				self:UpdateWaitingForAllPlayers(nrReadyPlayers, #AllPlayers, locationID, ascensionLevel)
+				self:UpdateWaitingForAllPlayers(nrReadyPlayers, #AllPlayers, dungeon_run_params.location_id, dungeon_run_params.ascension)
 			end
 		else
 			self:HideStatusLabel()

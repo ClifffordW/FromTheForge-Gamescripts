@@ -2,7 +2,7 @@ local kassert = require "util.kassert"
 local mapgen = require "defs.mapgen"
 local waves = require "encounter.waves"
 local lume = require "util.lume"
-
+local krandom = require("util.krandom")
 
 local Difficulty = mapgen.Difficulty -- for brevity
 
@@ -38,7 +38,7 @@ end
 local function SpawnInitialScenario(spawner, opts)
 	local rng = spawner:GetRNG()
 	if opts.traps then
-		-- Pick a random wave of traps. JAMBELLTRAP todo: allow design for these in difficulties
+		-- Pick a random wave of traps. todo: allow design for these in difficulties
 		local worldmap = TheDungeon:GetDungeonMap()
 		local biome_location = worldmap.nav:GetBiomeLocation()
 		local wave_candidates = FilterTrapwaves(waves.trapwaves.biome[biome_location.id], spawner)
@@ -129,8 +129,9 @@ local encounters = {
 	_biome = {
 		treemon_forest = CreateEmptyEncounterSet(),
 		owlitzer_forest = CreateEmptyEncounterSet(),
-		kanft_swamp = CreateEmptyEncounterSet(),
+		bandi_swamp = CreateEmptyEncounterSet(),
 		thatcher_swamp = CreateEmptyEncounterSet(),
+		sedament_tundra = CreateEmptyEncounterSet(),
 	},
 }
 -- Add a biome to this list if you want it to include default and biome specific encounters
@@ -236,6 +237,97 @@ local function SpawnTrapWave(spawner, trapwave)
 	spawner:SpawnTraps(trapwave)
 end
 
+local function SpawnDuoEncounter(spawner)
+	--Spawn two monsters from the biomes monster list, with some filtering for monster type and dungeon progress
+
+	--Choose two enemies from the biome monsters, throw out minor/major enemies based on progress, save the selected enemies for all waves in this encounter
+	--Apply counts to both enemies based on type, more basics than minor and majors, maybe from a total allowed in the room? So if we end up with two basics we dont get tons of mobs
+	--Spawn enemies. Maybe allow a different amount of waves, maybe determine enemies to spawn based on encounter difficulty
+
+	local enemy_type = {Basic = "BASIC", Minor = "MINOR", Major = "MAJOR", Swarm = "SWARM"}
+	local progress = spawner:GetProgressThroughDungeon()
+	local difficulty = TheDungeon:GetDungeonMap():GetDifficultyForCurrentRoom()
+    local biomes = require "defs.biomes"
+	local biome_mob_list = biomes.locations[TheSceneGen.components.scenegen.dungeon].monsters.mobs
+	local available_mob_list = {}
+
+	--Filter out non monster prefabs as well as ones ineligible due to dungeon progress or difficulty
+	for _, monster in ipairs(biome_mob_list) do
+		if (TUNING[monster] and TUNING[monster].multiplayer_mods and not TUNING[monster].stationary) then
+			if (TUNING[monster].multiplayer_mods == enemy_type.Minor and difficulty > 1) then
+				table.insert(available_mob_list, monster)
+			elseif (false and TUNING[monster].multiplayer_mods == enemy_type.Major and (progress > 0.5 or difficulty > 2)) then --Disable majors in duowaves atm, leave for handbuilt encounters
+				table.insert(available_mob_list, monster)
+			elseif (TUNING[monster].multiplayer_mods == enemy_type.Basic or TUNING[monster].multiplayer_mods == enemy_type.Swarm) then
+				table.insert(available_mob_list, monster)
+			end
+		end
+	end
+
+	--Choose two of the available monsters and determine how many to spawn based on progress and type
+	local selected_monsters = {}
+	local wave1 = {}
+	local wave2 = {}
+	local wave3 = {}
+	local num_basics = 4 + math.floor(progress / 0.33)
+	local num_swarm = 6 + math.floor(progress / 0.33)
+
+	--Choose first monster
+	local index = spawner.rng:Integer(1, #available_mob_list)
+	local selected_mob = available_mob_list[index]
+	local is_swarm = TUNING[selected_mob].multiplayer_mods == enemy_type.Swarm
+	local is_basic = TUNING[selected_mob].multiplayer_mods == enemy_type.Basic
+	local is_major = TUNING[selected_mob].multiplayer_mods == enemy_type.Major
+	local num_to_spawn = (is_swarm and num_swarm) or (is_basic and num_basics) or (is_major and 1) or 2
+	for i = 1, num_to_spawn do
+		table.insert(selected_monsters, selected_mob)
+	end
+	table.remove(available_mob_list, index)
+
+	--Choose second monster
+	index = spawner.rng:Integer(1, #available_mob_list)
+	selected_mob = available_mob_list[index]
+	is_swarm = TUNING[selected_mob].multiplayer_mods == enemy_type.Swarm
+	is_basic = TUNING[selected_mob].multiplayer_mods == enemy_type.Basic
+	is_major = TUNING[selected_mob].multiplayer_mods == enemy_type.Major
+	num_to_spawn = (is_swarm and num_swarm) or (is_basic and num_basics) or (is_major and 1) or 2
+	for i = 1, num_to_spawn do
+		table.insert(selected_monsters, selected_mob)
+	end
+	table.remove(available_mob_list, index)
+
+	--Randomize the selected monsters and put them into waves, based on type difficulty and progress there may only be one or two waves
+	krandom.Shuffle(selected_monsters)
+	local has_swarm = lume.match(selected_monsters, function(x) return TUNING[x].multiplayer_mods == enemy_type.Swarm end)
+	local first_wave = (has_swarm and 5) or (progress > 0.5 and 5) or 4
+	local second_wave = (has_swarm and 10) or (progress > 0.5 and 10) or 8
+	for i = 1, #selected_monsters do
+		if (i <= first_wave) then
+			table.insert(wave1, selected_monsters[i])
+		elseif (i <= second_wave) then
+			table.insert(wave2, selected_monsters[i])
+		else
+			table.insert(wave3, selected_monsters[i])
+		end
+	end
+
+	--Start encounter spawnwave logic
+	if (#wave1 > 0) then
+		wave1 = lume.frequency(wave1)
+		spawner:SpawnWave(waves.Raw(wave1))
+	end
+	if (#wave2 > 0) then
+		spawner:WaitForDefeatedPercentage(0.8)
+		wave2 = lume.frequency(wave2)
+		spawner:SpawnWave(waves.Raw(wave2))
+	end
+	if (#wave3 > 0) then
+		spawner:WaitForDefeatedPercentage(0.8)
+		wave3 = lume.frequency(wave3)
+		spawner:SpawnWave(waves.Raw(wave3))
+	end
+end
+
 -- Dungeon state helpers
 local function IsAfterMiniboss(spawner)
 	-- Returns true/false: are we past the miniboss or not.
@@ -269,6 +361,8 @@ encounters.bespoke = {
 			spawner:SpawnStationaryEnemies(waves.Raw{ treemon = 1 })
 			SpawnTrapWave(spawner, waves.trapwaves.biome.treemon_forest.one_bomb) -- Teach about bombs right away.
 			spawner:SpawnWave(waves.Raw{ cabbageroll = 2 })
+			spawner:WaitForDefeatedPercentage(0.33) 						 -- Learn that sometimes more mobs spawn in the middle of an encounter!
+			spawner:SpawnWave(waves.Raw{ cabbageroll = 2 })
 		end,
 	},
 
@@ -276,8 +370,8 @@ encounters.bespoke = {
 		exec_fn = function(spawner)
 			spawner:SpawnPropDestructibles(4)
 			SpawnTrapWave(spawner, waves.trapwaves.biome.treemon_forest.three_spikes)
-			spawner:SpawnWave(waves.Raw{ cabbageroll = 2, blarmadillo = 1 }) -- Now that you know how to deal with cabbagerolls, fight some while seeing what a blarmadillo does
-			spawner:WaitForDefeatedPercentage(0.66) 						 -- Learn that sometimes more mobs spawn in the middle of an encounter!
+			spawner:SpawnWave(waves.Raw{ cabbageroll = 3, blarmadillo = 1 }) -- Now that you know how to deal with cabbagerolls, fight some while seeing what a blarmadillo does
+			spawner:WaitForDefeatedPercentage(0.25)
 			spawner:SpawnWave(waves.Raw{ cabbageroll = 1, blarmadillo = 1 }) -- Keep dealing with that problem
 		end,
 	},
@@ -299,8 +393,10 @@ encounters.bespoke = {
 			spawner:WaitForDefeatedPercentage(1)
 			spawner:WaitForSeconds(0.75)
 			spawner:SpawnWave(waves.Raw{ beets = 2 }) -- Learn how to fight a few of them
-			spawner:WaitForSeconds(0.75)
-			spawner:SpawnWave(waves.Raw{ beets = 2 })
+			spawner:WaitForSeconds(0.25)
+			spawner:SpawnWave(waves.Raw{ beets = 3 })
+			spawner:WaitForSeconds(0.5)
+			spawner:SpawnWave(waves.Raw{ blarmadillo = 2 })
 		end,
 	},
 
@@ -842,22 +938,20 @@ encounters._biome.owlitzer_forest.monster =
 	}
 }
 
-encounters._biome.kanft_swamp.monster =
+encounters._biome.bandi_swamp.monster =
 {
 	easy =
 	{
 		e01 = {
-			factor = 5,
+			factor = 4,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
-				spawner:SpawnPropDestructibles(5)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
-				spawner:WaitForDefeatedPercentage(0.8)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
+				spawner:SpawnPropDestructibles(4)
+				SpawnDuoEncounter(spawner)
 			end,
 		},
 		e02 = {
-			factor = 4,
+			factor = 3,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(3)
@@ -885,11 +979,22 @@ encounters._biome.kanft_swamp.monster =
 				spawner:SpawnWave(waves.Raw{ mothball = AdaptiveWaveCount(Difficulty.id.easy, spawner) })
 			end,
 		},
+		e04 = { -- early mothball spawner
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(3)
+				spawner:SpawnStationaryEnemies(waves.Raw{ mothball_spawner = 1 })
+				spawner:SpawnWave(waves.Raw{ mothball = HalfAdaptiveWaveCount(Difficulty.id.easy, spawner) })
+				spawner:WaitForDefeatedPercentage(0.8)
+				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
+			end,
+		},
 	},
 	medium =
 	{
 		m01 = {
-			factor = 7,
+			factor = 4,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(4)
@@ -900,7 +1005,7 @@ encounters._biome.kanft_swamp.monster =
 			end,
 		},
 		m02 = {
-			factor = 7,
+			factor = 6,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(4)
@@ -944,7 +1049,7 @@ encounters._biome.kanft_swamp.monster =
 				return Progress(spawner) > 0.51
 			end,
 			exec_fn = function(spawner)
-				spawner:SpawnTraps(waves.Raw{ trap_spores_groak = 1, trap_spores_damage = 3 })
+				spawner:SpawnTraps(waves.Raw{ trap_spores_groak = 1, trap_spores_heal = 3 })
 				spawner:SpawnWave(waves.Raw{ mossquito = 1,  mothball = 3 })
 				spawner:WaitForDefeatedPercentage(0.8)
 				spawner:SpawnWave(waves.Raw{ mothball = 4 })
@@ -969,12 +1074,33 @@ encounters._biome.kanft_swamp.monster =
 				spawner:WaitForDefeatedPercentage(0.8)
 				spawner:SpawnWave(waves.Raw{ mossquito = 2, mothball = 4 })
 			end,
-		}
+		},
+		m07 = {
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(3)
+				spawner:SpawnStationaryEnemies(waves.stationary.easy)
+				SpawnDuoEncounter(spawner)
+			end,
+		},
+		m08 = { -- A lot of mossquitos
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnStationaryEnemies(waves.stationary.medium)
+				spawner:SpawnWave(waves.Raw{ mossquito = 4 })
+				spawner:WaitForDefeatedPercentage(0.6)
+				spawner:SpawnWave(waves.Raw{ mossquito = 4 })
+				spawner:WaitForDefeatedPercentage(0.7)
+				spawner:SpawnWave(waves.Raw{ mossquito = 4 })
+			end,
+		},
 	},
 	hard =
 	{
 		h01 = {
-			factor = 3,
+			factor = 1,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(2)
@@ -987,14 +1113,15 @@ encounters._biome.kanft_swamp.monster =
 			end,
 		},
 		h02 = {
-			factor = 3,
+			factor = 2, -- Bulbug reinforcements
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(4)
-				spawner:SpawnStationaryEnemies(waves.stationary.hard)
-				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
-				spawner:WaitForDefeatedPercentage(0.9)
-				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
+				spawner:SpawnWave(waves.Raw{ bulbug = 2, mossquito = 4 })
+				spawner:WaitForDefeatedPercentage(0.6)
+				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
+				spawner:WaitForDefeatedPercentage(0.5)
+				spawner:SpawnWave(waves.Raw{ bulbug = 1 })
 			end,
 		},
 		h03 = { -- More common trap groak in hard
@@ -1012,15 +1139,12 @@ encounters._biome.kanft_swamp.monster =
 			end,
 		},
 		h04 = { -- Shielded eyev's
-			factor = 1,
+			factor = 2,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(5)
-				spawner:SpawnWave(waves.Raw{ bulbug = 1 })
-				if Progress(spawner) > 0.66 then
-					spawner:SpawnWave(waves.Raw{ bulbug = 1 })
-				end
-				spawner:SpawnWave(waves.Raw{ eyev = HalfAdaptiveWaveCount(Difficulty.id.medium, spawner) })
+				local bulbug_count = Progress(spawner) > 0.66 and 2 or 1
+				spawner:SpawnWave(waves.Raw{ bulbug = bulbug_count, eyev = HalfAdaptiveWaveCount(Difficulty.id.medium, spawner) })
 				if Progress(spawner) > 0.66 then
 					spawner:WaitForDefeatedPercentage(0.6)
 					spawner:SpawnWave(waves.Raw{ eyev = HalfAdaptiveWaveCount(Difficulty.id.easy, spawner) })
@@ -1039,15 +1163,19 @@ encounters._biome.kanft_swamp.monster =
 				spawner:SpawnAdaptiveWave(Difficulty.id.hard)
 			end,
 		},
-		h06 = { -- wave with trickster reinforcement
-			factor = 2,
+		h06 = { -- surprise groak with bulbug reinforcement
+			factor = 3,
+			constraint_fn = function(spawner)
+				return Progress(spawner) > 0.51
+			end,
 			exec_fn = function(spawner)
-				SpawnRandomTraps(spawner)
+				spawner:SpawnTraps(waves.Raw{ trap_spores_groak = 1, trap_spores_heal = 3 })
 				spawner:SpawnPropDestructibles(3)
-				spawner:SpawnStationaryEnemies(waves.stationary.medium)
 				spawner:SpawnAdaptiveWave(Difficulty.id.hard)
+				spawner:WaitForDefeatedPercentage(0.3)
+				spawner:SpawnWave(waves.Raw{ bulbug = 1 })
 				spawner:WaitForDefeatedPercentage(0.9)
-				spawner:SpawnWave(waves.trickster)
+				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
 			end,
 	},
 	},
@@ -1058,52 +1186,119 @@ encounters._biome.thatcher_swamp.monster =
 	easy =
 	{
 		e01 = {
-			factor = 6,
-			exec_fn = function(spawner)
-				SpawnRandomTraps(spawner)
-				spawner:SpawnPropDestructibles(5)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
-				spawner:WaitForDefeatedPercentage(0.8)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
-			end,
-		},
-		e02 = {
 			factor = 4,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(5)
-				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
+				SpawnDuoEncounter(spawner)
+			end,
+		},
+		e02 = { -- early mothball teen
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(4)
+				spawner:SpawnWave(waves.Raw{ mothball_teen = 1, swarmy = 2 })
+				spawner:WaitForDefeatedPercentage(0.8)
+				spawner:SpawnWave(waves.Raw{ swarmy = 3 })
+			end,
+		},
+		e03 = { --Lotsa woworms
+			factor = 4,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(5)
+				spawner:SpawnWave(waves.Raw{ woworm = 2, mothball = 4 })
+				spawner:WaitForDefeatedPercentage(0.8)
+				spawner:SpawnWave(waves.Raw{ woworm = 1, mothball = 3 })
+			end,
+		},
+		e04 = { --swarmy worms
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(4)
+				spawner:SpawnWave(waves.Raw{ woworm = 2, swarmy = 2 })
+				spawner:WaitForDefeatedPercentage(0.8)
+				spawner:SpawnWave(waves.Raw{ woworm = 1, swarmy = 3 })
 			end,
 		},
 	},
 	medium =
 	{
 		m01 = {
-			factor = 4,
+			factor = 1,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(4)
+				spawner:SpawnWave(waves.Raw{ totolili = 1, swarmy = 3 })
+				spawner:WaitForDefeatedPercentage(0.8)
 				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
-				spawner:WaitForDefeatedPercentage(0.9)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
 			end,
 		},
-		m02 = { --Enemies then Trickster as reinforcement
-			factor = 6,
+		m02 = { --totolilis to start
+			factor = 1,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(2)
-				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
+				spawner:SpawnWave(waves.Raw{ totolili = 2 })
+				spawner:WaitForDefeatedPercentage(0.5)
+				spawner:SpawnWave(waves.Raw{ swarmy = 3 })
+			end,
+		},
+		m03 = { --Woworms
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(3)
+				spawner:SpawnWave(waves.Raw{ woworm = 2, swarmy = 2 })
 				spawner:WaitForDefeatedPercentage(0.8)
-				spawner:SpawnWave(waves.trickster)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
+				spawner:SpawnWave(waves.Raw{ swarmy = 3, woworm = 1 })
+			end,
+		},
+		m04 = { --Slowpokes
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(4)
+				spawner:SpawnWave(waves.Raw{ slowpoke = 1, woworm = 3 })
+				spawner:WaitForDefeatedPercentage(0.8)
+				spawner:SpawnWave(waves.Raw{ slowpoke = 1, woworm = 2 })
+			end,
+		},
+		m05 = { --Swarmys and slowpokes
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(4)
+				spawner:SpawnWave(waves.Raw{ slowpoke = 2, swarmy = 2 })
+				spawner:WaitForDefeatedPercentage(0.8)
+				spawner:SpawnWave(waves.Raw{ slowpoke = 1, swarmy = 3 })
+			end,
+		},
+		m06 = { --Duowave
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(3)
+				SpawnDuoEncounter(spawner)
+			end,
+		},
+		m07 = { --Early bulbug
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(2)
+				spawner:SpawnWave(waves.Raw{ bulbug = 1, mothball = 5 })
+				spawner:WaitForDefeatedPercentage(0.6)
+				spawner:SpawnWave(waves.Raw{ mothball = 4 })
 			end,
 		},
 	},
 	hard =
 	{
 		h01 = {
-			factor = 3,
+			factor = 2,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(3)
@@ -1113,27 +1308,82 @@ encounters._biome.thatcher_swamp.monster =
 				spawner:SpawnAdaptiveWave(Difficulty.id.hard)
 			end,
 		},
-		h02 = {
-			factor = 3,
+		h02 = { -- floracrane moth teens
+			factor = 2,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(3)
-				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
-				spawner:WaitForDefeatedPercentage(1)
-				spawner:SpawnAdaptiveWave(Difficulty.id.hard)
-				spawner:WaitForDefeatedPercentage(0.9)
-				spawner:SpawnAdaptiveWave(Difficulty.id.easy)
+				spawner:SpawnWave(waves.Raw{ mothball_teen = 2, floracrane = 1 })
+				spawner:WaitForDefeatedPercentage(0.6)
+				spawner:SpawnWave(waves.Raw{ mothball_teen = 2 })
 			end,
 		},
-		h03 = { --Enemies then Trickster as reinforcement
-			factor = 4,
+		h03 = { --Floracrane woworm swarm
+			factor = 2,
 			exec_fn = function(spawner)
 				SpawnRandomTraps(spawner)
 				spawner:SpawnPropDestructibles(2)
-				spawner:SpawnAdaptiveWave(Difficulty.id.hard)
-				spawner:WaitForDefeatedPercentage(0.8)
-				spawner:SpawnWave(waves.trickster)
-				spawner:SpawnAdaptiveWave(Difficulty.id.medium)
+				spawner:SpawnWave(waves.Raw{ floracrane = 1, woworm = 3 })
+				spawner:WaitForDefeatedPercentage(0.7)
+				spawner:SpawnWave(waves.Raw{ woworm = 4 })
+			end,
+		},
+		h04 = { --slowpoke ambush
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(2)
+				spawner:SpawnWave(waves.Raw{ woworm = 2 })
+				spawner:WaitForDefeatedPercentage(0.5)
+				spawner:SpawnWave(waves.Raw{ slowpoke = 5 })
+			end,
+		},
+		h05 = { --totolili and bulbugs
+			factor = 2,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(3)
+				spawner:SpawnWave(waves.Raw{ totolili = 2, bulbug = 2 })
+				spawner:WaitForDefeatedPercentage(0.5)
+				spawner:SpawnWave(waves.Raw{ woworm = 3, totolili = 1 })
+			end,
+		},
+	}
+}
+
+-- Tundra
+encounters._biome.sedament_tundra.monster =
+{
+	easy =
+	{
+		e01 = {
+			factor = 4,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(5)
+				SpawnDuoEncounter(spawner)
+			end,
+		},
+	},
+	medium =
+	{
+		m01 = {
+			factor = 4,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(5)
+				SpawnDuoEncounter(spawner)
+			end,
+		},
+	},
+	hard =
+	{
+		h01 = {
+			factor = 4,
+			exec_fn = function(spawner)
+				SpawnRandomTraps(spawner)
+				spawner:SpawnPropDestructibles(5)
+				SpawnDuoEncounter(spawner)
 			end,
 		},
 	}
@@ -1147,12 +1397,12 @@ encounters._biome.treemon_forest.miniboss = {
 		e01 = {
 			exec_fn = function(spawner)
 				spawner:SpawnPropDestructibles(5)
-				spawner:SpawnMiniboss(waves.Raw{ yammo_elite = 1 })
+				spawner:SpawnMiniboss(waves.Raw{ yammo_miniboss = 1 })
 				spawner:WaitForSeconds(4.9)
 				spawner:SpawnWave(waves.Raw{ beets = 3 }, 0, 0, nil, true)
 				spawner:WaitForMinibossHealthPercent(0.75)
 				spawner:WaitForMinibossHealthPercentWithReinforcement(0, waves.Raw{ beets = 4 }, 2.2)
-				TheWorld.components.roomclear:CleanUpRemainingEnemies()
+				spawner:CleanUpRemainingEnemies()
 			end,
 		},
 	},
@@ -1166,13 +1416,13 @@ encounters._biome.owlitzer_forest.miniboss = {
 			exec_fn = function(spawner)
 				SpawnTrapWave(spawner, waves.Raw{ trap_weed_spikes = 3 })
 				spawner:SpawnPropDestructibles(5)
-				spawner:SpawnMiniboss(waves.Raw{ gourdo_elite = 2 })
+				spawner:SpawnMiniboss(waves.Raw{ gourdo_miniboss = 2 })
 				spawner:WaitForMinibossHealthPercent(0.6)
 				if (TheNet:GetNrPlayersOnRoomChange() > 2) then
 					spawner:SpawnWave(waves.Raw{ battoad = 1 }, 0, 0, nil, true)
 				end
 				spawner:WaitForMinibossHealthPercent(0)
-				TheWorld.components.roomclear:CleanUpRemainingEnemies()
+				spawner:CleanUpRemainingEnemies()
 			end,
 		},
 	},
@@ -1180,44 +1430,69 @@ encounters._biome.owlitzer_forest.miniboss = {
 encounters._biome.owlitzer_forest.miniboss.medium = encounters._biome.owlitzer_forest.miniboss.easy
 encounters._biome.owlitzer_forest.miniboss.hard = encounters._biome.owlitzer_forest.miniboss.easy
 
-encounters._biome.kanft_swamp.miniboss = {
+encounters._biome.bandi_swamp.miniboss = {
 	easy = {
 		e01 = {
 			exec_fn = function(spawner)
 				spawner:SpawnPropDestructibles(3)
 				spawner:SpawnStationaryEnemies(waves.Raw{ mothball_spawner = 2 })
-				spawner:SpawnMiniboss(waves.Raw{ groak_elite = 1 })
+				spawner:SpawnMiniboss(waves.Raw{ groak_miniboss = 1 })
 				spawner:WaitForMinibossHealthPercent(0.5)
 				spawner:WaitForMinibossHealthPercentWithReinforcement(0, waves.Raw{ mothball = 4 }, 2.2)
-				TheWorld.components.roomclear:CleanUpRemainingEnemies()
+				spawner:CleanUpRemainingEnemies()
 				spawner:WaitForSeconds(0.16) -- do a second delayed cleanup to catch mothballs spawned by nests killed in the first cleanup
-				TheWorld.components.roomclear:CleanUpRemainingEnemies()
+				spawner:CleanUpRemainingEnemies()
 			end,
 		},
 	},
 }
-encounters._biome.kanft_swamp.miniboss.medium = encounters._biome.kanft_swamp.miniboss.easy
-encounters._biome.kanft_swamp.miniboss.hard = encounters._biome.kanft_swamp.miniboss.easy
+encounters._biome.bandi_swamp.miniboss.medium = encounters._biome.bandi_swamp.miniboss.easy
+encounters._biome.bandi_swamp.miniboss.hard = encounters._biome.bandi_swamp.miniboss.easy
 
 encounters._biome.thatcher_swamp.miniboss = {
 	easy = {
 		e01 = {
 			exec_fn = function(spawner)
-				SpawnTrapWave(spawner, waves.Raw{ trap_acid = 4 })
 				spawner:SpawnPropDestructibles(4)
-				spawner:SpawnMiniboss(waves.Raw{ floracrane_elite = 1 })
+				spawner:SpawnMiniboss(waves.Raw{ floracrane_miniboss = 1 })
 				spawner:WaitForMinibossHealthPercent(0.75)
-				spawner:SpawnWave(waves.Raw{ bulbug = 2 })
-				spawner:WaitForMinibossHealthPercent(0.5)
-				spawner:SpawnWave(waves.Raw{ slowpoke = 1 })
+				if (TheNet:GetNrPlayersOnRoomChange() > 2) then
+					spawner:SpawnWave(waves.Raw{ bulbug = 1, slowpoke = 1 })
+				else
+					spawner:SpawnWave(waves.Raw{ slowpoke = 1 })
+				end
+				spawner:WaitForMinibossHealthPercent(0.4)
+				if (TheNet:GetNrPlayersOnRoomChange() > 2) then
+					spawner:SpawnWave(waves.Raw{ slowpoke = 2 })
+				else
+					spawner:SpawnWave(waves.Raw{ slowpoke = 1 })
+				end
 				spawner:WaitForMinibossHealthPercent(0)
-				TheWorld.components.roomclear:CleanUpRemainingEnemies()
+				spawner:CleanUpRemainingEnemies()
 			end,
 		},
 	},
 }
 encounters._biome.thatcher_swamp.miniboss.medium = encounters._biome.thatcher_swamp.miniboss.easy
 encounters._biome.thatcher_swamp.miniboss.hard = encounters._biome.thatcher_swamp.miniboss.easy
+
+encounters._biome.sedament_tundra.miniboss = {
+	easy = {
+		e01 = {
+			exec_fn = function(spawner)
+				spawner:SpawnPropDestructibles(5)
+				spawner:SpawnMiniboss(waves.Raw{ crystroll_miniboss = 1 })
+				--spawner:WaitForSeconds(4.9)
+				--spawner:SpawnWave(waves.Raw{ beets = 1 }, 0, 0, nil, true)
+				--spawner:WaitForMinibossHealthPercent(0.75)
+				--spawner:WaitForMinibossHealthPercentWithReinforcement(0, waves.Raw{ beets = 4 }, 2.2)
+				--spawner:CleanUpRemainingEnemies()
+			end,
+		},
+	},
+}
+encounters._biome.sedament_tundra.miniboss.medium = encounters._biome.sedament_tundra.miniboss.easy
+encounters._biome.sedament_tundra.miniboss.hard = encounters._biome.sedament_tundra.miniboss.easy
 
 for roomtype,room_enc in pairs(encounters._default) do
 	mapgen.validate.all_keys_are_difficulty(room_enc)

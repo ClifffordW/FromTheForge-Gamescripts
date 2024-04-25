@@ -12,6 +12,10 @@ local prefabs =
 	"fx_ground_target_red",
 	"mothball",
 }
+table.appendarrays(
+	prefabs,
+	TUNING.TRAPS.swamp_stalactite.fx,
+	TUNING.TRAPS.swamp_stalagmite.fx)
 
 local function fn(prefabname, tuning)
 	local inst = CreateEntity()
@@ -72,6 +76,7 @@ local function fn(prefabname, tuning)
 	inst.fx_types = tuning.fx
 
 	inst:AddTag("prop") -- Classify this as a prop for prop-related interactions.
+	inst:Hide() -- Hide on spawn to prevent a flicker when spawning stalacitites; the fall pre state will make this visible.
 
 	return inst
 end
@@ -83,11 +88,19 @@ local function stalactite_fn(prefabname)
 
 	inst.Physics:SetSnapToGround(false)
 
-	inst.OnSetSpawnInstigator = function(inst, instigator)
-		inst.owner = instigator and instigator.owner or nil
+	inst.OnSetSpawnInstigator = function(_inst, instigator)
+		-- Set the owner if it isn't a trap that spawns stalactites (e.g. Bandicoot)
+		local owner = instigator and instigator.owner
+		if owner then
+			if not owner:HasTag("trap") then
+				inst.owner = owner
+			else
+				-- If the instigator is a trap, store a reference to it.
+				inst.trap_spawner = owner
+			end
+		end
 	end
 
-	inst:AddTag("hidingspot")
 	inst.sg:GoToState("fall_pre")
 
 	return inst
@@ -114,6 +127,7 @@ end
 local function stalagmite_fn(prefabname)
 	local tuning = TUNING.TRAPS["swamp_stalagmite"]
 	local inst = fn(prefabname, tuning)
+	inst:Show() -- The default initializer hides this entity for stalactites, make stalagmites visible upon spawn.
 
 	inst:AddTag("hidingspot")
 

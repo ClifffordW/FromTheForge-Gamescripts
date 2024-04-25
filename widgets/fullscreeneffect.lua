@@ -83,7 +83,7 @@ function FullscreenEffect:StopLooping()
 	if not self.updater then
 		-- Ignore graphics.screen_flash so we correctly restore if the setting
 		-- was modified while effect was active.
-		-- TODO(dbriscoe): Stop active effects when screen flash setting changes.
+		-- TODO(ui): Stop active effects when screen flash setting changes.
 		return
 	end
 	assert(self.updater)

@@ -21,17 +21,13 @@ end
 
 local assets =
 {
-	Asset("ANIM", "anim/cabbageroll_single_bank.zip"),
-	Asset("ANIM", "anim/cabbagerolls_double_bank.zip"),
-	Asset("ANIM", "anim/cabbagerolls_bank.zip"),
+	Asset("ANIM", "anim/cabbageroll4_bank.zip"),
 	Asset("ANIM", "anim/cabbageroll_build.zip"),
 }
 
 local elite_assets =
 {
-	Asset("ANIM", "anim/cabbageroll_single_bank.zip"),
-	Asset("ANIM", "anim/cabbagerolls_double_bank.zip"),
-	Asset("ANIM", "anim/cabbagerolls_bank.zip"),
+	Asset("ANIM", "anim/cabbageroll4_bank.zip"),
 	Asset("ANIM", "anim/cabbageroll_elite_build.zip"),
 }
 
@@ -45,6 +41,7 @@ local prefabs =
 	"fx_low_health_ring",
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "cabbageroll")
+prefabutil.SetupDeathFxPrefabs(prefabs, "cabbageroll_elite")
 
 local attacks =
 {
@@ -158,7 +155,7 @@ local attacks =
 			type = "melee",
 			pre_anim = "smash_pre",
 			hold_anim = "smash_hold",
-			startup_frames = 30,
+			startup_frames = 24,
 			cooldown = 2.67,
 			targetrange = { base = 3.6, steps = 4, scale = 2, centered = false },
 			max_attacks_per_target = 2,
@@ -183,7 +180,7 @@ local attacks =
 			priority = 2,
 			pre_anim = "bodyslam_pre",
 			hold_anim = "body_slam_hold",
-			startup_frames = 40,
+			startup_frames = 26,
 			cooldown = 10.67,
 			start_conditions_fn = function(inst, data, trange)
 				local result = false
@@ -322,7 +319,7 @@ local elite_attacks =
 			type = "melee",
 			pre_anim = "smash_pre",
 			hold_anim = "smash_hold",
-			startup_frames = 30,
+			startup_frames = 24,
 			cooldown = 2.67,
 			targetrange = { base = 3.6, steps = 4, scale = 2, centered = false },
 			max_attacks_per_target = 2,
@@ -347,7 +344,7 @@ local elite_attacks =
 			priority = 2,
 			pre_anim = "bodyslam_pre",
 			hold_anim = "body_slam_hold",
-			startup_frames = 40,
+			startup_frames = 20,
 			cooldown = 10.67,
 			start_conditions_fn = function(inst, data, trange)
 				local result = false
@@ -366,6 +363,15 @@ local elite_attacks =
 	},
 }
 
+-- This needs to be here to extract the names of cooldown timers for the network strings
+export_timer_names_grab_attacks(attacks[1])
+export_timer_names_grab_attacks(attacks[2])
+export_timer_names_grab_attacks(attacks[3])
+export_timer_names_grab_attacks(elite_attacks[1])
+export_timer_names_grab_attacks(elite_attacks[2])
+export_timer_names_grab_attacks(elite_attacks[3])
+
+
 local MONSTER_SIZE = 0.9
 
 local function fn(prefabname)
@@ -374,6 +380,7 @@ local function fn(prefabname)
 
 	monsterutil.MakeBasicMonster(inst, MONSTER_SIZE, monsterutil.MonsterSize.SMALL)
 
+	inst.AnimState:SetBank("cabbageroll4_bank")
 	inst.AnimState:SetBuild("cabbageroll_build")
 
 	inst.components.timer:StartTimer("combine_cd", 8)
@@ -431,9 +438,9 @@ local function cabbagerolls2_fn()
 	hat_roll.components.foleysounder:SetFootstepSound(fmodtable.Event.cabbageroll_footstep)
 	hat_roll.components.foleysounder:SetBodyfallSound(fmodtable.Event.cabbageroll_bodyfall)
 
-   -- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
+	-- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
 	master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
-   	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
+	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
 
 	return master_roll
 end
@@ -451,9 +458,9 @@ local function cabbagerolls_fn()
 	hat_roll.components.foleysounder:SetFootstepSound(fmodtable.Event.cabbageroll_footstep)
 	hat_roll.components.foleysounder:SetBodyfallSound(fmodtable.Event.cabbageroll_bodyfall)
 
-   -- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
-   	master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
-   	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
+	-- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
+	master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
+	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
 
 	return master_roll
 end
@@ -474,9 +481,9 @@ local function elite_fn(prefabname)
 	inst.components.foleysounder:SetFootstepSound(fmodtable.Event.cabbageroll_Elite_footstep)
 	inst.components.foleysounder:SetBodyfallSound(fmodtable.Event.cabbageroll_bodyfall)
 
-   -- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
-   inst.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_Elite_hit)
-   inst.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_Elite_knockdown)
+	-- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
+	inst.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_Elite_hit)
+	inst.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_Elite_knockdown)
 
 	return inst
 end
@@ -494,9 +501,9 @@ local function cabbagerolls2_elite_fn()
 	hat_roll.components.foleysounder:SetFootstepSound(fmodtable.Event.cabbageroll_Elite_footstep)
 	hat_roll.components.foleysounder:SetBodyfallSound(fmodtable.Event.cabbageroll_bodyfall)
 
-   -- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
-   	master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
-   	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
+	-- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
+	master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
+	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
 
 	return master_roll
 end
@@ -514,9 +521,9 @@ local function cabbagerolls_elite_fn()
 	hat_roll.components.foleysounder:SetFootstepSound(fmodtable.Event.cabbageroll_Elite_footstep)
 	hat_roll.components.foleysounder:SetBodyfallSound(fmodtable.Event.cabbageroll_bodyfall)
 
-   -- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
-   master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
-   master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
+	-- inst.components.foleysounder:SetHitStartSound(fmodtable.Event.AAAA_default_event)
+	master_roll.components.foleysounder:SetKnockbackStartSound(fmodtable.Event.cabbageroll_hit)
+	master_roll.components.foleysounder:SetKnockdownStartSound(fmodtable.Event.cabbageroll_knockdown)
 
 	return master_roll
 end

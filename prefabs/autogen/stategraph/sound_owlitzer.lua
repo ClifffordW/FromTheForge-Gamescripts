@@ -135,11 +135,6 @@ return {
         },
         {
           eventtype="playsound",
-          name="mx-stinger_divebomb",
-          param={ soundevent="Mus_Owlitzer_SwoopStinger_Dive",},
-        },
-        {
-          eventtype="playsound",
           name="sfx-protect_pre",
           param={ soundevent="owlitzer_protect_pre",},
         },
@@ -171,7 +166,11 @@ return {
         {
           eventtype="playsound",
           name="sfx-owlitzer_protect_hold_light",
-          param={ name="owlitzer_protect_hold", soundevent="owlitzer_protect_hold", volume=65.0,},
+          param={
+            name="owlitzer_protect_hold",
+            soundevent="owlitzer_protect_hold",
+            stopatexitstate=true,
+          },
         },
       },
     },

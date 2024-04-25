@@ -1,4 +1,10 @@
+-- All emotions can be triggered from conversations with !
+-- agent:
+--		!happy
+--		!clap
+--		Woo hoo!
 local emotion = {
+	-- emote: An animation expressing a feeling.
 	emote = {
 		angry = "angry",
 		clap = "clap",
@@ -29,7 +35,11 @@ local emotion = {
 		disagree = "disagree", --(shake head)
 
 		wavelunn = "wavelunn", --(berna specific emote)
+		wink = "wink", --(alphonse specific emote)
+		cough = "cough", --(toot specific emote)
+		very_sick = "very_sick", --(toot specific emote)
 	},
+	-- feeling: current emotional state that changes how their face looks.
 	feeling = {
 		happy = "happy",
 		neutral = "neutral",

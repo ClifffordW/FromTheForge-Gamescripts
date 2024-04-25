@@ -61,6 +61,10 @@ Power.PowerInstance = Class(function(self, power)
 end)
 
 function Power.PowerInstance:StartPowerTimer(inst, timer_name, var_name)
+	if not inst.components.timer then
+		return
+	end
+
 	timer_name = timer_name or self.def.name
 	var_name = var_name or "time"
 	local force = true
@@ -69,6 +73,14 @@ end
 
 function Power.PowerInstance:GetVar(var)
 	return self.persistdata:GetVar(var)
+end
+
+function Power.PowerInstance:GetStacks()
+	return self.persistdata.stacks
+end
+
+function Power.PowerInstance:GetDef()
+	return self.persistdata:GetDef()
 end
 
 function Power.CollectAssets(tbl)
@@ -109,7 +121,8 @@ function Power.AddPower(slot, name, build, data)
 		name = name,
 		slot = slot,
 		icon = data.icon or GetIcon(name, slot, build),
-		pretty = data.pretty or slotutil.GetPrettyStrings(slot, name),
+		-- Strings are in STRINGS.ITEMS.POWERS.
+		pretty = data.pretty or slotutil.GetPrettyStringsByType("POWERS", slot, name),
 		desc_fn = data.desc_fn,
 		tuning = data.tuning or { [Power.Rarity.COMMON] = {} },
 		-- Used both as organizational tags (for querying power defs) and tags
@@ -154,6 +167,7 @@ function Power.AddPower(slot, name, build, data)
 		overrides_sources = data.overrides_sources,
 		minimum_player_count = data.minimum_player_count or 1,
 		maximum_player_count = data.maximum_player_count or 4,
+		minimum_runs = data.minimum_runs or 0, -- how many runs must we have done before this power drops?
 		get_counter_text = data.get_counter_text,
 		on_net_serialize_fn = data.on_net_serialize_fn,			-- on_net_serialize_fn(entity)
 		on_net_deserialize_fn = data.on_net_deserialize_fn,		-- on_net_deserialize_fn(entity)
@@ -327,6 +341,16 @@ end
 
 function Power.GetRarityAsParameter(power)
 	return lume.find(Power.RarityIdx, power:GetRarity())
+end
+
+function Power.IsSlot(slot)
+	for _, v in pairs(Power.Slots) do
+		if v == slot then
+			return true
+		end
+	end
+
+	return false
 end
 
 -- Validation

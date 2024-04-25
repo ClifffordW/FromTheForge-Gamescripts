@@ -17,7 +17,7 @@ local MapPathEditor = Class(PrefabEditorBase, function(self)
 
 	self.name = "Map Path Editor"
 	self.prefab_label = "Path"
-	-- TODO(dbriscoe): What should test do? Should this be an EditorBase instead?
+	-- TODO(ui): What should test do? Should this be an EditorBase instead?
 	self.test_label = "Begin Editing"
 
 	self.edit_options = DebugSettings("mappatheditor.edit_options")

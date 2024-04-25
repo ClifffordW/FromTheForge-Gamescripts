@@ -1,7 +1,7 @@
 -- Intended to be a mixin: Only a table of functions.
 local ContentNode = {}
 
-local ANIM, IMG, LOC = require("questral.util.contentutil").anim_img_loc()
+local ANIM, IMG = require("questral.util.contentutil").anim_img_fns()
 
 function ContentNode:GetContent()
     return rawget( self, "_content" ) -- Will be nil if this class or instance defines no content.
@@ -133,6 +133,7 @@ function ContentNode:AddStrings(t, prefix)
             self:AddStrings(v, id)
         end
     end
+    return self
 end
 
 function ContentNode:AddQuips(quips)

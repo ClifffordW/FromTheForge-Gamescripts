@@ -2,7 +2,7 @@
 return {
   __displayName="fx_windmon",
   isfinal=true,
-  prefab={ "windmon",},
+  prefab={ "windmon", "windmon_elite",},
   stategraphs={
     sg_windmon={
       sg_events={

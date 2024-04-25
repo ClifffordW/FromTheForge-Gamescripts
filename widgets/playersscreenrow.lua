@@ -3,7 +3,9 @@ local Clickable = require("widgets/clickable")
 local Text = require("widgets/text")
 local Panel = require("widgets/panel")
 local Image = require("widgets/image")
+local ImageButton = require("widgets/imagebutton")
 local PlayerPuppet = require("widgets/playerpuppet")
+local CheckBox = require "widgets.checkbox"
 
 local easing = require "util.easing"
 local fmodtable = require "defs.sound.fmodtable"
@@ -11,17 +13,31 @@ local fmodtable = require "defs.sound.fmodtable"
 ------------------------------------------------------------------------------------
 -- Displays a single player on the PlayersScreen.
 
-local PlayersScreenRow = Class(Clickable, function(self) self:init() end)
-
-PlayersScreenRow:SetGainFocusSound(nil)
+local PlayersScreenRow = Class(Widget, function(self) self:init() end)
 
 PlayersScreenRow.WIDTH = 1060
 PlayersScreenRow.HEIGHT = 240
 
-function PlayersScreenRow:init()
-    Clickable._ctor(self, "PlayersScreen Row")
+-- PlayersScreenRow.CONTROL_MAP =
+-- {
+-- 	{
+-- 		control = Controls.Digital.Y,
+-- 		fn = function(self)
+-- 			if self.permissions:IsShown() then
+-- 				self.permissions:Click()
+-- 				return true
+-- 			end
+-- 		end
+-- 	},
+-- }
 
-    self.id = 0
+function PlayersScreenRow:init()
+    Widget._ctor(self, "PlayersScreen Row")
+
+    TheLog:enable_channel("PlayersScreenRow")
+
+    self.client_id = nil
+    self.player_id = nil
     self.empty = false
     self.host = false
 
@@ -87,6 +103,20 @@ function PlayersScreenRow:init()
 		:SetGlyphColor(UICOLORS.DARK_TEXT)
 		:SetHAlign(ANCHOR_LEFT)
 		:SetAutoSize(self.text_width)
+	self.permissions = self.text_container:AddChild(CheckBox())
+		:SetSize(50, 50)
+		:SetTextSize(FONTSIZE.SCREEN_TEXT)
+		:SetText(STRINGS.UI.PLAYERSSCREEN.ALLOW_TOWN_EDITING)
+		:SetTextColour(UICOLORS.DARK_TEXT)
+		:SetOnChangedFn(function(val)
+			if self.client_id ~= nil then
+				TheLog.ch.PlayersScreenRow:print("setting privileges", self.client_id, val and 2 or 0)
+				TheNet:SetTownPropEditPrivilegeByClientID(self.client_id, val and 2 or 0)
+			end
+		end)
+		:SetToolTip(STRINGS.UI.PLAYERSSCREEN.TT_ALLOW_TOWN_EDITING)
+		:ShowToolTipOnFocus(true)
+		:SetNavFocusable(true)
 
 	self.empty_label = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT*1.4))
 		:SetName("Empty label")
@@ -96,35 +126,37 @@ function PlayersScreenRow:init()
 		:Hide()
 
 	-- Ban and remove buttons
-	self.row_ban_btn = self:AddChild(Image("images/ui_ftf_online/player_btn_ban.tex"))
+	self.row_ban_btn = self:AddChild(ImageButton("images/ui_ftf_online/player_btn_ban.tex"))
 		:SetName("Ban button")
+		:SetScaleOnFocus(false)
+		:SetImageNormalColour(0xeeeeeeff)
+		:SetImageFocusColour(0xffffffff)
 		:SetSize(self.right_btn_width, PlayersScreenRow.HEIGHT)
 		:LayoutBounds("right", "center", self.hitbox)
 		:Hide()
-	self.row_ban_text = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
+	self.row_ban_text = self.row_ban_btn:GetImage():AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
 		:SetName("Ban text")
 		:SetGlyphColor(UICOLORS.BACKGROUND_DARK)
 		:OverrideLineHeight(FONTSIZE.SCREEN_TEXT * 0.8)
 		:SetAutoSize(self.right_btn_width - self.padding_h*2)
 		:SetText(STRINGS.UI.PLAYERSSCREEN.BAN_BTN)
-		:LayoutBounds("center", "center", self.row_ban_btn)
-		:Hide()
-	self.row_remove_btn = self:AddChild(Image("images/ui_ftf_online/player_btn_remove.tex"))
+		:LayoutBounds("center", "center")
+
+	self.row_remove_btn = self:AddChild(ImageButton("images/ui_ftf_online/player_btn_remove.tex"))
 		:SetName("Remove button")
+		:SetScaleOnFocus(false)
+		:SetImageNormalColour(0xeeeeeeff)
+		:SetImageFocusColour(0xffffffff)
 		:SetSize(self.right_btn_width, PlayersScreenRow.HEIGHT)
 		:LayoutBounds("right", "center", self.hitbox)
 		:Hide()
-	self.row_remove_text = self:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
+	self.row_remove_text = self.row_remove_btn:GetImage():AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
 		:SetName("Remove text")
 		:SetGlyphColor(UICOLORS.BACKGROUND_DARK)
 		:OverrideLineHeight(FONTSIZE.SCREEN_TEXT * 0.8)
 		:SetAutoSize(self.right_btn_width - self.padding_h*2)
 		:SetText(STRINGS.UI.PLAYERSSCREEN.REMOVE_BTN)
-		:LayoutBounds("center", "center", self.row_remove_btn)
-		:Hide()
-
-	self:SetOnGainFocus(function() self:OnFocusChanged(true) end)
-	self:SetOnLoseFocus(function() self:OnFocusChanged(false) end)
+		:LayoutBounds("center", "center")
 end
 
 function PlayersScreenRow:SetPlayer(player)
@@ -172,6 +204,17 @@ function PlayersScreenRow:SetPlayerId(player_id)
 	return self
 end
 
+function PlayersScreenRow:SetClientId(client_id)
+	if client_id ~= self.client_id then
+		self.client_id = client_id
+
+		local privileges = TheNet:GetTownPropEditPrivileges()
+		local can_edit = privileges[client_id] and privileges[client_id].privilege == 2
+		self.permissions:SetValue(can_edit, true)
+	end
+	return self
+end
+
 function PlayersScreenRow:GetPlayerId()
 	return self.player_id
 end
@@ -180,11 +223,12 @@ function PlayersScreenRow:SetHost(is_host)
 	self.host = is_host
 	local input_device_icon = ""
 	if self.player and self.player:IsLocal() then
-		input_device_icon = self.player.components.playercontroller:GetLabelForDevice()
-		dbassert(input_device_icon)
-		if not self.player.components.playercontroller:HasInputDevice() then
-			input_device_icon = input_device_icon .." ".. STRINGS.UI.PLAYERSSCREEN.PLAYER_NO_DEVICE
+		if self.player.components.playercontroller:HasInputDevice() then
+			input_device_icon = self.player.components.playercontroller:GetLabelForDevice()
+		else
+			input_device_icon = STRINGS.UI.PLAYERSSCREEN.PLAYER_NO_DEVICE
 		end
+		dbassert(input_device_icon)
 	end
 
 	if self.host then
@@ -195,6 +239,7 @@ function PlayersScreenRow:SetHost(is_host)
 			:Show()
 	end
 	self:Layout()
+
 	return self
 end
 
@@ -208,8 +253,11 @@ function PlayersScreenRow:SetPlayerIndex(idx)
 		self.client_indicator:Hide()
 		self.bg:SetSize(PlayersScreenRow.WIDTH, PlayersScreenRow.HEIGHT)
 		self.disconnected_device:LayoutBounds("before", "center", self.bg)
+
+		self.permissions:SetShown(not self.host)
 	else
 		-- This is indented under the main player
+		self.permissions:Hide()
 		if idx == 2 then
 			self.client_indicator:SetTexture("images/ui_ftf_online/player_client_2.tex")
 		elseif idx > 2 then
@@ -229,29 +277,27 @@ function PlayersScreenRow:SetPlayerIndex(idx)
 	return self
 end
 
-function PlayersScreenRow:ShowBanButton()
+function PlayersScreenRow:ShowBanButton(fn)
 	self.row_ban_btn:Show()
-	self.row_ban_text:Show()
+		:SetOnClick(fn)
 	self:Layout()
 	return self
 end
 
 function PlayersScreenRow:HideBanButton()
 	self.row_ban_btn:Hide()
-	self.row_ban_text:Hide()
 	return self
 end
 
-function PlayersScreenRow:ShowRemoveButton()
+function PlayersScreenRow:ShowRemoveButton(fn)
 	self.row_remove_btn:Show()
-	self.row_remove_text:Show()
+		:SetOnClick(fn)
 	self:Layout()
 	return self
 end
 
 function PlayersScreenRow:HideRemoveButton()
 	self.row_remove_btn:Hide()
-	self.row_remove_text:Hide()
 	return self
 end
 
@@ -314,19 +360,6 @@ function PlayersScreenRow:Layout()
 		:LayoutBounds("after", "center", self.portrait_container)
 		:Offset(40, 3)
 
-	return self
-end
-
-function PlayersScreenRow:OnFocusChanged(has_focus)
-	if has_focus then
-		-- self:GetImage():ColorAddTo(nil, UICOLORS.LIGHT_BACKGROUNDS_LIGHT, 0.1, easing.outQuad)
-		self.row_ban_btn:ColorAddTo(nil, HexToRGB(0x101010FF), 0.1, easing.outQuad)
-		self.row_remove_btn:ColorAddTo(nil, HexToRGB(0x101010FF), 0.1, easing.outQuad)
-	else
-		-- self:GetImage():ColorAddTo(nil, UICOLORS.BLACK, 0.2, easing.outQuad)
-		self.row_ban_btn:ColorAddTo(nil, UICOLORS.BLACK, 0.2, easing.outQuad)
-		self.row_remove_btn:ColorAddTo(nil, UICOLORS.BLACK, 0.2, easing.outQuad)
-	end
 	return self
 end
 

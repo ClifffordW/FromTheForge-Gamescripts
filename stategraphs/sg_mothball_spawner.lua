@@ -30,6 +30,7 @@ local events =
 {
 }
 monsterutil.AddStationaryMonsterCommonEvents(events, { ondeath_fn = OnDeath, })
+monsterutil.AddOptionalMonsterEvents(events, {spawn_battlefield = true})
 
 local states =
 {
@@ -58,7 +59,25 @@ local states =
 		},
 	}),
 }
-
+SGCommon.States.AddSpawnBattlefieldStates(states,
+{
+	anim = "spawn",
+	fadeduration = 0.33,
+	fadedelay = 0,
+	timeline =
+	{
+		FrameEvent(0, function(inst)
+			inst:PushEvent("leave_spawner")
+			inst.Physics:StartPassingThroughObjects()
+		end),
+		FrameEvent(18, function(inst)
+			inst.Physics:StopPassingThroughObjects()
+		end),
+	},
+	onexit_fn = function(inst)
+		inst.Physics:StopPassingThroughObjects()
+	end,
+})
 SGCommon.States.AddAttackPre(states, "spawn")
 SGCommon.States.AddAttackHold(states, "spawn")
 

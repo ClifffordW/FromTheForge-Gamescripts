@@ -5,6 +5,8 @@ local lume = require("util/lume")
 local Panel = require "widgets.panel"
 local Weight = require "components/weight"
 local UIAnim = require "widgets/uianim"
+local soundutil = require "util.soundutil"
+local fmodtable = require "defs.sound.fmodtable"
 
 ------------------------------------------------------------------------------------
 
@@ -47,12 +49,14 @@ local TotalWeightWidget = Class(Widget, function(self, player, scale)
 		:SetMultColor(UICOLORS.DARK_TEXT)
 		:LayoutBounds("center", "above", self.scale_container)
 		:Offset(0, 170)
+		:SetRotation(-90)
 
 	self.weight_light_icon = self:AddChild(Image("images/icons_ftf/stat_weight.tex"))
 		:SetScale(0.5)
 		:SetMultColor(UICOLORS.DARK_TEXT)
 		:LayoutBounds("center", "below", self.scale_container)
 		:Offset(0, -185)
+		:SetRotation(-90)
 end)
 
 function TotalWeightWidget:UpdateByListOfWeights(weights)
@@ -73,6 +77,13 @@ function TotalWeightWidget:UpdateMeter(weightnum)
 	end
 
 	local suffix = weightnum > self.current and "_u" or "_d"
+
+	-- weightnum is weight of item (1 is lightest so far, 3 is heaviest I've seen? But could be higher)
+	-- the spatial coordinates on these aren't working or feel flipped??
+
+	-- local weightMeter_adjust_sound = weightnum > self.current and fmodtable.Event.ui_weightMeter_adjust_up or fmodtable.Event.ui_weightMeter_adjust_down
+	-- local weightDifference = math.abs(weightnum - self.current)
+	-- self:PlaySpatialSound(weightMeter_adjust_sound, { weightDifference = weightDifference })
 
 	self.scale:GetAnimState():PlayAnimation(weightnum..suffix)
 	self.current = weightnum

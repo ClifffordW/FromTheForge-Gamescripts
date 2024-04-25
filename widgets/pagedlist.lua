@@ -133,10 +133,10 @@ function PagedList:RefreshView()
 	self:EvaluateArrows()
 end
 
-function PagedList:OnControl(controls, down)
+function PagedList:OnControl(controls, down, ...)
 	--print("PagedList got control", controls, down)
 
-	if PagedList._base.OnControl(self, controls, down) then return true end
+	if PagedList._base.OnControl(self, controls, down, ...) then return true end
 end
 
 return PagedList

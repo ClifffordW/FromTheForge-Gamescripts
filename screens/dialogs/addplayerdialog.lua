@@ -116,8 +116,9 @@ AddPlayerDialog.CONTROL_MAP = {
 	},
 }
 
-function AddPlayerDialog:HandleControlDown(controls, device_type, trace, device_id)
-	device_id = device_id or 0 -- keyboard is 0
+function AddPlayerDialog:HandleControlDown(controls, trace)
+	local input_device = controls:GetDevice()
+	local device_type, device_id = input_device:unpack()
 	if self.selected_device
 		and self.selected_device.device_type == device_type
 		and self.selected_device.device_id == device_id
@@ -133,7 +134,7 @@ function AddPlayerDialog:HandleControlDown(controls, device_type, trace, device_
 		end
 	end
 
-	local tex = TheInput:GetTexForDevice(device_type, device_id)
+	local tex = TheInput:GetTexForDevice(input_device)
 
 	self.selected_device = nil
 	if device_type == "mouse" then
@@ -151,7 +152,7 @@ function AddPlayerDialog:HandleControlDown(controls, device_type, trace, device_
 		self.confirm_text:SetText(STRINGS.UI.ADDPLAYERDIALOG.CONFIRM_HINT)
 		self.confirm_text:Show()
 		self.cancel_text:Show()
-		local existing_player = TheInput:GetDeviceOwner(device_type, device_id)
+		local existing_player = TheInput:GetDeviceOwner(input_device)
 		if existing_player then
 			self.confirm_text:SetGlyphColor(UICOLORS.LIGHT_TEXT_DARK)
 		else

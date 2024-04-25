@@ -13,7 +13,6 @@ return {
   build="drop_anims",
   clickable=true,
   group="shop_items",
-  hostspawn=true,
   looping=true,
   networked=1,
   nonpersist=true,

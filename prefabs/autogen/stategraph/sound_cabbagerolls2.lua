@@ -4,9 +4,9 @@ return {
   group="sound_creature",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "cabbagerolls2",},
+  prefab={ "cabbagerolls2", "cabbagerolls2_elite",},
   stategraphs={
-    sg_cabbagerolls2={
+    sg_cabbageroll={
       events={
         knockback={ { eventtype="stopsound", frame=1, param={ name="hold",},},},
         knockdown={ { eventtype="stopsound", frame=1, param={ name="hold",},},},
@@ -77,6 +77,11 @@ return {
           eventtype="playsound",
           name="sfx-whoosh",
           param={ soundevent="cabbageroll_whoosh",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-behaviour2",
+          param={ soundevent="cabbageroll_behaviour_2",},
         },
       },
     },

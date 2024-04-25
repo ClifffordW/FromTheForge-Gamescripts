@@ -28,7 +28,7 @@ function DraggableWorldWidget:HandleControlDown(controls)
     end
 end
 
-function DraggableWorldWidget:OnControl(controls, down)
+function DraggableWorldWidget:OnControl(controls, down, ...)
     if controls:Has(Controls.Digital.ACCEPT) then
         self.dragging = true
     end

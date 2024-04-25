@@ -2,6 +2,7 @@ local EffectEvents = require "effectevents"
 local SGCommon = require "stategraphs.sg_common"
 local easing = require("util/easing")
 local monsterutil = require "util.monsterutil"
+local spawnutil = require "util.spawnutil"
 local fmodtable = require "defs.sound.fmodtable"
 
 local events =
@@ -44,9 +45,12 @@ local states =
 		    local dz = targetpos.z - z
 		    local rangesq = dx * dx + dz * dz
 		    local maxrange = 15
-		    local speed = easing.linear(rangesq, 20, 3, maxrange * maxrange)
-		    inst.components.complexprojectile:SetHorizontalSpeed(speed)
-		    inst.components.complexprojectile:SetGravity(-40)
+			local base_speed = (math.random() - 0.5) * 4 + 20 -- 20 +/-2
+		    local speed = easing.linear(rangesq, base_speed, 3, maxrange * maxrange)
+
+			inst.components.complexprojectile:SetHorizontalSpeed(speed)
+
+			inst.components.complexprojectile:SetGravity(-40)
 		    inst.components.complexprojectile:Launch(targetpos)
 		    inst.components.complexprojectile.onhitfn = function() inst.sg:GoToState("land", { pos = targetpos, size = data and data.size or "normal" }) end
 
@@ -78,25 +82,24 @@ local states =
 			inst.sg:SetTimeoutAnimFrames(3)
 
 			-- spawn hurt zone here
+			spawnutil.SpawnAcidTrap(inst, data.size or "medium", 300)
 
-			local aoe = SGCommon.Fns.SpawnAtDist(inst, "trap_acid", 0) -- This trap sits in the "init" state until we have told it to proceed. We need to tell it what its transform size + hitbox sizes should be first.
-			if not aoe then return end
-
-			aoe.Transform:SetPosition(pos.x, 0, pos.z)
-			local trapdata =
-			{
-				size = data and data.size or "medium",
-				temporary = true,
-			}
-			EffectEvents.MakeNetEventPushEventOnMinimalEntity(aoe, "acid_start", trapdata)
-
-			local splat_fx = SpawnPrefab("fx_battoad_projectile_land", inst)
+			--[[local splat_fx = SpawnPrefab("fx_acid_projectile_land", inst)
 			splat_fx:SetupDeathFxFor(inst)
 
-			local splat_ground_fx = SpawnPrefab("fx_battoad_projectile_land_ground", inst)
-			splat_ground_fx:SetupDeathFxFor(inst)
+			local splat_ground_fx = SpawnPrefab("fx_acid_projectile_land_ground", inst)
+			splat_ground_fx:SetupDeathFxFor(inst)]]
 
-			inst.sg.statemem.size_mod = data and data.size == "large" and 1.3 or 1
+			local size = 1
+			if data then
+				if data.size == "large" then
+					size = 1.3
+				elseif data.size == "small" then
+					size = 0.5
+				end
+			end
+
+			inst.sg.statemem.size_mod = size
 		end,
 
 		timeline =

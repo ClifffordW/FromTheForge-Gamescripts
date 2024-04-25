@@ -7,5 +7,6 @@ return {
   bloom=40.0,
   build="fx_spawn_light_strips",
   glowcolor="BF00FFFF",
+  group="general",
   multcolor="DB94FFBF",
 }

@@ -5,7 +5,7 @@ return {
   layer="bg",
   nonpersist=true,
   onground=true,
-  parallax={ { anim="miniboss",},},
+  parallax={ { anim="plain",},},
   parallax_use_baseanim_for_idle=true,
   sortorder=2,
   stategraph_override="sg_gate_indicator",

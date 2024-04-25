@@ -1,3 +1,5 @@
+--jcheng: archiving old scripts for now where it's easy to find so you don't have to look at svn history to find them
+local INCLUDE_ARCHIVED = false
 local LIST_FILES = require "util.listfilesenum"
 
 
@@ -20,6 +22,8 @@ function ScriptLoader:LoadScript(filename, post_fn)
     return result
 end
 
+-- base_dir is relative to data. ex: "scripts/dbui"
+-- post_fn( filename, result ) lets you process the content of each file.
 function ScriptLoader:LoadAllScript(base_dir, post_fn)
     --~ local _perf1 <close> = PROFILE_SECTION( "ScriptLoader:LoadAllScript", base_dir )
     local function recurse( folder )
@@ -32,7 +36,9 @@ function ScriptLoader:LoadAllScript(base_dir, post_fn)
 
         for _,v in ipairs(files) do
             local filename = folder.."/"..v
-            self:LoadScript( filename, post_fn )
+            if INCLUDE_ARCHIVED or folder:find("archive") == nil then
+                self:LoadScript( filename, post_fn )
+            end
         end
         local count = #files
 

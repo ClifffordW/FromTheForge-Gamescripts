@@ -1,6 +1,7 @@
 local Widget = require("widgets/widget")
 local Image = require("widgets/image")
 local Text = require("widgets/text")
+local Panel = require("widgets/panel")
 
 local lume = require"util.lume"
 local EquipmentStatDisplay = require "defs.equipmentstatdisplay"
@@ -27,21 +28,30 @@ local DisplayStat = Class(Widget, function(self, max_width, icon_size, text_size
 	self.up_color = UICOLORS.BONUS
 	self.down_color = UICOLORS.PENALTY
 
-	self.icon = self:AddChild(Image())
+	-- used only to layout widgets in an easy way because this panel has forced widths in some cases.
+	self.sizer_widget = self:AddChild(Panel())
+		:SetNineSliceBorderScale(0.01) -- super small scale so the texture doesn't limit how small the panel can be made
+		:SetMultColorAlpha(0) -- just hide it
+
+	self.content = self:AddChild(Widget("content"))
+
+	self.icon = self.content:AddChild(Image())
 		:SetSize(icon_size, icon_size)
 		:SetMultColor(UICOLORS.DARK_TEXT)
 		:Hide()
 
-	self.label = self:AddChild(Text(FONTFACE.DEFAULT, text_size, "", UICOLORS.DARK_TEXT))
+	self.label = self.content:AddChild(Text(FONTFACE.DEFAULT, text_size, "", UICOLORS.DARK_TEXT))
 		:LeftAlign()
 
-	self.valueContainer = self:AddChild(Widget())
+	self.valueContainer = self.content:AddChild(Widget())
 	self.value = self.valueContainer:AddChild(Text(FONTFACE.DEFAULT, text_size, "", UICOLORS.DARK_TEXT))
 	self.delta = self.valueContainer:AddChild(Text(FONTFACE.DEFAULT, delta_size, "", UICOLORS.DARK_TEXT))
 		:Hide()
 
 	self.is_smaller_better = false
 	self.show_tooltip = false
+
+	self:LeftAlign()
 
 	self.show_delta_total = show_delta_total -- If show_delta_total is true, then the "delta" shows 60 -> 66, instead of 60 ^6
 end)
@@ -66,6 +76,14 @@ function DisplayStat:SetValue(value, label, delta, deltaColour, stat)
 	local display_info = EquipmentStatDisplay[stat]
 	-- Add an arrow up or down to the delta
 	local delta_arrow
+	local hide_colour = false
+
+	if stat == EQUIPMENT_STATS.s.WEIGHT then
+		deltaColour = nil
+		hide_colour = true
+	end
+
+
 	if not self.suppress_delta and delta and delta ~= 0 then
 		if self.show_delta_total then
 			-- Use a sideways arrow, and we will also show the full new value
@@ -76,6 +94,11 @@ function DisplayStat:SetValue(value, label, delta, deltaColour, stat)
 				color = self.down_color
 				value = value
 			end
+
+			if hide_colour then
+				color = self.delta:GetColour()
+			end
+
 			delta_arrow = "<p img='images/ui_ftf_shop/displayvalue_right.tex' scale=0.5 color=" .. HexToStr(RGBToHex(color)) .. ">"
 		else
 			-- Use a small up/down arrow
@@ -103,6 +126,7 @@ function DisplayStat:SetValue(value, label, delta, deltaColour, stat)
 	else
 		self.delta:Hide()
 	end
+
 	if deltaColour then self.delta:SetGlyphColor(deltaColour) end
 
 	-- Update values
@@ -122,6 +146,10 @@ function DisplayStat:SetValue(value, label, delta, deltaColour, stat)
 		delta = lume.round(delta, display_info and display_info.round)
 	end
 
+	if display_info and display_info.deltavalue_fn then
+		delta = display_info and display_info.deltavalue_fn(value, delta)
+	end
+
 	if display_info and display_info.displayvalue_fn then
 		value = display_info and display_info.displayvalue_fn(stat, value)
 		delta = display_info and display_info.displayvalue_fn(stat, delta)
@@ -133,8 +161,12 @@ function DisplayStat:SetValue(value, label, delta, deltaColour, stat)
 	if delta_arrow then
 		local layout
 		if self.show_delta_total then
-			local total = value + delta
-			layout = delta_arrow..total
+			if type(value) ~= "number" then
+				layout = ("%s %s"):format(delta_arrow, delta)
+			else
+				local total = value + delta
+				layout = ("%s %s"):format(delta_arrow, total)
+			end
 		elseif delta ~= nil then
 			layout = delta..delta_arrow
 		end
@@ -142,22 +174,34 @@ function DisplayStat:SetValue(value, label, delta, deltaColour, stat)
 		self.delta:SetText(delta_str)
 	end
 
+	local w, h = self.content:GetSize()
+	self.sizer_widget:SetSize(self.max_width, h)
+
+	self.icon:LayoutBounds("left", "center", self.sizer_widget)
+
 	-- Layout widgets
 	self.label:LayoutBounds(self.icon:IsShown() and "after" or "left", "center", self.icon)
 		:Offset(6, 0)
-	self.delta:LayoutBounds("after", "center", self.value)
-		:Offset(4, 0)
 
-	-- HACK: Align to *before* the initial content to calc the offset we need
-	-- from the right edge. It'd be more obvious to position at max_width and
-	-- then nudge left by our width, but this is simpler in our UI system
-	-- because this widget doesn't have a right edge anchor.
-	self.valueContainer:LayoutBounds("before", "center", self.icon:IsShown() and self.icon or self.label)
-		:Offset(self.max_width, 0)
+	self.delta:LayoutBounds("after", "center", self.value)
+		:Offset(10, 0)
+
+	if self.right_align then
+		-- HACK: Align to *before* the initial content to calc the offset we need
+		-- from the right edge. It'd be more obvious to position at max_width and
+		-- then nudge left by our width, but this is simpler in our UI system
+		-- because this widget doesn't have a right edge anchor.
+		self.valueContainer:LayoutBounds("right", "center", self.sizer_widget)
+	else
+		local layout_widget = self.label:IsShown() and self.label or self.icon
+		self.valueContainer:LayoutBounds("after", "center", layout_widget)
+			:Offset(6, 0)
+	end
 
 	if self.underline then
 		self.underline:LayoutBounds("left", "below", self.icon:IsShown() and self.icon or self.label):Offset(5, -4)
 	end
+
     return self
 end
 
@@ -173,6 +217,18 @@ end
 
 function DisplayStat:ShouldSuppressDelta(bool)
 	self.suppress_delta = bool
+	return self
+end
+
+function DisplayStat:RightAlign()
+	-- The stats snap as far right as they can in the widget
+	self.right_align = true
+	return self
+end
+
+function DisplayStat:LeftAlign()
+	-- the stats appear just to the left of the text or icon
+	self.right_align = false
 	return self
 end
 

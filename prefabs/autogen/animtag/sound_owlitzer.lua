@@ -161,6 +161,7 @@ return {
           { frame=22, name="sfx-wing_fast",},
         },
       },
+      phase_transition_get_off_me_hold={ done=true, events={ { frame=1, name="sfx-owlitzer_protect_hold",},},},
       phase_transition_get_off_me_pre={ events={ { frame=1, name="sfx-protect_pre",},},},
       phase_transition_leap={
         events={

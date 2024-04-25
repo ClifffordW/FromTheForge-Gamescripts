@@ -6,7 +6,6 @@ return {
   scene_duration=190.0,
   scene_init={  },
   timelines={
-    attachswipefx={  },
     blurscreen={
       {
         0,
@@ -42,8 +41,8 @@ return {
         },
       },
       {
-        135,
-        143,
+        118,
+        126,
         {
           eventtype="blurscreen",
           param={
@@ -74,8 +73,8 @@ return {
         },
       },
       {
-        143,
-        190,
+        126,
+        173,
         {
           eventtype="blurscreen",
           param={ curve={ 0, 0, 1, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,}, duration=47,},
@@ -167,7 +166,7 @@ return {
               1.0,
             },
             duration=37,
-            offset={ x=0.0, y=3.0, z=0.0,},
+            offset={ x=0.0, y=2.2999999523163, z=0.0,},
           },
         },
       },
@@ -322,16 +321,10 @@ return {
         },
       },
     },
-    cameratargetoverride={  },
-    detachswipefx={  },
-    disableplayinput={  },
-    facing={  },
-    fade={  },
-    gameevent={  },
     gotostate={
       {
         0,
-        190,
+        190.0,
         {
           eventtype="gotostate",
           param={ statename="death_cinematic",},
@@ -339,16 +332,15 @@ return {
         },
       },
     },
-    letterbox={ { 0, 137, { eventtype="letterbox", param={ duration=137,},},},},
-    levelmusicstop={  },
+    letterbox={ { 0, 121.0, { eventtype="letterbox", param={ duration=121,},},},},
     lightintensity={
       {
         0,
-        137,
+        121,
         {
           eventtype="lightintensity",
           param={
-            duration=137,
+            duration=121,
             self_intensity=1.0,
             skip_world=false,
             world_intensity=0.19300000369549,
@@ -358,53 +350,61 @@ return {
       },
       {
         0,
-        137,
+        121,
         {
+          apply_to_all_players=false,
           eventtype="lightintensity",
-          param={ duration=137, self_intensity=0.5, skip_world=true, world_intensity=0.5,},
+          param={ duration=121, self_intensity=0.5, skip_world=true, world_intensity=0.5,},
           target_role="players",
         },
       },
     },
-    movetopoint={  },
-    musicbosspause={  },
-    musicbossstart={  },
     musicbossstop={
       {
         0,
-        190,
+        190.0,
         { eventtype="musicbossstop", is_unedited=true, param={  }, target_role="lead",},
       },
     },
-    pausesg={  },
-    playcountedsound={  },
-    playfoleysound={  },
-    playsound={  },
-    playsound_window={  },
-    pushanim={  },
-    runintoscene={  },
-    setsheathed={  },
-    setsoundparameter={  },
-    setvisible={  },
     shakecamera={
       {
-        137,
-        181,
+        120,
+        164,
         {
           eventtype="shakecamera",
           param={ dist=35, duration=44, mode="FULL", scale=0.44999998807907,},
         },
       },
     },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
-    stopsound={  },
-    teleport={  },
-    titlecard={  },
-    uibosshealthbar={  },
-    uihidehud={  },
+    showtext={
+      {
+        0,
+        61,
+        {
+          eventtype="showtext",
+          param={
+            duration=61,
+            monster_language_id="thatcher",
+            textID="THATCHER_DEATH_1",
+            use_monster_language=true,
+          },
+          target_role="lead",
+        },
+      },
+      {
+        62,
+        123,
+        {
+          eventtype="showtext",
+          param={
+            duration=61,
+            monster_language_id="thatcher",
+            textID="THATCHER_DEATH_2",
+            use_monster_language=true,
+          },
+          target_role="lead",
+        },
+      },
+    },
   },
 }

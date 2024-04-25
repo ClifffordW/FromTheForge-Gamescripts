@@ -41,7 +41,6 @@ return {
             sound_max_count=1.0,
             soundevent="powerCrystal_spawn_energy",
             stopatexitstate=true,
-            stopatstateexit=true,
           },
         },
         {

@@ -1,12 +1,13 @@
 local Button = require "widgets.button"
-local CraftButton = require("widgets/ftf/craftbutton")
 local HotkeyWidget = require "widgets.hotkeywidget"
 local HudButton = require "widgets.ftf.hudbutton"
-local InventoryScreen = require "screens.town.inventoryscreen"
+local ArmoryScreen = require "screens.town.armoryscreen"
+local DecorScreen = require "screens.town.decorscreen"
 local TownHudWidget = require("widgets/ftf/townhudwidget")
 local Widget = require("widgets/widget")
+local Image = require("widgets/image")
 local playerutil = require "util.playerutil"
-
+local Constructable = require "defs.constructable"
 
 -- The whole hud widget for in town.
 local TownHud = Class(Widget, function(self, debug_root)
@@ -18,6 +19,8 @@ function TownHud:OnBecomeActive()
 	if self.townHudWidget then
 		self.townHudWidget:Refresh()
 	end
+
+	self:StartUpdating()
 end
 
 function TownHud:_Init()
@@ -29,28 +32,56 @@ function TownHud:_Init()
 	self.townHudWidget = self.root:AddChild(TownHudWidget(self.debug_root))
 		:LayoutBounds("center", "top", self.parent)
 
-	-- Add craft button to the bottom right
-	self.craftButton = self.root:AddChild(CraftButton(function() self:OnCraftButtonClicked() end))
-		:LayoutBounds("right", "bottom", self.parent)
-		:Offset(-20, 20)
-		:Hide() -- 2023-09-06: Disabling craft menu for network playtest
-
 	self.testButton = self.root:AddChild(Button())
 		 :LayoutBounds("right", "bottom", self.parent)
 		 :Offset(-20, 20)
 		 :SetTextSize(48)
 
-	-- Get a reference to the crafting-details floating panel, and position it on the screen
-	self.craftDetailsPanel = self.craftButton:GetDetailsPanel()
-		:LayoutBounds("center", "top", self.parent)
-		:Offset(0, -150)
-		:MemorizePosition()
-
-	self.inventoryButton = self.root:AddChild(self:_CreateInventoryButton())
+	self.craftButton = self.root:AddChild(self:_CreateHudButton(
+			"images/ui_ftf_shop/hud_button_build.tex", 
+			Controls.Digital.OPEN_CRAFTING, 
+			STRINGS.CRAFT_WIDGET.HUD_HOTKEY,
+			function() self:OnCraftButtonClicked(player) end))
 		:LayoutBounds("left", "bottom", self.parent)
 		:Offset(20, 40)
 end
 
+local any_decor_unlocked = function(player)
+	for _, items in pairs(Constructable.Items) do
+		for _, item in pairs(items) do
+			if player.components.unlocktracker:IsRecipeUnlocked(item.name) then
+				return true
+			end
+		end	
+	end
+
+	return false
+end
+
+local any_decor_is_new = function(player)
+	for _, items in pairs(Constructable.Items) do
+		for _, item in pairs(items) do
+			if player.components.unlocktracker:IsRecipeUnlocked(item.name) and
+				not player.components.hasseen:HasSeenDecor(item.name) then
+				return true
+			end
+		end	
+	end
+
+	return false
+end
+
+function TownHud:OnUpdate()
+	local player = self:GetOwningPlayer()
+	if player == nil then
+		return
+	end
+
+	if self.craftButton ~= nil then
+		self.craftButton:SetShown( any_decor_unlocked(player) )
+		self.craftButton.new_icon:SetShown( any_decor_is_new(player) )
+	end
+end
 
 function TownHud:AttachPlayerToHud(player)
 	--~ TheLog.ch.FrontEnd:print("TownHud:AttachPlayerToHud", player)
@@ -62,7 +93,6 @@ function TownHud:AttachPlayerToHud(player)
 		self:_Init()
 	end
 	self.townHudWidget:AttachPlayerToHud(player)
-	self.craftButton:Refresh()
 	return self
 end
 
@@ -72,9 +102,9 @@ function TownHud:DetachPlayerFromHud(player)
 end
 
 function TownHud:GetControlMap()
-	if self.craftButton and self.craftButton:IsBarOpen() then
-		return self.craftButton:GetControlMap()
-	end
+	-- if self.craftButton and self.craftButton:IsBarOpen() then
+	-- 	return self.craftButton:GetControlMap()
+	-- end
 end
 
 function TownHud:AnimateIn()
@@ -88,18 +118,24 @@ function TownHud:AnimateOut()
 	return self
 end
 
-function TownHud:_CreateInventoryButton()
+function TownHud:_CreateHudButton(icon, hotkey, text, onclick)
 	local fn = function(device_type, device_id)
-		local player = TheInput:GetDeviceOwner(device_type, device_id)
+		local input_device = TheInput:GetInputDevice(device_type, device_id)
+		local player = TheInput:GetDeviceOwner(input_device)
 		-- Our UI generally works with mouse, so find a player if there's no mouse user.
 		player = player or (device_type == "mouse" and playerutil.GetFirstLocalPlayer())
 		if player then
-			self:OnInventoryButtonClicked(player)
+			onclick(player)
 		end
 	end
-	local button = Widget("InventoryButton")
-	button.btn = button:AddChild(HudButton(360, "images/ui_ftf_shop/hud_button_inventory.tex", UICOLORS.ACTION, fn))
-	button.hotkeyWidget = button:AddChild(HotkeyWidget(Controls.Digital.OPEN_INVENTORY, STRINGS.UI.INVENTORYSCREEN.BUTTON_LABEL):SetWidgetSize(32))
+	local button = Widget("CraftButton")
+	button.btn = button:AddChild(HudButton(300, icon, UICOLORS.ACTION, fn))
+	button.new_icon = button:AddChild(Image("images/ui_ftf/star.tex"))
+		:SetScale(1.2)
+		:LayoutBounds("right", "top", button.btn)
+		:SetHiddenBoundingBox(true)
+		:SetToolTip(STRINGS.CRAFT_WIDGET.NEW)
+	button.hotkeyWidget = button:AddChild(HotkeyWidget(hotkey, text):SetWidgetSize(32))
 		:LayoutBounds("center", "below", button.btn)
 		:Offset(0, -10)
 	button.hotkeyWidget:SetOnLayoutFn(function()
@@ -110,20 +146,16 @@ function TownHud:_CreateInventoryButton()
 end
 
 -- Also called by playerhud to handle Controls.Digital.OPEN_CRAFTING hotkey
-function TownHud:OnCraftButtonClicked()
+function TownHud:OnCraftButtonClicked(player)
 	if self.craftButton:IsShown() and self.craftButton:IsEnabled() then
-		self.craftButton:ToggleBar()
+		TheFrontEnd:PushScreen(DecorScreen(player))
 	end
-end
-
-function TownHud:IsCraftMenuOpen()
-	return self.craftButton:IsBarOpen()
 end
 
 -- Also called by playerhud to handle Controls.Digital.OPEN_INVENTORY hotkey
 function TownHud:OnInventoryButtonClicked(player)
 	if self.inventoryButton:IsShown() and self.inventoryButton:IsEnabled() then
-		TheFrontEnd:PushScreen(InventoryScreen(player))
+		TheFrontEnd:PushScreen(ArmoryScreen(player))
 	end
 end
 

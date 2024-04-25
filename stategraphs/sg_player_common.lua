@@ -13,6 +13,7 @@ local lume = require "util.lume"
 local Weight = require "components.weight"
 local Cosmetics = require "defs.cosmetics.cosmetics"
 local color = require "math.modules.color"
+local CurrencyType = require "currency.currency_type"
 
 local SGPlayerCommon =
 {
@@ -227,6 +228,12 @@ local DoControlFn =
 				inst.sg:GoToState(state)
 			elseif inst.sg:HasStateTag("busy") or (inst.sg:HasStateTag("turning") and inst.sg:GetTicksInState() > 0) then
 				inst.sg.mem.attack_type = "heavy_attack"
+
+				if inst.sg:HasStateTag("attack") and inst.sg.mem.heavydodge then
+					-- We are dodge canceling out of an attack
+					inst:PushEvent("dodge_cancel", { state = inst.sg.currentstate, state_tags = inst.sg.currentstate.tags })
+				end
+
 				SGCommon.Fns.FaceActionTarget(inst, data, true, true)
 				inst.sg:GoToState(state)
 			else
@@ -252,6 +259,7 @@ local DoControlFn =
 				inst.components.playercontroller:FlushControlQueueAt(data)
 				if inst.sg:HasStateTag("norotatecombo") or inst.sg.statemem.norotateskillcombo then
 					inst.sg.mem.attack_type = "skill"
+					SGCommon.Fns.FaceActionTarget(inst, data, true, true)
 					inst.sg:GoToState(state)
 				elseif inst.sg:HasStateTag("busy") or (inst.sg:HasStateTag("turning") and inst.sg:GetTicksInState() > 0) then
 					inst.sg.mem.attack_type = "skill"
@@ -289,9 +297,15 @@ local DoControlFn =
 				-- Cannot dodge out of an interaction.
 				return false
 			elseif inst.sg:HasStateTag("busy") or (inst.sg:HasStateTag("turning") and inst.sg:GetTicksInState() > 0) then
+				if inst.sg:HasStateTag("attack") and not inst.sg.mem.heavydodge then
+					-- We are dodge canceling out of an attack
+					inst:PushEvent("dodge_cancel", { state = inst.sg.currentstate, state_tags = inst.sg.currentstate.tags })
+				end
+
 				SGCommon.Fns.FaceActionTarget(inst, data, data.dir == nil)
 				inst.sg:GoToState(state)
 			else
+				-- Neutral dodge
 				SGCommon.Fns.TurnAndActOnTarget(inst, data, data.dir == nil, state)
 			end
 		end
@@ -301,7 +315,7 @@ local DoControlFn =
 	["potion"] = function(inst, data)
 		if inst.components.potiondrinker:CanDrinkPotion() then
 			inst.components.playercontroller:FlushControlQueueAt(data)
-			if inst.sg:HasStateTag("potion_refill") then --JAMBELL TODO: once figured out potion buffering, fix drinking potion from a refill
+			if inst.sg:HasStateTag("potion_refill") then --TODO: once figured out potion buffering, fix drinking potion from a refill
 				inst.sg:GoToState("potion_pre")
 			else
 				if inst.sg.mem.potionholdtask then
@@ -314,7 +328,7 @@ local DoControlFn =
 			end
 			return true
 		elseif inst.PeekFollowStatus then
-			inst:PeekFollowStatus({showHealth = true, showPotionStatus = true})
+			inst:PeekFollowStatus({show_potion = true}, true)
 		end
 		return false
 	end,
@@ -330,7 +344,7 @@ local DoControlFn =
 		if not interactable:CanPlayerInteract(inst, true) then
 			return false
 		end
-		
+
 		interactable:StartInteract(inst)
 
 		local nextstate = interactable:GetInteractStateName()
@@ -484,6 +498,69 @@ function SGPlayerCommon.Fns.SetCanAttackOrAbility(inst)
 	return SGPlayerCommon.Fns.TryQueuedAction(inst, "lightattack", "heavyattack", "potion", "skill")
 end
 
+function SGPlayerCommon.Fns.SetHitConfirmCancelWindows(inst, data)
+	--[[
+		data
+			dodgedelay: allow dodging in this many frames
+
+			lightdelay: allow lights in this many frames
+			lightcombostate: allow canceling into this state
+
+			heavydelay: allow heavies in this many frames
+			heavycombostate: allow canceling into this state
+
+			skilldelay: allow skills in this many frames
+	]]
+	if data.dodgedelay then
+		inst.components.playercontroller:OverrideControlQueueTicks("dodge", data.dodgedelay * ANIM_FRAMES)
+		inst:DoTaskInAnimFrames(data.dodgedelay, function(inst)
+			-- DESIGN: Allow dodge-cancelling if we hit anything, but not immediately.
+			if inst.sg:HasStateTag("busy") then -- In case we've gone into a different state
+				SGPlayerCommon.Fns.SetCanDodge(inst)
+				SGPlayerCommon.Fns.TryQueuedAction(inst, "dodge")
+			end
+			inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
+		end)
+	end
+
+	if data.lightdelay and data.lightcombostate then
+		inst.components.playercontroller:OverrideControlQueueTicks("lightattack", data.lightdelay * ANIM_FRAMES)
+		inst:DoTaskInAnimFrames(data.lightdelay, function(inst)
+			-- DESIGN: Allow throw-cancelling if we hit anything, but not immediately.
+			if inst.sg:HasStateTag("busy") then -- In case we've gone into a different state
+				inst.sg.statemem.heavycombostate = data.lightcombostate
+				SGPlayerCommon.Fns.TryQueuedAction(inst, "lightattack")
+			end
+			inst.components.playercontroller:OverrideControlQueueTicks("lightattack", nil)
+		end)
+	end
+
+	if data.heavydelay and data.heavycombostate then
+		inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", data.heavydelay * ANIM_FRAMES)
+		inst:DoTaskInAnimFrames(data.heavydelay, function(inst)
+			-- DESIGN: Allow throw-cancelling if we hit anything, but not immediately.
+			if inst.sg:HasStateTag("busy") then -- In case we've gone into a different state
+				inst.sg.statemem.heavycombostate = data.heavycombostate
+				SGPlayerCommon.Fns.TryQueuedAction(inst, "heavyattack")
+			end
+			inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", nil)
+		end)
+	end
+
+	if data.skilldelay and data.skillcombostate then
+		inst.components.playercontroller:OverrideControlQueueTicks("skill", data.skilldelay * ANIM_FRAMES)
+		inst:DoTaskInAnimFrames(data.skilldelay, function(inst)
+			-- DESIGN: Allow throw-cancelling if we hit anything, but not immediately.
+			if inst.sg:HasStateTag("busy") then -- In case we've gone into a different state
+				inst.sg.statemem.skillcombostate = data.skillcombostate
+				SGPlayerCommon.Fns.TryQueuedAction(inst, "skill")
+			end
+			inst.components.playercontroller:OverrideControlQueueTicks("skill", nil)
+		end)
+	end
+end
+
+
 --Enables all controls
 function SGPlayerCommon.Fns.RemoveBusyState(inst)
 	dbassert(inst.sg:HasStateTag("busy")) --just to make sure we're using this correctly
@@ -504,6 +581,7 @@ end
 
 function SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
 	inst.Physics:SetSize(inst.sg.mem.preroll_physicssize)
+	inst.components.worldbounded:Activate()
 end
 
 -- Adjusts character hitbox size during a roll's recovery
@@ -578,7 +656,8 @@ local function TurnBodyToFaceMouse(inst)
 	local left = inst.Transform:GetFacing() == FACING_LEFT
 	local dir = inst.components.playercontroller:GetMouseActionDirection()
 	if left and math.abs(dir) <= 90 or
-		not left and math.abs(dir) >= 90 then
+		not left and math.abs(dir) >= 90
+	then
 		-- inst:FlipFacingAndRotation() -- IMMEDIATE TURN, NO ANIM
 		inst.components.locomotor:TurnToDirection(dir) -- TRANSITION TURN WITH ANIM
 	end
@@ -613,7 +692,7 @@ function SGPlayerCommon.States.AddIdleState(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard" then
+			if inst.components.playercontroller:ShouldAimAtMouse() then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -643,7 +722,7 @@ function SGPlayerCommon.States.AddIdleState(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -665,7 +744,7 @@ function SGPlayerCommon.States.AddIdleState(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -693,7 +772,7 @@ function SGPlayerCommon.States.AddIdleState(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -721,7 +800,7 @@ function SGPlayerCommon.States.AddIdleState(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -768,7 +847,7 @@ function SGPlayerCommon.States.AddIdleStateGeneric(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -794,7 +873,7 @@ function SGPlayerCommon.States.AddIdleStateGeneric(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -816,7 +895,7 @@ function SGPlayerCommon.States.AddIdleStateGeneric(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -844,7 +923,7 @@ function SGPlayerCommon.States.AddIdleStateGeneric(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -872,7 +951,7 @@ function SGPlayerCommon.States.AddIdleStateGeneric(states)
 		end,
 
 		onupdate = function(inst)
-			if inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"then
+			if inst.components.playercontroller:ShouldAimAtMouse()then
 				TurnBodyToFaceMouse(inst)
 			end
 		end,
@@ -906,7 +985,7 @@ function SGPlayerCommon.Fns.SetWeaponSheathed(inst, bool)
 	end
 
 	if TheWorld:HasTag('town') and bool then
-		inst.components.locomotor:AddSpeedMult('sheathed_weapon', 0.33)
+		inst.components.locomotor:AddSpeedMult('sheathed_weapon', 0.5)
 	else
 		inst.components.locomotor:RemoveSpeedMult('sheathed_weapon')
 	end
@@ -916,6 +995,18 @@ function SGPlayerCommon.Fns.SetWeaponSheathed(inst, bool)
 	end
 
 	inst.sg.mem.sheathed = bool
+end
+
+function SGPlayerCommon.Fns.SheatheWeaponNow(inst)
+	if SGPlayerCommon.Fns.IsWeaponSheathed(inst) then
+		return
+	end
+
+	local animname = "sheathe_fast"
+	animname = SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, animname)
+	inst.AnimState:PlayAnimation(animname)
+	SGPlayerCommon.Fns.SetWeaponSheathed(inst, true)
+	inst.AnimState:PushAnimation("idle", true)
 end
 
 function SGPlayerCommon.Fns.SheatheWeapon(inst, data)
@@ -983,6 +1074,28 @@ function SGPlayerCommon.States.AddSheathedStates(states)
 		onenter = function(inst, loops)
 			local animname = "idle"
 			inst.AnimState:PlayAnimation(animname, true)
+		end,
+
+		events =
+		{
+			EventHandler("unsheathe_stop_waiting", function(inst)
+				inst.sg:GoToState("unsheathe_fast")
+			end),
+		},
+	})
+
+	states[#states + 1] = State({
+		name = "sheathed_wait_four_seconds", -- Use this state if you need the player to lose control and wait, sheathed, for a specific amount of time. This will make the player wait, sheathed, and then let them out after a few seconds.
+		tags = { "idle", "busy" },
+
+		onenter = function(inst)
+			local animname = "idle"
+			inst.AnimState:PlayAnimation(animname, true)
+			inst.sg:SetTimeoutAnimFrames(30*4) -- This timing is currently timed for the Wanderer's coin flip event. Do not change this without confirming that event works.
+		end,
+
+		ontimeout = function(inst)
+			inst.sg:GoToState("unsheathe_fast")
 		end,
 
 		events =
@@ -1160,15 +1273,31 @@ function SGPlayerCommon.States.AddTurnStates(states)
 end
 
 --------------------------------------------------------------------------
+
+local function IsAnotherPlayerParticipating(inst)
+	for _, player in ipairs(AllPlayers) do
+		if player ~= inst and not player:IsInLimbo() then
+			return true
+		end
+	end
+	return false
+end
+
 function ValidateHitPlayerState(inst, data)
 	-- Check if the player is alive during a hit state; if not go to the relevant state instead.
 	if inst:IsDying() or inst:IsDead() then
-		TheLog.ch.Health:printf("Dying, but entering hit state. Transitioning to death_hit. Entity GUID %d, EntityID %d", inst.GUID, inst.Network:GetEntityID())
+		TheLog.ch.StateGraph:printf("Dying, but entering hit state. Transitioning to death_hit. Entity GUID %d, EntityID %d", inst.GUID, inst.Network:GetEntityID())
 		inst.sg:GoToState("death_hit")
 		return false
 	elseif inst:IsRevivable() then
-		TheLog.ch.Health:printf("In revivable state, but entering hit state. Transitioning to revivable_hit. Entity GUID %d, EntityID %d", inst.GUID, inst.Network:GetEntityID())
-		inst.sg:GoToState("revivable_hit", data)
+		if IsAnotherPlayerParticipating() and not playerutil.AreAllMultiplayerPlayersDead() then
+			TheLog.ch.StateGraph:printf("In revivable state, but entering hit state. Transitioning to revivable_hit. Entity GUID %d, EntityID %d", inst.GUID, inst.Network:GetEntityID())
+			inst.sg:GoToState("revivable_hit", data)
+		else
+			-- weird situation: should not get here, but if it happens, this hit should force this player to become a corpse.
+			TheLog.ch.StateGraph:printf("In revivable state, but all other players are dead. Transitioning to death_hit. Entity GUID %d, EntityID %d", inst.GUID, inst.Network:GetEntityID())
+			inst.sg:GoToState("death_hit")
+		end
 		return false
 	end
 
@@ -1311,7 +1440,7 @@ function SGPlayerCommon.States.AddRollStates(states)
 
 		timeline =
 		{
-			FrameEvent(0, function() end) -- jambell: adding this because otherwise timeline{} does not exist when we try to add things to it later
+			FrameEvent(0, function() end) -- adding this because otherwise timeline{} does not exist when we try to add things to it later
 		},
 
 		events =
@@ -1603,7 +1732,7 @@ function SGPlayerCommon.States.AddRollStates(states)
 
 		timeline =
 		{
-			FrameEvent(0, function(inst) -- @jambell #roll consider setting this to be f1
+			FrameEvent(0, function(inst) -- #roll consider setting this to be f1
 										 -- how many frames of startup before the motion begins?
 				inst.Physics:SetMotorVel(inst.sg.statemem.velocity)
 			end)
@@ -1793,6 +1922,7 @@ function SGPlayerCommon.States.AddRollStates(states)
 
 			inst.components.playercontroller:OverrideControlQueueTicks("lightattack", 40 * ANIM_FRAMES)
 			inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", 40 * ANIM_FRAMES)
+			inst.components.playercontroller:OverrideControlQueueTicks("skill", 40 * ANIM_FRAMES)
 
 			local distance = inst.components.playerroller:GetTotalDistance()
 			local ticks = inst.components.playerroller:GetTotalTicks()
@@ -1812,7 +1942,7 @@ function SGPlayerCommon.States.AddRollStates(states)
 
 		timeline =
 		{
-			FrameEvent(0, function() end),
+			FrameEvent(1, function(inst) inst.sg:AddStateTag("airborne") end),
 			FrameEvent(2, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.velocity) end), -- Start a bit faster for better feel, then slow down to correct velocity after a frame or two. end),
 		},
 
@@ -1863,6 +1993,8 @@ function SGPlayerCommon.States.AddRollStates(states)
 				SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
 				inst.components.playercontroller:OverrideControlQueueTicks("lightattack", nil)
 				inst.components.playercontroller:OverrideControlQueueTicks("heavyattack", nil)
+				inst.components.playercontroller:OverrideControlQueueTicks("skill", nil)
+
 				inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
 			elseif inst.sg.statemem.pst then
 				inst.components.playercontroller:OverrideControlQueueTicks("dodge", nil)
@@ -1872,7 +2004,7 @@ function SGPlayerCommon.States.AddRollStates(states)
 
 	states[#states + 1] = State({
 		name = "roll_heavy_pst",
-		tags = { "busy", "norotatecombo", "dodge", "dodge_pst" },
+		tags = { "busy", "norotatecombo", "dodge", "dodge_pst", "airborne" },
 
 		onenter = function(inst, data)
 			-- data =
@@ -1904,6 +2036,7 @@ function SGPlayerCommon.States.AddRollStates(states)
 			FrameEvent(2, function(inst) SGCommon.Fns.SetMotorVelScaled(inst, inst.sg.statemem.velocity * 0.125) end),
 			FrameEvent(4, function(inst) inst.Physics:Stop() end),
 
+			FrameEvent(1, function(inst) inst.sg:RemoveStateTag("airborne") end),
 			FrameEvent(3, function(inst)
 				SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
 			end),
@@ -2092,15 +2225,15 @@ function SGPlayerCommon.States.AddKnockbackState(states)
 			--
 
 			FrameEvent(4, SGPlayerCommon.Fns.SetCanDodge),
-			FrameEvent(2, function(inst)
-				inst.sg:AddStateTag("airborne")
-			end),
+			-- FrameEvent(2, function(inst)
+			-- 	inst.sg:AddStateTag("airborne")
+			-- end),
 			FrameEvent(7, function(inst)
 				if inst.sg.statemem.deafen then
 					inst.sg:GoToState("deafen_pre")
 					return
 				end
-				inst.sg:RemoveStateTag("airborne")
+				-- inst.sg:RemoveStateTag("airborne")
 				SGPlayerCommon.Fns.RemoveBusyState(inst)
 				inst.sg.statemem.candeafen = true
 			end),
@@ -2227,7 +2360,7 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 			FrameEvent(13, function(inst) inst.Physics:SetMotorVel(5 * inst.sg.statemem.speedmult) end),
 			--
 
-			-- victorc: 60Hz, open this up by one extra 60Hz frame
+			-- 60Hz, open this up by one extra 60Hz frame
 			-- FrameEvent(10, function(inst)
 			FrameEvent60(19, function(inst) --FrameEvent9/10
 					inst.sg:RemoveStateTag("airborne")
@@ -2242,6 +2375,7 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 				end
 				inst.HitBox:SetEnabled(true)
 				inst.sg:AddStateTag("prone")
+				inst.sg:AddStateTag("doubletoxicity")
 			end),
 			FrameEvent(15, SGPlayerCommon.Fns.UnsetCanDodgeSpecial), -- Let player roll as normal, but after this point it is no longer a QuickRise.
 			FrameEvent(15, SGPlayerCommon.Fns.UnsetCanHeavyDodgeSpecial),
@@ -2363,6 +2497,7 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 					inst:ShakeCamera(CAMERASHAKE.VERTICAL, .4, .01, .08)
 				end
 				inst.sg:AddStateTag("prone")
+				inst.sg:AddStateTag("doubletoxicity")
 			end),
 			FrameEvent(20, SGPlayerCommon.Fns.SetCanDodgeSpecial), -- quick rise window
 			FrameEvent(20, SGPlayerCommon.Fns.SetCanHeavyDodgeSpecial), -- quick rise window
@@ -2397,7 +2532,7 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 
 	states[#states + 1] = State({
 		name = "knockdown_idle",
-		tags = { "knockdown", "busy", "nodeafen" },
+		tags = { "knockdown", "busy", "nodeafen", "prone", "doubletoxicity" },
 
 		onenter = function(inst, speedmult)
 			local data = inst.components.playercontroller:GetNextQueuedControl()
@@ -2408,7 +2543,6 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 			end
 			inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "knockdown_idle", true))
 			inst.sg.statemem.speedmult = speedmult or 0
-			inst.sg:AddStateTag("prone")
 		end,
 
 		onupdate = function(inst)
@@ -2437,6 +2571,9 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 				inst.components.playercontroller:FlushControlQueueAt(data)
 				if data.control == "dodge" then
 					inst.sg:GoToState("default_dodge")
+				elseif inst.sg.mem.heavydodge and data.control == "heavyattack" then
+					-- A bit of a hack, if we add another heavydodge we'll have to add support here.
+					inst.sg:GoToState("cannon_quickrise")
 				else
 					inst.sg:GoToState("knockdown_getup")
 				end
@@ -2450,10 +2587,9 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 
 	states[#states + 1] = State({
 		name = "knockdown_getup",
-		tags = { "knockdown", "busy", "nodeafen" },
+		tags = { "knockdown", "busy", "nodeafen", "prone", "doubletoxicity" },
 
 		onenter = function(inst)
-			inst.sg:AddStateTag("prone")
 			inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "getup_pre"))
 			SGPlayerCommon.Fns.SetCanDodge(inst)
 		end,
@@ -2474,10 +2610,9 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 
 	states[#states + 1] = State({
 		name = "knockdown_getup_struggle",
-		tags = { "knockdown", "busy", "nodeafen" },
+		tags = { "knockdown", "busy", "nodeafen", "prone", "doubletoxicity" },
 
 		onenter = function(inst)
-			inst.sg:AddStateTag("prone")
 			inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "getup_struggle"))
 			SGPlayerCommon.Fns.SetCanDodge(inst)
 		end,
@@ -2487,6 +2622,7 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 			FrameEvent(7, function(inst)
 				inst.sg:RemoveStateTag("nodeafen")
 				inst.sg:RemoveStateTag("prone")
+				inst.sg:RemoveStateTag("doubletoxicity")
 			end),
 			FrameEvent(13, function(inst) inst.sg:RemoveStateTag("knockdown") end),
 
@@ -2511,7 +2647,10 @@ function SGPlayerCommon.States.AddKnockdownStates(states)
 		timeline =
 		{
 			FrameEvent(0, SGPlayerCommon.Fns.SetCanDodge),
-			FrameEvent(4, function(inst) inst.sg:RemoveStateTag("prone") end),
+			FrameEvent(4, function(inst)
+				inst.sg:RemoveStateTag("prone")
+				inst.sg:RemoveStateTag("doubletoxicity")
+			end),
 			FrameEvent(6, SGPlayerCommon.Fns.RemoveBusyState),
 		},
 
@@ -2842,6 +2981,8 @@ function SGPlayerCommon.States.AddPlayerSkillStates(states)
 	end
 end
 
+local PRE_SWALLOWED_CANCEL_PUSHBACK <const> = 0.5
+
 -- Special states played on interactions with certain monsters.
 function SGPlayerCommon.States.AddMonsterInteractionStates(states)
 	states[#states + 1] = State({
@@ -2852,6 +2993,14 @@ function SGPlayerCommon.States.AddMonsterInteractionStates(states)
 		onenter = function(inst, data)
 			inst.AnimState:PlayAnimation("vacuum_pre")
 			inst.Physics:StartPassingThroughObjects()
+		end,
+
+		onupdate = function(inst)
+			-- Groak suck power not active anymore; exit out of this state
+			local groak_suck_pwr = inst.components.powermanager:GetPowerByName("groak_suck")
+			if not groak_suck_pwr then
+				SGCommon.Fns.ExitSwallowed(inst, { swallower = inst, knockback = PRE_SWALLOWED_CANCEL_PUSHBACK })
+			end
 		end,
 
 		events =
@@ -2879,6 +3028,14 @@ function SGPlayerCommon.States.AddMonsterInteractionStates(states)
 
 			-- Set timeout fallback if the player never gets swallowed
 			inst.sg:SetTimeout(3)
+		end,
+
+		onupdate = function(inst)
+			-- Groak suck power not active anymore; exit out of this state
+			local groak_suck_pwr = inst.components.powermanager:GetPowerByName("groak_suck")
+			if not groak_suck_pwr then
+				SGCommon.Fns.ExitSwallowed(inst, { swallower = inst, knockback = PRE_SWALLOWED_CANCEL_PUSHBACK })
+			end
 		end,
 
 		events =
@@ -3007,15 +3164,6 @@ end
 
 local function OnLastPlayerDead(inst)
 	inst.sg:ForceGoToState("death_pst")
-end
-
-local function IsAnotherPlayerParticipating(inst)
-	for _, player in ipairs(AllPlayers) do
-		if player ~= inst and not player:IsInLimbo() then
-			return true
-		end
-	end
-	return false
 end
 
 local function OnDeath(inst)
@@ -3663,7 +3811,7 @@ local function OnRevived(inst, reviver)
 	inst.components.combat:ApplyHeal(revive_heal)
 
 	-- Damage the reviver
-	if TheDungeon.progression.components.ascensionmanager:GetCurrentLevel() >= 1 then
+	if TheDungeon.progression.components.ascensionmanager:GetCurrentLevel() >= TUNING.REVIVE_HEALTH_DONATION_ASCENSION_LEVEL then
 		if reviver and reviver.components.health:GetCurrent() > 1 then
 			local revive_damage = Attack(inst, reviver)
 			revive_damage:SetHeal(-revive_health)
@@ -3770,25 +3918,7 @@ function SGPlayerCommon.States.AddPotionStates(states)
 
 			inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "potion_pre"))
 
-			if inst.sg.mem.heal_aoe and inst.sg.mem.heal_aoe:IsValid() then
-				inst.sg.mem.heal_aoe:Remove()
-			end
-
-			inst.sg.mem.heal_aoe = powerutil.SpawnParticlesAtPosition(inst:GetPosition(), "heal_aoe_ring", 0, inst)
-
-			--TODO(jambell): temp, mocking up this implementation
-			local x,z = inst.Transform:GetWorldXZ()
-			local friendlies = FindTargetTagGroupEntitiesInRange(x, z, TUNING.POTION_AOE_RANGE, inst.components.combat:GetFriendlyTargetTags(), nil)
-			for _,ent in ipairs(friendlies) do
-				if ent.components.health and inst ~= ent then
-					powerutil.SpawnParticlesOnEntity(ent, "heal_aoe_ring_affected", nil, 0)
-				end
-			end
-
-			-- if inst.sg.mem.drink_from_refill then
-			-- 	inst.AnimState:SetFrame(7)
-			-- 	inst.sg.mem.drink_from_refill = false
-			-- end
+			SGPlayerCommon.Fns.ShowAOEHealPreview(inst)
 		end,
 
 		timeline =
@@ -4056,6 +4186,36 @@ function SGPlayerCommon.States.AddPotionStates(states)
 	})
 end
 
+
+function SGPlayerCommon.Fns.ShowAOEHealPreview(inst)
+	if inst.sg.mem.heal_aoe and inst.sg.mem.heal_aoe:IsValid() then
+		inst.sg.mem.heal_aoe:Remove()
+	end
+
+	inst.sg.mem.heal_aoe = powerutil.SpawnParticlesAtPosition(inst:GetPosition(), "heal_aoe_ring", 0, inst)
+
+	local x,z = inst.Transform:GetWorldXZ()
+	local friendlies = FindTargetTagGroupEntitiesInRange(x, z, TUNING.POTION_AOE_RANGE, inst.components.combat:GetFriendlyTargetTags(), nil)
+	for _,ent in ipairs(friendlies) do
+		if ent.components.health and inst ~= ent then
+			powerutil.SpawnParticlesOnEntity(ent, "heal_aoe_ring_affected", nil, 0)
+		end
+	end
+end
+
+function SGPlayerCommon.Fns.DoAOEHeal(inst, radius, amount, id)
+	local x,z = inst.Transform:GetWorldXZ()
+	local friendlies = FindTargetTagGroupEntitiesInRange(x, z, radius, inst.components.combat:GetFriendlyTargetTags(), nil)
+	for _,ent in ipairs(friendlies) do
+		if ent.components.health and inst ~= ent then
+			local friendly_heal = Attack(inst, ent)
+			friendly_heal:SetHeal(amount)
+			friendly_heal:SetID(id)
+			ent.components.combat:ApplyHeal(friendly_heal)
+		end
+	end
+end
+
 --------------------------------------------------------------------------
 local function GetInteractable(item)
 	if item and item:IsValid() then
@@ -4099,16 +4259,14 @@ function SGPlayerCommon.States.AddTalkState(states)
 			local fatigued = inst.components.health ~= nil and inst.components.health:IsLow()
 
 			if not fatigued then
-				if SGPlayerCommon.Fns.SheatheWeapon(inst, item) then
-					inst.AnimState:PlayAnimation("idle", true)
-				end
+				SGPlayerCommon.Fns.SheatheWeaponNow(inst)
 			end
 			inst.sg.mem.interact_target = item
 		end,
 
 		timeline =
 		{
-			FrameEvent(11, function(inst)
+			FrameEvent(1, function(inst)
 				local interactable = GetInteractable(inst.sg.mem.interact_target)
 				if interactable and interactable:IsPlayerInteracting(inst) then
 					interactable:PerformInteract(inst)
@@ -4120,7 +4278,7 @@ function SGPlayerCommon.States.AddTalkState(states)
 					end
 				end
 			end),
-			FrameEvent(9, SGPlayerCommon.Fns.RemoveBusyState),
+			FrameEvent(2, SGPlayerCommon.Fns.RemoveBusyState),
 		},
 
 		onexit = function(inst)
@@ -4132,6 +4290,37 @@ function SGPlayerCommon.States.AddTalkState(states)
 
 	})
 end
+
+function SGPlayerCommon.States.AddNoAnimInteractState(states)
+	states[#states + 1] = State({
+		name = "no_anim_interact",
+		tags = { "busy", "interact" },
+
+		default_data_for_tools = Interact_DefaultDataForTools,
+
+		onenter = function(inst, item)
+			dbassert(IsPlayerInteracting(item, inst))
+			inst.sg.mem.interact_target = item
+		end,
+
+		onupdate = function(inst, item)
+			local interactable = GetInteractable(inst.sg.mem.interact_target)
+			if interactable then
+				interactable:PerformInteract(inst)
+			end
+			inst.sg:GoToState("idle")
+		end,
+
+		onexit = function(inst)
+			local interactable = GetInteractable(inst.sg.mem.interact_target)
+			if interactable then
+				interactable:ClearInteract(inst, true, true)
+			end
+			inst.sg.mem.interact_target = nil
+		end,
+	})
+end
+--------------------------------------------------------------------------
 
 local function CanPickUp(player)
 	local pickup = player.sg.mem.interact_target.components.singlepickup
@@ -4151,7 +4340,7 @@ function SGPlayerCommon.States.AddPickupState(states)
 			inst.sg.mem.interact_target = item
 
 			if not CanPickUp(inst) then
-				inst.sg:GoToState("idle")				
+				inst.sg:GoToState("idle")
 			end
 		end,
 
@@ -4180,7 +4369,7 @@ function SGPlayerCommon.States.AddPickupState(states)
 		onexit = function(inst)
 			if CanPickUp(inst) then
 				ClearInteractFromMem(inst)
-			else				
+			else
 				local interactable = GetInteractable(inst.sg.mem.interact_target)
 				if interactable then
 					interactable:ClearInteract(inst, true, true)
@@ -4191,19 +4380,9 @@ function SGPlayerCommon.States.AddPickupState(states)
 	})
 end
 --------------------------------------------------------------------------
-local DEPOSIT_CURRENCY_RATE =
-{
-	-- For how long we've been in the 'deposit_currency' state, how many ticks between 'proc'
-	-- Start slow to allow precision, but when the player has held for a while speed up because we know they're trying to spend a lot.
-	{ ticksinstate = 60, ticks_between_proc = 0, deposits_per_proc = 3 },
-	{ ticksinstate = 50, ticks_between_proc = 0, deposits_per_proc = 2 },
-	{ ticksinstate = 40, ticks_between_proc = 0, deposits_per_proc = 1 },
-	{ ticksinstate = 20, ticks_between_proc = 1, deposits_per_proc = 1 },
-	{ ticksinstate = 10, ticks_between_proc = 2, deposits_per_proc = 1 },
-	{ ticksinstate = 0, ticks_between_proc = 3, deposits_per_proc = 1 },
-}
 
 function SGPlayerCommon.States.AddDepositCurrencyState(states)
+	-- Decide between continuous depositing and single insertion.
 	states[#states + 1] = State({
 		name = "deposit_currency",
 		tags = { "interact" },
@@ -4214,14 +4393,89 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 			TheLog.ch.InteractSpam:printf("deposit_currency:onenter(%s) %s", inst, item)
 			TheLog.ch.InteractSpam:indent()
 
-			-- inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "pickup_item"), true)
 			inst.sg.mem.interact_target = item
+
+			local currency_type
+			local deposit_rate
+
+			-- VendingMachine component will override currency type
+			local vending_machine = inst.sg.mem.interact_target.components.vendingmachine
+			if vending_machine then
+				currency_type = vending_machine.currency_type
+				deposit_rate = vending_machine.currency.use_default_deposit_rates
+					and require "currency.default_deposit_rates"
+					or nil
+			else
+				currency_type = item.currency or CurrencyType.id.Run
+				deposit_rate = item.deposit_rate
+			end
+
+			inst.sg.mem.currency = currency_type
+			inst.sg.mem.deposit_rate = deposit_rate
+
+			if inst.sg.mem.deposit_rate then
+				inst.sg:GoToState("repeated_deposit_currency")
+			else
+				inst.sg:GoToState("single_deposit_currency")
+			end
+
+			TheLog.ch.InteractSpam:unindent()
+		end,
+	})
+
+	-- Deposit a single unit of currency and then end the interaction.
+	states[#states + 1] = State({
+		name = "single_deposit_currency",
+		tags = { "interact" },
+
+		default_data_for_tools = Interact_DefaultDataForTools,
+
+		onenter = function(inst, item)
+			TheLog.ch.InteractSpam:printf("single_deposit_currency:onenter(%s) %s", inst, item)
+			TheLog.ch.InteractSpam:indent()
+			-- inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "pickup_item"), true)
+			TheLog.ch.InteractSpam:unindent()
+		end,
+
+		onupdate = function(inst)
+			inst.sg:GoToState("deposit_currency_pst")
+		end,
+
+		onexit = function(inst)
+			TheLog.ch.InteractSpam:printf("single_deposit_currency:onexit(%s)", inst)
+			TheLog.ch.InteractSpam:indent()
+			local interactable = GetInteractable(inst.sg.mem.interact_target)
+			if interactable then
+				interactable:PerformInteract(inst)
+				interactable:ClearInteract(inst, true)
+			end
+			inst.sg.mem.interact_target = nil
+			TheLog.ch.InteractSpam:unindent()
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst, data)
+				inst.sg:GoToState("deposit_currency_pst")
+			end),
+		},
+	})
+
+	-- Continue depositing currency until the interact button is released.
+	states[#states + 1] = State({
+		name = "repeated_deposit_currency",
+		tags = { "interact" },
+
+		default_data_for_tools = Interact_DefaultDataForTools,
+
+		onenter = function(inst, item)
+			TheLog.ch.InteractSpam:printf("repeated_deposit_currency:onenter(%s) %s", inst, item)
+			TheLog.ch.InteractSpam:indent()
 
 			-- Never hog the Interaction -- allow others to interact, too.
 			local interactable = GetInteractable(inst.sg.mem.interact_target)
 			interactable:ClearInteract(inst, true)
-
-			local initial_rate = DEPOSIT_CURRENCY_RATE[#DEPOSIT_CURRENCY_RATE] -- Start slow. Speed up when holding for longer.
+			local initial_rate = inst.sg.mem.deposit_rate[#inst.sg.mem.deposit_rate] -- Start slow. Speed up when holding for longer.
 			inst.sg.statemem.ticks_left = initial_rate.ticks_between_proc
 			inst.sg.statemem.deposits_per_proc = initial_rate.deposits_per_proc
 
@@ -4249,7 +4503,7 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 				if interactable.lock then
 					dbassert(interactable.lock ~= inst, "How do we already have a lock?")
 					TheLog.ch.InteractSpam:printf(
-						"Skipping deposit_currency:onupdate(%s) because Interactable(%s) is locked by another Player(%s)", 
+						"Skipping repeated_deposit_currency:onupdate(%s) because Interactable(%s) is locked by another Player(%s)",
 						inst,
 						interactable,
 						interactable.lock
@@ -4280,14 +4534,14 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 			if is_depositing and not inst.sg.statemem.is_depositing then
 				inst.sg.statemem.is_depositing = true
 				inst.sg.mem.interact_target:PushEvent("depositing_currency_changed", {
-					player = inst, 
+					player = inst,
 					is_depositing = inst.sg.statemem.is_depositing
 				})
 			end
 
 			-- Reset the timer.
 			local ticksinstate = inst.sg:GetTicksInState()
-			for _, rate_data in pairs(DEPOSIT_CURRENCY_RATE) do
+			for _, rate_data in pairs(inst.sg.mem.deposit_rate) do
 				if ticksinstate >= rate_data.ticksinstate then
 					inst.sg.statemem.ticks_left = rate_data.ticks_between_proc
 					inst.sg.statemem.deposits_per_proc = rate_data.deposits_per_proc
@@ -4297,7 +4551,7 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 		end,
 
 		onexit = function(inst)
-			TheLog.ch.InteractSpam:printf("deposit_currency:onexit(%s)", inst)
+			TheLog.ch.InteractSpam:printf("repeated_deposit_currency:onexit(%s)", inst)
 			TheLog.ch.InteractSpam:indent()
 
 			local interactable = GetInteractable(inst.sg.mem.interact_target)
@@ -4306,7 +4560,7 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 			if inst.sg.statemem.is_depositing then
 				inst.sg.statemem.is_depositing = false
 				inst.sg.mem.interact_target:PushEvent("depositing_currency_changed", {
-					player = inst, 
+					player = inst,
 					is_depositing = inst.sg.statemem.is_depositing
 				})
 			end
@@ -4341,6 +4595,9 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 		default_data_for_tools = Interact_DefaultDataForTools,
 
 		onenter = function(inst, item)
+			-- Ensure we clean up our cross-state memory.
+			inst.sg.mem.currency = nil
+			inst.sg.mem.interact_target = nil
 			inst.sg:GoToState("idle")
 			-- inst.AnimState:PlayAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "knockback_pst"), true)
 		end,
@@ -4353,10 +4610,53 @@ function SGPlayerCommon.States.AddDepositCurrencyState(states)
 		},
 	})
 end
+
 --------------------------------------------------------------------------
+
 function SGPlayerCommon.States.AddHeartstoneInteractStates(states)
+
 	states[#states + 1] = State({
-		name = "townpillar_interact",
+		name = "deposit_heart",
+		tags = {"busy", "interact"},
+		default_data_for_tools = Interact_DefaultDataForTools,
+
+		onenter = function(inst, item)
+			dbassert(IsPlayerInteracting(item, inst))
+
+			if SGPlayerCommon.Fns.SheatheWeapon(inst, item) then
+				inst.sg.mem.interact_target = item
+				inst.AnimState:PlayAnimation("interact_place_heartstone")
+			end
+
+		end,
+
+		timeline =
+		{
+			FrameEvent(15, function(inst)
+				local interactable = GetInteractable(inst.sg.mem.interact_target)
+				if interactable and interactable:IsPlayerInteracting(inst) then
+					interactable:PerformInteract(inst)
+					inst.components.heartmanager:SpawnHeartFX()
+				else
+					assert(not interactable, "How did we get to this state without starting the interaction?")
+					-- failure
+					inst.sg:GoToState("idle")
+				end
+			end),
+		},
+
+		events =
+		{
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
+			end),
+		},
+
+		onexit = ClearInteractFromMem,
+	})
+
+	states[#states + 1] = State({
+		name = "swap_heart",
 		tags = { "busy", "interact" },
 
 		default_data_for_tools = Interact_DefaultDataForTools,
@@ -4366,23 +4666,20 @@ function SGPlayerCommon.States.AddHeartstoneInteractStates(states)
 
 			if SGPlayerCommon.Fns.SheatheWeapon(inst, item) then
 				inst.AnimState:PlayAnimation("konjur_accept")
-				-- Must store in mem since interaction spans multiple states.
 				inst.sg.mem.interact_target = item
 			end
-
-			TheDungeon.HUD:HidePrompt(item)
 		end,
 
 		timeline =
 		{
-			FrameEvent(14, function(inst)
+			FrameEvent(10, function(inst)
 				local interactable = GetInteractable(inst.sg.mem.interact_target)
 				if interactable and interactable:IsPlayerInteracting(inst) then
 					interactable:PerformInteract(inst)
 				else
 					assert(not interactable, "How did we get to this state without starting the interaction?")
 					-- failure
-					inst.sg:GoToState("powerup_abort")
+					inst.sg:GoToState("idle")
 				end
 			end),
 		},
@@ -4400,44 +4697,18 @@ function SGPlayerCommon.States.AddHeartstoneInteractStates(states)
 			-- This can become a dbassert when we ship playtest, but I want to ensure QA hit it.
 			assert(not is_interact_invalid, "Interactable failed to resolve invalid interactable.")
 			if is_interact_invalid then
-				inst.sg:GoToState("powerup_abort")
+				inst.sg:GoToState("idle")
 			end
 		end,
 
 		events =
 		{
-			EventHandler("deposit_heart", function(inst)
-				inst.sg:GoToState("deposit_heart")
+			EventHandler("animover", function(inst)
+				inst.sg:GoToState("idle")
 			end),
 		},
 
 		onexit = ClearInteractFromMem,
-	})
-
-	states[#states + 1] = State({
-		name = "deposit_heart",
-		tags = { "busy", "interact" },
-
-		default_data_for_tools = Interact_DefaultDataForTools,
-
-		onenter = function(inst, item)
-			inst.sg.statemem.animovers = 0
-			inst.AnimState:PlayAnimation("upgrade_accept")
-		end,
-
-		timeline =
-		{
-
-		},
-
-		events =
-		{
-			EventHandler("animover", function(inst)
-				SGPlayerCommon.Fns.RemoveBusyState(inst)
-				inst:PushEvent("deposit_heart_finished")
-				inst.sg:GoToState("idle")
-			end),
-		},
 	})
 end
 
@@ -4462,7 +4733,7 @@ function SGPlayerCommon.States.AddPowerupInteractStates(states)
 
 		timeline =
 		{
-			FrameEvent(11, function(inst)
+			FrameEvent(5, function(inst)
 				local interactable = GetInteractable(inst.sg.mem.interact_target)
 				if interactable and interactable:IsPlayerInteracting(inst) then
 					interactable:PerformInteract(inst)
@@ -4504,6 +4775,9 @@ function SGPlayerCommon.States.AddPowerupInteractStates(states)
 			end),
 			EventHandler("roombonusscreen_closed", function(inst)
 				inst.sg:GoToState("powerup_abort")
+			end),
+			EventHandler("took_soul", function(inst)
+				inst.sg:GoToState("konjur_accept")
 			end),
 		},
 
@@ -4555,17 +4829,35 @@ function SGPlayerCommon.States.AddPowerupInteractStates(states)
 		name = "powerup_accept",
 		tags = { "busy" },
 
-		default_data_for_tools = Interact_DefaultDataForTools,
+		default_data_for_tools = "attack_dice",
 
-		onenter = function(inst, item)
+		onenter = function(inst, power_accepted)
 			inst.sg.statemem.animovers = 0
 			inst.AnimState:PlayAnimation("power_accept")
+
+			inst.sg.statemem.power_accepted = power_accepted
+			inst.HitBox:SetInvincible(true)
 		end,
 
 		timeline =
 		{
+			FrameEvent(45, function(inst)
+				if inst.sg.statemem.power_accepted then
+					inst:PushEvent("hide_followpower")
 
+					-- TheNetEvent:SpawnPowerPopup(targetGUID, powername, hide_description, disable_tooltip, scale, offset_y)
+					if inst.Network then
+						TheNetEvent:SpawnPowerPopup(inst.Network:GetEntityID(), inst.sg.statemem.power_accepted, true, true, 0.4, 400)
+					else
+						TheDungeon.HUD:MakePowerPopup({ target = inst, power = inst.sg.statemem.power_accepted, hide_description = true, scale = 0.4, offset_y = 400, disable_tooltip = true })
+					end
+				end
+			end),
 		},
+
+		onexit = function(inst)
+			inst.HitBox:SetInvincible(false)
+		end,
 
 		events =
 		{
@@ -4606,7 +4898,7 @@ function SGPlayerCommon.States.AddPowerupInteractStates(states)
 		name = "powerup_abort",
 		tags = { "busy" },
 
-		default_data_for_tools = Interact_DefaultDataForTools,
+		-- Do not use Interact_DefaultDataForTools because we are *clearing* the interaction and that starts it.
 
 		onenter = function(inst, item)
 			SGPlayerCommon.Fns.SetWeaponSheathed(inst, false)
@@ -4734,21 +5026,6 @@ function SGPlayerCommon.States.AddReviveInteractStates(states)
 			local time_in_state = inst.sg:GetTimeInState()
 			inst.components.revive:ReviverUpdateTimeRemaining(time_in_state)
 
-			--sound presentation
-			local revive_progress = (inst.components.revive.revive_time - inst.components.revive.current_revive_time) / inst.components.revive.revive_time
-			soundutil.SetInstanceParameter(inst, "fx_heal_revive_LP", "progress", revive_progress)
-
-			local is_local_player_involved = (inst:IsLocal() or target:IsLocal()) and 1 or 0
-			soundutil.SetLocalInstanceParameter(inst, "fx_heal_revive_LP", "isLocalPlayerInvolved", is_local_player_involved)
-
-			local num_players_alive = 0
-			for k, player in pairs(AllPlayers) do
-				if player:IsAlive() then
-					num_players_alive = (num_players_alive + 1) or 1
-				end
-			end
-			soundutil.SetInstanceParameter(inst, "fx_heal_revive_LP", "numPlayersAlive", num_players_alive)
-
 			-- Cancel reviving
 			-- ... if the revive target moves away from the reviver.
 			-- ... if the target has a reviver that is not you (inst)
@@ -4794,13 +5071,6 @@ function SGPlayerCommon.States.AddReviveInteractStates(states)
 		onenter = function(inst, item)
 			inst.AnimState:PlayAnimation("revive_success_pst")
 			inst.AnimState:PushAnimation(SGPlayerCommon.Fns.ApplyWeaponPrefix(inst, "unsheathe_fast"))
-			--sound
-			local is_local_player_involved = (inst:IsLocal() or inst.sg.mem.interact_target:IsLocal()) and 1 or 0
-			local params = {}
-			params.fmodevent = fmodtable.Event.revive
-			params.sound_max_count = 1
-			local revive_sound = soundutil.PlaySoundData(inst, params)
-			soundutil.SetLocalInstanceParameter(inst, revive_sound, "isLocalPlayerInvolved", is_local_player_involved)
 		end,
 
 		events =
@@ -4869,39 +5139,6 @@ function SGPlayerCommon.States.AddTestState(states)
 			inst.HitBox:SetEnabled(true)
 		end,
 	})
-
-	states[#states + 1] = State({
-		name = "wave",
-		tags = { "busy", "nointerrupt" },
-
-		onenter = function(inst)
-			inst.AnimState:PlayAnimation("emote_wave")
-		end,
-
-		events =
-		{
-			EventHandler("animover", function(inst, data)
-				inst.sg:GoToState("unsheathe_fast")
-			end),
-		},
-	})
-
-	states[#states + 1] = State({
-		name = "cheer",
-		tags = { "busy", "nointerrupt" },
-
-		onenter = function(inst)
-			inst.AnimState:PlayAnimation("emote_pump")
-		end,
-
-		events =
-		{
-			EventHandler("animover", function(inst, data)
-				inst.sg:GoToState("unsheathe_fast")
-			end),
-		},
-	})
-
 end
 
 --------------------------------------------------------------------------
@@ -4966,6 +5203,38 @@ function SGPlayerCommon.States.AddEmoteStates(states)
 			end),
 		},
 	})
+
+	states[#states + 1] = State({
+		name = "wave",
+		tags = { "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("emote_wave")
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst, data)
+				inst.sg:GoToState("unsheathe_fast")
+			end),
+		},
+	})
+
+	states[#states + 1] = State({
+		name = "cheer",
+		tags = { "busy", "nointerrupt" },
+
+		onenter = function(inst)
+			inst.AnimState:PlayAnimation("emote_pump")
+		end,
+
+		events =
+		{
+			EventHandler("animover", function(inst, data)
+				inst.sg:GoToState("unsheathe_fast")
+			end),
+		},
+	})
 end
 
 --------------------------------------------------------------------------
@@ -5014,6 +5283,7 @@ function SGPlayerCommon.States.AddAllBasicStates(states)
 	SGPlayerCommon.States.AddPotionStates(states)
 	SGPlayerCommon.States.AddFoodStates(states)
 	SGPlayerCommon.States.AddTalkState(states)
+	SGPlayerCommon.States.AddNoAnimInteractState(states)
 	SGPlayerCommon.States.AddPickupState(states)
 	SGPlayerCommon.States.AddDepositCurrencyState(states)
 	SGPlayerCommon.States.AddHeartstoneInteractStates(states)
@@ -5152,9 +5422,9 @@ end
 local ENABLE_BACK_LOOKING = true
 function SGPlayerCommon.Fns.ApplyBackPrefixOnUpdate(inst, animname)
 
-	local using_keyboard = inst.components.playercontroller:GetLastInputDeviceType() == "keyboard"
+	local using_gamepad = inst.components.playercontroller:HasGamepad()
 
-	if not ENABLE_BACK_LOOKING or SGPlayerCommon.Fns.IsWeaponSheathed(inst) or not using_keyboard then
+	if not ENABLE_BACK_LOOKING or SGPlayerCommon.Fns.IsWeaponSheathed(inst) or using_gamepad then
 		return animname
 	end
 
@@ -5513,6 +5783,26 @@ function SGPlayerCommon.Fns.CelebrateEquipment(inst, state_transition_delay)
 	else
 		inst.sg:GoToState(emotes[random_idx])
 	end
+end
+
+function SGPlayerCommon.Fns.RecallOneShotput(inst, horizontal)
+	for projectile,_ in pairs(inst.sg.mem.active_projectiles) do
+		if projectile:IsValid() and projectile.sg:HasStateTag("recallable") then
+			projectile:TakeControl()
+			if projectile:IsLocal() then
+				projectile.sg:GoToState("recalled_pre", { recaller = inst, horizontal = horizontal })
+				inst.SoundEmitter:PlaySound(fmodtable.Event.Skill_Shotput_Recall)
+				SGCommon.Fns.BlinkAndFadeColor(projectile, { 200/255, 200/255, 200/255 }, 4)
+				SGCommon.Fns.BlinkAndFadeColor(inst, { 200/255, 200/255, 200/255 }, 4)
+				break
+			end
+		end
+	end
+end
+-- StopPassingThroughObjects and activate WorldBounded.
+function SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
+	inst.Physics:StopPassingThroughObjects()
+	inst.components.worldbounded:Activate()
 end
 --------------------------------------------------------------------------
 

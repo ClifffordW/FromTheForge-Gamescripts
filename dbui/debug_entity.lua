@@ -29,6 +29,11 @@ DebugEntity.RenderAnimStateCurrentAnim = function(ui, animstate)
 		return
 	end
 
+	ui:Value("Bank", animstate:GetBank())
+	ui:Value("Build", animstate:GetBuild())
+	ui:Value("Orientation", lume.find(ANIM_ORIENTATION, animstate:GetOrientation()))
+	ui:Value("Layer", animstate:GetLayer())
+
 	-- If no anim is playing, current_anim_name is nil and some
 	-- AnimState functions will crash.
 	local current_anim_name = animstate:GetCurrentAnimationName()
@@ -258,7 +263,7 @@ function DebugEntity:RenderPanel( ui, panel )
 
 	if debug_entity ~= self.inst then
 		ui:Value("Debug Entity", debug_entity)
-		if self.autoselect or ui:Button("Select", nil, nil, debug_entity) then
+		if self.autoselect or ui:Button("Inspect", nil, nil, not debug_entity) then
 			self.inst = debug_entity
 		end
 		ui:SameLineWithSpace()
@@ -270,7 +275,7 @@ function DebugEntity:RenderPanel( ui, panel )
 		end
 		ui:SameLineWithSpace()
 	end
-	self.autoselect = ui:_Checkbox("Autoselect Debug Entity", self.autoselect)
+	self.autoselect = ui:_Checkbox("Auto-inspect Debug Entity", self.autoselect)
 	ui:Separator()
 
 	if not self.inst then
@@ -284,6 +289,12 @@ function DebugEntity:RenderPanel( ui, panel )
 	if ui:Button(ui.icon.copy.. "##name") then
 		ui:SetClipboardText(tostring(self.inst))
 	end
+
+	ui:SameLineWithSpace()
+	if ui:Button(ui.icon.edit, ui.icon.width, nil, self.inst == debug_entity) then
+		SetDebugEntity(self.inst)
+	end
+	ui:SetTooltipIfHovered(string.format("SetDebugEntity(<%s>)", self.inst))
 
 	ui:SameLineWithSpace()
 	ui:PushDisabledStyle()
@@ -563,10 +574,11 @@ function DebugEntity:RenderPanel( ui, panel )
 			end
 
 			local changed
-			local s = self.inst.AnimState:GetScale()
-			changed, s = ui:SliderFloat("Scale", s, 0.001, 10)
+			local s = Vector2(self.inst.AnimState:GetScale())
+			changed, s.x = ui:SliderFloat("Uniform Scale", s.x, 0.001, 10)
+			changed = ui:DragVec2f("Scale", s, nil, 0.001, 10) or changed
 			if changed then
-				self.inst.AnimState:SetScale(s, s)
+				self.inst.AnimState:SetScale(s.x, s.y)
 			end
 
 			local current_anim = DebugEntity.RenderAnimStateCurrentAnim(ui, self.inst.AnimState)
@@ -632,9 +644,13 @@ function DebugEntity:RenderPanel( ui, panel )
 	if self.inst.Network and ui:CollapsingHeader("Component: Network") then
 		ui:Indent() do
 			ui:Value("IsLocal", self.inst:IsLocal())
+			ui:Value("IsMinimal", self.inst:IsMinimal())
+			ui:Value("IsNetworked", self.inst:IsNetworked())
+			ui:Value("IsTransferable", self.inst:IsTransferable())
+			ui:Value("ShouldSendNetEvents", self.inst:ShouldSendNetEvents())
 			ui:Value("EntityID", self.inst.Network:GetEntityID())
 			ui:Value("Lua State Size", self.inst.Network:GetLuaStateSize())
-			ui:Value("Is In Limbo (C++)", self.inst.entity:IsInLimbo())
+			ui:Value("Is In Limbo", self.inst:IsInLimbo())
 			ui:Value("Deserialize Counter", self.inst.Network:GetDeserializeCounter())
 		end ui:Unindent()
 	end
@@ -651,6 +667,12 @@ function DebugEntity:RenderPanel( ui, panel )
 			changed_v, s = ui:DragVec3f("Scale", s, 0.001, 0.001, 50)
 			if changed_u or changed_v then
 				self.inst.Transform:SetScale(s:unpack())
+			end
+
+			local rot = self.inst.Transform:GetRotation()
+			changed_u, rot = ui:SliderFloat("Rotation##Transform", rot, -180, 180, "%.1fº")
+			if changed_u then
+				self.inst.Transform:SetRotation(rot)
 			end
 		end ui:Unindent()
 	end

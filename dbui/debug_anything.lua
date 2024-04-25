@@ -10,6 +10,8 @@ local DebugAnything = Class(DebugNodes.DebugNode, function(self)
 	self.error_str = nil
 	self.saved = DebugSettings("debuganything.saved")
 		:Option("history", {})
+
+	self.auto_focus = true
 end)
 
 DebugAnything.PANEL_WIDTH = 500
@@ -44,6 +46,11 @@ function DebugAnything:RenderPanel( ui, panel )
 	local flags = (ui.InputTextFlags.EnterReturnsTrue
 		| ui.InputTextFlags.CallbackHistory)
 	local changed, text = ui:InputText("Variable to debug", self.text, flags, InputTextCallback, self, ui)
+
+	if self.auto_focus then
+		ui:SetKeyboardFocusHere(-1)
+		self.auto_focus = false
+	end
 
 	if changed then
 		self:LoadExpression(text)

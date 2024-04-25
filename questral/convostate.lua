@@ -39,15 +39,30 @@ function ConvoState:Textures(t)
     return self
 end
 
-function ConvoState:FlagAsTemp()
-    self.convo.temp_convo = true
+-- The dialogue for this convo is work-in-progress or scratch and will be
+-- rewritten. It won't be translated or accessible in public builds.
+function ConvoState:NotReadyToTranslate()
+    dbassert(self.convo:GetContent() == nil or self.convo:GetContent().strings == nil, "Call NotReadyToTranslate *before* Strings. Otherwise, it's too late to flag the strings.")
+    self.convo.is_intentionally_untranslated = true
     return self
 end
 
 function ConvoState:Strings(strs)
     assert(strs, "Expected some strings. Is there a typo?")
-    self.convo:AddStrings( strs, self.id )
+    local exclude_strings = POT_GENERATION and self.convo.is_intentionally_untranslated
+    if not exclude_strings then
+        self.convo:AddStrings( strs, self.id )
+    end
     return self
+end
+
+function ConvoState:OneTimeConvo()
+    self.convo.one_time_convo = true
+    return self
+end
+
+function ConvoState:IsOneTimeConvo()
+    return self.convo.one_time_convo
 end
 
 function ConvoState:RequiredWorldFlags(flags)

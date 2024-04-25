@@ -1,18 +1,17 @@
 local Power = require("defs.powers.power")
-local Equipment = require("defs.equipment")
 local SGCommon = require "stategraphs.sg_common"
 local slotutil = require("defs.slotutil")
 local power_icons = require "gen.atlas.ui_ftf_power_icons"
 local Consumable = require "defs.consumable"
-local fmodtable = require "defs.sound.fmodtable"
 local powerutil = require "util.powerutil"
 local combatutil = require "util.combatutil"
 local lume = require "util.lume"
 local LootEvents = require "lootevents"
 local EffectEvents = require "effectevents"
+local ParticleSystemHelper = require "util.particlesystemhelper"
 local soundutil = require "util.soundutil"
 local fmodtable = require "defs.sound.fmodtable"
-local ParticleSystemHelper = require "util.particlesystemhelper"
+local spawnutil = require "util.spawnutil"
 
 local function GetIcon(name)
 	local icon_name = ("icon_equipment_%s"):format(name)
@@ -54,7 +53,7 @@ Power.AddEquipmentPower("basic_head",
 	power_category = Power.Categories.SUPPORT,
 	max_stacks = 150,
 
-	stacks_per_usage_level =  { 50, 100, 150 },
+	stacks_per_usage_level =  { 25, 50, 100 },
 	tuning =
 	{
 		[Power.Rarity.COMMON] = {
@@ -85,10 +84,11 @@ Power.AddEquipmentPower("basic_head",
 
 Power.AddEquipmentPower("basic_body",
 {
+	-- Currently disabled
 	power_category = Power.Categories.SUPPORT,
 
 	max_stacks = 150,
-	stacks_per_usage_level =  { 0, 50, 100 }, -- can't have 0 stacks baseline or it removes itself
+	stacks_per_usage_level =  { 0, 25, 50 }, -- can't have 0 stacks baseline or it removes itself
 	tuning =
 	{
 		[Power.Rarity.COMMON] = {
@@ -119,10 +119,11 @@ Power.AddEquipmentPower("basic_body",
 
 Power.AddEquipmentPower("basic_waist",
 {
+	-- Currently disabled
 	power_category = Power.Categories.SUPPORT,
 
 	max_stacks = 150,
-	stacks_per_usage_level = { 0, 50, 100 }, -- can't have 0 stacks baseline or it removes itself
+	stacks_per_usage_level = { 0, 25, 50 }, -- can't have 0 stacks baseline or it removes itself
 	tuning =
 	{
 		[Power.Rarity.COMMON] = {
@@ -479,7 +480,7 @@ Power.AddEquipmentPower("battoad_head",
 	event_triggers =
 	{
 		["gain_konjur"] = function(pow, inst, amount)
-			if amount > 0 then
+			if inst:IsLocal() and amount > 0 then
 				local bonus_percent = pow.persistdata:GetVar("konjur_bonus")
 				local bonus = math.ceil(amount * bonus_percent)
 
@@ -771,7 +772,10 @@ Power.AddEquipmentPower("windmon_waist",
 	},
 
 	on_update_fn = function(pow, inst)
-		local stationary = not ((inst.sg:HasStateTag("busy") and not inst.sg:HasStateTag("turning")) or inst.sg:HasStateTag("moving"))
+		local busy = inst.sg:HasStateTag("busy") and not (inst.sg:HasStateTag("turning") or inst.sg:HasStateTag("emote"))
+		local moving = inst.sg:HasStateTag("moving")
+
+		local stationary = not busy and not moving
 
 		if stationary then
 			if not pow.mem.active then
@@ -834,11 +838,12 @@ local function _on_gnarlic_head_hitboxtriggered(pow, inst, data)
 			local dir = inst:GetAngleTo(v)
 			attack:SetDir(dir)
 			attack:SetHitstunAnimFrames(hitstun)
+			attack:SetHitFlags(Attack.HitFlags.LOW_ATTACK)
 			attack:SetFocus(false)
 			attack:SetPushback(0.5)
 			attack:SetID(pow.def.name)
 
-			inst.components.combat:DoKnockbackAttack(attack)
+			local hit = inst.components.combat:DoKnockbackAttack(attack)
 
 
 			local hitstoplevel = 0
@@ -852,7 +857,9 @@ local function _on_gnarlic_head_hitboxtriggered(pow, inst, data)
 				hitfx_x_offset = hitfx_x_offset + 0.75
 			end
 
-			inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_pierce", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+			if hit then
+				inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_pierce", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+			end
 
 			pow.mem.touched[v] = true
 		end
@@ -876,13 +883,13 @@ Power.AddEquipmentPower("gnarlic_head",
 	end,
 
 	on_update_fn = function(pow, inst, dt)
-		if pow.mem.canattack then
+		if pow.mem.canattack and inst:IsAlive() then
 			local animframe = inst.sg:GetAnimFramesInState()
 
 			-- Only attack a few frames into the run.
 			-- Wait until we have a LITTLE bit of momentum before we attack.
 
-			if animframe >= 2 then -- Make this number 0 and equip Pew Pew! for a really fun time.
+			if animframe >= 3 then -- Make this number 0 and equip Pew Pew! for a really fun time.
 				local dir = ConvertRotationToRoughDirection(inst)
 
 				if not pow.mem.attackstarted then
@@ -945,23 +952,33 @@ Power.AddEquipmentPower("gnarlic_body",
 		pow.mem.active = false
 		pow.mem.active_ticks = 0
 		pow.mem.seconds_activated = 0
+		pow.mem.x_last_tick, pow.mem.z_last_tick = inst.Transform:GetWorldXZ()
 	end,
 
 	on_update_fn = function(pow, inst)
-		if pow.mem.active then
+		local x, z = inst.Transform:GetWorldXZ()
+		local dist_moved = inst:GetDistanceSqToXZ(pow.mem.x_last_tick, pow.mem.z_last_tick)
+
+		pow.mem.x_last_tick = x
+		pow.mem.z_last_tick = z
+
+		local traveled_enough = dist_moved > 0.01 -- If they are standing still, then don't count the movement.
+
+		if pow.mem.active and traveled_enough then
+			pow.mem.active_ticks = pow.mem.active_ticks + 1
 			local seconds = math.floor(pow.mem.active_ticks / 45) -- Under the hood, be slightly better than 1s
 			if seconds > pow.mem.seconds_activated then
 				inst.components.locomotor:AddSpeedMult(pow.def.name, pow.persistdata:GetVar("speed_bonus_per_second") * seconds)
 
 				pow.mem.seconds_activated = seconds
 			end
+			-- print("YES!", dist_moved, pow.persistdata:GetVar("speed_bonus_per_second") * seconds)
 		else
 			inst.components.locomotor:RemoveSpeedMult(pow.def.name)
 			pow.mem.active_ticks = 0
 			pow.mem.seconds_activated = 0
+			-- print("NO!", dist_moved, 0)
 		end
-
-		pow.mem.active_ticks = pow.mem.active_ticks + 1
 	end,
 
 	event_triggers =
@@ -1072,6 +1089,98 @@ Power.AddEquipmentPower("zucco_waist",
 		[Power.Rarity.COMMON] =
 		{
 		},
+	},
+})
+
+Power.AddEquipmentPower("gourdo_weapon",
+{
+	-- When you gain life, deal that much damage in an area around you.
+	power_category = Power.Categories.DAMAGE,
+	tags = { },
+	stacks_per_usage_level = { 100, 200, 300 },
+	prefabs =
+	{
+		"hits_player_skill_gourdo",
+	},
+	tuning =
+	{
+		[Power.Rarity.COMMON] = {
+			damage_mult = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["take_heal"] = function(pow, inst, heal)
+
+			local RADIUS = 10 -- "Large radius"
+			local heal_amount = heal:GetHeal()
+
+			if heal_amount < 10 then
+				return
+			end
+
+			local x,z = inst.Transform:GetWorldXZ()
+			local ents = FindEnemiesInRange(x, z, RADIUS)
+
+			local valid_targets = 0  -- Initialize to 0
+			for i, ent in ipairs(ents) do
+				if ent:IsValid() and ent.components.health and ent.components.health:IsAlive() then
+					valid_targets = valid_targets + 1
+				end
+			end
+
+			-- local params = {}
+			-- params.fmodevent = fmodtable.Event.Power_bigStick_Explode
+			-- soundutil.PlaySoundData(inst, params)
+
+			local baseline_delay = 4
+			-- Determine fixed delay increment based on the number of valid entities
+			local time_between_explosions
+			if valid_targets >= 1 and valid_targets <= 3 then
+				time_between_explosions = 4
+			elseif valid_targets >= 4 and valid_targets <= 7 then
+				time_between_explosions = 3
+			else -- for valid_targets > 7
+				time_between_explosions = 2
+			end
+
+			local proced = false
+			for i, ent in ipairs(ents) do
+				proced = true
+				local delay_frames = baseline_delay + (i - 1) * time_between_explosions
+				inst:DoTaskInAnimFrames(delay_frames, function()
+					if ent:IsValid() and ent.components.health and ent.components.health:IsAlive() then
+						-- Sound for explosion
+						local params = {}
+						params.fmodevent = fmodtable.Event.Hit_BigStick_Explosion_Single
+						local handle = soundutil.PlaySoundData(ent, params)
+						soundutil.SetInstanceParameter(ent, handle, "Count", i)
+
+						local power_attack = Attack(inst, ent)
+						power_attack:SetDamage(heal_amount * pow.persistdata:GetVar("damage_mult"))
+						power_attack:SetHitstunAnimFrames(5)
+						power_attack:SetPushback(0)
+						power_attack:SetSource(pow.def.name)
+
+						inst.components.combat:DoPowerAttack(power_attack)
+
+						ent.components.combat:SetTarget(inst)
+						powerutil.SpawnPowerHitFx("hits_player_skill_gourdo", inst, ent, 0, 1, HitStopLevel.NONE)
+					end
+				end)
+			end
+			if proced then
+				--sound
+				local params = {}
+				params.fmodevent = fmodtable.Event.Power_bigStick_Explode
+				soundutil.PlaySoundData(inst, params)
+
+				powerutil.StopAttachedParticleSystem(inst, pow)
+			end
+			pow.persistdata.counter = 0
+			inst:PushEvent("used_power", pow.def)
+		end,
 	},
 })
 
@@ -1203,6 +1312,34 @@ Power.AddEquipmentPower("gourdo_waist",
 			inst:PushEvent("used_power", pow.def)
 		end,
 	}
+})
+
+Power.AddEquipmentPower("yammo_weapon",
+{
+	-- Your knockdown attacks become projectiles + deal damage to other enemies.
+	power_category = Power.Categories.DAMAGE,
+	tags = { },
+	stacks_per_usage_level = { 50, 100, 200 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] = {
+			knockdown_distance = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	on_stacks_changed_fn = function(pow, inst)
+		inst.components.combat:SetKnockdownBecomesProjectile(true)
+		inst.components.combat:SetKnockdownDistanceMult(pow.def.name, pow.persistdata:GetVar("knockdown_distance"))
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.components.combat:SetKnockdownBecomesProjectile(false)
+		inst.components.combat:RemoveKnockdownDistanceModifier(pow.def.name)
+	end,
+
+	event_triggers =
+	{
+	},
 })
 
 Power.AddEquipmentPower("yammo_head",
@@ -1508,7 +1645,7 @@ Power.AddEquipmentPower("mothball_head",
 					-- Apply FX, apply damagedealtmult
 					local bonus = 1 + pow.persistdata:GetVar("damage_bonus")
 					inst.components.combat:SetDamageDealtMult(pow.def.name, bonus)
-					powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail") -- TODO: add correct pfx from Sloth
+					powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail") -- TODO: add correct pfx
 					pow.mem.active = true
 				end
 			else
@@ -1558,7 +1695,7 @@ Power.AddEquipmentPower("mothball_body",
 					-- Apply FX, apply damagereceivedmult
 					local bonus = 1 - pow.persistdata:GetVar("damage_reduction")
 					inst.components.combat:SetDamageReceivedMult(pow.def.name, bonus)
-					-- powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail") -- TODO: add correct pfx from Sloth
+					-- powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail") -- TODO: add correct pfx
 					pow.mem.active = true
 				end
 			else
@@ -1605,7 +1742,7 @@ Power.AddEquipmentPower("mothball_waist",
 			if num_allies > 0 then
 				if not pow.mem.active then
 					-- Apply FX, set 'active' to true so heal_mod_fn knows
-					-- powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail") -- TODO: add correct pfx from Sloth
+					-- powerutil.AttachParticleSystemToEntity(pow, inst, "extroverted_trail") -- TODO: add correct pfx
 					pow.mem.active = true
 				end
 			else
@@ -1628,18 +1765,34 @@ Power.AddEquipmentPower("mothball_waist",
 	end,
 })
 
+local function eyev_apply_vulnerable(pow, inst, data)
+	if inst.sg:HasStateTag("dodge") and not pow.persistdata.active then
+		local target = SGCommon.Fns.SanitizeTarget(data.inst)
+		local debuff_def = Power.Items.STATUSEFFECT.vulnerable
+		assert(debuff_def)
+		if target then
+			target = target.owner or target -- make projectile owner vulnerable
+			if target.components.powermanager then
+				local stacks = math.floor(pow.persistdata:GetVar("debuff_stacks") * 100)
+				if inst:IsNetworked() and target:IsNetworked() then
+					TheNetEvent:ApplyPower(inst.GUID, target.GUID, debuff_def.name, stacks)
+				elseif target:IsLocalOrMinimal() then
+					target.components.powermanager:AddPower(target.components.powermanager:CreatePower(debuff_def), stacks)
+				end
+			end
+			-- TODO: fx?  There is already one added on the status effect side
+		end
+	end
+end
+
 Power.AddEquipmentPower("eyev_head",
 {
-	-- TODO: NOV2023 this power will not work over the network -- can't add a power to an entity unless you own it, and the DoTaskInTime() will break if control is lost
-	-- Rework this so that "vulnerable" handles itself independently.
-
 	power_category = Power.Categories.DAMAGE,
 	stacks_per_usage_level = { 10, 20, 30 },
 	tuning =
 	{
 		[Power.Rarity.COMMON] =
 		{
-			seconds = 5,
 			debuff_stacks = StackingVariable(1):SetPercentage(),
 		},
 	},
@@ -1652,35 +1805,11 @@ Power.AddEquipmentPower("eyev_head",
 	event_triggers =
 	{
 		["newstate"] = function(pow, inst, data)
-			if inst.sg:HasStateTag("dodge") and not pow.persistdata.active then
-				local target = SGCommon.Fns.SanitizeTarget(data.inst)
-				local debuff_def = Power.Items.STATUSEFFECT.vulnerable
-				assert(debuff_def)
-				if target and target.components.powermanager then
-					local stacks = math.floor(pow.persistdata:GetVar("debuff_stacks") * 100)
-					target.components.powermanager:AddPower(target.components.powermanager:CreatePower(debuff_def), stacks)
-
-					target:DoTaskInTime(pow:GetVar("seconds"), function()
-						target.components.powermanager:DeltaPowerStacks(debuff_def, -stacks)
-					end)
-				end
-			end
+			eyev_apply_vulnerable(pow, inst, data)
 		end,
 
 		["hitboxcollided_invincible"] = function(pow, inst, data)
-			if inst.sg:HasStateTag("dodge") and not pow.persistdata.active then
-				local target = SGCommon.Fns.SanitizeTarget(data.inst)
-				local debuff_def = Power.Items.STATUSEFFECT.vulnerable
-				assert(debuff_def)
-				if target and target.components.powermanager then
-					local stacks = math.floor(pow.persistdata:GetVar("debuff_stacks") * 100)
-					target.components.powermanager:AddPower(target.components.powermanager:CreatePower(debuff_def), stacks)
-
-					target:DoTaskInTime(pow:GetVar("seconds"), function()
-						target.components.powermanager:DeltaPowerStacks(debuff_def, -stacks)
-					end)
-				end
-			end
+			eyev_apply_vulnerable(pow, inst, data)
 		end,
 	}
 })
@@ -1754,7 +1883,8 @@ Power.AddEquipmentPower("eyev_waist",
 	{
 		["newstate"] = function(pow, inst, data)
 			if pow.mem.active and not inst.sg:HasStateTag("dodge") then
-				inst.Physics:StopPassingThroughObjects()
+				local SGPlayerCommon = require "stategraphs.sg_player_common"
+				SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 				pow.mem.active = false
 			end
 		end,
@@ -1951,6 +2081,334 @@ Power.AddEquipmentPower("bulbug_waist",
 	},
 })
 
+Power.AddEquipmentPower("swarmy_head",
+{
+	-- RUN FASTER WHEN POISONED
+
+	power_category = Power.Categories.SUPPORT,
+	stacks_per_usage_level = { 25, 50, 75 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			acid_speed_bonus = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	on_update_fn = function(pow, inst, dt)
+		local toxicpower = Power.FindPowerByName("toxicity")
+		if (not pow.persistdata.init and inst.components.powermanager:HasPower(toxicpower)) then
+			pow.persistdata.init = true
+			inst.components.locomotor:AddSpeedMult(pow.def.name, pow.persistdata:GetVar("acid_speed_bonus"))
+		elseif (pow.persistdata.init and not inst.components.powermanager:HasPower(toxicpower)) then
+			pow.persistdata.init = false
+			inst.components.locomotor:RemoveSpeedMult(pow.def.name)
+		end
+	end,
+
+	on_remove_fn = function(pow, inst)
+		if (pow.persistdata.init and inst.components.locomotor ~= nil) then
+			inst.components.locomotor:RemoveSpeedMult(pow.def.name)
+		end
+		pow.persistdata.init = false
+	end,
+})
+Power.AddEquipmentPower("swarmy_body",
+{
+	-- SPAWN ACID POOL ON KILL
+
+	power_category = Power.Categories.SUPPORT,
+	stacks_per_usage_level = { 4, 6, 8 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			acid_duration = StackingVariable(1):SetFlat(),
+		},
+	},
+
+	event_triggers =
+	{
+		["kill"] = function(pow, inst, data)
+			local victim = data.attack:GetTarget()
+			local duration = pow.persistdata:GetVar("acid_duration")
+			spawnutil.SpawnAcidTrap(victim, "small", duration * 30)
+		end
+	}
+})
+Power.AddEquipmentPower("swarmy_waist",
+{
+	-- FARTHER(FASTER) ROLL WHEN POISONED
+
+	power_category = Power.Categories.SUPPORT,
+	stacks_per_usage_level = { 30, 40, 50 }, -- % distance multiplier
+	tuning =
+	{
+		[Power.Rarity.COMMON] = {
+			acid_dodge_bonus = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	on_update_fn = function(pow, inst, dt)
+		local toxicpower = Power.FindPowerByName("toxicity")
+		if (not pow.persistdata.init and inst.components.powermanager:HasPower(toxicpower)) then
+			pow.persistdata.init = true
+			local percent = pow.persistdata:GetVar("acid_dodge_bonus")
+			inst.components.playerroller:AddTicksMultModifier(pow.def.name, -percent)
+		elseif (pow.persistdata.init and not inst.components.powermanager:HasPower(toxicpower)) then
+			pow.persistdata.init = false
+			inst.components.playerroller:RemoveTicksMultModifier(pow.def.name)
+		end
+	end,
+
+	on_remove_fn = function(pow, inst)
+		if pow.persistdata.init then
+			pow.persistdata.init = false
+			inst.components.playerroller:RemoveTicksMultModifier(pow.def.name)
+		end
+	end,
+})
+Power.AddEquipmentPower("woworm_head",
+{
+	-- HEAL WHEN TAKING ACID DAMAGE
+
+	power_category = Power.Categories.SUPPORT,
+	stacks_per_usage_level = { 20, 40, 70 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			heal_percent = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["take_damage"] = function(pow, inst, attack)
+			if (attack.id == "toxicity") then
+				local heal_amount = attack:GetDamage() * pow.persistdata:GetVar("heal_percent")
+				local power_heal = Attack(inst, inst)
+				power_heal:SetHeal(heal_amount)
+				power_heal:SetSource(pow.def.name)
+				inst:DoTaskInTime(0.3, function() inst.components.combat:ApplyHeal(power_heal) end)
+			end
+		end
+	}
+})
+Power.AddEquipmentPower("woworm_body",
+{
+	-- SPAWN ACIDPOOL ON DODGE
+
+	power_category = Power.Categories.SUPPORT,
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			acid_duration = StackingVariable(1):SetFlat(),
+		},
+	},
+
+	event_triggers =
+	{
+		["dodge"] = function(pow, inst, data)
+			local duration = pow.persistdata:GetVar("acid_duration")
+			spawnutil.SpawnAcidTrap(inst, "medium", duration * 30)
+		end,
+	}
+})
+Power.AddEquipmentPower("woworm_waist",
+{
+	-- REDUCED DAMAGE FROM ALL SOURCES WHEN IN ACID
+
+	power_category = Power.Categories.SUPPORT,
+	stacks_per_usage_level = { 10, 20, 30 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			damage_reduction = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	defend_mod_fn = function(pow, attack, output_data)
+		local toxicpower = Power.FindPowerByName("toxicity")
+		local inst = attack:GetTarget()
+		if (inst.components.powermanager:HasPower(toxicpower)) then
+			local damage = attack:GetDamage()
+			local prevented = damage * (pow.persistdata:GetVar("damage_reduction"))
+			output_data.damage_delta = output_data.damage_delta - math.ceil(prevented)
+		end
+		return true
+	end,
+})
+Power.AddEquipmentPower("slowpoke_head",
+{
+	-- POISON DEALS NO DAMAGE UNDER A THRESHOLD (might need to deal heavily reduced damage? ie 1)
+
+	power_category = Power.Categories.SUPPORT,
+
+	tags = { },
+	stacks_per_usage_level = { 10, 20, 30 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] = {
+			low_health = StackingVariable(1):SetPercentage(),
+		},
+	},
+	defend_mod_fn = function(pow, attack, output_data)
+		if (attack.id == "toxicity") then
+			local inst = attack:GetTarget()
+			local threshold = pow.persistdata:GetVar("low_health")
+			if (inst.components.health:GetPercent() < threshold) then
+				local damage = attack:GetDamage()
+				output_data.damage_delta = output_data.damage_delta - damage
+			end
+		end
+		return true
+	end,
+})
+local _slowpoke_body_attack = function(pow, inst)
+	local airborne_high_attack = pow.mem.has_been_airborne_high
+
+	local x,z = inst.Transform:GetWorldXZ()
+	local radius = airborne_high_attack and 6 or 5
+
+	local damage = inst.components.combat:GetBaseDamage()
+	local modded_damage = damage * pow.persistdata:GetVar("aoe_damage")
+
+	local ents_near, ents_med, ents_far = powerutil.GetEntitiesInRangesFromPoint(x, z, radius)
+
+	local do_attack = function(pow, inst, ent, airborne_high)
+		if inst ~= nil and inst:IsValid()
+			and ent ~= nil and ent:IsValid()
+			and not ent.sg:HasStateTag("airborne")
+			and not ent.HitBox:IsInvincible() then
+
+			local attack = Attack(inst, ent)
+			attack:SetDamage(modded_damage)
+			attack:SetHitstunAnimFrames(airborne_high and 13 or 0)
+			attack:SetPushback(airborne_high and 1 or 0.75)
+			attack:SetSource(pow.def.name)
+
+			local distance = inst:GetDistanceSqTo(ent)
+			if airborne_high and distance <= 5 then
+				inst.components.combat:DoKnockdownAttack(attack)
+				powerutil.SpawnPowerHitFx("hits_player_unarmed", inst, ent, 0, 0, HitStopLevel.MEDIUM)
+			else
+				inst.components.combat:DoPowerAttack(attack)
+				powerutil.SpawnPowerHitFx("hits_player_unarmed", inst, ent, 0, 0, HitStopLevel.MEDIUM)
+			end
+		end
+	end
+
+	for i, ent in ipairs(ents_near) do
+		inst:DoTaskInAnimFrames(math.random(0, 1), function() do_attack(pow, inst, ent, airborne_high_attack) end)
+	end
+
+	inst:DoTaskInAnimFrames(1, function()
+		for i, ent in ipairs(ents_med) do
+			inst:DoTaskInAnimFrames(math.random(0, 1), function() do_attack(pow, inst, ent, airborne_high_attack) end)
+		end
+	end)
+
+	inst:DoTaskInAnimFrames(2, function()
+		for i, ent in ipairs(ents_far) do
+			inst:DoTaskInAnimFrames(math.random(0, 1), function() do_attack(pow, inst, ent, airborne_high_attack) end)
+		end
+	end)
+
+	local params =
+	{
+		scalex = airborne_high_attack and 1.75 or 1.5,
+		scalez = airborne_high_attack and 1.75 or 1.5,
+	}
+	powerutil.SpawnFxOnEntity("slowpoke_slam_groundring", inst, params)
+	inst:PushEvent("used_power", pow.def)
+end
+Power.AddEquipmentPower("slowpoke_body",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 50, 75, 100 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] = {
+			aoe_damage = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	on_update_fn = function(pow, inst)
+		-- TODO: consider making this run on the player all the time and push an event like 'player_landed' that other powers can tap into
+
+		-- NOTE: this cannot listen for removal of the "airborne" tag, because state transitions between two airborne states will trigger that event.
+		-- For example, "attack_pre" ends with airborne, and "attack_loop" starts with airborne -- we receive a "remove" and then an "add" of the trigger, making it unusable for this case.
+
+		local was_airborne = pow.mem.airborne_lasttick
+		local is_airborne = inst.sg:HasStateTag("airborne") or inst.sg:HasStateTag("airborne_high")
+
+		-- This variable gets reset on landing... if we've been airborne high this jump, then the AoE effect will be different.
+		if not pow.mem.has_been_airborne_high and inst.sg:HasStateTag("airborne_high") then
+			pow.mem.has_been_airborne_high = true
+		end
+
+		local landing = was_airborne and not is_airborne
+
+		if landing then
+			_slowpoke_body_attack(pow, inst)
+
+			-- Reset "high" tracker, after doing the attack. We need to know in the attack if we were high, but now we're done with it.
+			pow.mem.has_been_airborne_high = false
+		end
+
+		pow.mem.airborne_lasttick = is_airborne
+	end,
+})
+Power.AddEquipmentPower("slowpoke_waist",
+{
+	-- POISON BUILDS SLOWER
+
+	power_category = Power.Categories.SUPPORT,
+
+	tags = { },
+	stacks_per_usage_level = { 20, 40, 60 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] = {
+			reduction = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["power_stacks_changed"] = function(pow, inst, data)
+			if (data.power_def.name == "toxicity") then
+				local delta = data.new - data.old
+				if (data.new < data.power_def.max_stacks and delta > 0) then -- Only reduce when stacks are added and we're not proccing
+					local reduced_delta = delta * pow.persistdata:GetVar("reduction")
+					data.power.stacks = data.power.stacks - reduced_delta
+				end
+			end
+		end
+	}
+})
+
+Power.AddEquipmentPower("groak_weapon",
+{
+	-- Hitstreaks take longer to decay
+	power_category = Power.Categories.DAMAGE,
+	stacks_per_usage_level = { 25, 50, 100 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			time_mult = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	tooltips =
+	{
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.components.combat:SetHitStreakDecayTimeMult(pow.def.name, pow.persistdata:GetVar("time_mult"))
+	end,
+	on_stacks_changed_fn = function(pow, inst)
+		inst.components.combat:SetHitStreakDecayTimeMult(pow.def.name, pow.persistdata:GetVar("time_mult"))
+	end,
+	on_remove_fn = function(pow, inst)
+		inst.components.combat:RemoveHitStreakDecayTimeModifier(pow.def.name)
+	end,
+})
 Power.AddEquipmentPower("groak_head",
 {
 	-- Heavy attacks apply more hitstun
@@ -2053,7 +2511,6 @@ Power.AddEquipmentPower("groak_waist",
 	{
 		["add_power"] = function(pow, inst, added_power)
 			--[[
-			jambell: 
 				I don't love the way this is implemented... this still goes through the entire add/remove flow. Sounds still play, etc.
 				We would ideally insert ourselves into the addpower flow to see if anything wants to negate the adding of a power.
 			]]
@@ -2070,6 +2527,39 @@ Power.AddEquipmentPower("groak_waist",
 	}
 })
 
+Power.AddEquipmentPower("floracrane_weapon",
+{
+	-- Increased crit chance while airborne
+	power_category = Power.Categories.DAMAGE,
+	stacks_per_usage_level = { 5, 10, 15 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			critchance = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	tooltips =
+	{
+	},
+	event_triggers =
+	{
+		-- Check whenever adding or removing
+		["add_state_tag"] = function(pow, inst, tag)
+			if inst.sg:HasStateTag("airborne") or inst.sg:HasStateTag("airborne_high") then
+				inst.components.combat:SetCritChanceModifier(pow.def.name, pow:GetVar("critchance"))
+			else
+				inst.components.combat:RemoveCritChanceModifier(pow.def.name)
+			end
+		end,
+		["remove_state_tag"] = function(pow, inst, tag)
+			if inst.sg:HasStateTag("airborne") or inst.sg:HasStateTag("airborne_high") then
+				inst.components.combat:SetCritChanceModifier(pow.def.name, pow:GetVar("critchance"))
+			else
+				inst.components.combat:RemoveCritChanceModifier(pow.def.name)
+			end
+		end,
+	},
+})
 Power.AddEquipmentPower("floracrane_head",
 {
 	power_category = Power.Categories.DAMAGE,
@@ -2098,7 +2588,7 @@ Power.AddEquipmentPower("floracrane_body",
 	power_category = Power.Categories.DAMAGE,
 
 	tags = { POWER_TAGS.PROVIDES_CRITCHANCE },
-	stacks_per_usage_level = { 5, 7, 10, 13, 16, 20 },
+	stacks_per_usage_level = { 5, 10, 15 },
 	tuning = {
 		[Power.Rarity.COMMON] = {
 			critchance = StackingVariable(1):SetPercentage(),
@@ -2125,13 +2615,25 @@ Power.AddEquipmentPower("floracrane_waist",
 	power_category = Power.Categories.DAMAGE,
 
 	tags = { },
-	stacks_per_usage_level = { 1, 2, 3 },
-	tuning =
-	{
-		[Power.Rarity.COMMON] =
-		{
+	stacks_per_usage_level = { 10, 20, 30 },
+	tuning = {
+		[Power.Rarity.COMMON] = {
+			critchance = StackingVariable(1):SetPercentage(),
 		},
 	},
+
+	tooltips =
+	{
+		"CRIT_CHANCE",
+		"CRITICAL_HIT",
+	},
+
+	damage_mod_fn = function(pow, attack, output_data)
+		if attack:GetID() == "skill" then
+			attack:DeltaBonusCritChance(pow.persistdata:GetVar("critchance"))
+			return true
+		end
+	end,
 })
 
 Power.AddEquipmentPower("bandicoot_head",
@@ -2205,6 +2707,761 @@ Power.AddEquipmentPower("bandicoot_waist",
 		[Power.Rarity.COMMON] =
 		{
 		},
+	},
+})
+
+
+-- Hammers
+Power.AddEquipmentPower("hammer_dodge_whenever",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+		["newstate"] = function(pow, inst, data)
+			local SGPlayerCommon = require "stategraphs.sg_player_common"
+
+			if inst.sg:HasStateTag("attack") then
+				inst.sg.statemem.candodge = true
+				local was_airborne = inst.sg:HasStateTag("airborne")
+				local did = SGPlayerCommon.Fns.TryQueuedAction(inst, "dodge")
+				if did then
+					if was_airborne then
+						TheDungeon.HUD:MakePopText({ target = inst, button = "poof!", color = UICOLORS.KONJUR, size = 65, fade_time = 0.5 })
+					end
+				end
+			end
+		end,
+	},
+})
+
+Power.AddEquipmentPower("hammer_buff_after_dodge_cancel",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+		["dodge_cancel"] = function(pow, inst, data)
+			powerutil.AttachParticleSystemToSymbol(pow, inst, "extroverted_trail", "swap_fx")
+			inst:PushEvent("used_power", pow.def)
+		end,
+		["timerdone"] = function(pow, inst, data)
+			if data.name == pow.def.name then
+				powerutil.StopAttachedParticleSystem(inst, pow)
+			end
+		end,
+	},
+})
+
+Power.AddEquipmentPower("cannon_heavy_wide",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.heavyblastmod =
+		{
+			damagemodmult = 5/6, -- 6 bullets, do same total damage as 5 bullets
+			numbullets = 6,
+			startangle = -90,
+			angleperbullet= 30,
+			delay_frames_per_blast_bullet =
+			{
+				2,
+				0,
+				1,
+				0,
+				2,
+				0,
+			},
+			extra_range_per_blast_bullet =
+			{
+				0,
+				1.25,
+				1,
+				1,
+				1.25,
+				0,
+			},
+		}
+	end,
+})
+
+Power.AddEquipmentPower("cannon_heavy_triple",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.heavyblastmod =
+		{
+			damagemodmult = 2.5,
+			numbullets = 3,
+			startangle = -90,
+			angleperbullet= 45,
+			delay_frames_per_blast_bullet =
+			{
+				1,
+				0,
+				1,
+			},
+			extra_range_per_blast_bullet =
+			{
+				0,
+				1,
+				0,
+			},
+		}
+	end,
+})
+
+Power.AddEquipmentPower("cannon_light_pierce",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.lightpierce = true
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.lightpierce = true
+	end,
+})
+
+Power.AddEquipmentPower("cannon_light_pierce_focus",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.lightfocuspierce = true
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.lightfocuspierce = true
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.lightfocuspierce = nil
+	end,
+})
+
+Power.AddEquipmentPower("cannon_heavy_pierce_focus",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.heavyfocuspierce = true
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.heavyfocuspierce = true
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.heavyfocuspierce = nil
+	end,
+})
+
+Power.AddEquipmentPower("cannon_pierce_focus",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 10, 20, 30 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			focus_damage_bonus = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.lightfocuspierce = true
+			inst.sg.mem.heavyfocuspierce = true
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.lightfocuspierce = true
+		inst.sg.mem.heavyfocuspierce = true
+	end,
+
+	on_stacks_changed_fn = function(pow, inst)
+		inst.components.combat:SetFocusDamageMult(pow.def.name, pow:GetVar("focus_damage_bonus"))
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.lightfocuspierce = nil
+		inst.sg.mem.heavyfocuspierce = nil
+	end,
+})
+
+Power.AddEquipmentPower("cannon_clusterbomb",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 5, 7, 9 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			clusters = StackingVariable(1):SetFlat(),
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.cannon_mortar_clusterbombs = pow.persistdata:GetVar("clusters")
+			inst.sg.mem.cannon_override_mortar_ammopershot = 1
+			inst.sg.mem.cannon_override_mortar_ammopercent = 0.1 -- Always quick recovery
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.cannon_mortar_clusterbombs = pow.persistdata:GetVar("clusters")
+		inst.sg.mem.cannon_override_mortar_ammopershot = 1
+		inst.sg.mem.cannon_override_mortar_ammopercent = 0.1 -- Always quick recovery
+	end,
+
+	on_stacks_changed_fn = function(pow, inst)
+		inst.sg.mem.cannon_mortar_clusterbombs = pow.persistdata:GetVar("clusters")
+		inst.sg.mem.cannon_override_mortar_ammopershot = 1
+		inst.sg.mem.cannon_override_mortar_ammopercent = 0.1 -- Always quick recovery
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.cannon_mortar_clusterbombs = nil
+		inst.sg.mem.cannon_override_mortar_ammopershot = nil
+		inst.sg.mem.cannon_override_mortar_ammopercent = nil
+	end,
+})
+
+Power.AddEquipmentPower("cannon_heavy_onebigshot",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+		},
+	},
+
+	event_triggers =
+	{
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.heavyblastmod =
+		{
+			damagemodmult = 5,
+			numbullets = 1,
+			startangle = 0,
+			angleperbullet= 0,
+			delay_frames_per_blast_bullet =
+			{
+				0,
+			},
+			extra_range_per_blast_bullet =
+			{
+				0,
+			},
+		}
+	end,
+})
+
+Power.AddEquipmentPower("polearm_extended_multithrust",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			additional_loops = StackingVariable(1):SetFlat(),
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.maxmultithrustloops = 1 + pow.persistdata:GetVar("additional_loops")
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.maxmultithrustloops = 1 + pow.persistdata:GetVar("additional_loops")
+	end,
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.maxmultithrustloops = nil
+	end,
+})
+
+Power.AddEquipmentPower("polearm_extended_drill",
+{
+	power_category = Power.Categories.DAMAGE,
+
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			additional_loops = StackingVariable(1):SetFlat(),
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.maxspinningdrillloops = 1 + pow.persistdata:GetVar("additional_loops")
+		end,
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.maxspinningdrillloops = 1 + pow.persistdata:GetVar("additional_loops")
+	end,
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.maxspinningdrillloops = nil
+	end,
+})
+
+Power.AddEquipmentPower("polearm_long_range",
+{
+	power_category = Power.Categories.DAMAGE,
+	prefabs = { GroupPrefab("fx_polearm_long") },
+	tags = { },
+	stacks_per_usage_level = { 25, 35, 50 }, -- The weapon this is on is a Light weapon, so it already has reduced main damage compared to comparable weapons. Make this juicy as hell.
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			normal_damage_reduction = PowerVariable(-10):SetPercentage(),
+			focus_damage_bonus = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["enter_room"] = function(pow, inst, data)
+			inst.sg.mem.lightattackdistance = 9
+			inst.sg.mem.lightattackthickness = 1.25
+
+			inst.sg.mem.heavyattackdistance = 9
+			inst.sg.mem.heavyattackthickness = 1.25
+
+			inst.sg.mem.multithrustdistance = 9.3
+			inst.sg.mem.multithrustthickness = 1.25
+		end,
+	},
+
+	damage_mod_fn = function(pow, attack, output_data)
+		local damage_delta = 0
+
+		if not attack:GetFocus() then
+			damage_delta = attack:GetDamage() * pow.persistdata:GetVar("normal_damage_reduction")
+		end
+
+		output_data.damage_delta = output_data.damage_delta + damage_delta
+		return true
+	end,
+
+	on_add_fn = function(pow, inst)
+		inst.sg.mem.lightattackdistance = 9
+		inst.sg.mem.lightattackthickness = 1.25
+
+		inst.sg.mem.heavyattackdistance = 9
+		inst.sg.mem.heavyattackthickness = 1.25
+
+		inst.sg.mem.multithrustdistance = 9.3
+		inst.sg.mem.multithrustthickness = 1.25
+	end,
+
+	on_stacks_changed_fn = function(pow, inst)
+		inst.components.combat:SetFocusDamageMult(pow.def.name, pow:GetVar("focus_damage_bonus"))
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.sg.mem.lightattackdistance = nil
+		inst.sg.mem.lightattackthickness = nil
+
+		inst.sg.mem.heavyattackdistance = nil
+		inst.sg.mem.heavyattackthickness = nil
+
+		inst.sg.mem.multithrustdistance = nil
+		inst.sg.mem.multithrustthickness = nil
+	end,
+})
+
+Power.AddEquipmentPower("speed_bonus_after_dodge_cancel",
+{
+	power_category = Power.Categories.SUPPORT,
+	prefabs = { "fx_player_skill_dodge_cancel" },
+	tags = { },
+	stacks_per_usage_level = { 20, 30, 40 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			speed = StackingVariable(1):SetPercentage(),
+			time = PowerVariable(2):SetFlat(),
+		},
+	},
+
+	event_triggers =
+	{
+		["dodge_cancel"] = function(pow, inst, data)
+			powerutil.SpawnFxOnEntity("fx_player_skill_dodge_cancel", inst, { ischild = true, inheritrotation = true })
+
+			inst.components.locomotor:AddSpeedMult(pow.def.name, pow.persistdata:GetVar("speed"))
+			pow:StartPowerTimer(inst)
+			inst:PushEvent("used_power", pow.def)
+		end,
+		["timerdone"] = function(pow, inst, data)
+			if data.name == pow.def.name then
+				inst.components.locomotor:RemoveSpeedMult(pow.def.name)
+			end
+		end,
+	},
+
+	on_remove_fn = function(pow, inst)
+		inst.components.timer:StopTimer(pow.def.name)
+		inst.components.locomotor:RemoveSpeedMult(pow.def.name)
+	end,
+})
+
+local function _hammer_attack_hits_again(pow, inst, attack)
+	local target = attack:GetTarget()
+	local damage_mod = attack:GetDamageMod() * pow.persistdata:GetVar("damage")
+	local dir = attack:GetDir()
+	local hitstun = attack:GetHitstunAnimFrames()
+	local focus = attack:GetFocus()
+	local attacktype = attack:GetID()
+	local hitflags = attack:GetHitFlags()
+
+	local extra_hits = pow.persistdata:GetVar("extra_hits")
+	local delay_between_hits = 7
+
+	for i = 1, extra_hits do
+		inst:DoTaskInAnimFrames(HitStopLevel.HEAVIER + (i * delay_between_hits), function(inst)
+			target = SGCommon.Fns.SanitizeTarget(target)
+
+			if target then
+				local extra_attack = Attack(inst, target)
+				extra_attack:SetDamageMod(damage_mod)
+				extra_attack:SetDir(dir)
+				extra_attack:SetHitstunAnimFrames(hitstun)
+				extra_attack:SetFocus(focus)
+				extra_attack:SetID(attacktype)
+				extra_attack:SetHitFlags(hitflags)
+
+				local hit = inst.components.combat:DoBasicAttack(extra_attack)
+
+				if hit then
+					--unused
+					if pow.mem.num_targets > 0 then
+						pow.mem.num_targets = pow.mem.num_targets - 1
+					end
+
+					local hitfx_x_offset = inst.sg.statemem.hitfx_x_offset or 1.5
+					local hitfx_y_offset = 1.75
+					local target_size = lume.round(target.Physics:GetSize(), 0.1)
+					if target_size < 1.4 then
+						--SMALL
+						hitfx_y_offset = hitfx_y_offset - 0.5
+					elseif target_size >= 1.4 and target_size < 1.8 then
+						--MEDIUM
+						hitfx_y_offset = hitfx_y_offset
+					else
+						--LARGE
+						hitfx_y_offset = hitfx_y_offset + 0.25
+					end
+
+					inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_blunt_extra", target, inst, hitfx_x_offset + 2, hitfx_y_offset + 0, dir, 0)
+					SpawnHurtFx(inst, target, hitfx_x_offset, dir, 0)
+
+				end
+			end
+		end)
+	end
+end
+
+Power.AddEquipmentPower("hammer_charged_golfswing_hits_again",
+{
+	power_category = Power.Categories.DAMAGE,
+	prefabs = { },
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			extra_hits = StackingVariable(1):SetFlat(),
+			damage = PowerVariable(50):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["do_damage"] = function(pow, inst, attack)
+			local attack_id = attack:GetNameID()
+			local valid_attack = ((attack_id == "GOLF_SWING_FULL") and inst.sg.statemem.chargedtier >= 2)
+			-- pow:StartPowerTimer(inst)
+
+			if valid_attack then
+				pow.mem.num_targets = (pow.mem.num_targets or 0) + 1
+				_hammer_attack_hits_again(pow, inst, attack)
+			end
+		end,
+		-- ["timerdone"] = function(pow, inst, data)
+		-- 	if data.name == pow.def.name then
+		-- 		pow.mem.num_targets = 0
+		-- 		print(pow.def.name .. " timer done")
+		-- 	end
+		-- end,
+	},
+})
+
+Power.AddEquipmentPower("hammer_charged_hits_again",
+{
+	power_category = Power.Categories.DAMAGE,
+	prefabs = { },
+	tags = { },
+	stacks_per_usage_level = { 1, 2, 3 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			extra_hits = StackingVariable(1):SetFlat(),
+			damage = PowerVariable(50):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["do_damage"] = function(pow, inst, attack)
+			local attack_id = attack:GetNameID()
+			local valid_attack = ((attack_id == "GOLF_SWING_FULL" or attack_id == "HEAVY_SLAM") and inst.sg.statemem.chargedtier >= 2)
+				or (attack_id == "THUMP_TIER2")
+				or (attack_id == "HEAVY_AIR_SPIN" and inst.sg:GetAnimFramesInState() >= 17) -- TODO use an attack id for this, not frames
+				or (attack_id == "LARIAT" and (inst.sg.mem.heavyspinloops and inst.sg.mem.heavyspinloops > 1))
+
+			if valid_attack then
+
+				local target = attack:GetTarget()
+				local damage_mod = attack:GetDamageMod() * pow.persistdata:GetVar("damage")
+				local dir = attack:GetDir()
+				local hitstun = attack:GetHitstunAnimFrames()
+				local focus = attack:GetFocus()
+				local attacktype = attack:GetID()
+				local hitflags = attack:GetHitFlags()
+
+				local extra_hits = pow.persistdata:GetVar("extra_hits")
+				local delay_between_hits = 5
+				for i=1,extra_hits do
+					inst:DoTaskInAnimFrames(HitStopLevel.HEAVIER + (i * delay_between_hits), function(inst)
+
+						target = SGCommon.Fns.SanitizeTarget(target)
+
+						if target then
+							local extra_attack = Attack(inst, target)
+							extra_attack:SetDamageMod(damage_mod)
+							extra_attack:SetDir(dir)
+							extra_attack:SetHitstunAnimFrames(hitstun)
+							extra_attack:SetFocus(focus)
+							extra_attack:SetID(attacktype)
+							extra_attack:SetHitFlags(hitflags)
+
+							local hit = inst.components.combat:DoBasicAttack(extra_attack)
+
+							if hit then
+								local hitfx_x_offset = inst.sg.statemem.hitfx_x_offset or 1.5
+								local hitfx_y_offset = 1.75
+								local target_size = lume.round(target.Physics:GetSize(), 0.1)
+								if target_size < 1.4 then
+									--SMALL
+									hitfx_y_offset = hitfx_y_offset - 0.5
+								elseif target_size >= 1.4 and target_size < 1.8 then
+									--MEDIUM
+									hitfx_y_offset = hitfx_y_offset
+								else
+									--LARGE
+									hitfx_y_offset = hitfx_y_offset + 0.25
+								end
+
+								inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_blunt", target, inst, hitfx_x_offset, hitfx_y_offset + 1, dir, 0)
+								-- soundutil.PlayCodeSound(inst, fmodtable.Event.Hit_blunt_heavy, { max_count = 1 })
+								SpawnHurtFx(inst, target, hitfx_x_offset, dir, 0)
+							end
+						end
+					end)
+				end
+			end
+		end,
+	},
+})
+
+Power.AddEquipmentPower("shotput_explode_on_land",
+{
+	power_category = Power.Categories.DAMAGE,
+	prefabs = { "player_shotput_land_explosion", "bomb_explosion", "bomb_explosion_ground" },
+	tags = { },
+	stacks_per_usage_level = { 50, 100, 200 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			percent_of_weapondamage = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	event_triggers =
+	{
+		["shotput_landed"] = function(pow, inst, data)
+			local projectile = data.projectile
+			local x,y,z = projectile.Transform:GetWorldPosition()
+
+			local explo = SGCommon.Fns.SpawnAtDist(projectile, "player_shotput_land_explosion", 0)
+			local player = inst.owner
+			soundutil.PlayCodeSound(explo, fmodtable.Event.Skill_Shotput_Land_Explode,
+				{
+					instigator = player,
+					name = "shotput_explode",
+					max_count = 1,
+					is_autostop = false,
+				}
+			)
+
+			explo:Setup( 
+			{
+				owner = inst,
+				source_projectile = projectile,
+				damage_mod = pow.persistdata:GetVar("percent_of_weapondamage"),
+				hitstun_animframes = 10,
+				hitstoplevel = HitStopLevel.HEAVY,
+				pushback = 1.5,
+				attacktype = "power"
+			})
+		end,
+	},
+})
+
+Power.AddEquipmentPower("shotput_rebounds_to_owner",
+{
+	-- Also gives Focus Damage bonus, which goes well with rebounds to owner.
+	power_category = Power.Categories.SUPPORT,
+	prefabs = { },
+	tags = { },
+	stacks_per_usage_level = { 10, 15, 20 },
+	tuning =
+	{
+		[Power.Rarity.COMMON] =
+		{
+			focus_damage_mult = StackingVariable(1):SetPercentage(),
+		},
+	},
+
+	on_add_fn = function(pow, inst)
+		inst.components.combat:SetFocusDamageMult(pow.def.name, pow.persistdata:GetVar("focus_damage_mult"))
+	end,
+
+	on_stacks_changed_fn = function(pow, inst)
+		inst.components.combat:SetFocusDamageMult(pow.def.name, pow.persistdata:GetVar("focus_damage_mult"))
+	end,
+
+	on_remove_fn = function(pow, inst)
+		inst.components.combat:RemoveFocusDamageModifier(pow.def.name)
+	end,
+
+	event_triggers =
+	{
 	},
 })
 

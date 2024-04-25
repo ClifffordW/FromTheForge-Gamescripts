@@ -2,15 +2,11 @@
 return {
   __displayName="ogre_pink_skin_tone_1",
   cosmetic_data={
-    color={ 0.875, 0.3, 1.0,},
+    color={ 0.87450981140137, 0.28185328841209, 0.95752894878387,},
     color_species="ogre",
     colorgroup="SKIN_TONE",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
 }

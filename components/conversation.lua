@@ -4,6 +4,7 @@ local Quest = require "questral.quest"
 local audioid = require "defs.sound.audioid"
 local camerautil = require "util.camerautil"
 local color = require "math.modules.color"
+local curves = require "prefabs.curve_autogen_data"
 local emotion = require "defs.emotion"
 local fmodtable = require "defs.sound.fmodtable"
 local soundutil = require "util.soundutil"
@@ -13,24 +14,7 @@ require "class"
 local CONVERSATION_CAMERA_PARAMETERS =
 {
 	-- Pitch transition parameters
-	curve={ -- The curve of the pitch transition
-		0.0,
-		0,
-		0.14285714924335,
-		0.53733563423157,
-		0.28571429848671,
-		0.81406557559967,
-		0.4285714328289,
-		0.93907302618027,
-		0.57142859697342,
-		0.98554176092148,
-		0.71428573131561,
-		0.99809604883194,
-		0.85714286565781,
-		0.99994051456451,
-		1.0,
-		1.0,
-	},
+	curve = curves.cam_convo_pitch.curve, -- The curve of the pitch transition
 	duration=40, -- How long it takes the pitch transition to complete
 	pitch=17,    -- Destination pitch
 
@@ -92,7 +76,7 @@ local Conversation = Class(function(self, inst)
 		-- will do it automatically if the npc has a valid interaction.
 	end
 
-	self.restart_delay = 1
+	self.restart_delay = 0.1
 end)
 
 function Conversation:OnSave()
@@ -114,8 +98,12 @@ function Conversation:GetPlayer()
 	return self.target
 end
 
-function Conversation:SetFlagAsTemp(is_temp)
-	self.temp_writing = is_temp
+function Conversation:SetNotReadyToTranslate(is_temp)
+	self.is_intentionally_untranslated = is_temp
+end
+
+function Conversation:SetIsMissingTranslation(is_missing)
+	self.is_missing_translation = is_missing
 end
 
 function Conversation:ActivatePrompt(player)
@@ -130,7 +118,10 @@ function Conversation:ActivatePrompt(player)
 
 	self.should_record_line = true
 	self:_ConstructPrompt()
-	self:_RestartConversation(self:GetBestQuest(true))
+
+	local state, quest, node = self:GetBestQuest(true)
+	TheLog.ch.Conversation:print("ActivatePrompt: ", quest)
+	self:_RestartConversation(state, quest, node)
 
 	self.inst:PushEvent("activate_convo_prompt")
 end
@@ -162,7 +153,7 @@ end
 function Conversation:PlayEmote(agent, emote)
 	-- Don't _TryRecordLine here because it's just state on npc and not on UI.
 
-	-- TODO(dbriscoe): Add new locmacro to differentiate between these two?
+	-- TODO(convo): Add new locmacro to differentiate between these two?
 	if emotion.emote[emote] then
 		self.inst:PushEvent("emote", emote)
 
@@ -195,15 +186,17 @@ function Conversation:_SetSpeaker(agent)
 		show_name = false -- Don't show the player's name on speech bubbles
 	elseif agent.inst then
 		self.prompt:SetTarget(agent.inst)
-		name = agent:GetName()
+		name = agent:GetPrettyName()
 	else
 		self.prompt:SetTarget(self.inst)
 		name = self.pretty_name
 		inst = self.inst
 	end
 
-	if self.temp_writing then
-		name = ("%s <#RED>[%s]</>"):format(name, STRINGS.TALK.TITLE_TEMPWRITING)
+	if self.is_missing_translation
+		and not self.is_intentionally_untranslated
+	then
+		name = ("%s <#RED>[%s]</>"):format(name, STRINGS.TALK.TITLE_PENDING_TRANSLATION)
 	end
 
 	local focalpoint = TheFocalPoint.components.focalpoint
@@ -251,13 +244,16 @@ function Conversation:_ShowSpeechBalloon(line, agent)
 	self:_SetSpeaker(agent)
 
 	local cb
-	if self.was_modal then
+	if self.non_interactive_convo then
+		cb = nil
+	elseif self.was_modal then
 		cb = self.ontalk
 	else
 		cb = self.onstartmodal
 	end
 
 	self.prompt:ShowDialogBalloonSpooled(line, self:_GetPersonality(agent), cb, not self.was_modal)
+		:SetIsInteractable(not self.non_interactive_convo)
 	if not self.was_modal then
 		-- Skip spool on attract line so it doesn't cause input delays in
 		-- starting the conversation.
@@ -288,6 +284,14 @@ end
 function Conversation:SetBlocker(val)
 end
 
+function Conversation:ForceNonInteractiveConvo()
+	assert(self.prompt, "How did we call before a prompt?")
+	dbassert(not self.was_modal, "Can't turn off interactivity when past first line of dialogue. Only call when playing a single line.")
+	if not self.was_modal then
+		self.non_interactive_convo = true
+	end
+end
+
 -- TODO(dbriscoe): Remove?
 function Conversation:EndConvo()
 	self:_EndConversation(self.target)
@@ -295,7 +299,7 @@ function Conversation:EndConvo()
 end
 
 function Conversation:OnResumeFromCallback()
-	-- TODO(dbriscoe): This setup allows us to resume conversation after
+	-- TODO(convo): This setup allows us to resume conversation after
 	-- placing or other interruptions, but needs polish.
 	local player = self.convoplayer:GetPlayer()
 	if player then
@@ -325,34 +329,35 @@ function Conversation:PresentOptions(options, header)
 
 	local did_back = false
 	for k, option in ipairs(options) do
-
-		local opt
+		local btn
 		if option.is_back then
 			assert(not did_back, "multiple back buttons!")
-			opt = self.prompt:ShowActionButton(
+			btn = self.prompt:ShowActionButton(
 				"<p img='images/ui_ftf_dialog/convo_end.tex' color=0>",
 				option.txt or STRINGS.TALK.OPT_BACK,
 				function()
 					self.convoplayer:PickOption(k)
-					-- TODO(dbriscoe): Implement going back to the main
+					-- TODO(convo): Implement going back to the main
 					-- conversation loop?
 				end,
 				self.restart_delay,
 				false)
 			did_back = true
 		else
-			opt = self.prompt:ShowActionButton(option.right_text, option.txt, function()
+			btn = self.prompt:ShowActionButton(option.right_text, option.txt, function()
 				self.convoplayer:PickOption(k)
 			end)
 		end
 
 		if not option:IsEnabled() then
-			opt:Disable()
+			local tt = ""
+			for _, tooltip in ipairs(option:GetTooltips()) do
+				tt = tt..tooltip.."\n"
+			end
+			btn:Disable()
+				:SetToolTip(tt)
+				:ShowToolTipOnFocus()
 		end
-
-		--~ if not option:IsEnabled() then
-		--~ 	opt:Disable()
-		--~ end
 
 		--~ --do some checking on the functions available, in case the user is using an esoteric menu button type
 		--~ if opt.MarkWithQuest then
@@ -419,48 +424,65 @@ function Conversation:PresentOptions(options, header)
 	end
 
 	self.prompt:SetModal(true)
-		:ShowNpcName(self.pretty_name)
 		:AnimateIn()
 end
 
 function Conversation:_ClearState()
 	self.was_modal = false
+	self.non_interactive_convo = nil
 end
 
-function Conversation:GetBestQuest(force_convo)
-	local questcentral = self:GetPlayer().components.questcentral
-	local castmanager = TheDungeon.progression.components.castmanager
-	local actor = castmanager:GetNpcNode(self.inst)
-	local qm = questcentral:GetQuestManager()
-	-- TODO(dbriscoe): Confront should trigger the conversation instead of
+function Conversation:EvaluateQuestsForQuestManager(qm, actor)
+	local state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.CONFRONT, actor, self.target)
+
+	-- TODO(convo): Confront should trigger the conversation instead of
 	-- being a higher priority attract.
-	local state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.CONFRONT, actor)
+
 	if not quest then
 		local hook = Quest.CONVO_HOOK.s.CHAT_DUNGEON
 		if TheWorld:HasTag("town") then
 			hook = Quest.CONVO_HOOK.s.CHAT_TOWN
 		end
-		state, quest, node = qm:EvaluateHook(hook, actor)
+		state, quest, node = qm:EvaluateHook(hook, actor, self.target)
 	end
 
 	if not quest and TheWorld:HasTag("town") then
-		state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.CHAT_TOWN_SHOP, actor)
+		state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.CHAT_TOWN_SHOP, actor, self.target)
 	end
 
 	if not quest then
-		state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.ATTRACT, actor)
-	end
-
-	if not quest and force_convo then
-		qm:SpawnQuest("twn_fallback_chat", nil, nil, {
-				giver = actor,
-			})
-		state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.ATTRACT, actor)
+		state, quest, node = qm:EvaluateHook(Quest.CONVO_HOOK.s.ATTRACT, actor, self.target)
 	end
 
 	return state, quest, node
 end
 
+function Conversation:GetBestQuest(force_convo)
+	local castmanager = TheDungeon.progression.components.castmanager
+	local actor = castmanager:GetNpcNode(self.inst)
+
+	local questcentral_world = TheDungeon.progression.components.questcentral
+	local qm_world = questcentral_world:GetQuestManager()
+	local state, quest, node = self:EvaluateQuestsForQuestManager(qm_world, actor)
+
+	if quest then
+		return state, quest, node
+	end
+
+	local questcentral_player = self:GetPlayer().components.questcentral
+	local qm_player = questcentral_player:GetQuestManager()
+
+	state, quest, node = self:EvaluateQuestsForQuestManager(qm_player, actor)
+
+	if not quest and force_convo then
+		qm_player:SpawnQuest("twn_fallback_chat", nil, nil, {
+				giver = actor,
+			})
+		state, quest, node = qm_player:EvaluateHook(Quest.CONVO_HOOK.s.ATTRACT, actor)
+	end
+
+	return state, quest, node
+end
 
 function Conversation:Debug_ForceStartConvo(player, state, quest)
 	self:Debug_ForceEndConvo(player)
@@ -483,7 +505,7 @@ function Conversation:CanStartModalConversation(player)
 	if self.inst.components.timer:HasTimer("talk_cd") then
 		return false, "talk_cd"
 	elseif hud:IsHudSinkingInput() then
-		-- TODO(dbriscoe): Is this check necessary?
+		-- TODO(convo): Is this check necessary?
 		return false, "HUD"
 	elseif hud:GetPromptTarget() then
 		return false, "prompt"
@@ -499,6 +521,15 @@ function Conversation:BeginModalConversation()
 	assert(self.prompt, "Should have hit ActivatePrompt when within range.")
 	assert(self.target)
 
+	if self.non_interactive_convo then
+		-- User interacted with a non interactive convo, so clear us. (We need
+		-- interactable enabled so we can show the speech bubble.)
+		TheLog.ch.Conversation:print("non_interactive_convo: Clearing conversation", self.inst, self.target)
+		self.convoplayer:ClearConvo()
+		self:_EndConversation(self.target)
+		return false
+	end
+
 	self.convoplayer:SetForceWaitAfterLine(false)
 	self.was_modal = true
 	TheLog.ch.Conversation:print("Start conversation", self.inst, self.target)
@@ -508,6 +539,7 @@ function Conversation:BeginModalConversation()
 	self.prompt:Offset(0, CONVERSATION_CAMERA_PARAMETERS.speech_box_z_offset)
 
 	self.prompt:BeginModalConversation(self.ontalk)
+	return true
 end
 
 function Conversation:_AddSecondarySpeaker(inst)
@@ -521,7 +553,7 @@ function Conversation:_RestartConversation(state, quest, node)
 	self:_ClearEmotion()
 	self:_ClearState()
 
-	-- TODO(dbriscoe): Don't allow interaction unless we have a quest.
+	-- TODO(convo): Don't allow interaction unless we have a quest.
 	assert(quest, "Couldn't find a quest! TODO: have fallback 'quest' (quip).")
 	local questcentral = self:GetPlayer().components.questcentral
 	local castmanager = TheDungeon.progression.components.castmanager
@@ -551,7 +583,6 @@ end
 
 function Conversation:_OnTalk(is_modal)
 	assert(self.prompt)
-	-- TODO(dbriscoe): special handle for quips to make it non modal
 
 	if is_modal then
 		self.convoplayer:Advance()
@@ -570,8 +601,8 @@ function Conversation:_EndConversation(player)
 	--print(debugstack())
 	assert(player)
 	assert(self.convoplayer:IsConvoDone(), "How did we end without finishing?")
-	TheLog.ch.Conversation:print("End conversation", self.inst, player)
-	
+	TheLog.ch.Conversation:print("End conversation", self.inst, player, self.convoplayer:GetQuest())
+
 	self:_EndConversationCamera()
 
 	player:PushEvent('conversation', { action = 'end', npc = self.inst, })
@@ -584,7 +615,7 @@ end
 
 function Conversation:TryDeactivatePrompt(player)
 	if player ~= self.target then
-		TheLog.ch.Conversation:print("TryDeactivatePrompt ignored (target not matching)")
+		TheLog.ch.Conversation:print("TryDeactivatePrompt ignored (target not matching)", player, self.target)
 		return
 	end
 	if self.was_modal then
@@ -623,8 +654,9 @@ function Conversation:DeactivatePrompt(player)
 		timer:StartTimer("talk_cd", 1.0)
 	end
 
-	self.inst:PushEvent("deactivate_convo_prompt")
+	TheWorld:PushEvent("refresh_markers", {npc = self.inst, player = player})
 
+	self.inst:PushEvent("deactivate_convo_prompt")
 end
 
 function Conversation:_ClearEmotion()
@@ -632,13 +664,27 @@ function Conversation:_ClearEmotion()
 	self.inst:PushEvent("feeling", self.inst.default_feeling or emotion.feeling.neutral)
 end
 
-function Conversation:_StartConversationCamera()
-	--sound
-	local params = {}
-	params.fmodevent = fmodtable.Event.Snapshot_Interacting_LP
-	self.interactable_snapshot = soundutil.PlayLocalSoundData(self.inst, params)
+function Conversation:StartInteractableSnapshot()
+	self.interactable_snapshot = soundutil.PlayLocalCodeSound(self.inst, fmodtable.Event.Snapshot_Interacting_LP, {
+		max_count = 1,
+		is_autostop = true,
+		}
+	)
 	TheAudio:SetPersistentSoundParameter(audioid.persistent.world_music, "isInteracting", 1)
 	TheAudio:SetPersistentSoundParameter(audioid.persistent.room_music, "isInteracting", 1)
+end
+
+function Conversation:StopInteractableSnapshot()
+	if self.interactable_snapshot then
+		soundutil.KillSound(self.inst, self.interactable_snapshot)
+		self.interactable_snapshot = nil
+	end
+	TheAudio:SetPersistentSoundParameter(audioid.persistent.world_music, "isInteracting", 0)
+	TheAudio:SetPersistentSoundParameter(audioid.persistent.room_music, "isInteracting", 0)
+end
+
+function Conversation:_StartConversationCamera()
+	self:StartInteractableSnapshot()
 
 	-- Explictly focus on main conversation members so other players don't pull
 	-- camera away from text.
@@ -652,6 +698,7 @@ function Conversation:_StartConversationCamera()
 	TheWorld.components.cameralimits:SetEnabled(false)
 
 	-- Pitch
+	camerautil.EnforceValidCurve(CONVERSATION_CAMERA_PARAMETERS.curve)
 	camerautil.BlendPitch(self.inst, CONVERSATION_CAMERA_PARAMETERS)
 
 	-- Letterbox
@@ -668,16 +715,11 @@ function Conversation:_StartConversationCamera()
 	end
 
 	-- Offset to frame the actors
-	TheCamera:SetOffset(0, 0, CONVERSATION_CAMERA_PARAMETERS.camera_z_offset)
+	TheCamera:SetOffset(self, 0, 0, CONVERSATION_CAMERA_PARAMETERS.camera_z_offset)
 end
 
 function Conversation:_EndConversationCamera()
-	if self.interactable_snapshot then
-		soundutil.KillSound(self.inst, self.interactable_snapshot)
-		self.interactable_snapshot = nil
-	end
-	TheAudio:SetPersistentSoundParameter(audioid.persistent.world_music, "isInteracting", 0)
-	TheAudio:SetPersistentSoundParameter(audioid.persistent.room_music, "isInteracting", 0)
+	self:StopInteractableSnapshot()
 	
 	local focalpoint = TheFocalPoint.components.focalpoint
 	focalpoint:ClearExplicitTargets()
@@ -691,7 +733,7 @@ function Conversation:_EndConversationCamera()
 	TheWorld.components.cameralimits:SetEnabled(true)
 
 	-- Pitch
-	local pitch_param = CONVERSATION_CAMERA_PARAMETERS
+	local pitch_param = shallowcopy(CONVERSATION_CAMERA_PARAMETERS)
 	pitch_param.pitch = camerautil.defaults.pitch
 	camerautil.BlendPitch(self.inst, pitch_param)
 
@@ -704,17 +746,12 @@ function Conversation:_EndConversationCamera()
 		end
 	end
 
-	TheCamera:SetOffset(0, 0, 0)
+	TheCamera:ClearOffsetFrom(self)
 end
 
 function Conversation:GetDebugString()
-	local str = [[
-target: %s
-memory: %s
-]]
-	return str:format(self.target, table.inspect(self.persist.memory))
+	local str = "target[%s] memory[%s] convoplayer[%s]"
+	return str:format(self.target, table.inspect(self.persist.memory), self.convoplayer:GetDebugString())
 end
-
-
 
 return Conversation

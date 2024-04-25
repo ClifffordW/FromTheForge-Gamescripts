@@ -58,8 +58,8 @@ function MovieDialog:OnUpdate(dt)
     end
 end
 
-function MovieDialog:OnControl(controls, down)
-    if MovieDialog._base.OnControl(self, controls, down) then
+function MovieDialog:OnControl(controls, down, ...)
+    if MovieDialog._base.OnControl(self, controls, down, ...) then
         return true
     elseif down and controls:Has(Controls.Digital.PAUSE, Controls.Digital.ACCEPT) then
         self:Cancel()

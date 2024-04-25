@@ -2,6 +2,7 @@ local Widget = require "widgets.widget"
 local WishlistCTA = require "widgets.ftf.wishlistcta"
 local Image = require "widgets.image"
 local Text = require "widgets.text"
+local TextButton = require "widgets.textbutton"
 local MenuMultiplayerWidget = require "widgets.ftf.menumultiplayerwidget"
 local MenuOnlineWidget = require "widgets.ftf.menuonlinewidget"
 local DiscordCTA = require"widgets.ftf.discordcta"
@@ -13,6 +14,7 @@ local templates = require "widgets.ftf.templates"
 local audioid = require "defs.sound.audioid"
 local fmodtable = require "defs.sound.fmodtable"
 local easing = require "util.easing"
+local Version = require "savedata.version"
 
 OFFLINE_DIALOG = nil
 
@@ -21,11 +23,13 @@ local IS_STEAM_ENABLED = true -- False if on other platforms without friends lis
 
 local bottom_pad = 60
 
-local MainScreen = Class(Screen, function(self, profile)
+-- If skip_start, then we'll go directly to the choices screen, skipping the
+-- "press play to start" one
+local MainScreen = Class(Screen, function(self, profile, skip_start)
 	Screen._ctor(self, "MainScreen")
-	self:SetAudioEnterOverride(nil)
-		:SetAudioExitOverride(nil)
+	self:SetAudioCategory(Screen.AudioCategory.s.None)
 	self.profile = profile
+	self.skip_start = skip_start or false
 	self:DoInit()
 	self.default_focus = self.play_button
 	assert(self.default_focus)
@@ -104,20 +108,39 @@ function MainScreen:DoInit()
 			:SetHAlign(ANCHOR_MIDDLE)
 	end
 
-
-	-- Flip to playtest logo here.
-	self.game_logo = self:AddChild(Image("images/ui_ftf/logo_demo.tex"))
-		:Offset(0, 398)
+	----------------------------------------------------------------------
+	-- Game logo
+	-- This one moves when the menu transitions
+	self.game_logo_container = self:AddChild(Widget())
+		:SetName("Logo container")
+		:Offset(0, 487.6)
+	-- This is the actual image
+	self.game_logo = self.game_logo_container:AddChild(Image("images/ui_ftf/logo.tex"))
 		:SetScale(1.4)
---	self.game_logo = self:AddChild(Image("images/ui_ftf/logo.tex"))
---		:Offset(0, 487.6)
---		:SetScale(1.4)
 
-	self.game_logo:SetName("Game logo")
-	self.game_logo_x, self.game_logo_start_y = self.game_logo:GetPos() -- On the Play interaction
+	-- Make it float
+	local duration = 2.6
+	local amplitude = 7
+	local widgetX, widgetY = self.game_logo:GetPosition()
+	self.floating_updater = self.game_logo:RunUpdater(
+		Updater.Loop({
+			Updater.Ease(function(v) self.game_logo:SetPosition(widgetX, v) end, widgetY, widgetY + amplitude, duration * 0.8, easing.outQuad),
+			Updater.Wait(duration * 0.2),
+			Updater.Ease(function(v) self.game_logo:SetPosition(widgetX, v) end, widgetY + amplitude, widgetY - amplitude * 1.2, duration * 1.8, easing.inOutQuad),
+			Updater.Wait(duration * 0.1),
+			Updater.Ease(function(v) self.game_logo:SetPosition(widgetX, v) end, widgetY - amplitude * 1.2, widgetY + amplitude * 1.3, duration * 1.6, easing.inOutQuad),
+			Updater.Wait(duration * 0.2),
+			Updater.Ease(function(v) self.game_logo:SetPosition(widgetX, v) end, widgetY + amplitude * 1.3, widgetY - amplitude, duration * 1.7, easing.inOutQuad),
+			Updater.Wait(duration * 0.1),
+			Updater.Ease(function(v) self.game_logo:SetPosition(widgetX, v) end, widgetY - amplitude, widgetY, duration * 0.8, easing.inQuad),
+		})
+	)
+
+	self.game_logo_container:SetName("Game logo")
+	self.game_logo_x, self.game_logo_start_y = self.game_logo_container:GetPos() -- On the Play interaction
 	self.game_logo_end_y = self.game_logo_start_y + 100 -- On the other interactions
 
-	if LOC.IsLocalized() then
+	if TheGameContent:GetContentDB():HasTranslationApplied() then
 		self.loc_disclaimer = self.warning_stack:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
 			:SetText(STRINGS.UI.MAINSCREEN.TRANSLATION_WIP)
 			:SetHAlign(ANCHOR_MIDDLE)
@@ -141,12 +164,6 @@ function MainScreen:DoInit()
 		:SetOnClick(function() self:OnClickOptions() end)
 		:SetMultColorAlpha(0)
 		:Hide()
-	self.multiplayer_back_button = self.left_corner_btns:AddChild(templates.Button(STRINGS.UI.MAINSCREEN.BACK))
-		:SetSecondary()
-		:ResizeToFit(90)
-		:SetOnClick(function() self:OnClickMultiplayerBack() end)
-		:SetMultColorAlpha(0)
-		:Hide()
 	self.online_back_button = self.left_corner_btns:AddChild(templates.Button(STRINGS.UI.MAINSCREEN.BACK))
 		:SetSecondary()
 		:ResizeToFit(90)
@@ -162,7 +179,14 @@ function MainScreen:DoInit()
 		:SetName("Right corner buttons")
 
 	self.discord_cta = self.right_corner_btns:AddChild(DiscordCTA())
-	self.wishlist_btn = self:AddChild(WishlistCTA()) -- DEMO!
+
+	if RELEASE_CHANNEL == "demo"
+		or not TheSim:GetUserHasLicenseForApp(APPID.ROTWOOD)
+	then
+		self.wishlist_btn = self:AddChild(WishlistCTA())
+			:LayoutBounds("right", "below", self.updatename)
+			:Offset(0, -20)
+	end
 
 	self:LayoutRightCornerButtons()
 
@@ -192,24 +216,21 @@ function MainScreen:DoInit()
 	self.interaction_online = self.interactions_container:AddChild(MenuOnlineWidget())
 		:SetName("Interaction - Online")
 		:ShowSteamFriends(IS_STEAM_ENABLED)
+		:ShowUserGroupsFriends(IS_STEAM_ENABLED)
 		:Hide()
 	----------------------------------------------------------------------
 	----------------------------------------------------------------------
 
-	self.play_button = self.interaction_play:AddChild(templates.Button(STRINGS.UI.MAINSCREEN.PLAY))
-		:SetPrimary()
+	self.play_button = self.interaction_play:AddChild(TextButton())
+		:SetText(STRINGS.UI.MAINSCREEN.PLAY)
+		:SetTextSize(FONTSIZE.SCREEN_SUBTITLE * 0.8)
+		:SetTextColour(UICOLORS.LIGHT_TEXT_TITLE)
+		:SetTextFocusColour(UICOLORS.LIGHT_TEXT_TITLE)
 		:SetOnClick(function()
 			self.play_button:Disable()
 			self:OnPlayButton()
 		end)
-	local online_label = TheSim:GetOnlineEnabled() and STRINGS.UI.MAINSCREEN.ONLINE_PLAY_INFO or STRINGS.UI.MAINSCREEN.ONLINE_INACTIVE_INFO
-	self.online_play_info_label = self.interaction_play:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TEXT))
-		:SetGlyphColor(UICOLORS.LIGHT_BACKGROUNDS_DARK)
-		:SetHAlign(ANCHOR_MIDDLE)
-		:SetAutoSize(900)
-		:SetText(online_label)
-		:LayoutBounds("center", "below", self.play_button)
-		:Offset(0, -30)
+		:Offset(0, -40)
 
 	self.dbg_btn_root = self:AddChild(Widget())
 	self.dbg_btn_root.uitest = self.dbg_btn_root:AddChild(templates.Button("<p img='images/icons_ftf/menu_search.tex' scale=1 color=0> UI Assets"))
@@ -239,20 +260,61 @@ function MainScreen:DoInit()
 		:SetScale(.75)
 		:SetNormalScale(.75)
 		:SetFocusScale(.8)
+
+	local function _get_active_town_name_str()
+		local name = TheSaveSystem:GetSaveSlotName(TheSaveSystem:GetActiveSaveSlot())
+		return ("<p img='images/icons_ftf/build_buildings.tex' scale=1 color=0> %s"):format(name)
+	end
+
+	self.dbg_btn_root.townslot = self.dbg_btn_root:AddChild(templates.Button(_get_active_town_name_str()))
+		:SetDebug()
+		:SetOnClick(function()
+			local TownSelectionScreen = require "screens.town.townselectionscreen"
+			local screen = TownSelectionScreen()
+
+			screen:SetCloseCallback(function()
+				self.dbg_btn_root.townslot:SetText(_get_active_town_name_str())
+			end)
+
+			TheFrontEnd:PushScreen(screen)
+		end)
+		:SetScale(.75)
+		:SetNormalScale(.75)
+		:SetFocusScale(.8)
+
 	self.dbg_btn_root.resetSave = self.dbg_btn_root:AddChild(templates.Button("Reset Save Data"))
 		:SetDebug() -- User-facing version is in options.
 		:SetToolTip("Production button to clear save data is in options.")
 		:SetOnClick(function()
-			print("Resetting character, world, everything save data...")
-			TheSaveSystem.about_players:SetValue("last_selected_slot", nil)
-			TheSaveSystem:EraseAll(function(success)
-				if success then
-					print("Reset complete.")
-				else
-					print("Reset failed.")
-				end
-				c_reset()
-			end)
+			local function delete_all_saves()
+				print("Resetting character, world, everything save data...")
+				TheSaveSystem:EraseAll(function(success)
+					if success then
+						print("Reset complete.")
+					else
+						print("Reset failed.")
+					end
+					c_reset()
+				end)
+			end
+
+			local function cancel()
+				TheFrontEnd:PopScreen() -- confirmation message box
+			end
+
+			local confirmation = ConfirmDialog(self:GetOwningPlayer(), nil, true,
+				"Delete ALL Save Slots?",
+				"This will delete EVERY save slot.",
+				"If you wish to delete a single save slot, do it in the slot selection screen."
+			)
+			:SetYesButton(STRINGS.CHARACTER_SELECTOR.DELETE_CONFIRM, delete_all_saves)
+			:SetNoButton(STRINGS.CHARACTER_SELECTOR.DELETE_CANCEL, cancel)
+			:HideArrow()
+			:SetMinWidth(600)
+			:CenterText()
+			:CenterButtons()
+
+			TheFrontEnd:PushScreen(confirmation)
 		end)
 		:SetScale(.75)
 		:SetNormalScale(.75)
@@ -280,10 +342,6 @@ function MainScreen:DoInit()
 	-- 	:SetScale(.75)
 	-- 	:SetNormalScale(.75)
 	-- 	:SetFocusScale(.8)
-
-	-- if not TheSaveSystem.about_players:GetValue("last_selected_slot") then
-	-- 	self.dbg_quickplay:Disable()
-	-- end
 
 	self.dbg_startdailyrun = self.dbg_play_root:AddChild(templates.Button("Start Daily Run"))
 		:SetDebug()
@@ -366,7 +424,6 @@ function MainScreen:DoInit()
 	for _, value in pairs(audioid.persistent) do
 		TheAudio:StopPersistentSound(value)
 	end
-	TheAudio:PlayPersistentSound(audioid.persistent.ui_music, fmodtable.Event.mus_TitleScreen_LP)
 
 end
 
@@ -377,8 +434,6 @@ MainScreen.CONTROL_MAP =
 		fn = function(self)
 			if self.online_back_button:IsShown() then
 				self.online_back_button:Click()
-			elseif self.multiplayer_back_button:IsShown() then
-				self.multiplayer_back_button:Click()
 			elseif self.exit_button:IsShown() then
 				self.exit_button:Click()
 			end
@@ -402,10 +457,6 @@ function MainScreen:LayoutRightCornerButtons()
 	self.right_corner_btns:LayoutChildrenInRow(20)
 	self.right_corner_btns:LayoutBounds("right", "bottom", self)
 		:Offset(-bottom_pad, bottom_pad)
-	-- Not part of right_corner_btns because it doesn't display at the same time as discord.
-	self.wishlist_btn
-		:LayoutBounds("right", "bottom", self)
-		:Offset(-bottom_pad, bottom_pad)
 end
 
 function MainScreen:OnPlayButton()
@@ -413,7 +464,14 @@ function MainScreen:OnPlayButton()
 	self:_AnimateInInteractionMultiplayer()
 	TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_overlay_enter)
 	-- TheAudio:StartFMODSnapshot(fmodtable.Snapshot.Dim_TitleScreen_Music)
-	self.wishlist_btn:AnimateOut()
+end
+
+function MainScreen:HandleControlUp(control)
+	if self.interaction_play:IsShown() then
+		self.play_button:Disable()
+		self:OnPlayButton()
+	end
+	return false
 end
 
 function MainScreen:OnClickSinglePlayer(device_type, device_id)
@@ -438,11 +496,6 @@ function MainScreen:OnClickOptions()
 	return self
 end
 
-function MainScreen:OnClickMultiplayerBack()
-	self:_AnimateInInteractionPlay()
-	return self
-end
-
 function MainScreen:OnClickOnlineBack()
 	self:_AnimateInInteractionMultiplayer()
 	return self
@@ -451,18 +504,13 @@ end
 function MainScreen:Quit()
 	local confirmation = nil
 
-	confirmation = ConfirmDialog(nil, self.exit_button, true,
+	confirmation = ConfirmDialog(self:GetOwningPlayer(), self.exit_button, true,
 		STRINGS.UI.MAINSCREEN.ASKQUIT,
 		STRINGS.UI.MAINSCREEN.ASKQUITSUBTITLE,
 		STRINGS.UI.MAINSCREEN.ASKQUITDESC)
-		:SetYesButtonText(STRINGS.UI.MAINSCREEN.YES)
-		:SetNoButtonText(STRINGS.UI.MAINSCREEN.NO)
-		:SetOnDoneFn(function(accepted)
-			if accepted then
-				RequestShutdown()
-			else
-				TheFrontEnd:PopScreen(confirmation)
-			end
+		:SetYesButton(STRINGS.UI.MAINSCREEN.YES, RequestShutdown)
+		:SetNoButton(STRINGS.UI.MAINSCREEN.NO, function()
+			TheFrontEnd:PopScreen(confirmation)
 		end)
 		:SetArrowXOffset(20) -- extra right shift looks more centred
 		:SetAnchorOffset(380, 0)
@@ -482,9 +530,14 @@ function MainScreen:OnOpen()
 	TheAudio:PlayPersistentSound(audioid.persistent.ui_music, fmodtable.Event.mus_TitleScreen_LP)
 
 	-- Show first interaction
-	self:_AnimateInInteractionPlay()
+	if self.skip_start then
+		self:_AnimateInInteractionMultiplayer()
+	else
+		self:_AnimateInInteractionPlay()
+	end
 
 	self:FocusTest_ValidateSaveFiles()
+	TheSaveSystem.can_prompt_for_save_deletion = false
 
 	-- Display offline popup when data collection is disabled
 	if RUN_GLOBAL_INIT then
@@ -494,7 +547,7 @@ function MainScreen:OnOpen()
 					STRINGS.UI.DATACOLLECTION.LOGIN.SEE_OPTIONS
 				},
 				"\n\n")
-			local dialog = ConfirmDialog(nil, nil, true, STRINGS.UI.DATACOLLECTION.LOGIN.TITLE, nil, body)
+			local dialog = ConfirmDialog(self:GetOwningPlayer(), nil, true, STRINGS.UI.DATACOLLECTION.LOGIN.TITLE, nil, body)
 			dialog
 				:SetYesButton(STRINGS.UI.DATACOLLECTION.LOGIN.CONTINUE,
 					function()
@@ -513,46 +566,61 @@ function MainScreen:OnOpen()
 end
 
 function MainScreen:FocusTest_ValidateSaveFiles()
-	local version = TheSaveSystem.progress:GetValue("global_version")
-	TheLog.ch.SaveLoad:printf("Loaded global_version %s and expected version %s.", version, TheSaveSystem.progress.GLOBAL_VERSION)
-	-- Require exact match because there's no migration support here.
-	if version ~= TheSaveSystem.progress.GLOBAL_VERSION then
-		local confirmation = ConfirmDialog(nil, nil, true,
-			STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ASK_ERASE.TITLE,
-			nil,
-			STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ASK_ERASE.BODY)
+	TheLog.ch.SaveLoad:printf("Expected version %s.", Version.Effective())
 
-		confirmation:SetYesButtonText(STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ASK_ERASE.CONFIRM)
-			:HideNoButton()
-			:HideArrow()
-			:CenterText()
-			:CenterButtons()
-			:SetWideButtons()
-			:SetOnDoneFn(function()
-				TheLog.ch.SaveLoad:print("Player selected wipe saves due to global_version mismatch.")
-				TheSaveSystem:EraseAll(function()
-					TheFrontEnd:PopScreen(confirmation)
+	local delete_saves = TheSaveSystem.bad_save_data
 
-					local ok_popup = ConfirmDialog(nil, nil, true,
-						STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ERASE_COMPLETE.TITLE,
-						nil,
-						STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ERASE_COMPLETE.BODY)
+	-- Be sure to not retain this state now that we have addressed it.
+	TheSaveSystem.bad_save_data = false
 
-					ok_popup:SetYesButtonText(STRINGS.UI.BUTTONS.OK)
-						:HideNoButton()
-						:HideArrow()
-						:CenterText()
-						:CenterButtons()
-						:SetOnDoneFn(function()
-							TheFrontEnd:PopScreen(ok_popup)
-							-- Restart to ensure clean save data startup.
-							RestartToMainMenu()
-						end)
-					TheFrontEnd:PushScreen(ok_popup)
-				end)
-		end)
-		TheFrontEnd:PushScreen(confirmation)
+	-- NEVER delete save games in release builds.
+	if not DEV_MODE then
+		return
 	end
+
+	if not delete_saves then
+		return
+	end
+
+	local confirmation = ConfirmDialog(
+		self:GetOwningPlayer(),
+		nil,
+		true,
+		STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ASK_ERASE.TITLE,
+		nil,
+		STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ASK_ERASE.BODY
+	)
+
+	confirmation:SetYesButtonText(STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ASK_ERASE.CONFIRM)
+		:HideNoButton()
+		:HideArrow()
+		:CenterText()
+		:CenterButtons()
+		:SetWideButtons()
+		:SetOnDoneFn(function()
+			TheLog.ch.SaveLoad:print("Player selected wipe saves due to save data version mismatch.")
+			TheSaveSystem:EraseAll(function()
+				TheFrontEnd:PopScreen(confirmation)
+
+				local ok_popup = ConfirmDialog(self:GetOwningPlayer(), nil, true,
+					STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ERASE_COMPLETE.TITLE,
+					nil,
+					STRINGS.UI.MAINSCREEN.INCOMPATIBLE_SAVE.ERASE_COMPLETE.BODY)
+
+				ok_popup:SetYesButtonText(STRINGS.UI.BUTTONS.OK)
+					:HideNoButton()
+					:HideArrow()
+					:CenterText()
+					:CenterButtons()
+					:SetOnDoneFn(function()
+						TheFrontEnd:PopScreen(ok_popup)
+						-- Restart to ensure clean save data startup.
+						RestartToMainMenu()
+					end)
+				TheFrontEnd:PushScreen(ok_popup)
+			end)
+	end)
+	TheFrontEnd:PushScreen(confirmation)
 end
 
 function MainScreen:OnBecomeActive()
@@ -570,15 +638,10 @@ function MainScreen:_AnimateInInteractionPlay()
 	self.discord_cta:Hide()
 
 	-- Prepare corner buttons for animation
-	self.exit_button:SetMultColorAlpha(0):Show()
-	self.options_button:SetMultColorAlpha(0):Show()
-	self.multiplayer_back_button:Hide()
+	self.exit_button:Hide()
+	self.options_button:Hide()
 	self.online_back_button:Hide()
 	self:LayoutLeftCornerButtons()
-	local exit_button_x, exit_button_y = self.exit_button:GetPos()
-	local options_button_x, options_button_y = self.options_button:GetPos()
-
-	self.wishlist_btn:AnimateIn()
 
 	-- Animate stuff in
 	self:RunUpdater(Updater.Parallel{
@@ -590,21 +653,63 @@ function MainScreen:_AnimateInInteractionPlay()
 			-- Update default_focus
 			self.default_focus = self.play_button
 			-- Ensure it has focus when you back out of Play.
-			self.default_focus:SetFocus()
-			-- Unlike most screens, we likely appear before the user has
-			-- touched the gamepad. So turn on brackets for all inputs if
-			-- there's a gamepad connected (even if not in use).
-			if TheInput:HasAnyConnectedGamepads() then
-				self:EnableFocusBracketsForGamepadAndMouse()
-			else
-				self:EnableFocusBracketsForGamepad()
-			end
+			self:SetDefaultFocus()
 		end),
 
-		Updater.Ease(function(y) self.game_logo:SetPos(self.game_logo_x, y) end, self.game_logo.y, self.game_logo_start_y, 0.9, easing.outElasticUI),
+		Updater.Ease(function(y) self.game_logo_container:SetPos(self.game_logo_x, y) end, self.game_logo_container.y, self.game_logo_start_y, 0.9, easing.outElasticUI),
 
 		Updater.Ease(function(a) self.play_button:SetMultColorAlpha(a) end, 0, 1, 0.25, easing.outQuad),
 		Updater.Ease(function(y) self.play_button:SetPos(0, y) end, -50, 0, 0.75, easing.outElasticUI),
+
+	})
+
+	return self
+end
+
+function MainScreen:_AnimateInInteractionMultiplayer()
+
+	-- Hide things that aren't visible
+	self.discord_cta:Hide()
+	self.interaction_play:Hide()
+	self.interaction_multiplayer:Hide()
+	self.interaction_online:Hide()
+
+	-- Prepare corner buttons for animation
+	self.exit_button:SetMultColorAlpha(0):Show()
+	self.options_button:SetMultColorAlpha(0):Show()
+	self.online_back_button:Hide()
+	self:LayoutLeftCornerButtons()
+	local exit_button_x, exit_button_y = self.exit_button:GetPos()
+	local options_button_x, options_button_y = self.options_button:GetPos()
+
+	-- Check if there is network
+	if IS_ONLINE_ENABLED and TheNet:IsLoggedOn() then
+		self.interaction_multiplayer:SetOnline(true)
+			:SetOnMultiplayerFn(function() self:_AnimateInInteractionOnline() end)
+	else
+		self.interaction_multiplayer:SetOnline(false)
+			:SetOnMultiplayerFn(function() self.interaction_multiplayer:ShowOfflineError() end)
+	end
+
+	-- Animate stuff in
+	self:RunUpdater(Updater.Parallel{
+		Updater.Do(function()
+			self.interaction_multiplayer:Show()
+				:LayoutBounds("center", "center", 0, self.interactions_container.y)
+				:AnimateIn()
+
+			-- Update default_focus
+			self.default_focus = self.interaction_multiplayer.default_focus
+			self:SetDefaultFocus()
+			self:_UpdateSelectionBrackets(self.default_focus)
+
+			self:EnableFocusBracketsForGamepad()
+
+		end),
+
+		Updater.Ease(function(y) self.game_logo_container:SetPos(self.game_logo_x, y) end, self.game_logo_container.y, self.game_logo_end_y, 0.9, easing.outElasticUI),
+
+		Updater.Ease(function(a) self.overlay:SetMultColorAlpha(a) end, self.overlay:GetMultColorAlpha(), 0.85, 0.45, easing.outQuad),
 
 		Updater.Series{
 			Updater.Wait(0.25),
@@ -625,62 +730,6 @@ function MainScreen:_AnimateInInteractionPlay()
 
 	})
 
-	return self
-end
-
-function MainScreen:_AnimateInInteractionMultiplayer()
-
-	-- Hide things that aren't visible
-	self.discord_cta:Hide()
-	self.interaction_play:Hide()
-	self.interaction_multiplayer:Hide()
-	self.interaction_online:Hide()
-
-	-- Prepare corner buttons for animation
-	self.exit_button:Hide()
-	self.options_button:Hide()
-	self.multiplayer_back_button:SetMultColorAlpha(0):Show()
-	self.online_back_button:Hide()
-	self:LayoutLeftCornerButtons()
-	local multiplayer_back_button_x, multiplayer_back_button_y = self.multiplayer_back_button:GetPos()
-
-	-- Check if there is network
-	if IS_ONLINE_ENABLED and TheNet:IsLoggedOn() then
-		self.interaction_multiplayer:SetOnline(true)
-			:SetOnMultiplayerFn(function() self:_AnimateInInteractionOnline() end)
-	else
-		self.interaction_multiplayer:SetOnline(false)
-			:SetOnMultiplayerFn(function() self.interaction_multiplayer:ShowOfflineError() end)
-	end
-
-	-- Animate stuff in
-	self:RunUpdater(Updater.Parallel{
-		Updater.Do(function()
-			self.interaction_multiplayer:Show()
-				:LayoutBounds("center", "center", 0, self.interactions_container.y)
-				:AnimateIn()
-
-			-- Update default_focus
-			self.default_focus = self.interaction_multiplayer.default_focus
-			self.default_focus:SetFocus()
-			self:_UpdateSelectionBrackets(self.default_focus)
-		end),
-
-		Updater.Ease(function(y) self.game_logo:SetPos(self.game_logo_x, y) end, self.game_logo.y, self.game_logo_end_y, 0.9, easing.outElasticUI),
-
-		Updater.Ease(function(a) self.overlay:SetMultColorAlpha(a) end, self.overlay:GetMultColorAlpha(), 0.85, 0.45, easing.outQuad),
-
-		Updater.Series{
-			Updater.Wait(0.25),
-			Updater.Parallel{
-				-- Back button
-				Updater.Ease(function(a) self.multiplayer_back_button:SetMultColorAlpha(a) end, 0, 1, 0.25, easing.outQuad),
-				Updater.Ease(function(y) self.multiplayer_back_button:SetPos(multiplayer_back_button_x, y) end, multiplayer_back_button_y-40, multiplayer_back_button_y, 0.75, easing.outElasticUI),
-			},
-		}
-
-	})
-
 
 	return self
 end
@@ -695,7 +744,6 @@ function MainScreen:_AnimateInInteractionOnline()
 	-- Prepare corner buttons for animation
 	self.exit_button:Hide()
 	self.options_button:Hide()
-	self.multiplayer_back_button:Hide()
 	self.online_back_button:SetMultColorAlpha(0):Show()
 	self:LayoutLeftCornerButtons()
 	local online_back_button_x, online_back_button_y = self.online_back_button:GetPos()
@@ -708,11 +756,11 @@ function MainScreen:_AnimateInInteractionOnline()
 
 			-- Update default_focus
 			self.default_focus = self.interaction_online.default_focus
-			self.default_focus:SetFocus()
+			self:SetDefaultFocus()
 			self:_UpdateSelectionBrackets(self.default_focus)
 		end),
 
-		Updater.Ease(function(y) self.game_logo:SetPos(self.game_logo_x, y) end, self.game_logo.y, self.game_logo_end_y, 0.9, easing.outElasticUI),
+		Updater.Ease(function(y) self.game_logo_container:SetPos(self.game_logo_x, y) end, self.game_logo_container.y, self.game_logo_end_y, 0.9, easing.outElasticUI),
 
 		Updater.Ease(function(a) self.overlay:SetMultColorAlpha(a) end, self.overlay:GetMultColorAlpha(), 0.85, 0.45, easing.outQuad),
 
@@ -729,15 +777,6 @@ function MainScreen:_AnimateInInteractionOnline()
 	})
 
 	return self
-end
-
-function MainScreen:OnUpdate(dt)
-	if IS_ONLINE_ENABLED then
-		self.online_play_info_label:Show()
-			:SetText(TheNet:IsLoggedOn() and STRINGS.UI.MAINSCREEN.ONLINE_PLAY_INFO or STRINGS.UI.MAINSCREEN.ONLINE_INACTIVE_INFO)
-	else
-		self.online_play_info_label:Hide()
-	end
 end
 
 return MainScreen

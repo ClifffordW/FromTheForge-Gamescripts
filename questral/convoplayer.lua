@@ -1,17 +1,12 @@
+local Agent = require "questral.agent"
+local ConvoOption = require "questral.convooption"
 local Coro = require "util.coro"
 local DialogParser = require "questral.util.dialogparser"
-local StringFormatter = require "questral.util.stringformatter"
+local crashutil = require "util.crashutil"
 local fmodtable = require "defs.sound.fmodtable"
 local kassert = require "util.kassert"
+local kstring = require "util.kstring"
 local loc = require "questral.util.loc"
-local lume = require "util.lume"
-local Agent = require "questral.agent"
---~ local AgentUtil = require "questral.agentutil"
---~ local qconstants = require "questral.questralconstants"
---~ local CmpRelationships = require "sim.components.agent.cmprelationships"
-local ConvoOption = require "questral.convooption"
-
---~ local SystemMapScreen = require "ui.screens.systemmapscreen"
 
 --------------------------------------------------------------------------------
 
@@ -21,7 +16,7 @@ local ConvoOption = require "questral.convooption"
 local ConvoPlayer = Class(function(self, ...) self:init(...) end)
 ConvoPlayer:add_mixin( require "questral.contentnode" )
 
-local ANIM, IMG, LOC = require("questral.util.contentutil").anim_img_loc()
+local ANIM, IMG = require("questral.util.contentutil").anim_img_fns()
 
 ConvoPlayer:AddStrings{
     TALKING_TO = "Talking to {1.ui}",
@@ -30,9 +25,24 @@ ConvoPlayer:AddStrings{
 function ConvoPlayer:init(conversation)
     self.screen = conversation
     self.sim = nil
-    --~ self.scenario = conversation:GetCurrentScenario()
     self.memory = {} -- user key-value pairs; unlike scratch, memory is accessible/persistent for the entire convo.
     self.picked_options = {}
+    -- Give context from our tostring when we're printed from crash fullstacks.
+    self.debug__current_convo = crashutil.FwdToString(self)
+end
+
+function ConvoPlayer:__tostring()
+    local convo = self.cxt_stack and self:GetCurrentConvo()
+    local id = convo and convo.id or "<inactive>"
+    return string.format("ConvoPlayer[c=%s %s]", id, kstring.raw(self))
+end
+
+function ConvoPlayer:GetDebugString()
+    local txt = "%s, IsWaitingForAdvance[%s] IsWaitingForCallback[%s]"
+    return txt:format(
+        self,
+        self:IsWaitingForAdvance(),
+        self:IsWaitingForCallback())
 end
 
 function ConvoPlayer:IsPlaying()
@@ -78,10 +88,6 @@ function ConvoPlayer:GetMemory()
     return self.memory
 end
 
---~ function ConvoPlayer:GetScenario()
---~     return self.scenario
---~ end
-
 function ConvoPlayer:_GetPlayedStrings()
     for k = #self.cxt_stack, 1, -1 do
         if self.cxt_stack[k].played_strings then
@@ -92,20 +98,26 @@ function ConvoPlayer:_GetPlayedStrings()
 end
 
 function ConvoPlayer:_GetFormatter()
-    local formatter = StringFormatter()
-    if self.quest then
-        self.quest:FillFormatter( formatter )
-    end
+    local formatter = self.sim:CreateQuipFormatter(self.quest)
     formatter:AddLookupTable(self:GetScratch())
-    local is_agent = self.current_speaker and Agent.is_instance(self.current_speaker)
-    formatter:SetSpeaker(is_agent and self.current_speaker) -- when is speaker not an agent?
-    formatter:AddLookup( "player", self:GetPlayer() )
-    formatter:AddLookup( "agent", self.primary_entity )
+    if self.current_speaker then
+        formatter:SetSpeaker( self.current_speaker )
+    end
+    formatter:AddLookup("agent", self.primary_entity)
     return formatter
 end
 
 function ConvoPlayer:_PushContext(state, quest, scratch, played_strings, string_lookup)
-    table.insert(self.cxt_stack, {state = state, quest = quest, scratch = scratch or {}, played_strings = played_strings, string_lookup = string_lookup })
+    scratch = scratch or {}
+    table.insert(self.cxt_stack, {
+            state = state,
+            quest = quest,
+            scratch = scratch,
+            played_strings = played_strings,
+            string_lookup = string_lookup,
+            option_start = #self.current_options + 1,
+        })
+    self.quest = quest
 end
 
 function ConvoPlayer:_PopContext()
@@ -116,11 +128,12 @@ end
 function ConvoPlayer:_ConvoCoro(quest, state, speaker, on_done)
     self.convo_done = false
     self.cxt_stack = {}
+    self.current_options = {}
 
     self:_PushContext(state, quest)
 
+    self.picked_options = {}
     self.played_strings = {}
-    self.current_options = {}
     self.line_just_played = false
     self.wait_for_advance = false
     self.done = nil
@@ -138,6 +151,17 @@ function ConvoPlayer:_ConvoCoro(quest, state, speaker, on_done)
         self:WaitForAdvance()
     end
 
+    if TheWorld:HasTag("town")
+        -- if the convo completes the quest it is possible for the quest to not have a quest manager
+        and quest:GetQuestManager()
+        and not quest:GetQuestManager().used_cheats_to_compromise_quest_state
+    then
+        -- If you're in the town, save player and quest state at the end of
+        -- each convo. We don't save the world because serializing out
+        -- everything is slow enough to cause a visible hitch.
+        TheSaveSystem:SaveAllExcludingRoom()
+    end
+
     self.convo_coro = nil
     self.skipping = nil
 
@@ -149,10 +173,6 @@ function ConvoPlayer:_ConvoCoro(quest, state, speaker, on_done)
         on_done( )
     end
 
-    if TheWorld:HasTag("town") then
-        -- If you're in the town, save world and quest state at the end of each convo.
-        TheSaveSystem:SaveAll()
-    end
 end
 
 function ConvoPlayer:IsConvoDone()
@@ -171,9 +191,7 @@ function ConvoPlayer:_InjectOption(state, quest, ...)
     self:_PushContext(state, quest)
 
     self.injection = true
-    self.quest = self:GetQuest()
     state.fn(self, ...)
-    self.quest = nil
     self.injection = false
 
     self:_PopContext()
@@ -264,11 +282,58 @@ function ConvoPlayer:Talk(id, ...)
     self:WaitForAdvance()
     assert(not self.injection, "No dialog allowed in hubs.")
 
-    local txt, remember_id = self:GetString(id, ...)
+    local txt, remember_id, missing_translation = self:GetString(id, ...)
     if remember_id then
         self:_GetPlayedStrings()[remember_id] = true
     end
+    self.screen:SetIsMissingTranslation(missing_translation)
     self:_PlayDialog(txt or loc.format( "MISSING STRING: {1}", id))
+end
+
+--select a quip, but don't execute it yet
+function ConvoPlayer:SelectQuip( speaker, tags )
+    self:WaitForAdvance()
+    local original_speaker = self.current_speaker
+
+    if type(speaker) == "string" then
+        speaker = self.quest:GetCastMember(speaker)
+    end
+
+    assert( Agent.is_instance(speaker))
+    assert( type(tags) == "table" )
+
+    self:SetCurrentSpeaker( speaker )
+    local qscript, match = self:_LookupQuip( tags )
+    self:SetCurrentSpeaker( original_speaker ) -- Quips can never change the original speaker.
+    return match.quip, qscript, match.string_id
+end
+
+-- Execute the "qscript" returned from SelectQuip.
+function ConvoPlayer:ExecuteScript(quip, qscript, string_id)
+    -- TODO(quest): Why is this before _PlayDialog here, but after it in Quip?
+    -- Could that affect how nested quips are selected?
+    if self:GetPlayer() then
+        quip:MarkAsRead(self:GetPlayer().inst)
+    end
+
+    if string_id then
+        local txt, remember_id, missing_translation = self:GetString(string_id)
+        if remember_id then
+            self:_GetPlayedStrings()[remember_id] = true
+        end
+        self.screen:SetIsMissingTranslation(missing_translation)
+    end
+
+    self:WaitForAdvance()
+    do
+        if qscript then
+            self:_PlayDialog( qscript )
+        else
+            TheLog.ch.Quest:print("WARNING: No quip found", self.current_speaker)
+            -- Otherwise we'll crash later because we're stuck waiting for dialogue that will never come.
+            error(("Always provide a fallback quip with one or zero tags. Missing on speaker '%s'."):format(self.current_speaker))
+        end
+    end
 end
 
 function ConvoPlayer:Quip( speaker, tags )
@@ -283,8 +348,8 @@ function ConvoPlayer:Quip( speaker, tags )
     assert( type(tags) == "table" )
 
     self:SetCurrentSpeaker( speaker )
+    local qscript, match = self:_LookupQuip( tags )
     do
-        local qscript = self:_LookupQuip( tags )
         if qscript then
             self:_PlayDialog( qscript )
         else
@@ -294,24 +359,39 @@ function ConvoPlayer:Quip( speaker, tags )
         end
     end
     self:SetCurrentSpeaker( original_speaker ) -- Quips can never change the original speaker.
+
+    if self:GetPlayer() then
+        match.quip:MarkAsRead(self:GetPlayer().inst)
+    end
+
+    return match.quip
+end
+
+-- Only call after playing one line of text! No interaction means player cannot
+-- advance to next line.
+-- Use sparingly because removing interactivity could put player in a bad state.
+function ConvoPlayer:ForceNonInteractiveConvo()
+    self.screen:ForceNonInteractiveConvo()
 end
 
 -- Retrieve a localized string from id. Quest content shouldn't call GetString.
 function ConvoPlayer:GetString(id, ...)
     local lookup = self:_GetContext().string_lookup
-    local full_id, txt
+    local full_id, txt, missing_translation
 
     if lookup and lookup:TryLOC( id ) then
         full_id = id
-        txt = lookup:LOC( id )
+        txt, missing_translation = lookup:LOC( id )
     else
         full_id = self:GetState():GetFullStringID(id)
 
         -- See note at Quest:SkinString for the caveats of quest string skinning.
-        txt = self.quest and self.quest:TryLOC( id )
+        if self.quest then
+            txt, missing_translation = self.quest:TryLOC( id )
+        end
 
         if txt == nil then
-            txt = self:GetCurrentConvo():TryLOC( full_id )
+            txt, missing_translation = self:GetCurrentConvo():TryLOC( full_id )
         end
     end
 
@@ -323,12 +403,12 @@ function ConvoPlayer:GetString(id, ...)
     end
 
     if not txt then
-        txt = self:GetCurrentConvo():TryLOC(id)
+        txt, missing_translation = self:GetCurrentConvo():TryLOC(id)
         remember_id = self:GetCurrentConvo().id .. "." .. id
     end
 
     if not txt then
-        txt = LOC(id)
+        txt, missing_translation = LOC(id)
         remember_id = id
     end
 
@@ -336,7 +416,7 @@ function ConvoPlayer:GetString(id, ...)
         local formatter = self:_GetFormatter()
         formatter:AddLookup("first_time", self:_GetPlayedStrings()[remember_id] == nil)
         txt = formatter:FormatString(loc.format( txt, ... ))
-        return txt, remember_id
+        return txt, remember_id, missing_translation
     end
 
     return loc.format("[STRING NOT FOUND: {1}]", id), id
@@ -451,7 +531,12 @@ end
 --       cx:Talk("TALK_RAMBLE")
 --   end)
 function ConvoPlayer:JoinAllOpt_Fn(fn)
-	for _,opt in ipairs(self.current_options) do
+	local ctx = self:_GetContext()
+	-- Ignore options from prior context since they're unlikely in the same
+	-- file so probably not ones we care about.
+	local start = ctx.option_start
+	for i=start,self:GetNumOptions() do
+		local opt = self.current_options[i]
 		opt:Fn(fn)
 	end
 	return self
@@ -469,17 +554,30 @@ function ConvoPlayer:_CreateOption(txt, forced_id)
     -- force the prompt's target back to the primary NPC that you are speaking to.
     self.screen.prompt:SetTarget(self.screen.inst)
 
-    local opt = ConvoOption(self, self.cxt_stack[#self.cxt_stack], txt)
+    local opt = ConvoOption(self, self:_GetContext(), txt)
     if forced_id then
         opt:SetID(forced_id)
     end
+
+    local state = self:GetState()
+    local quest = self:GetQuest()
+    if self.injection and quest and state and opt:GetRightText() == nil then
+        local obj_id = state.convo.objective_id
+        local objective = quest.def.objective[obj_id]
+        -- if the option doesn't already have a right text & it's important, add the quest marker
+        if objective and objective:GetImportance() == QUEST_IMPORTANCE.s.HIGH then
+            opt:MakeOppo() -- we only want this to happen in a hub
+        end
+    end
+
+
     table.insert( self.current_options, opt)
     return opt
 end
 
 --~ function ConvoPlayer:BoonOpt( boon )
 --~     local opt = self:Opt()
---~             :Text( boon:GetName() )
+--~             :Text( boon:GetPrettyName() )
 --~             :AppendRawTooltip( boon:GetDesc())
 --~             :SetIcon( boon:IMG "OPT_BOON_ICON" )
 --~             :Priority( -1 )
@@ -528,13 +626,19 @@ function ConvoPlayer:_RunFn(fn, cxt, ...)
 
     local pushed
     if cxt and cxt ~= self:_GetContext() then
+        -- picking a new context in a hub, already inside a convo
         self:_PushContext(cxt.state, cxt.quest, nil, nil, cxt.string_lookup)
         pushed = true
     end
     table.clear(self.current_options)
     -- self.current_header = nil
     self.quest = self:GetQuest()
-    fn(self, ...)
+    -- the convo has not started, but the first line is displayed above the npc's head
+    fn(self, ...) -- the convo's logic function. 
+    -- the convo has ended
+    if self:GetState():IsOneTimeConvo() then
+        self:GetQuest():FinishOneTimeConvo(self:GetState():GetFullID())
+    end
     self.quest = nil
 
     if pushed then
@@ -602,6 +706,21 @@ function ConvoPlayer:Skip()
     end
 end
 
+-- Warning: DelaySeconds isn't well tested.
+function ConvoPlayer:DelaySeconds(seconds)
+    dbassert(seconds)
+    dbassert(not self:IsWaitingForPresentation(), "Already waiting for presentation!")
+    self.in_callback = true
+    self.skipping = false
+    self.screen.inst:DoTaskInTime(seconds, function()
+        self.in_callback = false
+        self:OnPresDone()
+    end)
+
+    -- Piggybacking on presentation state.
+    self:WaitForPresentation()
+end
+
 function ConvoPlayer:IsWaitingForPresentation()
     return self.waiting_for_presentation
 end
@@ -632,9 +751,11 @@ function ConvoPlayer:PresentCallbackScreen(screen_ctor, ...)
     screen:SetCloseCallback(function(...)
         self.in_callback = false
         self.screen:OnResumeFromCallback()
-        self.convo_coro:Resume(...)
+        self.convo_coro:Resume(...) -- return our arguments from the below yield.
     end)
 
+    -- Returns the screen instance. It has already displayed and closed when
+    -- this function returns, but it's a good place to store result info.
     return coroutine.yield()
 end
 
@@ -691,10 +812,9 @@ function ConvoPlayer:WaitForAdvance()
     end
 end
 
-function ConvoPlayer:WaitForAnimOver(inst, statename)
-    -- TODO(dbriscoe): For this to work, we need to allow player to leave the
-    -- talk sg state (so they can play other animations) without clearing their
-    -- interact target. Maybe it's a special case for talk?
+-- You must call *during* the animation. Should never softlock because animover
+-- is fired at the end of loops and the player is always playing animations.
+function ConvoPlayer:WaitForAnimOver(inst)
     local onanimover
     onanimover = function(source)
         inst:RemoveEventCallback("animover", onanimover)
@@ -706,24 +826,9 @@ function ConvoPlayer:WaitForAnimOver(inst, statename)
 end
 
 function ConvoPlayer:_LookupQuip( tags )
-    local primary = tags[1]
-    local tag_dict = lume.invert(tags)
-
     local matcher = self.sim:GetQuipMatcher()
-    if self.current_speaker then
-        self.current_speaker:FillOutQuipTags( tag_dict )
-    end
-
-    if self.quest then
-        tag_dict[self.quest:GetQuipID()] = true
-    end
 
     local state = self:GetState()
-    tag_dict[state.convo:GetQuipID()] = true
-
-    tag_dict[primary] = nil
-    tags = lume.keys(tag_dict)
-    table.insert(tags, 1, primary)
 
     -- Terrible quip 'identity' based on speaker and tags.
     local remember_id = tostring(self.current_speaker)..":"..table.concat( tags, "." )
@@ -732,7 +837,9 @@ function ConvoPlayer:_LookupQuip( tags )
     formatter:AddLookup("first_time", self:_GetPlayedStrings()[remember_id] == nil)
     self:_GetPlayedStrings()[remember_id] = true
 
-    return matcher:LookupQuip( tags, formatter )
+    local player = self:GetPlayerEnt()
+    tags = matcher:CollectRelevantTags(tags, self.current_speaker, player, self.quest, state.convo)
+    return matcher:LookupQuip(tags, formatter, player)
 end
 
 -- Force wait after the next line to prevent options from displaying next to it
@@ -748,7 +855,7 @@ function ConvoPlayer:_PlayDialog(txt)
     --this gives us a nice, usable, translated list of instructions
     local state = self:GetState()
 
-    self.screen:SetFlagAsTemp(state.convo.temp_convo)
+    self.screen:SetNotReadyToTranslate(state.convo.is_intentionally_untranslated)
 
     local dialog = DialogParser.ParseDialog(txt)
     for k, dialog_instruction in ipairs(dialog) do
@@ -875,7 +982,7 @@ function ConvoPlayer:_PresentOptions()
     if picked_idx == nil and fn then
         -- PickFnOption: TODO why would we use this? gln doesn't use it yet.
         error("ConvoOption's id depends on its callstack, so this probably doesn't set that up. It also doesn't support picked_options.")
-        local opt = ConvoOption(self, self.cxt_stack[#self.cxt_stack], "")
+        local opt = ConvoOption(self, self:_GetContext(), "")
         opt:Fn(fn)
         return opt
     else
@@ -939,13 +1046,11 @@ function ConvoPlayer:SetCurrentSpeaker( agent )
         self.current_speaker = nil
     else
         self.current_speaker = agent
-
-        if agent:GetFaction() then
-            local CmpFactionRelationships = require "sim.components.agent.cmpfactionrelationships"
-            local faction_rels = self:GetPlayer():GetComponent(CmpFactionRelationships)
-            faction_rels:MeetFaction(agent:GetFaction())
-        end
     end
+end
+
+function ConvoPlayer:GetCurrentSpeaker()
+    return self.current_speaker
 end
 
 function ConvoPlayer:GetPrimaryEntity()
@@ -958,18 +1063,18 @@ end
 function ConvoPlayer:SetPlayer(player)
     self.convo_player = player
 end
+-- The GameNode for the player who is in this convo.
 function ConvoPlayer:GetPlayer()
     assert(self.convo_player, "No player yet!")
     return self.convo_player
 end
 
-function ConvoPlayer:GetLocation()
-    local player = self:GetPlayer()
-    if player then
-        return player:GetConvoLocation()
+function ConvoPlayer:GetPlayerEnt()
+    local player_actor = self:GetPlayer()
+    if player_actor then
+        return player_actor.inst
     end
 end
-
 
 -------------------------
 
@@ -986,31 +1091,7 @@ end
 
 ---------convo starting/stopping
 
---~ function ConvoPlayer:StartScenario( sector, x, y, fn )
---~     self:WaitForAdvance()
---~     self.screen:Close(function()
---~         local EntityUtil = require "sim.entityutil"
---~         local scenario = EntityUtil.StartScenario( sector, x and function( playerShip ) playerShip:SetLocalPos(x, y) end )
---~         if fn then
---~             fn( scenario )
---~         end
---~     end)
---~     self:End()
---~ end
-
 function ConvoPlayer:InjectHubOptions()
-    if self:GetAgent():IsOpenToIdleConversation() then
-        local role_data = self:GetAgent():GetFactionRoleData()
-        if role_data and role_data.smalltalk then
-            self:_InjectOption( role_data.smalltalk:GetDefaultState() )
-        end
-        if role_data and role_data.convos then
-            for i, convo in ipairs( role_data.convos) do
-                self:_InjectOption( convo:GetDefaultState() )
-            end
-        end
-    end
-
     local qm = self.sim:GetQuestManager()
     local hub_options = qm:GetHubOptions(self:GetAgent())
     for _, opt in ipairs(hub_options) do
@@ -1039,33 +1120,9 @@ function ConvoPlayer:StopTalking()
 end
 
 
-local function FindOwner(obj)
-    if obj then
-        if obj.GetAgentOwner then
-            local owner = obj:GetAgentOwner()
-            if owner then
-                return owner
-            end
-        end
-        return FindOwner(obj:GetParent())
-    end
-end
-
-function ConvoPlayer:PushVisit(object, convo, agent)
-    convo = convo or object:GetConvo("VISIT")
-    agent = agent or FindOwner(object)
-    if agent and convo then
-        local old_loc = self:GetPlayer():GetConvoLocation()
-        self:GetPlayer():SetConvoLocation(object)
-        self:GoTo(convo:GetDefaultState(), nil, nil, object)
-        self:GetPlayer():SetConvoLocation(old_loc)
-        self:StopTalking()
-    end
-end
-
 function ConvoPlayer:PushHub( what )
     self:Loop(function()
-        self.current_header = what:GetName()
+        self.current_header = what:GetPrettyName()
         local qm = self.sim:GetQuestManager()
         local hub_options = qm:GetHubOptions( what )
         for _, opt in ipairs(hub_options) do
@@ -1168,49 +1225,6 @@ function ConvoPlayer:MakeChallengeRoll( title, chance, modifiers )
             return nil
         end
     end
-end
-
-function ConvoPlayer:GrantMoney(amt)
-    self:Talk("STRINGS.TALK.TALK_GAIN_MONEY", amt)
-    self:GetPlayer():DeltaMoney(amt)
-    return self
-end
-
-function ConvoPlayer:GrantStatProgress( amt, category, params )
-    local CmpCharacterStats = require "sim.components.agent.cmpcharacterstats"
-    local cmp = self:GetPlayer():GetComponent( CmpCharacterStats )
-    if cmp then
-        cmp:GainProgress( nil, category, amt, params )
-        self:Talk("STRINGS.TALK.TALK_GAIN_STAT_PROGRESS", amt, CmpCharacterStats:LOC(category))
-    end
-    return self
-end
-
-function ConvoPlayer:DeltaTether(amt)
-
-    local change = self:GetPlayer():DeltaTether(amt)
-    change = math.round(change)
-    if change > 0 then
-        self:Talk("STRINGS.TALK.TALK_GAIN_TETHER", change)
-    elseif change < 0 then
-        self:Talk("STRINGS.TALK.TALK_LOSE_TETHER", -change)
-    end
-
-    return self
-end
-
-function ConvoPlayer:GrantLore( lore_id )
-    local CmpUnlocker = require "sim.components.agent.cmpunlocker"
-    local unlocks = self:GetPlayer():GetComponent( CmpUnlocker )
-    unlocks:LearnAboutLore( lore_id )
-    return self
-end
-
-function ConvoPlayer:GrantRandomLore( lore_category )
-    local CmpUnlocker = require "sim.components.agent.cmpunlocker"
-    local unlocks = self:GetPlayer():GetComponent( CmpUnlocker )
-    unlocks:LearnAboutRandomLore( lore_category )
-    return self
 end
 
 function ConvoPlayer:AddBack()

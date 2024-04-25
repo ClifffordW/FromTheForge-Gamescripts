@@ -3,7 +3,7 @@ return {
   __displayName="fx_yammo_elite",
   group="Bosses",
   isfinal=true,
-  prefab={ "yammo_elite",},
+  prefab={ "yammo_elite", "yammo_miniboss",},
   stategraphs={
     sg_yammo={
       events={
@@ -123,22 +123,59 @@ return {
           param={ impact_size=1, impact_type=1, offx=0.97000002861023, offz=0.0,},
         },
         {
-          eventtype="spawneffect",
-          name="vfx-behavior1_stomp1-old",
+          eventtype="shakecamera",
+          name="vfx-behavior1_stomp1",
           param={
-            fxname="yammo_behavior1",
-            inheritrotation=true,
-            ischild=true,
-            offx=0.0,
-            offy=0.0,
-            offz=0.0,
-            stopatexitstate=true,
+            dist=20,
+            duration=5.0,
+            mode="VERTICAL",
+            scale=0.20000000298023,
+            speed=0.019999999552965,
           },
         },
         {
-          eventtype="spawneffect",
-          name="vfx-idle_unhooked",
-          param={ fxname="yammo_idle", inheritrotation=true, ischild=true, stopatexitstate=true,},
+          eventtype="shakecamera",
+          name="vfx-behavior1_stomp2",
+          param={
+            dist=20,
+            duration=5.0,
+            mode="VERTICAL",
+            scale=0.20000000298023,
+            speed=0.019999999552965,
+          },
+        },
+        {
+          eventtype="shakecamera",
+          name="vfx-behavior1_stomp3",
+          param={
+            dist=20,
+            duration=5.0,
+            mode="VERTICAL",
+            scale=0.20000000298023,
+            speed=0.019999999552965,
+          },
+        },
+        {
+          eventtype="shakecamera",
+          name="vfx-impact_jump_pst",
+          param={
+            dist=20,
+            duration=5.0,
+            mode="VERTICAL",
+            scale=0.20000000298023,
+            speed=0.019999999552965,
+          },
+        },
+        {
+          eventtype="shakecamera",
+          name="vfx-impact_elite_heavy_slam",
+          param={
+            dist=20,
+            duration=5.0,
+            mode="VERTICAL",
+            scale=0.30000001192093,
+            speed=0.019999999552965,
+          },
         },
       },
       state_events={

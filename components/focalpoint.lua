@@ -44,8 +44,8 @@ local FocalPoint = Class(function(self, inst)
 
 	-- entity edge detection tuning values
 	self.edgeDetectCameraDistanceMax = 54 -- min is default_camera_distance
-	self.edgeDetectCameraSafeZone = {default = 0.03, player = 0.1}
-	self.edgeDetectCameraSafeZoneBuffer = {default = 0.01, player = 0.05}
+	self.edgeDetectCameraSafeZone = {default = 0.03, player = 0.1, town_player = 0.01}
+	self.edgeDetectCameraSafeZoneBuffer = {default = 0.01, player = 0.05, town_player = 0.005}
 	self.edgeDetectCameraDistanceDelta = 1
 	self.edgeDetectCameraDistanceTimeout = 0.1
 
@@ -60,6 +60,10 @@ local FocalPoint = Class(function(self, inst)
 	self.minSpeed = 4 --DEPRECATED
 	inst:StartUpdatingComponent(self)
 end)
+
+function FocalPoint:OnRoomTravel()
+	self:ClearEntitiesForEdgeDetection()
+end
 
 -- Adds a possible alternate focal target. We'll focus the players and *one* of
 -- these focus sources.
@@ -78,7 +82,7 @@ function FocalPoint:StartFocusSource(source, focus_tuning)
 		return
 	end
 
-	self:OnUpdate(0)
+	self:StepUpdate()
 end
 
 function FocalPoint:StopFocusSource(source)
@@ -89,7 +93,7 @@ function FocalPoint:StopFocusSource(source)
 
 		if self.current_source == source then
 			self.current_source = nil
-			self:OnUpdate(0)
+			self:StepUpdate()
 		end
 	end
 end
@@ -107,6 +111,10 @@ function FocalPoint:AddExplicitTarget(target)
 	self.explicit_targets = self.explicit_targets or {}
 	self.explicit_targets[target] = true
 	return self
+end
+
+function FocalPoint:HasAnyExplicitTarget()
+	return self.explicit_targets and next(self.explicit_targets) ~= nil
 end
 
 function FocalPoint:HasExplicitTarget(target)
@@ -153,6 +161,10 @@ function FocalPoint:_SetDesiredDistance(dist)
 	self.inst.desired_camera_distance = dist
 end
 
+function FocalPoint:ResetDesiredDistanceToDefault()
+	self:_SetDesiredDistance(self.default_camera_distance)
+end
+
 function FocalPoint:_DebugDrawEntityEdgeDetection(sx_left, sx_right, sy_up, sy_down)
 	local ui = require "dbui.imgui"
 	local screensize = { TheSim:GetScreenSize() } -- rt size, not imgui size
@@ -165,15 +177,31 @@ function FocalPoint:_DebugDrawEntityEdgeDetection(sx_left, sx_right, sy_up, sy_d
 	local sy_up_s = { ScreenXYNormalizedToScaled(sy_up, screensize) }
 	local sy_down_s = { ScreenXYNormalizedToScaled(sy_down, screensize) }
 
-	-- TODO: victorc - this isn't visually accurate for non-16:9 aspect ratios due to letterboxing
+	-- TODO: focalpoint - this isn't visually accurate for non-16:9 aspect ratios due to letterboxing
 	ui:ScreenLine(sx_left_s, sx_right_s)
 	ui:ScreenLine(sy_up_s, sy_down_s)
+end
+
+function FocalPoint:_ResetTrackedEntity(candidate)
+	if self.edgeDetectTrackedEntities[candidate] then
+		self.edgeDetectTrackedEntities[candidate] = nil
+		-- TheLog.ch.Camera:printf("Entity is on screen: %s", tostring(candidate))
+		local proxy = self.edgeDetectTrackedProxies[candidate]
+		if proxy then
+			proxy:PushEvent("entityoffscreenchanged", {entity=candidate, isVisible=true})
+		end
+	end
 end
 
 function FocalPoint:_UpdateEntityEdgeDetection(dt, candidate, x, y, z, halfWidth, halfHeight)
 	if not self.edgeDetectEnabled or self.inst:GetTimeAlive() < 0.5 then
 		return
-	elseif self:HasExplicitTarget(candidate) then
+	elseif self:HasAnyExplicitTarget() then
+		if next(self.edgeDetectTrackedEntities) then
+			for ent,_cooldown in pairs(self.edgeDetectTrackedEntities) do
+				self:_ResetTrackedEntity(ent)
+			end
+		end
 		return -- ignore explicit targets; they are meant to be in view
 	end
 
@@ -182,7 +210,10 @@ function FocalPoint:_UpdateEntityEdgeDetection(dt, candidate, x, y, z, halfWidth
 		-- Players will cause the camera to pull back to try and encapsulate them
 		-- Tracked entities will display an offscreen indicator
 		local is_player = candidate:HasTag("player")
-		local profile = is_player and "player" or "default"
+		local profile = "default"
+		if is_player then
+			profile = TheWorld:HasTag("town") and "town_player" or "player"
+		end
 
 		-- for players, detect nearest edge to screen
 		-- for others, detect when fully off the screen
@@ -219,7 +250,9 @@ function FocalPoint:_UpdateEntityEdgeDetection(dt, candidate, x, y, z, halfWidth
 				self.edgeDetectTrackedEntities[candidate] = 0
 
 				-- create an offscreen indicator for non-player entities
-				if not is_player then
+				-- also one for local player entities while in town
+				local is_local_player_in_town = is_player and candidate:IsLocal() and TheWorld:HasTag("town") and candidate.sg:GetCurrentState() ~= "inputs_disabled"
+				if not is_player or is_local_player_in_town then
 					-- TheLog.ch.Camera:printf("FocalPoint: Entity is off-screen: %s", tostring(candidate))
 					if not self.edgeDetectTrackedProxies[candidate] then
 						-- removed in _CleanupEntityEdgeDetection
@@ -230,31 +263,32 @@ function FocalPoint:_UpdateEntityEdgeDetection(dt, candidate, x, y, z, halfWidth
 			end
 			-- increment a "frame counter" of sorts to smooth out popping in/out of tracked entities
 			self.edgeDetectTrackedEntities[candidate] = math.min(self.edgeDetectTrackedEntities[candidate] + 1, 15 * ANIM_FRAMES)
-		elseif math.max(tx, ty, math.abs(s_center[1]), math.abs(s_center[2])) < safe_threshold_inner
-			and self.edgeDetectTrackedEntities[candidate] and self.edgeDetectTrackedEntities[candidate] > 0 then
+		elseif (TheFrontEnd:GetLetterbox():IsDisplaying() and self.edgeDetectTrackedEntities[candidate]) or
+			(math.max(tx, ty, math.abs(s_center[1]), math.abs(s_center[2])) < safe_threshold_inner
+			and self.edgeDetectTrackedEntities[candidate] and self.edgeDetectTrackedEntities[candidate] > 0) then
 			-- entity is back in the camera's view
-			--TheLog.ch.Camera:printf("FocalPoint: %s is far from the screen edge s=(%1.2f,%1.2f) t=(%1.2f,%1.2f)", tostring(candidate), (sx_right - sx_left) / 2, (sy_up - sy_down) / 2, tx, ty)
+			-- TheLog.ch.Camera:printf("FocalPoint: %s is far from the screen edge s=(%1.2f,%1.2f) t=(%1.2f,%1.2f)", tostring(candidate), (sx_right[1] - sx_left[1]) / 2, (sy_up[2] - sy_down[2]) / 2, tx, ty)
 
 			if is_player then
 				self.edgeDetectCameraZoomDelta = self.edgeDetectCameraZoomDelta - self.edgeDetectCameraDistanceDelta
-				self.edgeDetectTrackedEntities[candidate] = self.edgeDetectTrackedEntities[candidate] - 1
+				if not TheWorld:HasTag("town") then
+					self.edgeDetectTrackedEntities[candidate] = self.edgeDetectTrackedEntities[candidate] - 1
+				else
+					self.edgeDetectTrackedEntities[candidate] = self.edgeDetectTrackedEntities[candidate] - 10 * ANIM_FRAMES
+				end
 			else
 				self.edgeDetectTrackedEntities[candidate] = self.edgeDetectTrackedEntities[candidate] - 5 * ANIM_FRAMES
 			end
 
 			if self.edgeDetectTrackedEntities[candidate] <= 0 then
-				self.edgeDetectTrackedEntities[candidate] = nil
-				-- TheLog.ch.Camera:printf("Entity is on screen: %s", tostring(candidate))
-				local proxy = self.edgeDetectTrackedProxies[candidate]
-				if proxy then
-					proxy:PushEvent("entityoffscreenchanged", {entity=candidate, isVisible=true})
-				end
+				self:_ResetTrackedEntity(candidate)
 			end
-		-- TODO: This code needs to run when a player dies while the camera is panned far away
+		-- TODO: focalpoint - This code needs to run when a player dies while the camera is panned far away
 		elseif not next(self.edgeDetectTrackedEntities, nil) and TheCamera:GetDistance() > self.default_camera_distance then
 			self.edgeDetectCameraZoomDelta = -self.edgeDetectCameraDistanceDelta
 		end
-	elseif self.edgeDetectCooldown > 0 then
+	end
+	if self.edgeDetectCooldown > 0 then
 		self.edgeDetectCooldown = math.max(0, self.edgeDetectCooldown - dt)
 	end
 end
@@ -303,14 +337,14 @@ function FocalPoint:EnableEntityEdgeDetection(enabled)
 	if self.edgeDetectEnabled ~= enabled then
 		self.edgeDetectEnabled = enabled
 		TheLog.ch.Camera:print("FocalPoint: Player Edge Detection", (enabled and "enabled" or "disabled"))
-		self:_SetDesiredDistance(self.default_camera_distance)
+		self:ResetDesiredDistanceToDefault()
 		self.edgeDetectTrackedEntities = {}
 		self.edgeDetectCooldown = 0
 		self.edgeDetectCameraZoomDelta = 0
 	end
 end
 
--- TODO: victorc - if needed, support a key for add/remove/clear so callers can manage their own sets
+-- TODO: focalpoint - if needed, support a key for add/remove/clear so callers can manage their own sets
 function FocalPoint:AddEntityForEdgeDetection(ent)
 	self.edgeDetectCandidates[ent] = 0.0
 	if TheNet:IsHost() and ent:IsNetworked() then
@@ -359,7 +393,7 @@ end
 
 function FocalPoint:ClearEntitiesForEdgeDetection(keep_tags)
 	if keep_tags then
-		-- TODO: victorc: this code path is untested as it has no use cases
+		-- TODO: focalpoint - this code path is untested as it has no use cases
 		if type(keep_tags) == "string" then
 			keep_tags = {[keep_tags] = true}
 		end
@@ -417,11 +451,17 @@ function FocalPoint:_DebugDrawFocalPointPosition(x, z)
 	ui:WorldLine({wx, wy, wz}, {x, 0, z}, UICOLORS.GREY)
 end
 
-function FocalPoint:OnUpdate(dt)
-	if not TheWorld then
-		return
-	end
+function FocalPoint:Snap()
+	self.snap = true
+	self:StepUpdate()
+	self.snap = false
+end
 
+function FocalPoint:StepUpdate()
+	return self:_UpdateFocus(0)
+end
+
+function FocalPoint:OnUpdate(dt)
 	if TheDungeon.HUD then
 		local is_focus_on_hud, reason = TheDungeon.HUD:IsHudSinkingInput()
 		if is_focus_on_hud
@@ -433,6 +473,15 @@ function FocalPoint:OnUpdate(dt)
 			return
 		end
 	end
+	return self:_UpdateFocus(dt)
+end
+
+function FocalPoint:_UpdateFocus(dt)
+	if not TheWorld then
+		-- TheFocalPoint survives room travel, but don't try to touch anything
+		-- until next room loaded.
+		return
+	end
 
 	-- Weighted center of all players and interested entities
 	local relevant_ents = {}
@@ -440,18 +489,20 @@ function FocalPoint:OnUpdate(dt)
 
 	local should_focus_remote_players = false
 
-	-- jambell: If you want to focus on remote players during combat, to recreate Local feeling, swap to this instead:
-	-- jambell: We should consider making this an Options toggle.
+	-- If you want to focus on remote players during combat, to recreate Local feeling, swap to this instead:
+	-- We should consider making this an Options toggle.
 
 	-- local should_focus_remote_players = (
 	-- 	not TheWorld:HasTag("town") -- let remotes wander town without zooming out
 	-- 	and TheWorld:GetCurrentRoomType() ~= mapgen.roomtypes.RoomType.s.market -- don't focus remotes in market
 	-- 	)
 
+	local single_player_focus = TheSaveSystem.cheats:GetValue("force_camera_focus_player")
 	for _i,v in ipairs(AllPlayers) do
 		local is_relevant = (not v:IsDead()
 			and not v:IsInLimbo()
-			and (should_focus_remote_players or v:IsLocal()))
+			and (should_focus_remote_players or v:IsLocal())
+			and (not single_player_focus or single_player_focus == v:GetHunterId()))
 		if is_relevant then
 			-- Keep some focus, but not as strong, on reviveable or dying players.
 			local weight = v:IsAlive() and 1.0 or 0.75
@@ -541,8 +592,7 @@ function FocalPoint:OnUpdate(dt)
 	end
 
 	--Camera limits
-	-- TODO(roomtravel): instead of nil check, prevent us from updating while world doesn't exist
-	if TheWorld and TheWorld.components.cameralimits then
+	if TheWorld.components.cameralimits then
 		x, z = TheWorld.components.cameralimits:ApplyLimits(x, z)
 	end
 
@@ -552,25 +602,15 @@ function FocalPoint:OnUpdate(dt)
 		--TheLog.ch.Camera:printf("FocalPoint: Camera Distance %0.2f -> %0.2f ", old_dist, dist)
 	end
 
-	if n >= 1 and self.inst:GetTimeAlive() >= 0.5 then
+	if not self.snap
+		and n >= 1
+		and self.inst:GetTimeAlive() >= 0.5
+	then
 		local targetPosition = Vector3(x,0,z)
 		local lastPosition = Vector3({self.inst.Transform:GetWorldPosition()})
 
 		local newPosition = lastPosition + ((targetPosition - lastPosition) * math.min(dt * self.newCameraMinSpeed, 1.0))
 		self.inst.Transform:SetPosition(newPosition.x, newPosition.y, newPosition.z)
-
-		-- victorc: this code broke because lume.approximately had a critical error comparing differing signed values
-		-- NW: This code is unstable, it will sometimes explode in networked games and result in HUGE camera speeds:
-		--local delta = targetPosition - lastPosition
-		--local dist_diff = Vector3.len(delta)
-		--if lume.approximately(dist_diff, 0, math.max(self.minSpeed * dt, 0.001)) then
-		--	self.inst.Transform:SetPosition(x, 0, z)
-		--else
-		--	local speed = self:CalculateMoveSpeed(dist_diff)
-		--	local dir = delta / dist_diff
-		--	local newPosition = lastPosition + dir * (speed * dt)
-		--	self.inst.Transform:SetPosition(newPosition.x, newPosition.y, newPosition.z)
-		--end
 	else
 		self.inst.Transform:SetPosition(x, 0, z)
 	end

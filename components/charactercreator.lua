@@ -2,7 +2,7 @@ local Cosmetic = require("defs.cosmetics.cosmetics")
 local krandom = require("util.krandom")
 local lume = require("util.lume")
 
-local CharacterCreator = Class(function(self, inst)
+local CharacterCreator = Class(function(self, inst, use_playerdata_storage)
 	self.inst = inst
 	self.isnew = true
 	self.bodyparts = {}
@@ -10,20 +10,34 @@ local CharacterCreator = Class(function(self, inst)
 	self.filtertags = {}
 	self.symboltags = {}
 
-	for colorgroup in pairs(Cosmetic.ColorGroups) do
-		local colors = self:GetColorList(colorgroup)
-		self:SetColorGroup(colorgroup, colors[1].name)
-	end
+	-- for colorgroup in pairs(Cosmetic.ColorGroups) do
+	-- 	local colors = self:GetColorList(colorgroup)
+	-- 	self:SetColorGroup(colorgroup, colors[1].name)
+	-- end
 
-	self:SetSpecies("ogre")
+	self:SetSpecies("ogre") -- TODO: optimization, remove this to reduce unnecessary churn
+
+	-- deliberate assignment after setting "defaults"
+	self.use_playerdata_storage = use_playerdata_storage
+
+	self._onplayerdatachanged = function(_inst, data_changed_flags)
+		self:_OnPlayerDataChanged(data_changed_flags)
+	end
+	self.inst:ListenForEvent("playerdatachanged", self._onplayerdatachanged)
+
+	-- TODO: optimization, explore using an earlier event
+	self._onplayerentered = function(_inst)
+		TheLog.ch.CharacterCreator:printf("PlayerEntered: %s", _inst)
+		self:_RefreshPlayerData()
+	end
+	self.inst:ListenForEvent("playerentered", self._onplayerentered)
 end)
 
-local species_heads = 
-{
-	[CHARACTER_SPECIES.CANINE] = "canine_head_1",
-	[CHARACTER_SPECIES.MER] = "mer_head_1",
-	[CHARACTER_SPECIES.OGRE] = "ogre_head_1",
-}
+
+function CharacterCreator:OnRemoveFromEntity()
+	self.inst:RemoveEventCallback("playerdatachanged", self._onplayerdatachanged)
+	self.inst:RemoveEventCallback("playerentered", self._onplayerentered)
+end
 
 function CharacterCreator:GetSpecies()
 	return self.species
@@ -35,33 +49,17 @@ function CharacterCreator:SetSpecies(species)
 	end
 
 	self.species = species
-
-	local replaced_parts = {}
-	for bodypart in pairs(Cosmetic.BodyPartGroups) do
-		local name = self.bodyparts[bodypart]
-		if name ~= nil then
-			local def = Cosmetic.BodyParts[bodypart][name]
-			if def.filtertags and not def.filtertags[species] then
-				table.insert(replaced_parts, bodypart)
-			end
-		else
-			table.insert(replaced_parts, bodypart)
-		end
+	if self.use_playerdata_storage then
+		ThePlayerData:SetCharacterCreatorSpecies(self.inst.Network:GetPlayerID(), species)
 	end
 
-	for _, bodypart in ipairs(replaced_parts) do
-		local candidate_parts = Cosmetic.GetSpeciesBodyParts(bodypart, species)
-		if #candidate_parts == 0 then
-			self:SetBodyPart(bodypart, nil)
-		else
-			self:SetBodyPart(bodypart, candidate_parts[1].name)
-			local colorgroup = candidate_parts[1].colorgroup
-			if colorgroup ~= nil then
-				local candidate_colors = Cosmetic.GetSpeciesColors(colorgroup, species)
-				candidate_colors = krandom.Shuffle(candidate_colors)
-				assert(#candidate_colors > 0, "BAD COSMETIC SETUP, MISSING COLORS FOR GROUP:" .. colorgroup)
-				self:SetColorGroup(colorgroup, candidate_colors[1].name)
-			end
+	if species ~= "canine" then
+		self:SetBodyPart("OTHER", nil)
+	end
+
+	for i, data in ipairs(DEFAULT_CHARACTERS_SETUP) do
+		if data.species == species then
+			self:LoadFromTable(data)
 		end
 	end
 end
@@ -80,30 +78,12 @@ function CharacterCreator:IsBodyPartUnlocked(def, owner)
 	end
 end
 
-function CharacterCreator:IsBodyPartPurchased(def, owner)
-	owner = owner or self.inst
-	if owner.components.unlocktracker then
-		return owner.components.unlocktracker:IsCosmeticPurchased(def.name, "PLAYER_BODYPART")
-	else -- A nil unlocktracker means this is a new character so we check the filtertags instead
-		return def.filtertags.default_purchased ~= nil
-	end
-end
-
 function CharacterCreator:IsColorUnlocked(def, owner)
 	owner = owner or self.inst
 	if owner.components.unlocktracker then
 		return owner.components.unlocktracker:IsCosmeticUnlocked(def.name, "PLAYER_COLOR")
 	else -- A nil unlocktracker means this is a new character so we check the filtertags instead
 		return def.filtertags.default_unlocked ~= nil
-	end
-end
-
-function CharacterCreator:IsColorPurchased(def, owner)
-	owner = owner or self.inst
-	if owner.components.unlocktracker then
-		return owner.components.unlocktracker:IsCosmeticPurchased(def.name, "PLAYER_COLOR")
-	else -- A nil unlocktracker means this is a new character so we check the filtertags instead
-		return def.filtertags.default_purchased ~= nil
 	end
 end
 
@@ -133,53 +113,7 @@ function CharacterCreator:ClearAllExceptTable(exceptions)
 	end
 end
 
-function CharacterCreator:SetBodyPart(bodypart, name)
-	if self.bodyparts[bodypart] == name then
-		return false, false
-	end
-
-	local items = Cosmetic.BodyParts[bodypart]
-	if items == nil then
-		print("[CharacterCreator] Invalid body part: "..bodypart)
-		return
-	end
-
-	local def = items[name]
-	if def == nil and name ~= nil then
-		print("[CharacterCreator] Invalid "..bodypart.." item: "..name)
-		return
-	end
-
-	local oldpart = self.bodyparts[bodypart]
-	if def ~= nil then
-		self.bodyparts[bodypart] = name
-		self:OverrideBodyPartSymbols(bodypart, def.build, def.colorgroup)
-	else
-		self.bodyparts[bodypart] = nil
-		self:ClearBodyPartSymbols(bodypart)
-	end
-
-	--Reset filter tags
-	local oldfiltertags = self.filtertags
-	self.filtertags = {}
-
-	for tag in pairs(def ~= nil and def.filtertags or oldfiltertags) do
-		if tag ~= "default_unlocked" and tag ~= "default_purchased" then
-			self.filtertags[tag] = true
-		end
-	end
-
-	--Reset symbol tags
-	local oldsymboltags = {}
-	oldsymboltags[bodypart] = deepcopy(self.symboltags[bodypart])
-	self.symboltags[bodypart] = {}
-
-	if def ~= nil and def.symboltags ~= nil then
-		for tag in pairs(def.symboltags) do
-			self.symboltags[bodypart][tag] = true
-		end
-	end
-
+function CharacterCreator:ValidateColorGroups()
 	-- filter color groups
 	local isColorMatched = function(color, tags, matchAll)
 		matchAll = matchAll or false
@@ -214,15 +148,74 @@ function CharacterCreator:SetBodyPart(bodypart, name)
 	for groupId, colorname in pairs(self.colorgroups) do
 		local currentBodyPartColor = Cosmetic.Colors[groupId][colorname]
 		if currentBodyPartColor and not isColorMatched(currentBodyPartColor, self.filtertags, false) then
-			--TheLog.ch.CharacterCreator:printf("Color group=%s id=%d is invalid for filter tags", groupId, colorname)
+			TheLog.ch.CharacterCreatorSpam:printf("Color group=%s id=%s is invalid for filter tags %s", groupId, colorname, tabletoordereddictstring(self.filtertags))
 			local bodyPartColors = Cosmetic.Colors[groupId]
 			local newFilterTags = deepcopy(self.filtertags)
 			newFilterTags["default"] = true
+			local foundDefault
 			for newname, newColor in pairs(bodyPartColors) do
 				if isColorMatched(newColor, newFilterTags, true) then
+					TheLog.ch.CharacterCreatorSpam:printf("Setting default color group=%s id=%s", groupId, newname)
 					self:SetColorGroup(groupId, newname)
+					foundDefault = true
+					break
 				end
 			end
+			if not foundDefault then
+				TheLog.ch.CharacterCreatorSpam:printf("Removing invalid color group=%s id=%s", groupId, colorname)
+				self:SetColorGroup(groupId, nil)
+			end
+		end
+	end
+end
+
+function CharacterCreator:SetBodyPart(bodypart, name)
+	if self.bodyparts[bodypart] == name then
+		return false, false
+	end
+
+	local items = Cosmetic.BodyParts[bodypart]
+	if items == nil then
+		TheLog.ch.CharacterCreator:printf("Invalid body part: %s", bodypart)
+		return
+	end
+
+	local def
+	if name then
+		def = items[name]
+		if not def then
+			TheLog.ch.CharacterCreator:printf("Invalid %s item: %s", bodypart, name)
+			return
+		end
+	end
+
+	local oldpart = self.bodyparts[bodypart]
+	if def ~= nil then
+		self.bodyparts[bodypart] = name
+		self:OverrideBodyPartSymbols(bodypart, def.build, def.colorgroup)
+	else
+		self.bodyparts[bodypart] = nil
+		self:ClearBodyPartSymbols(bodypart)
+	end
+
+	--Reset filter tags
+	local oldfiltertags = self.filtertags
+	self.filtertags = {}
+
+	for tag in pairs(def ~= nil and def.filtertags or oldfiltertags) do
+		if tag ~= "default_unlocked" then
+			self.filtertags[tag] = true
+		end
+	end
+
+	--Reset symbol tags
+	local oldsymboltags = {}
+	oldsymboltags[bodypart] = deepcopy(self.symboltags[bodypart])
+	self.symboltags[bodypart] = {}
+
+	if def ~= nil and def.symboltags ~= nil then
+		for tag in pairs(def.symboltags) do
+			self.symboltags[bodypart][tag] = true
 		end
 	end
 
@@ -260,7 +253,10 @@ function CharacterCreator:SetBodyPart(bodypart, name)
 	end
 	tagschanged = tagschanged or next(oldfiltertags) ~= nil
 
-	self.inst:PushEvent("onbodypartchanged", { bodypart = bodypart, oldpart = oldpart, newpart = self.bodyparts[bodypart] })
+	self.inst:PushEvent("onbodypartchanged", { bodypart = bodypart, oldpart = oldpart, newpart = name })
+	if self.use_playerdata_storage then
+		ThePlayerData:SetCharacterCreatorBodyPart(self.inst.Network:GetPlayerID(), bodypart, name)
+	end
 	return tagschanged, true
 end
 
@@ -321,17 +317,20 @@ function CharacterCreator:SetColorGroup(colorgroup, colorname)
 
 	local colors = Cosmetic.Colors[colorgroup]
 	if colors == nil then
-		print("[CharacterCreator] Invalid color group: "..colorgroup)
+		TheLog.ch.CharacterCreator:printf("Invalid color group: %s", colorgroup)
 		return false
 	end
 
-	local color = colors[colorname]
-	if color == nil then
-		print("[CharacterCreator] Invalid "..colorgroup.." color id: ", colorname)
-		return false
+	local color
+	if colorname then
+		color = colors[colorname]
+		if color == nil then
+			TheLog.ch.CharacterCreator:printf("Invalid %s color id: %s", colorgroup, colorname)
+			return false
+		end
 	end
 
-	if colorgroup == "SKIN_TONE" then
+	if color and colorgroup == "SKIN_TONE" then
 		self.inst:PushEvent("update_skin_color", color.rgb)
 		if PER_PLAYER_SILHOUETTE_COLOR then
 			local r,g,b,a = table.unpack(color.rgb)
@@ -341,10 +340,14 @@ function CharacterCreator:SetColorGroup(colorgroup, colorname)
 
 	local oldcolor = self.colorgroups[colorgroup]
 	self.colorgroups[colorgroup] = colorname
-	self:SetSymbolColorShift(colorgroup, table.unpack(color.hsb))
+	if color then
+		self:SetSymbolColorShift(colorgroup, table.unpack(color.hsb))
+	end
 
-	self.inst:PushEvent("oncolorchanged", { colorgroup = colorgroup, oldcolor = oldcolor, newcolor = self.colorgroups[colorgroup] })
-
+	self.inst:PushEvent("oncolorchanged", { colorgroup = colorgroup, oldcolor = oldcolor, newcolor = colorname })
+	if self.use_playerdata_storage then
+		ThePlayerData:SetCharacterCreatorColorGroup(self.inst.Network:GetPlayerID(), colorgroup, colorname)
+	end
 	return true
 end
 
@@ -388,7 +391,6 @@ end
 
 function CharacterCreator:Randomize(species, owner, unlock_all)
 	species = species or krandom.PickValue(CHARACTER_SPECIES)
-
 	self:SetSpecies(species)
 
 	for bodypart in pairs(Cosmetic.BodyPartGroups) do
@@ -396,8 +398,7 @@ function CharacterCreator:Randomize(species, owner, unlock_all)
 		if not unlock_all then
 			bodyparts = lume.removeall(bodyparts, function(bp)
 				local unlocked = self:IsBodyPartUnlocked(bp, owner)
-				local purchased = self:IsBodyPartPurchased(bp, owner)
-				return not unlocked or not purchased
+				return not unlocked
 			end)
 		end
 
@@ -411,8 +412,7 @@ function CharacterCreator:Randomize(species, owner, unlock_all)
 				if not unlock_all then
 					colors = lume.removeall(colors, function(clr)
 						local unlocked = self:IsColorUnlocked(clr, owner)
-						local purchased = self:IsColorPurchased(clr, owner)
-						return not unlocked or not purchased
+						return not unlocked
 					end)
 				end
 
@@ -420,11 +420,25 @@ function CharacterCreator:Randomize(species, owner, unlock_all)
 				assert(#colors > 0, "BAD COSMETIC SETUP, MISSING COLORS FOR GROUP:" .. colorgroup)
 				self:SetColorGroup(colorgroup, colors[1].name)
 			end
+		else
+			if bodypart ~= "OTHER" or (bodypart == "OTHER" and species == "canine") then
+				print ("NO BODY PART FOUND FOR ", species, bodypart, "SETTING DEFAULT INSTEAD")
+				for i, data in ipairs(DEFAULT_CHARACTERS_SETUP) do
+					if data.species == species then
+						local bodypart_name = data.bodyparts[bodypart]
+						if bodypart_name ~= nil then
+							self:SetBodyPart(bodypart, bodypart_name)
+							local colorgroup = Cosmetic.BodyParts[bodypart][bodypart_name].colorgroup
+							self:SetColorGroup(colorgroup, data.colorgroups[colorgroup])
+						end
+					end
+				end
+			end
 		end
 	end
 end
 
-function CharacterCreator:OnSave()
+function CharacterCreator:SaveToTable()
 	local data = {}
 	if next(self.bodyparts) ~= nil then
 		data.bodyparts = {}
@@ -444,89 +458,133 @@ function CharacterCreator:OnSave()
 	return next(data) ~= nil and data or nil
 end
 
+-- currently functionally the same as LoadFromTable but some added checks
+-- would treat other component as 'readonly'
+function CharacterCreator:CloneComponent(other)
+	assert(other:is_a(CharacterCreator))
+	self:LoadFromTable(other)
+end
+
+function CharacterCreator:LoadFromTable(data)
+	self.isnew = nil
+
+	if data then
+		local did_change
+
+		self.species = data.species
+
+		-- special case when importing legacy data: set this so it can propagate correctly
+		if self.use_playerdata_storage then
+			local playerID = self.inst.Network:GetPlayerID()
+			if TheNet:IsValidPlayer(playerID) then
+				ThePlayerData:SetCharacterCreatorSpecies(playerID, data.species)
+			end
+		end
+
+		if data.bodyparts ~= nil then
+			for bodypart, name in pairs(data.bodyparts) do
+				local tags_changed, parts_changed = self:SetBodyPart(bodypart, name)
+				did_change = did_change or parts_changed
+			end
+		end
+
+		if data.colorgroups ~= nil then
+			for colorgroup, name in pairs(data.colorgroups) do
+				local colour_changed = self:SetColorGroup(colorgroup, name)
+				did_change = did_change or colour_changed
+			end
+		end
+
+		local colors_were_invalid = self:ValidateColorGroups()
+		did_change = did_change or colors_were_invalid
+
+		if did_change then
+			self.inst:PushEvent("charactercreator_load")
+		end
+	end
+end
+
+function CharacterCreator:OnSave()
+	if self.use_playerdata_storage and self.inst:IsLocal() then
+		local playerID = self.inst.Network:GetPlayerID()
+		if TheNet:IsValidPlayer(playerID) then
+			if next(self.bodyparts) ~= nil then
+				for bodypart, name in pairs(self.bodyparts) do
+					ThePlayerData:SetCharacterCreatorBodyPart(playerID, bodypart, name)
+				end
+			end
+			if next(self.colorgroups) ~= nil then
+				for colorgroup, id in pairs(self.colorgroups) do
+					ThePlayerData:SetCharacterCreatorColorGroup(playerID, colorgroup, id)
+				end
+			end
+
+			ThePlayerData:SetCharacterCreatorSpecies(playerID, self.species)
+		end
+	end
+end
+
 function CharacterCreator:OnLoad(data)
-	self.isnew = nil
-	local did_change = false
+	if data then
+		self:LoadFromTable(data)
 
-	self.species = data.species
-
-	if data.bodyparts ~= nil then
-		for bodypart, name in pairs(data.bodyparts) do
-			local tags_changed, parts_changed = self:SetBodyPart(bodypart, name)
-			did_change = did_change or parts_changed
+		if self.use_playerdata_storage then
+			local msg = string.format("Character Creator has loaded legacy data for %s. Save game to store in new location.", self.inst:GetCustomUserName())
+			TheLog.ch.CharacterCreator:print("******************************************************************")
+			TheLog.ch.CharacterCreator:print("SaveSystem / OnLoad: " .. msg)
+			TheLog.ch.CharacterCreator:print("******************************************************************")
+			TheFrontEnd:ShowTextNotification("images/ui_ftf/warning.tex", nil, msg, 12)
 		end
 	end
+end
 
-	if data.colorgroups ~= nil then
-		for colorgroup, name in pairs(data.colorgroups) do
-			local colour_changed = self:SetColorGroup(colorgroup, name)
-			did_change = did_change or colour_changed
+function CharacterCreator:_OnPlayerDataChanged(data_changed_flags)
+	if self.use_playerdata_storage and (data_changed_flags & PlayerDataChangedFlags.CharacterCreator) == PlayerDataChangedFlags.CharacterCreator then
+		TheLog.ch.CharacterCreatorSpam:printf("%s OnPlayerDataChanged", self.inst)
+		self.isnew = nil
+		local playerID = self.inst.Network:GetPlayerID()
+		local did_change
+
+		self.species = ThePlayerData:GetCharacterCreatorSpecies(playerID)
+
+		local bodyparts = ThePlayerData:GetCharacterCreatorBodyParts(playerID)
+		if bodyparts then
+			for bodypart, name in pairs(bodyparts) do
+				local tags_changed, parts_changed = self:SetBodyPart(bodypart, name)
+				did_change = did_change or parts_changed
+			end
+		end
+
+		local colorgroups = ThePlayerData:GetCharacterCreatorColorGroups(playerID)
+		if colorgroups then
+			for colorgroup, name in pairs(colorgroups) do
+				local colour_changed = self:SetColorGroup(colorgroup, name)
+				did_change = did_change or colour_changed
+			end
+		end
+
+		local colors_were_invalid = self:ValidateColorGroups()
+		did_change = did_change or colors_were_invalid
+
+		if did_change then
+			self.inst:PushEvent("charactercreator_load")
 		end
 	end
-
-	if did_change then
-		self.inst:PushEvent("charactercreator_load")
-	end
 end
 
+function CharacterCreator:_RefreshPlayerData()
+	if self.use_playerdata_storage then
+		local playerID = self.inst.Network:GetPlayerID()
+		-- dbassert(TheNet:IsValidPlayer(playerID))
+		-- dbassert(ThePlayerData:IsCharacterCreatorDataValid(playerID))
 
-function CharacterCreator:OnNetSerialize()
-	local e = self.inst.entity
-
-	local nrbodyparts = table.numkeys(self.bodyparts)
-	e:SerializeUInt(nrbodyparts, 5)
-
-	local nrcolorgroups = table.numkeys(self.colorgroups)
-	e:SerializeUInt(nrcolorgroups, 4)
-
-	for bodypart, name in pairs(self.bodyparts) do
-		e:SerializeString(bodypart)
-		e:SerializeString(name)
-	end
-
-	for colorgroup, name in pairs(self.colorgroups) do
-		e:SerializeString(colorgroup)
-		e:SerializeString(name)
-	end
-
-	e:SerializeString(self.species)
-end
-
-function CharacterCreator:OnNetDeserialize()
-	self.isnew = nil
-	
-	local e = self.inst.entity
-	local nrbodyparts = e:DeserializeUInt(5);
-	local nrcolorgroups = e:DeserializeUInt(4);
-
-	local did_change = false
-
-	for i = 1, nrbodyparts do 
-		local bodypart = e:DeserializeString();
-		local name = e:DeserializeString();
-
-		local tags_changed, parts_changed = self:SetBodyPart(bodypart, name)
-		did_change = did_change or parts_changed
-	end
-
-	for i = 1, nrcolorgroups do 
-		local colorgroup = e:DeserializeString();
-		local colorname = e:DeserializeString();
-
-		local colour_changed = self:SetColorGroup(colorgroup, colorname)
-		did_change = did_change or colour_changed
-	end
-
-	local species = e:DeserializeString()
-	if species ~= self.species then
-		self:SetSpecies(species)
-	end
-
-	if did_change then
-		self.inst:PushEvent("charactercreator_load")
+		if TheNet:IsValidPlayer(playerID) and ThePlayerData:IsCharacterCreatorDataValid(playerID) then
+			-- force refresh ... possible performance issue
+			TheLog.ch.CharacterCreator:printf("Refreshing player data for player %d, %s", playerID, self.inst)
+			self:_OnPlayerDataChanged(PlayerDataChangedFlags.CharacterCreator)
+		end
 	end
 end
-
 
 function CharacterCreator:GetDebugString()
 	local str = ""

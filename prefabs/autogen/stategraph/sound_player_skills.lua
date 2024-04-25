@@ -7,7 +7,26 @@ return {
   sg_wildcard=true,
   stategraphs={
     ["*"]={
-      events={  },
+      events={
+        idle_blink={  },
+        skill_cannon_singlereload={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ soundevent="Skill_Cannon_ReloadAmmo", volume=0.0,},
+          },
+        },
+        skill_cannon_singlereload_no={
+          {
+            eventtype="playsound",
+            frame=1,
+            param={ soundevent="Skill_Cannon_ReloadAmmo_full",},
+          },
+        },
+        skill_cannon_singlereload_yes_loop={
+          { eventtype="playsound", frame=1, param={ soundevent="Skill_Cannon_ReloadAmmo",},},
+        },
+      },
       sg_events={
         {
           eventtype="playsound",
@@ -43,6 +62,38 @@ return {
             soundevent="Skill_ThrowStone_Charge_LP",
             stopatexitstate=true,
           },
+        },
+        {
+          eventtype="playsound",
+          name="sfx-foley_L",
+          param={ soundevent="Emote_Mvmt_lg",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-foley_m",
+          param={ soundevent="Emote_Mvmt_med",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-foley_sm",
+          param={ soundevent="Emote_Mvmt_sm",},
+        },
+        { eventtype="playfoleysound", name="sfx-footstep", param={ soundtag="Footstep",},},
+        { eventtype="playfoleysound", name="sfx-hand", param={ soundtag="Hand",},},
+        {
+          eventtype="playfoleysound",
+          name="sfx-footstep_stop",
+          param={ soundtag="Footstep Stop",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-groak_hands",
+          param={ soundevent="Skill_groak_vacuum_hands",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-groak",
+          param={ soundevent="Skill_groak_vacuum",},
         },
       },
     },

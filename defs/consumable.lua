@@ -1,4 +1,5 @@
 local icons_inventory = require "gen.atlas.icons_inventory"
+local kassert = require "util.kassert"
 local missinglist = require "util.missinglist"
 local lume = require "util.lume"
 local slotutil = require "defs.slotutil"
@@ -52,6 +53,28 @@ local function GetLockableIcon(def, locked)
 	end
 end
 
+--used for if you're receiving an item as a reward-- pops text over the player showing the material's icon + the amount received (does not show the name of the reward item)
+function Consumable.GetItemPopText(mat_name, amount)
+	--local pop_str = string.format(STRINGS.UI.INVENTORYSCREEN.ITEM_REWARD_POPTEXT, GetIcon(mat.name), amount)
+	return string.format(STRINGS.UI.INVENTORYSCREEN.ITEM_REWARD_POPTEXT, mat_name, amount)
+end
+
+function GetRaritySound(self)
+	if self.rarity == ITEM_RARITY.s.COMMON then
+		return fmodtable.Event.loot_pop_common
+	elseif self.rarity == ITEM_RARITY.s.UNCOMMON then
+		return fmodtable.Event.loot_pop_uncommon
+	elseif self.rarity == ITEM_RARITY.s.RARE then
+		return fmodtable.Event.loot_pop_rare
+	elseif self.rarity == ITEM_RARITY.s.EPIC then
+		return fmodtable.Event.loot_pop_epic
+	elseif self.rarity == ITEM_RARITY.s.LEGENDARY then
+		return fmodtable.Event.loot_pop_legendary
+	else
+		return fmodtable.Event.loot_pop_common
+	end
+end
+
 function Consumable.AddItem(slot, name, build, data)
 	local items = Consumable.Items[slot]
 	assert(items ~= nil and items[name] == nil, "Nonexistent slot " .. slot)
@@ -70,6 +93,7 @@ function Consumable.AddItem(slot, name, build, data)
 		recipes = data.recipes or nil,
 		add_sound = data.add_sound or nil,
 		remove_sound = data.remove_sound or nil,
+		GetLootSound = GetRaritySound,
 	}
 
 	if data.stackable == false then
@@ -90,6 +114,16 @@ function Consumable.FindItem(query)
 	end
 end
 
+function Consumable.CreateIngredient(name, count)
+	local mat = Consumable.Items.MATERIALS[name]
+	assert(mat, ("Invalid material: %s"):format(name))
+	kassert.typeof("number", count)
+	return {
+		name = name,
+		count = count,
+	}
+end
+
 -- Compare function for use with table.sort or iterators.sorted_pairs.
 function Consumable.CompareDef_ByRarityAndName(a_def, b_def)
 	local a_rarity = ITEM_RARITY.id[a_def.rarity] --lume.find(ITEM_RARITY_IDX, a_def.rarity)
@@ -97,7 +131,7 @@ function Consumable.CompareDef_ByRarityAndName(a_def, b_def)
 	if a_rarity == b_rarity then
 		return a_def.pretty.name < b_def.pretty.name
 	end
-	return a_rarity > b_rarity
+	return a_rarity < b_rarity
 end
 
 -- Compare function for use with table.sort or iterators.sorted_pairs.
@@ -122,14 +156,14 @@ end
 --------------------------------------------------------------------------
 
 Consumable.AddSlot("MATERIALS")
-Consumable.AddSlot("PLACEABLE_PROP")
+--Consumable.AddSlot("PLACEABLE_PROP")
 Consumable.AddSlot("KEY_ITEMS")
 
 --------------------------------------------------------------------------
 
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur', 'drops_currency',
 {
-	tags = { 'glory', 'drops_currency', 'currency', 'netserialize' },
+	tags = { 'glory', 'drops_currency', 'currency', "netserialize" },
 	rarity = ITEM_RARITY.s.COMMON,
 	add_sound = fmodtable.Event.add_currency_konjur,
 	remove_sound = fmodtable.Event.remove_currency_konjur,
@@ -145,7 +179,7 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'glitz', 'drops_currency',
 
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur_soul_lesser', 'drops_currency',
 {
-	tags = { 'crafting_resource', 'currency', 'netserialize' },
+	tags = { 'crafting_resource', 'currency', "netserialize" },
 	rarity = ITEM_RARITY.s.UNCOMMON,
 })
 
@@ -161,27 +195,31 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur_heart', 'drops_currency',
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
+
+-- Konjur Hearts MUST be named this way for the heartmanager/ energy well interactions to function.
+-- See heartstone_deposit_swap.lua and HeartManager:VisualizeQueuedHeart()
+
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur_heart_megatreemon', 'drops_currency',
 {
-	tags = { 'crafting_resource', 'currency', "konjur_heart" },
+	tags = { 'crafting_resource', 'currency', "konjur_heart", "netserialize" },
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur_heart_owlitzer', 'drops_currency',
 {
-	tags = { 'crafting_resource', 'currency', "konjur_heart" },
+	tags = { 'crafting_resource', 'currency', "konjur_heart", "netserialize" },
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur_heart_bandicoot', 'drops_currency',
 {
-	tags = { 'crafting_resource', 'currency', "konjur_heart" },
+	tags = { 'crafting_resource', 'currency', "konjur_heart", "netserialize" },
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'konjur_heart_thatcher', 'drops_currency',
 {
-	tags = { 'crafting_resource', 'currency', "konjur_heart" },
+	tags = { 'crafting_resource', 'currency', "konjur_heart", "netserialize" },
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
@@ -398,7 +436,7 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'windmon_horn', 'drops_windmon',
 -- Megatreemon
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'megatreemon_bark', 'drops_megatreemon',
 {
-	tags = { LOOT_TAGS.NORMAL, 'drops_megatreemon' },
+	tags = {'drops_megatreemon', 'hide' }, -- NEVER DROPS
 	rarity = ITEM_RARITY.s.UNCOMMON,
 })
 -- Consumable.AddItem(Consumable.Slots.MATERIALS, 'megatreemon_wood', 'drops_megatreemon',
@@ -413,7 +451,7 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'megatreemon_hand', 'drops_megatr
 })
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'megatreemon_cone', 'drops_megatreemon',
 {
-	tags = { LOOT_TAGS.ELITE, 'drops_megatreemon' },
+	tags = { LOOT_TAGS.ELITE, 'drops_megatreemon', 'hide' }, -- Can't drop yet,
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
@@ -425,7 +463,7 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'megatreemon_cone', 'drops_megatr
 -- })
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'owlitzer_fur', 'drops_owlitzer',
 {
-	tags = { LOOT_TAGS.NORMAL, 'drops_owlitzer' },
+	tags = { 'drops_owlitzer', 'hide' }, -- NEVER DROPS
 	rarity = ITEM_RARITY.s.UNCOMMON,
 })
 -- Consumable.AddItem(Consumable.Slots.MATERIALS, 'owlitzer_skull', 'drops_owlitzer',
@@ -439,7 +477,7 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'owlitzer_pelt', 'drops_owlitzer'
 })
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'owlitzer_claw', 'drops_owlitzer',
 {
-	tags = { LOOT_TAGS.ELITE, 'drops_owlitzer' },
+	tags = { LOOT_TAGS.ELITE, 'drops_owlitzer', 'hide' },  -- Can't drop yet,
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
@@ -471,21 +509,23 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'owlitzer_claw', 'drops_owlitzer'
 
 -- Battoad
 
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'battoad_leg', 'drops_battoad',
+Consumable.AddItem(Consumable.Slots.MATERIALS, 'battoad_wing', 'drops_battoad',
 {
 	tags = { LOOT_TAGS.NORMAL, 'drops_battoad' },
 	rarity = ITEM_RARITY.s.UNCOMMON,
 })
+
+Consumable.AddItem(Consumable.Slots.MATERIALS, 'battoad_leg', 'drops_battoad',
+{
+	tags = { LOOT_TAGS.ELITE, 'drops_battoad' },
+	rarity = ITEM_RARITY.s.EPIC,
+})
+
 -- Consumable.AddItem(Consumable.Slots.MATERIALS, 'battoad_tongue', 'drops_battoad',
 -- {
 -- 	tags = { LOOT_TAGS.NORMAL, 'drops_battoad' },
 -- 	rarity = ITEM_RARITY.s.RARE,
 -- })
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'battoad_wing', 'drops_battoad',
-{
-	tags = { LOOT_TAGS.ELITE, 'drops_battoad' },
-	rarity = ITEM_RARITY.s.EPIC,
-})
 
 -- Mothball
 Consumable.AddItem(Consumable.Slots.MATERIALS, "mothball_fluff", "drops_mothball",
@@ -631,7 +671,7 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, "swarmy_arm", "drops_swarmy",
 
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'bandicoot_tail', 'drops_bandicoot',
 {
-	tags = { LOOT_TAGS.NORMAL, 'drops_bandicoot' },
+	tags = { 'drops_bandicoot', 'hide' }, -- NEVER DROPS
 	rarity = ITEM_RARITY.s.UNCOMMON,
 })
 -- Consumable.AddItem(Consumable.Slots.MATERIALS, 'bandicoot_skull', 'drops_bandicoot',
@@ -646,10 +686,38 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'bandicoot_wing', 'drops_bandicoo
 })
 Consumable.AddItem(Consumable.Slots.MATERIALS, 'bandicoot_hand', 'drops_bandicoot',
 {
-	tags = { LOOT_TAGS.ELITE, 'drops_bandicoot' },
+	tags = { LOOT_TAGS.ELITE, 'drops_bandicoot', 'hide' },  -- Can't drop yet,
 	rarity = ITEM_RARITY.s.LEGENDARY,
 })
 
+
+-- Thatcher
+-- Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_antennae', 'drops_thatcher',
+-- {
+-- 	tags = { 'drops_thatcher', 'hide' }
+-- })
+-- Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_fur', 'drops_thatcher',
+-- {
+-- 	tags = { 'drops_thatcher', 'hide' }
+-- })
+-- Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_limb', 'drops_thatcher',
+-- {
+-- 	tags = { 'drops_thatcher', 'hide' }
+-- })
+-- Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_shell', 'drops_thatcher',
+-- {
+-- 	tags = { 'drops_thatcher', 'hide' }
+-- })
+Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_skull', 'drops_thatcher',
+{
+	tags = { LOOT_TAGS.NORMAL, 'drops_thatcher' },
+	rarity = ITEM_RARITY.s.EPIC,
+})
+Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_wing', 'drops_thatcher',
+{
+	tags = { LOOT_TAGS.ELITE, 'drops_thatcher', 'hide' }, -- Can't drop yet
+	rarity = ITEM_RARITY.s.LEGENDARY, -- this should not drop, is here as placeholder
+})
 
 -- Seeker
 Consumable.AddItem(Consumable.Slots.MATERIALS, "seeker_wood_stick", "drops_seeker",
@@ -748,53 +816,6 @@ Consumable.AddItem(Consumable.Slots.MATERIALS, 'rotwood_twig', 'drops_rotwood',
 	tags = { 'drops_rotwood', 'hide' }
 })
 
--- Thatcher
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_antennae', 'drops_thatcher',
-{
-	tags = { 'drops_thatcher', 'hide' }
-})
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_fur', 'drops_thatcher',
-{
-	tags = { 'drops_thatcher', 'hide' }
-})
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_limb', 'drops_thatcher',
-{
-	tags = { 'drops_thatcher', 'hide' }
-})
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_shell', 'drops_thatcher',
-{
-	tags = { 'drops_thatcher', 'hide' }
-})
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_skull', 'drops_thatcher',
-{
-	tags = { 'drops_thatcher', 'hide' }
-})
-Consumable.AddItem(Consumable.Slots.MATERIALS, 'thatcher_wing', 'drops_thatcher',
-{
-	tags = { 'drops_thatcher', 'hide' }
-})
-
--- auto-generated through constructable.lua
-function Consumable.MakePlaceablePropItem(constructable_def)
-	local slot = Consumable.Slots.PLACEABLE_PROP
-	local items = Consumable.Items[slot]
-	local name = constructable_def.name
-	assert(items ~= nil and items[name] == nil, "Nonexistent slot " .. slot)
-
-	local def = {
-		name = name,
-		slot = slot,
-		icon = constructable_def.icon,
-		pretty = constructable_def.pretty,
-		tags = constructable_def.tags,
-		rarity = ITEM_RARITY.s.COMMON,
-		weight = 1,
-		stackable = false,
-	}
-
-	items[name] = def
-	return def
-end
 
 local function GetIconForRecipeItem(prefab_name, recipes)
 	local icon_name = nil

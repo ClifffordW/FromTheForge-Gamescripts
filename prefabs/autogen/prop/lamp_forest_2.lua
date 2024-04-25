@@ -5,8 +5,11 @@ return {
   bloomtargets={ { name="candle", type="Symbol",},},
   glowcolor="ED6929FF",
   gridsize={ { h=2, w=2,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
   looping=true,
+  networked=1,
   parallax={
     { anim="moss", dist=-0.3, shadow=true,},
     { anim="lantern", dist=-0.2, shadow=true,},

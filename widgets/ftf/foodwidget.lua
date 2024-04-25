@@ -2,6 +2,7 @@ local Power = require "defs.powers"
 local Text = require "widgets.text"
 local Widget = require "widgets.widget"
 local FoodIconWidget = require "widgets.foodiconwidget"
+local PowerTooltip = require"widgets.ftf.powertooltip"
 local easing = require "util.easing"
 
 local FoodWidget = Class(Widget, function(self, width, owner, food)
@@ -13,6 +14,8 @@ local FoodWidget = Class(Widget, function(self, width, owner, food)
 	self.food = food
 	self.food_def = food:GetDef()
 
+	self:SetToolTipClass(PowerTooltip)
+
 	self.food_widget_root = self:AddChild(Widget())
 
 	self.food_widget = self.food_widget_root:AddChild(FoodIconWidget())
@@ -23,7 +26,7 @@ local FoodWidget = Class(Widget, function(self, width, owner, food)
 end)
 
 function FoodWidget:UpdateUI()
-	self:SetToolTip((STRINGS.UI.UNITFRAME.FOOD_TOOLTIP):format(self.food_def.pretty.name, Power.GetDescForPower(self.food)))
+	self:SetToolTip( { power = self.food } )
 	self.food_widget:UpdateFood()
 end
 

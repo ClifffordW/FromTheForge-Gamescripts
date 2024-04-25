@@ -64,8 +64,7 @@ function DebugCastManager:RenderPanel( ui, panel )
 
 	if ui:CollapsingHeader("Players", ui.TreeNodeFlags.DefaultOpen) then
 		ui:Indent()
-		local local_players = TheNet:GetLocalPlayerList()
-		for _, id in ipairs(local_players) do
+		for _, id in ipairs(TheNet:GetLocalPlayerList()) do
 			local player = GetPlayerEntityFromPlayerID(id)
 			local qc = self.castmanager.questcentrals[player]
 			if qc ~= nil then

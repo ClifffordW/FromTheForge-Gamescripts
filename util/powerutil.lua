@@ -1,6 +1,6 @@
 local EffectEvents = require "effectevents"
 local ParticleSystemHelper = require "util.particlesystemhelper"
-
+local mapgen = require "defs.mapgen"
 
 local powerutil = {}
 
@@ -63,6 +63,18 @@ function powerutil.SpawnPowerHitFx(prefab, attacker, target, x_offset, y_offset,
 	-- This can be solved by making all NPCs "minimal" entities, and then the internal check for FXHit could be changed from "IsLocal" to "IsLocal or IsMinimal" and allow it to happen
 	-- SEE internal todo list: "- Investigate changing them all to minimal entities?
 	return SpawnPowerHitFx(prefab, attacker, target, x_offset, y_offset, hitstoplevel)
+end
+
+function powerutil.SpawnLocalChildFxOnEntity(name, parent)
+	local fx = SpawnPrefab(name)
+	if fx then
+		fx.entity:SetParent(parent.entity)
+		fx.entity:AddFollower()
+		if parent.components.hitstopper ~= nil then
+			parent.components.hitstopper:AttachChild(fx)
+		end
+	end
+	return fx
 end
 
 function powerutil.SpawnFxOnEntity(name, ent, params)
@@ -133,6 +145,10 @@ function powerutil.GetCounterTextPercent(pow, inst)
 	return string.format("%d%%", pow.counter or 0)
 end
 
+function powerutil.TargetIsEnemy(attack)
+	local target = attack:GetTarget()
+	return target ~= nil and target:IsValid() and target:HasTag("mob")
+end
 function powerutil.TargetIsEnemyOrDestructibleProp(attack)
 	local target = attack:GetTarget()
 	return target ~= nil and target:IsValid() and (target:HasTag("mob") or target:HasTag("prop_destructible"))
@@ -140,6 +156,48 @@ end
 
 function powerutil.EntityIsEnemyOrDestructibleProp(entity)
 	return entity ~= nil and entity:IsValid() and (entity:HasTag("mob") or entity:HasTag("prop_destructible"))
+end
+
+function powerutil.CountEnemiesInTargetsHit(targets_hit)
+	local enemy_count = 0
+
+	if targets_hit then
+		for i,target in ipairs(targets_hit) do
+			if target:HasTag("mob") then
+				enemy_count = enemy_count + 1
+			end
+		end
+	end
+	return enemy_count
+end
+function powerutil.IsCombatRoom()
+	local tags =
+	{ 
+		"boss",
+		"miniboss",
+		"monster",
+	}
+	local current = TheWorld:GetCurrentRoomType()
+
+	local combat = table.contains(tags, current)
+	-- local complete = TheWorld.components.spawncoordinator:GetIsRoomComplete()
+
+	return combat -- and not complete
+end
+
+function powerutil.IsInActiveCombat()
+	local tags =
+	{ 
+		"boss",
+		"miniboss",
+		"monster",
+	}
+	local current = TheWorld:GetCurrentRoomType()
+
+	local combat = table.contains(tags, current)
+	local complete = TheWorld.components.spawncoordinator:GetIsRoomComplete()
+
+	return combat and not complete
 end
 
 return powerutil

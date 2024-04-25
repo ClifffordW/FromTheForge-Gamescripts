@@ -8,9 +8,6 @@ local Canopy = require "prefabs.customscript.canopy"
 local LightSpot = require "prefabs.customscript.lightspot"
 require "proc_gen.weighted_choice"
 
-local TILE_TYPES = PropProcGen.Tile:AlphaSorted()
-setmetatable(TILE_TYPES, nil)
-
 local PROP_FLAGS = PropProcGen.Tag:AlphaSorted()
 setmetatable(PROP_FLAGS, nil)
 
@@ -18,7 +15,6 @@ local SceneProp = Class(SceneElement, function(self, prop, zone_gen)
 	SceneElement._ctor(self)
 
 	self.prop = prop
-	self.tile_types = deepcopy(TILE_TYPES)
 	self.flags = {}
 	self.color_variants = {}
 
@@ -74,21 +70,6 @@ function SceneProp:GetDecorType()
 	return DecorType.s.Prop
 end
 
--- TODO @chrisp #scenegen - hard-coded tile types
-local tile_types = {
-	DIRT = PropProcGen.Tile.s.path,
-	MOLD = PropProcGen.Tile.s.path,
-	GRASS = PropProcGen.Tile.s.rough,
-	FUZZ = PropProcGen.Tile.s.rough,
-}
-
--- Return true if the specified tile_name maps to an accepted tile_type, or if the tile_name is unknown.
--- Return false if the specified tile_name is known but not in the whitelist of accepted tile types.
-function SceneProp:CanPlaceOnTile(tile_name)
-	local tile_type = tile_types[tile_name]
-	return not tile_type or Lume(self.tile_types):find(tile_type):result()
-end
-
 function SceneProp:GetLabel()
 	return self._base.GetLabel(self) or self.prop
 end
@@ -103,7 +84,6 @@ function SceneProp:Ui(ui, id, prop_browser, selected_color_variant)
 
 	self._base.Ui(self, ui, id)
 
-	ui:FlagRadioButtons("Tile Types" .. id, TILE_TYPES, self.tile_types)
 	ui:FlagRadioButtons("Flags"..id, PROP_FLAGS, self.flags)
 	selected_color_variant = PropColorVariant.ColorVariantsUi(self, ui, id.."ColorVariants", selected_color_variant)
 

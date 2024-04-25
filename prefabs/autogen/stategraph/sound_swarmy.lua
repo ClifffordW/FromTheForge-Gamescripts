@@ -3,7 +3,7 @@ return {
   __displayName="sound_swarmy",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "swarmy",},
+  prefab={ "swarmy", "swarmy_elite",},
   stategraphs={
     sg_swarmy={
       sg_events={
@@ -35,6 +35,23 @@ return {
           name="sfx-vo_long",
           param={ soundevent="swarmy_vo_long",},
         },
+        {
+          eventtype="playfoleysound",
+          name="sfx-bodyfall_q",
+          param={ soundtag="Bodyfall", volume=29.0,},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-tell",
+          param={ soundevent="AAAA_default_event",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-punch",
+          param={ soundevent="swarmy_uppercut",},
+        },
+        { eventtype="playsound", name="sfx-hit", param={ soundevent="swarmy_vo_hit",},},
+        { eventtype="playsound", name="sfx-be2", param={ soundevent="swarmy_be2",},},
       },
     },
   },

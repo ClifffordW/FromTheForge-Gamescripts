@@ -1,13 +1,21 @@
+local INTERACTOR_KEY = "screenopener"
+
 local screenopener = {
 	default = {},
 }
 
-local function OnInteract( inst, player, opts )
+function screenopener.OnInteract( inst, player, opts )
 	local screen_ctor = require(opts.screen_require)
 	-- Screen can access inst with
 	-- player.components.playercontroller:GetInteractTarget() but we don't
 	-- assume much about what arguments the screen accepts.
 	TheFrontEnd:PushScreen(screen_ctor(player))
+	local playercontroller = player.components.playercontroller
+	if not playercontroller:HasGamepad() then
+		-- Make screen behave like user used mouse to interact since that's
+		-- more common and a better initial state for screens.
+		playercontroller:_SetLastInputDeviceType("mouse")
+	end
 	player.sg:GoToState('idle_accept')
 end
 
@@ -26,16 +34,25 @@ function screenopener.default.CustomInit(inst, opts)
 		inst:AddComponent("interactable")
 	end
 
+	inst:AddComponent("townhighlighter")
+
 	inst.components.interactable:SetRadius(3.5)
-		:SetInteractStateName("powerup_interact")
+		:SetInteractStateName("no_anim_interact")
 		:SetInteractConditionFn(function(_, player, is_focused) return CanInteract(inst, player, is_focused) end)
-		:SetOnInteractFn(function(_, player) OnInteract(inst, player, opts) end)
-		:SetupForButtonPrompt(GetInteractionString(inst.prefab), nil, nil, opts.y_world_offset)
+		:SetOnInteractFn(function(_, player) screenopener.OnInteract(inst, player, opts) end)
+		:SetOnGainInteractFocusFn(function(inst, player)
+			player.components.interactor:SetStatusText(INTERACTOR_KEY, GetInteractionString(inst.prefab))
+		end)
+		:SetOnLoseInteractFocusFn(function(inst, player)
+			player.components.interactor:SetStatusText(INTERACTOR_KEY, nil)
+		end)
 end
 
 function screenopener.PropEdit(editor, ui, params)
 	local args = params.script_args
 	assert(args)
+	params.clickable = true  -- has interactable
+	params.sound = true  -- probably makes interact sound
 
 	ui:PushDisabledStyle()
 	ui:InputText("Interact Label", GetInteractionString(editor.prefabname))

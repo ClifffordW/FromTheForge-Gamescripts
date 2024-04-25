@@ -225,6 +225,6 @@ return {
       z=0.5,
     },
   },
-  group="bursts",
+  group="sparks",
   mode_2d=false,
 }

@@ -1,6 +1,8 @@
 local SGCommon = require "stategraphs.sg_common"
 local Enum = require "util.enum"
 local Strict = require "util.strict"
+local Power = require "defs.powers"
+local ParticleSystemHelper = require "util.particlesystemhelper"
 
 local STATES = Enum {
 	"spawn",
@@ -21,6 +23,24 @@ local ALTERNATE_ANIMATIONS <const> = {
 	[STATES.s.despawn] = "despawn",
 }
 Strict.strictify(ALTERNATE_ANIMATIONS)
+
+
+-- Do not strictify these, because we want to be able to check if one is nil.
+local TEASER_PARTICLES = {
+	[Power.Rarity.COMMON] = nil,
+	[Power.Rarity.EPIC] = "power_drop_glow_epic_teaser",
+	[Power.Rarity.LEGENDARY] = "power_drop_glow_legendary_teaser",
+}
+local ATTACHED_PARTICLES = {
+	[Power.Rarity.COMMON] = "power_drop_generic",
+	[Power.Rarity.EPIC] = "power_drop_glow_epic",
+	[Power.Rarity.LEGENDARY] = "power_drop_glow_legendary",
+}
+local DESPAWN_PARTICLES = {
+	[Power.Rarity.COMMON] = "power_drop_generic_despawn",
+	[Power.Rarity.EPIC] = "power_drop_glow_epic_despawn",
+	[Power.Rarity.LEGENDARY] = "power_drop_glow_legendary_despawn",
+}
 
 local function PlayAnimForState(inst, state, loop)
 	local anim = inst.sg.mem.use_alternate_anims
@@ -80,15 +100,19 @@ local states =
 
 		timeline =
 		{
---			-- Don't make a marker right away, because there may be a lot of powers in this area.
---			FrameEvent(2, function(inst)
---				if inst.components.playerhighlight and inst.components.singlepickup then
---					local assigned_player = inst.components.singlepickup:GetAssignedPlayer()
---					if assigned_player then
---						inst.components.playerhighlight:SetPlayer(assigned_player)
---					end
---				end
---			end),
+			FrameEvent(1, function(inst)
+				if inst.components.warevisualizer and inst.components.warevisualizer.rarity then
+					inst.sg.mem.rarity = inst.components.warevisualizer.rarity
+
+					if TEASER_PARTICLES[inst.sg.mem.rarity] then
+						ParticleSystemHelper.MakeEventSpawnParticles(inst, { name = "power_drop_teaser_particles", particlefxname = TEASER_PARTICLES[inst.sg.mem.rarity], ischild = true, followsymbol = "swap_fx", offz = -0.5 })
+					end
+
+					if ATTACHED_PARTICLES[inst.sg.mem.rarity] then
+						ParticleSystemHelper.MakeEventSpawnParticles(inst, { name = "power_drop_attached_particles", particlefxname = ATTACHED_PARTICLES[inst.sg.mem.rarity], ischild = true, followsymbol = "swap_fx", offz = -0.1 })
+					end
+				end
+			end),
 
 			-- Push some hitboxes as it lands, so that it clears out any props or traps that were there.
 			FrameEvent(17, function(inst)
@@ -120,6 +144,11 @@ local states =
 			PlayAnimForState(inst, STATES.s.idle, true)
 			-- enable interaction
 		end,
+
+		onexit = function(inst)
+			ParticleSystemHelper.MakeEventStopParticles(inst, { name = "power_drop_teaser_particles" })
+			ParticleSystemHelper.MakeEventStopParticles(inst, { name = "power_drop_attached_particles" })
+		end,
 	}),
 
 	State({
@@ -128,6 +157,10 @@ local states =
 
 		onenter = function(inst)
 			PlayAnimForState(inst,  STATES.s.despawn)
+
+			if inst.sg.mem.rarity and DESPAWN_PARTICLES[inst.sg.mem.rarity] then
+				ParticleSystemHelper.MakeOneShotAtPosition(inst:GetPosition(), DESPAWN_PARTICLES[inst.sg.mem.rarity], 3, inst, { offz = -0.1 })
+			end
 		end,
 
 		events =

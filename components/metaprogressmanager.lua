@@ -110,19 +110,30 @@ function MetaProgressManager:GetProgress(def)
 	return self.progress_instances[def.name]
 end
 
+function MetaProgressManager:ManifestProgress(def)
+	return self:GetProgress(def)
+		or self:StartTrackingProgress(self:CreateProgress(def))
+end
+
+function MetaProgressManager:IsPendingLevel( def )
+	local progress = self:GetProgress(def)
+	if progress and progress:IsPendingLevel() then
+		return true
+	end
+	return false
+end
+
+function MetaProgressManager:IsMaxLevel( def )
+	local progress = self:GetProgress(def)
+	if progress and progress:IsMaxLevel() then
+		return true
+	end
+	return false
+end
+
 function MetaProgressManager:GrantExperience( def, exp )
 	local progress = self:GetProgress(def)
-	if progress then
-		local log, unlocks = progress:GrantExperience(exp)
-
-		if #unlocks > 0 then
-			for _, unlock in ipairs(unlocks) do
-				unlock:UnlockRewardForPlayer(self.inst)
-			end
-		end
-
-		return log, unlocks
-	end
+	return progress and progress:GrantExperienceIfPossible(exp)
 end
 
 -- TODO: Need some sort of "unlock validation" just in case we change the unlocks for an earlier level

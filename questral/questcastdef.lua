@@ -12,6 +12,7 @@ function QuestCastDef:init(quest_class, id)
     self.quest_class = quest_class
     self.id = id
     self.event_handlers = {}
+    self.on_cast_fns = {}
 end
 
 function QuestCastDef:SetDeferred()
@@ -22,23 +23,6 @@ end
 function QuestCastDef:IsRequiredAssignment()
     -- If this cast definition has no filters or explicit casting function, it must be assigned to something when spawned.
     return not self.is_optional and self.filters == nil and self.cast_fn == nil and self.spawn_fn == nil
-end
-
-function QuestCastDef:SpawnFactionRoleFn(faction_type, role_or_roles, sector_cast)
-    self:SpawnFn(function(quest, node)
-        local faction = node:GetQC():FindFactionByClass( faction_type )
-        if faction then
-            local role
-            if type(role_or_roles) == "table" then
-                role = krandom.PickFromArray(role_or_roles)
-            elseif type(role_or_roles) == "string" then
-                role = role_or_roles
-            end
-            local agent = faction:GenerateMember(role, quest:GetCastMember( sector_cast ), quest:GetRank())
-            return agent
-        end
-    end)
-    return self
 end
 
 function QuestCastDef:FilterForPrefab(prefab)
@@ -101,6 +85,11 @@ end
 
 function QuestCastDef:OnUnassign(fn)
     self.unassign_fn = fn
+    return self
+end
+
+function QuestCastDef:AddOnCastFn(fn)
+    table.insert(self.on_cast_fns, fn)
     return self
 end
 
@@ -180,6 +169,12 @@ function QuestCastDef:DoCasting(quest, root)
         if self.spawn_ship_fn( quest, cast, root ) == false then
             quest:Log(self.id, ": could not spawn ship" )
             cast = nil -- Failed ship spawn.
+        end
+    end
+
+    if cast and self.on_cast_fns then
+        for _, fn in ipairs(self.on_cast_fns) do
+            cast:OnFillReservation(fn)
         end
     end
 

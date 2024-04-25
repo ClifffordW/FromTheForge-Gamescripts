@@ -33,7 +33,11 @@ function Quip:init(primary_tag, ...)
     self.tags = TagSet()
     self.notags = TagSet()
     self.dialog = table.empty
+    self.fn = nil
     self.scores = {}
+    self.available_lines = {}
+    self.important = false
+    self.repeatable = false
     for i=1,select('#', ...) do
         local v = select(i, ...)
         dbassert(Quip.AssertValidTag(v))
@@ -61,8 +65,21 @@ function Quip:HasTag(tag)
     return self.primary_tag == tag or self.tags:has(tag)
 end
 
-function Quip:GetScore(tag)
+function Quip:GetScore(tag, player)
+    if self.unique_id and player.components.hasseen:HasSeenQuip(self.unique_id) then
+        return -1
+    end
+
     return self.scores[tag] or 1
+end
+
+function Quip:SetFn(fn)
+    self.fn = fn
+    return self
+end
+
+function Quip:GetFn()
+    return self.fn
 end
 
 -- Quip is only selected if it matches all of the requested tags. You can set
@@ -102,6 +119,20 @@ function Quip:Not(tag)
     return self
 end
 
+function Quip:MarkAsRead(player)
+    if self.unique_id then
+        player.components.hasseen:MarkQuipAsSeen(self.unique_id)
+    end
+
+    return self
+end
+
+function Quip:SetUnique(id)
+    -- if set as unique, only play this quip once
+    self.unique_id = id
+    return self
+end
+
 function Quip:Emote(emote)
     assert(self.emote == nil, "already specified an emote!")
     self.emote = emote
@@ -120,6 +151,51 @@ function Quip:PossibleStrings(lines)
         end
     end
     return self
+end
+
+function Quip:ResetLines(player)
+    for _, line in ipairs(self.dialog) do
+        player.components.hasseen:MarkQuipLineAsSeen(line, false)
+    end    
+end
+
+function Quip:AreAllLinesRead(player)
+    return #self:GetDialog(player) == 0
+end
+
+function Quip:SetRepeatable()
+    --this quip does not mark its lines as read
+    self.repeatable = true
+    return self
+end
+
+function Quip:SetImportant()
+    --this quip makes the NPC wave their hands
+    self.important = true
+    return self
+end
+
+function Quip:IsImportant()
+    return self.important
+end
+
+function Quip:MarkLineAsRead(player, line)
+    if self.repeatable then
+        return
+    end
+
+    player.components.hasseen:MarkQuipLineAsSeen(line, true)
+end
+
+function Quip:GetDialog(player)
+    local available_lines = {}
+    for _, line in ipairs(self.dialog) do
+        if not player.components.hasseen:HasSeenQuipLine(line) then
+            table.insert(available_lines, line)
+        end
+    end
+
+    return available_lines
 end
 
 return Quip

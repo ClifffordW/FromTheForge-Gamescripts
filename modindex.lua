@@ -480,9 +480,9 @@ end
 function ModIndex:InitializeModInfo(modname)
 	local env = {
 		folder_name = modname,
-		locale = LOC.GetLocaleCode(),
+		locale = LOC.GetCurrentLanguageId(),
 		ChooseTranslationTable = function(tbl)
-			local locale = LOC.GetLocaleCode()
+			local locale = LOC.GetCurrentLanguageId()
 			return tbl[locale] or tbl[1]
 		end,
 	}

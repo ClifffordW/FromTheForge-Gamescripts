@@ -5,5 +5,6 @@ return {
   bank="fx_owlitzer",
   bloom=100.0,
   build="fx_owlitzer",
+  group="creatures",
   hue=-1.0,
 }

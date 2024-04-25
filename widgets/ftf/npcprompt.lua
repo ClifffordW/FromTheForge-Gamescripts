@@ -1,11 +1,11 @@
 local FollowPrompt = require("widgets/ftf/followprompt")
 local Image = require("widgets/image")
+local Screen = require "widgets.screen"
 local SpeechBalloon = require("widgets/ftf/speechballoon")
 local SpeechButton = require("widgets/speechbutton")
-local Panel = require("widgets/panel")
 local Widget = require("widgets/widget")
-local fmodtable = require "defs.sound.fmodtable"
 local easing = require "util.easing"
+local fmodtable = require "defs.sound.fmodtable"
 
 
 ------------------------------------------------------------------------------------------
@@ -15,8 +15,8 @@ local easing = require "util.easing"
 
 local ANIMATING_IN_ACTIONS =
 {
-	FADE_IN_TIME = 0.25,
-	BETWEEN_EACH_ACTION = 0.15,
+	FADE_IN_TIME = 0.1,
+	BETWEEN_EACH_ACTION = 0.05,
 }
 
 local ANIMATING_OUT_ACTIONS =
@@ -33,7 +33,7 @@ local ANIMATING_OUT_BALLOONS =
 -- local IGNORE_INPUT_BUFFER_WHILE_FADING_IN = 0.2 -- How long is Input Ignored after a balloon fades out and a new one is fading in?
 -- 												-- Too small means accidental double clicks skips text invisibly
 -- 												-- Too large means lots of clicks get ignored
--- 												-- jambell: planning to iterate on speech bubbles so we can see text history, but this should help for now.
+-- 												-- NOTE: planning to iterate on speech bubbles so we can see text history, but this should help for now.
 
 local IGNORE_INPUT_BUFFER_AFTER_SKIPPING = 0.2 -- How long is Input Ignored after the player clicks to skip the text animation?
 
@@ -72,24 +72,11 @@ local NpcPrompt = Class(FollowPrompt, function(self, owning_player, npc)
 	-- Shows the interactive widgets in this dialog
 	self.actionsBlock = self:AddChild(Widget("Actions Block"))
 
-	-- Item selection brackets
-	self.selection_brackets = self:AddChild(Panel("images/ui_ftf_dialog/speech_button_brackets.tex"))
-		:SetName("Selection brackets")
-		:SetNineSliceCoords(78, 94, 80, 96)
-		:SetNineSliceBorderScale(0.8)
-		:SetHiddenBoundingBox(true)
-		:IgnoreInput(true)
+	-- Item selection brackets. Normally these would come from the screen, but
+	-- the hud isn't normal and we want more control over where they appear.
+	local hunter_id = owning_player:GetHunterId()
+	self.selection_brackets = self:AddChild(Screen.FocusBrackets(hunter_id, {}))
 		:Hide()
-
-	-- Animate them too
-	local speed = 1.35
-	local amplitude = 14
-	self.selection_brackets_w, self.selection_brackets_h = SpeechButton.WIDTH, SpeechButton.HEIGHT
-	self.selection_brackets:RunUpdater(
-		Updater.Loop({
-			Updater.Ease(function(v) self.selection_brackets:SetSize(self.selection_brackets_w + v, self.selection_brackets_h + v) end, amplitude, 0, speed, easing.inOutQuad),
-			Updater.Ease(function(v) self.selection_brackets:SetSize(self.selection_brackets_w + v, self.selection_brackets_h + v) end, 0, amplitude, speed, easing.inOutQuad),
-		}))
 end)
 
 function NpcPrompt:Remove()
@@ -142,45 +129,10 @@ function NpcPrompt:_GetDefaultActionButton()
 	return self.actionsBlock.children and self.actionsBlock.children[1]
 end
 
-function NpcPrompt:_ResizeSelectionBrackets(target_button)
-	target_button = target_button or self.last_target_button or self:_GetDefaultActionButton()
-
-	if target_button then
-		local w, h = target_button:GetSize()
-		self.selection_brackets_w, self.selection_brackets_h = w + 40, h + 30
-		self.selection_brackets:SetSize(self.selection_brackets_w, self.selection_brackets_h)
-			:LayoutBounds("center", "center", target_button)
-	end
-
-	return self
-end
-
 function NpcPrompt:_UpdateSelectionBrackets(target_button)
-
 	if self.last_target_button == target_button then return self end
 
-	-- Get the brackets' starting position
-	local start_pos = self.selection_brackets:GetPositionAsVec2()
-
-	-- Align them with the target
-	self.selection_brackets:LayoutBounds("center", "center", target_button)
-		:Offset(0, 0)
-
-	-- Get the new position
-	local end_pos = self.selection_brackets:GetPositionAsVec2()
-
-	-- Calculate midpoint
-	local mid_pos = start_pos:lerp(end_pos, 0.2)
-	-- Calculate a perpendicular vector from the midpoint
-	local dir = start_pos - end_pos
-	dir = dir:perpendicular()
-	dir = dir:normalized()
-	dir = mid_pos + dir*100
-
-	-- Move them back and animate them in
-	self.selection_brackets:Show()
-		:SetPos(start_pos.x, start_pos.y)
-		:CurveTo(end_pos.x, end_pos.y, dir.x, dir.y, 0.35, easing.outElasticUI)
+	self.selection_brackets:MoveToWidget(target_button)
 
 	self.last_target_button = target_button
 	return self
@@ -287,7 +239,6 @@ function NpcPrompt:_PrepareAnimationActions()
 		button:IgnoreInput(true)
 	end
 
-	self:_ResizeSelectionBrackets()
 	self:_HideSelectionBrackets()
 
 	-- prevent focus from being given to something until the animation is done
@@ -464,7 +415,7 @@ function NpcPrompt:AnimateIn(onDoneFn)
 		-- done callback.
 		self:AnimateInActions()
 	end))
-	-- TODO(dbriscoe): Run the callback after anim completes
+	-- Should we run the callback after anim completes??
 
 	-- Run the callback, if any
 	balloonsUpdater:Add(Updater.Do(function()
@@ -522,7 +473,7 @@ function NpcPrompt:ShowDialogBalloonSpooled(line, personality, onClickFn, hasAct
 
 	self.completed_spooling = false
 	local function complete_cb(was_snapped)
-		self.balloon:SetContinueArrowShown(true)
+		self.balloon:SetContinueArrowShown(onClickFn ~= nil)
 		self.completed_spooling = true
 	end
 	self.balloon:SetPersonalityText(line, complete_cb, personality)
@@ -563,6 +514,10 @@ function NpcPrompt:ShowDialogBalloonSpooled(line, personality, onClickFn, hasAct
 	self:_ResumeInputAndFocus()
 
 	return self
+end
+
+function NpcPrompt:SetIsInteractable(interactable)
+	self.balloon:SetIsInteractable(interactable)
 end
 
 function NpcPrompt:SnapSpool()
@@ -660,27 +615,27 @@ end
 function NpcPrompt:DoFocusHookups()
 	for k, v in ipairs(self.actionsBlock.children) do
 		if k > 1 then
-			self.actionsBlock.children[k]:SetFocusChangeDir(MOVE_UP, self.actionsBlock.children[k-1])
+			self.actionsBlock.children[k]:SetFocusChangeDir(FocusMove.s.up, self.actionsBlock.children[k-1])
 		end
 		if k < #self.actionsBlock.children then
-			self.actionsBlock.children[k]:SetFocusChangeDir(MOVE_DOWN, self.actionsBlock.children[k+1])
+			self.actionsBlock.children[k]:SetFocusChangeDir(FocusMove.s.down, self.actionsBlock.children[k+1])
 		end
 	end
 	return self
 end
 
-function NpcPrompt:OnFocusMove(dir, down)
+function NpcPrompt:OnFocusMove(dir, input_device)
 	-- Never do super. We want to push focus moving down to the focus widget.
-	local focus = self:GetFE():GetFocusWidget()
+	local focus = self:GetFocusForOwner()
 	if focus == nil or focus:IsAncestorOf(self) then
 		focus = self:GetDefaultFocus()
 		if focus then
-			focus:SetFocus()
+			return focus
 		end
 	end
 	-- Ancestor check avoids infinite recursion.
 	if focus and not focus:IsAncestorOf(self) then
-		return focus:OnFocusMove(dir, down)
+		return focus:OnFocusMove(dir, input_device)
 	end
 end
 

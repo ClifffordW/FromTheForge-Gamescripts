@@ -24,8 +24,6 @@ local FAST_FORWARD_DT_MULTIPLIER = 30
 -- screen.
 
 local DungeonHistoryMap = Class(Widget, function(self, ...) self:init(...) end)
-	:SetGainFocusSound(nil)
-	:SetHoverSound(nil)
 
 local function noop() end
 
@@ -155,7 +153,7 @@ function DungeonHistoryMap:init(nav)
 		for y=1,grid_count.y do
 			self.bg.tile_root:AddItem(UIAnim(), x, y)
 				:SetBank(bankname)
-				:PlayAnimation(biome_location.id .. "1") -- arbitrary so there's something there
+				:PlayAnimation(biome_location.anim_id .. "1") -- arbitrary so there's something there
 		end
 	end
 	--~ local test = self.bg.tile_root:GetChildren()[1]
@@ -334,13 +332,11 @@ function DungeonHistoryMap:CreateAnimateInUpdater()
 						self.travel_cardinal, self.travel_room_id, TheDungeon:GetDungeonMap():GetCurrentRoomId())
 				end
 
-				if room and room.roomtype == "miniboss" or room.roomtype == "hype" then
-					TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.g_fadeOutMusicAndSendToReverb, 1)
-					TheWorld:DoTaskInTime(1, function()
-						TheLog.ch.Audio:print("***///***dungeonhistorymap.lua: Stopping all music because next clearing is miniboss or hype room.")
-						TheWorld.components.ambientaudio:StopAllMusic()
-					end)
-				end
+				-- if room and room.roomtype == "miniboss" or room.roomtype == "hype" then
+				-- 	TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.g_fadeOutMusicAndSendToReverb, 1)
+				-- 	TheLog.ch.Audio:print("***///***travelscreen.lua: Stopping all music because next clearing is miniboss or hype room.")
+				-- 	TheWorld.components.ambientaudio:StopAllMusic()
+				-- end
 			end
 
 		end),
@@ -520,7 +516,7 @@ function DungeonHistoryMap:_LayoutMap()
 	local tiles = self.bg.tile_root:GetChildren()
 	for _,w in ipairs(tiles) do
 		w.anim_choice = rng:Integer(1, self.tuning.bg_tile.num_variations)
-		w:PlayAnimation(biome_location.id .. w.anim_choice)
+		w:PlayAnimation(biome_location.anim_id .. w.anim_choice)
 	end
 
 	local path_data = self:_ChoosePath(rng)
@@ -645,6 +641,7 @@ function DungeonHistoryMap:CreateTravelUpdater(cardinal, dest_room_id, total_dur
 	self.travel_room_id = dest_room_id
 	self:_RebuildMapNodes()
 
+	dbassert(self.current_node, "Why don't we have a current location? Was this world loaded with debug?")
 	self.current_node:EnsureLocatorExists()
 	local dest_node = self.untravelled_path.dest_node
 	dest_node:EnsureLocatorExists()
@@ -675,14 +672,16 @@ function DungeonHistoryMap:CreateTravelUpdater(cardinal, dest_room_id, total_dur
 				self.dungeon_progress = worldmap.nav:GetProgressThroughDungeon()
 				TheFrontEnd:GetSound():PlaySound(fmodtable.Event.travelScreen_walk)
 
-				self.travel_LP = TheFrontEnd:GetSound():PlaySound_Autoname(fmodtable.Event.travelScreen_path_LP)
+				self.travel_LP = TheFrontEnd:GetSound():PlaySound_Autoname(fmodtable.Event.travelScreen_path_LP, 1, true)
 				TheFrontEnd:GetSound():SetParameter(self.travel_LP, "Music_Dungeon_Progress", self.dungeon_progress)
 				self.delay_remaining = path_draw_duration
 			end),
 			Updater.While(waiting_for_delay),
 			Updater.Do(function()
-				TheFrontEnd:GetSound():KillSound(self.travel_LP)
-				self.travel_LP = nil
+				if self.travel_LP then
+					TheFrontEnd:GetSound():KillSound(self.travel_LP)
+					self.travel_LP = nil
+				end
 
 				if self.travel_cardinal and self.travel_room_id then
 					-- TheLog.ch.DungeonHistoryMap:printf("travel_cardinal = %s travel_room_id = %d", self.travel_cardinal, self.travel_room_id)
@@ -748,6 +747,15 @@ end
 -- TODO: force player to travel if this is used, because dungeon map state has irreversibly changed
 function DungeonHistoryMap:Debug_TravelUsed()
 	return self._debug_travel_used
+end
+
+function DungeonHistoryMap:OnVizChange(is_visible)
+	if self.travel_LP then
+		if not is_visible then
+			TheFrontEnd:GetSound():KillSound(self.travel_LP)
+			self.travel_LP = nil
+		end
+	end
 end
 
 function DungeonHistoryMap:DebugDraw_AddSection(ui, panel)

@@ -13,4 +13,5 @@ return {
   scalex=2.0,
   scaley=2.0,
   sortorder=-1,
+  soundevent="Pushback_heavy",
 }

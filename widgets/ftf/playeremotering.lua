@@ -234,7 +234,7 @@ local PlayerEmoteRing = Class(Widget, function(self, owner)
 	self:SetOwningPlayer(owner)
 
 	self.active = false 					-- If true, then playercontroller will feed inputs to this instead
-	self.show_diagonals = true				-- If true, it displays 8 emotes, instead of the cardinal 4
+	self.show_diagonals = false				-- If true, it displays 8 emotes, instead of the cardinal 4
 	self.slots_count = self.show_diagonals and 8 or 4
 	self.slot_position_radius = 230			-- How far from the centre each slot is
 	self.slots_position_y_offset = 80		-- How much to offset the circle from y=0
@@ -408,6 +408,10 @@ function PlayerEmoteRing:OnEmoteKey(toggle_mode)
 end
 
 function PlayerEmoteRing:CloseImmediately()
+	if self.show_sound then
+		TheFrontEnd:GetSound():KillSound(self.show_sound)
+		self.show_sound = nil
+	end
 	self:SetRingState(RING_STATES.HIDDEN)
 	self:Hide()
 	self.active = false
@@ -418,7 +422,7 @@ function PlayerEmoteRing:CloseImmediately()
 end
 
 function PlayerEmoteRing:FadeIn()
-	self:PlaySpatialSound(fmodtable.Event.emoteRing_show)
+	self.show_sound = self:PlaySpatialSound(fmodtable.Event.emoteRing_show)
 	self:SetRingState(RING_STATES.FADE_IN)
 	self:Show()
 	for k, v in ipairs(self.slots_container.children) do
@@ -431,6 +435,10 @@ function PlayerEmoteRing:FadeIn()
 end
 
 function PlayerEmoteRing:FadeOut()
+	if self.show_sound then
+		TheFrontEnd:GetSound():KillSound(self.show_sound)
+		self.show_sound = nil
+	end
 	self:SetRingState(RING_STATES.FADE_OUT)
 	for k, v in ipairs(self.slots_container.children) do
 		if k == #self.slots_container.children then
@@ -474,12 +482,11 @@ function PlayerEmoteRing:UpdateFocus()
 
 	if self.owner then 
 		-- Get player's input device
-		local input_id = TheNet:FindInputIDForGUID(self.owner.GUID)
-		local device_type, device_id = TheInput:ConvertFromInputID(input_id)
+		local is_kbm = not self.owner.components.playercontroller:HasGamepad()
 
 		-- Handle them accordingly
 		local angle, radius
-		if device_type == "keyboard" then
+		if is_kbm then
 
 			-- Show focus based on the mouse angle around the ring
 			local mx, my = TheInput:GetVirtualMousePos()
@@ -498,7 +505,7 @@ function PlayerEmoteRing:UpdateFocus()
 
 			self:SetGamepadHotkeysShown(false)
 
-		elseif device_type == "gamepad" then
+		else
 
 			-- Show focus based on the gamepad stick angle
 			local playercontroller = self.owner.components.playercontroller
@@ -535,7 +542,7 @@ function PlayerEmoteRing:UpdateFocus()
 		self:SelectSlot(closest_slot_index) -- if none, it unselects all slots
 
 		-- If the player flicked the gamepad stick to a slot, trigger that emote
-		if device_type == "gamepad" and closest_slot_index > 0 then
+		if not is_kbm and closest_slot_index > 0 then
 
 			local slot = self:GetSlot(closest_slot_index)
 			local slot_is_active = slot:IsActive()

@@ -10,8 +10,6 @@ local function AddDyeSlot(slot)
 	Cosmetic.EquipmentDyes[slot] = {}
 end
 
--- Passing nil for filtertags or symboltags will match as if we supported every tag.
--- TODO(dbriscoe): POSTVS Pass tags as named keys in a tags table to avoid errors.
 function Cosmetic.AddEquipmentDye(name, data)
 	local cosmetic_data = data.cosmetic_data
 
@@ -37,20 +35,21 @@ function Cosmetic.AddEquipmentDye(name, data)
 
 end
 
-function Cosmetic.CollectEquipmentDyeAssets(assets)
-	local dupe = {}
+function Cosmetic.CollectEquipmentDyeAssets(asset_pack, included_cosmetics)
+	local dupe = {
+		prod = {},
+		dev = {},
+	}
 	for slot, armour_set in pairs(Cosmetic.EquipmentDyes) do
 		for set_name, set_data in pairs(armour_set) do
 			for dye_name,dye_def in pairs(set_data) do
-				if dye_def.build_override ~= nil and not dupe[dye_def.build_override] then
-
-					local file_path = "anim/"..dye_def.build_override..".zip"
-
-					dupe[dye_def.build_override] = true
-					assets[#assets + 1] = Asset("ANIM", "anim/"..dye_def.build_override..".zip")
+				local build = dye_def.build_override
+				local dest = included_cosmetics[dye_name] and "prod" or "dev"
+				if build and not dupe[dest][build] then
+					dupe[dest][build] = true
+					table.insert(asset_pack[dest], Asset("ANIM", "anim/"..build..".zip"))
 				end
 			end
-
 		end
 	end
 end

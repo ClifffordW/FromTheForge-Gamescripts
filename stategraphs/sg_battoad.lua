@@ -39,7 +39,7 @@ local function ApplyLickStatus(inst, target)
 	if inst.apply_on_lick and target ~= nil and target:IsValid() then
 		local pm = target.components.powermanager
 		if pm ~= nil then
-			pm:AddPowerByName(inst.apply_on_lick)
+			pm:AddPowerByName(inst.apply_on_lick, inst.stacks_on_lick)
 		end
 	end
 end
@@ -145,8 +145,13 @@ end
 local function OnDeath(inst, data)
 	--Spawn death fx
 	DropKonjur(inst)
-	local offset = inst:IsAirborne() and { y = 3.5 } or nil
-	EffectEvents.MakeEventFXDeath(inst, data.attack, "death_battoad", offset)
+	local offset = nil
+	local prefix = "death_battoad"
+	if inst:IsAirborne() then
+		offset = { y = 3.5 }
+		prefix = "death_battoad_air"
+	end
+	EffectEvents.MakeEventFXDeath(inst, data.attack, prefix, offset)
 
 	inst.components.lootdropper:DropLoot()
 end

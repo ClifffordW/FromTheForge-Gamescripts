@@ -2,102 +2,102 @@ STRINGS.PLAYER_EMOTES =
 {
 	EMOTE_WAVE = 
 	{
-		name = "EMOTE NAME",
+		name = "Wave",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_PUMP = 
 	{
-		name = "EMOTE NAME",
+		name = "Fist Pump",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_NOD_SHORT_STERN = 
 	{
-		name = "EMOTE NAME",
+		name = "Got It",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_NOD_CHEERFUL = 
 	{
-		name = "EMOTE NAME",
+		name = "Agree",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_NO_THX = 
 	{
-		name = "EMOTE NAME",
+		name = "No Thanks",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_BONION_CALL = 
 	{
-		name = "EMOTE NAME",
+		name = "Bulbin Call",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_SHRUG = 
 	{
-		name = "EMOTE NAME",
+		name = "Shrug",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_EXCITED = 
 	{
-		name = "EMOTE NAME",
+		name = "Excited",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_DEJECTED = 
 	{
-		name = "EMOTE NAME",
+		name = "Sad",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_THINK = 
 	{
-		name = "EMOTE NAME",
+		name = "Think",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_BANDICOOT_SNICKER = 
 	{
-		name = "EMOTE NAME",
+		name = "Snicker",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_GOURDO_FACE_BASH = 
 	{
-		name = "EMOTE NAME",
+		name = "Headbang",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_MAMMIMAL_HOWL = 
 	{
-		name = "EMOTE NAME",
+		name = "Awoo",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_AMPHIBEE_BUBBLE_KISS = 
 	{
-		name = "EMOTE NAME",
+		name = "Bubble Smooch",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_OGRE_CHARGED_JUMP = 
 	{
-		name = "EMOTE NAME",
+		name = "Jump",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_TOTOLILI_WIGGLES = 
 	{
-		name = "EMOTE NAME",
+		name = "Vibe",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_POLEARM_TWIRL = 
 	{
-		name = "EMOTE NAME",
+		name = "Spear Flourish",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_HAMMER_TWIRL = 
 	{
-		name = "EMOTE NAME",
+		name = "Hammer Flourish",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_CANNON_TWIRL = 
 	{
-		name = "EMOTE NAME",
+		name = "Cannon Flourish",
 		desc = "EMOTE DESC",
 	},
 	EMOTE_SHOULDER_LOOK	 = 
 	{
-		name = "EMOTE NAME",
+		name = "Strike a Pose",
 		desc = "EMOTE DESC",
 	},
 }

@@ -52,9 +52,7 @@ function RangeAndAttack:Visit()
 			self.status = BNState.FAILED
 		else
 			if not CollisionAvoidance.IsDebugEnabled() then
-				if self.inst.components.combat:HitStunPressureFramesExceeded() then
-					self.inst:PushEvent("dohitstunpressureattack", { target = target })
-				elseif not self.inst.components.combat:IsInCooldown() then
+				if not self.inst.components.combat:IsInCooldown() then
 					self.inst:PushEvent("doattack", { target = target })
 				end
 			end

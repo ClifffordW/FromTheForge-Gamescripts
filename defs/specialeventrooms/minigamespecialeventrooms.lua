@@ -47,7 +47,7 @@ local function AddDoors(inst)
 end
 
 local function AddWalls(inst)
-	--JAMBELL: TEMPORARY FOR NOW, until a reliable world/scene exists
+	-- TEMPORARY FOR NOW, until a reliable world/scene exists
 	local wall_positions =
 	{
 		{ 0,	0 },
@@ -128,7 +128,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("dps_check",
 
 	on_start_fn = function(inst)
 		local health = inst.components.specialeventroommanager:ScaleEnemyHealth(3000)
-		inst.roll.components.health:SetMax(health, true) -- TODO(jambell): scale based on player's average DPS this run
+		inst.roll.components.health:SetMax(health, true) -- TODO: scale based on player's average DPS this run
 		inst.roll.components.health:SetCurrent(health, true)
 
 		inst.components.specialeventroommanager:StartTimer(30)
@@ -401,7 +401,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("bomb_game",
 	end,
 
 	on_update_fn = function(inst)
-		if inst.components.specialeventroommanager:GetTimerSecondsPassed() % 2 == 0 then --TODO(jambell) fix onupdate so it doesn't update until event has started
+		if inst.components.specialeventroommanager:GetTimerSecondsPassed() % 2 == 0 then --TODO fix onupdate so it doesn't update until event has started
 			inst.spawn_arrangement(inst, inst.rng:PickValue(inst.bomb_arrangements))
 		end
 	end,
@@ -475,7 +475,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("hit_streak",
 	end,
 
 	on_start_fn = function(inst)
-		--JAMBELL: change slower
+		--TODO: change slower
 		inst.rng = TheDungeon:GetDungeonMap():GetRNG()
 
 		TheWorld.components.roomlockable:AddLock(inst)
@@ -573,7 +573,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("mini_cabbage_swarm",
 	},
 
 	on_init_fn = function(inst)
-		--TODO(jambell) set up an objectpool and configure all the mobs once, which will help with 
+		--TODO set up an objectpool and configure all the mobs once, which will help with 
 		inst:AddComponent("powermanager")
 
 		local def = Power.FindPowerByQualifiedName("pwr_smallify")
@@ -607,7 +607,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("mini_cabbage_swarm",
 
 		local spawn_wave = function(inst)
 			local should_clear = true
-			local addframes = inst.rng:Boolean(1) and 2 or 0 -- either throw them sequentially or all at once --JAMBELL: currently always sequential
+			local addframes = inst.rng:Boolean(1) and 2 or 0 -- either throw them sequentially or all at once -- currently always sequential
 
 			for idx, spawner in pairs(inst.spawner_positions) do
 				local x,z = spawner[1], spawner[2]
@@ -630,7 +630,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("mini_cabbage_swarm",
 
 							roll.Transform:SetPosition(x, 0, z)
 							-- roll.Transform:SetPosition(x + v[1], 0, z + v[2])
-							roll.sg:GoToState("spawn_battlefield", { spawner = inst, dir = x > 0 and 180 or 0 }) --TODO(jambell): change dir randomly
+							roll.sg:GoToState("spawn_battlefield", { spawner = inst, dir = x > 0 and 180 or 0 }) --TODO: change dir randomly
 							inst.rolls[roll] = true
 							inst.totalrolls = inst.totalrolls + 1
 						end
@@ -644,7 +644,7 @@ SpecialEventRoom.AddMinigameSpecialEventRoom("mini_cabbage_swarm",
 
 	on_update_fn = function(inst)
 		local secondspassed = inst.components.specialeventroommanager:GetTimerSecondsPassed()
-		if secondspassed % 2 == 0 then --TODO(jambell) fix onupdate so it doesn't update until event has started
+		if secondspassed % 2 == 0 then --TODO fix onupdate so it doesn't update until event has started
 			inst.spawn_wave(inst)
 		end
 	end,

@@ -314,16 +314,19 @@ function ZoneGenBuilder:RandomPointInTile(tile, element)
 	end
 end
 
-function ZoneGenBuilder:ZoneGenContains(element, x, z)
-	-- Compute the point on the circle in the 4 cardinal directions and see if those points
+function ZoneGenBuilder:ZoneGenContains(element, x, z, predicate)
+	-- Compute the point on the circle in STEP_COUNT directions and see if those points
 	-- are in tiles in our zone gen. If not, return false.
 	local radius = element:GetPersistentRadius()
+	local STEP_COUNT = 10
+	local radians_per_step = (math.pi * 2) / STEP_COUNT
 	local offsets = {
-		{x = radius, z = 0},
-		{x = -radius, z = 0},
-		{x = 0, z = radius},
-		{x = 0, z = -radius},
+		{ x = 0, z = 0 } -- always check the center
 	}
+	for i = 1, STEP_COUNT do
+		local theta = radians_per_step * (i - 1)
+		table.insert(offsets, KMath.polar_to_cartesian(radius, theta))
+	end
 	local tile = self.zone_grid:WorldToGrid({x = x, z = z})
 	if not tile then
 		-- Location is not on the tile layout.
@@ -338,6 +341,10 @@ function ZoneGenBuilder:ZoneGenContains(element, x, z)
 		if grid_location then
 			local index = self.zone_grid:GridToIndex(grid_location.x, grid_location.z)
 			if not self.tiles[index] then
+				return false
+			end
+
+			if predicate and not predicate(world_location) then
 				return false
 			end
 
@@ -503,10 +510,20 @@ function ZoneGenBuilder:PlaceElement(element, x, z)
 	end
 
 	-- Filter by tile type.
-	local external_tile_id = self.zone_grid.tile_layer.data[tile_index]
-	local tile_name = self.map_layout.tilegroup.ExternalOrder[external_tile_id]
-	if not element:CanPlaceOnTile(tile_name) then
-		return false
+	if element.filter_by_tile_type then
+		if element.tile_type_filter_shape == TileTypeFilterShape.s.Circle then
+			if not self:ZoneGenContains(element, x, z, function(world_position)		
+				local _, tile_name = self.zone_grid:GetTile(world_position)
+				return element:CanPlaceOnTile(tile_name)
+			end) then
+				return false
+			end
+		else
+			local _, tile_name = self.zone_grid:GetTile(world_position)
+			if not element:CanPlaceOnTile(tile_name) then
+				return false
+			end
+		end
 	end
 
 	-- Space is often reserved in front of important grid props that we do not want to obscure.
@@ -556,7 +573,7 @@ function ZoneGenBuilder:Warn(warning)
 	-- print (warning)
 end
 
-function ZoneGenBuilder:PlaceElements()	
+function ZoneGenBuilder:PlaceElements()
 	-- Loop forever, placing elements as we go, until we can't any more.
 	local spawn_attempts = 0
 	local center_tile = false
@@ -656,6 +673,13 @@ function ZoneGenBuilder:Build()
 	if self.report then
 		self.report.circles = {}
 	end
+	
+	local tags = {DecorTags[DecorLayer.id[self.zone_gen.decor_layer]]}
+
+	-- The ZoneGen tag is for zone-centric Editor features. We can exclude it in release builds.
+	if DEV_MODE then
+		table.insert(tags, self.zone_gen.tag)
+	end
 
 	-- Translate placed_elements into placements and return them.
 	local element_placements = {}
@@ -673,7 +697,7 @@ function ZoneGenBuilder:Build()
 					color_variant = PropColorVariant.ChooseColorVariant(self.rng, placed_element.element),
 					canopy = placed_element.element.canopy,
 					light_spot = placed_element.element.light_spot,
-					tags = {DecorTags[DecorLayer.id[self.zone_gen.decor_layer]], self.zone_gen.tag}
+					tags = deepcopy(tags),
 				}
 			)
 		elseif placed_element.element.particle_system then
@@ -688,7 +712,7 @@ function ZoneGenBuilder:Build()
 					particle_system = {
 						layer_override = placed_element.element.layer
 					},
-					tags = {DecorTags[DecorLayer.id[self.zone_gen.decor_layer]], self.zone_gen.tag}
+					tags = deepcopy(tags),
 				}
 			)
 		elseif placed_element.element.fx then
@@ -700,7 +724,7 @@ function ZoneGenBuilder:Build()
 					x = placed_element.location.x, 
 					y = placed_element.element:GetHeight(), 
 					z = placed_element.location.y,
-					tags = {DecorTags[DecorLayer.id[self.zone_gen.decor_layer]], self.zone_gen.tag}
+					tags = deepcopy(tags),
 				}
 			)
 		end

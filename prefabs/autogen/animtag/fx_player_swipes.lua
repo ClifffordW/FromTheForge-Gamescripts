@@ -46,6 +46,9 @@ return {
       polearm_atk3={ events={ { frame=8, name="AttachSwipeFx",},},},
       polearm_heavy_atk={ events={ { frame=10, name="AttachSwipeFx",},},},
       polearm_multithrust_atk={ events={ { frame=0, name="AttachSwipeFx",},},},
+      polearm_multithrust_atk_loop={ events={ { frame=0, name="vfx-polearm_multithrust_atk_loop",},},},
+      polearm_multithrust_atk_pre={ events={ { frame=0, name="vfx-polearm_multithrust_atk_pre",},},},
+      polearm_multithrust_atk_pst={ events={ { frame=0, name="vfx-polearm_multithrust_atk_pst",},},},
       polearm_rev_heavy_atk={ events={ { frame=10, name="AttachSwipeFx",},},},
       polearm_roll_atk={
         events={
@@ -54,6 +57,9 @@ return {
           { frame=2, name="AttachSwipeFxBack",},
         },
       },
+      polearm_roll_atk_loop={ events={ { frame=0, name="vfx-polearm_roll_atk_loop",},},},
+      polearm_roll_atk_pre={ events={ { frame=0, name="vfx-polearm_roll_atk_pre",},},},
+      polearm_roll_atk_pst={ events={ { frame=0, name="vfx-polearm_roll_atk_pst",},},},
       polearm_roll_rev_atk={ events={ { frame=6, name="AttachSwipeFx",},},},
       polearm_shove={ events={ { frame=3, name="vfx-polearm_shove",},},},
     },

@@ -104,7 +104,7 @@ function DoPulse(inst, i, numticks)
 	numticks = numticks or 40
 	local color = {80/255, 0/255, 0/255} --TODO: make tuning value
 
-	if inst:IsValid() then
+	if inst:IsValid() and inst:IsLocalOrMinimal() then	-- The pulsing color will be synced through the animstate.
 		if i < numticks then
 			local r, g, b = table.unpack(color)
 			local iterator = i % #flicker_piecewise_data

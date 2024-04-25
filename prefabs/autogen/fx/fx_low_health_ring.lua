@@ -4,6 +4,7 @@ return {
   anim="loop_small",
   bloom=82.0,
   finaloffset=-1,
+  group="TESTING",
   looping=true,
   multcolor="FFFFFF66",
   onground=true,

@@ -11,5 +11,5 @@ return {
   randomflip=true,
   saturation=-85.0,
   shadow=true,
-  soundevent="cabbageroll_death",
+  soundevent="cabbageroll_death_norm",
 }

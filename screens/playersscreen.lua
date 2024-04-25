@@ -1,6 +1,7 @@
 local AddPlayerDialog = require "screens.dialogs.addplayerdialog"
 local ConfirmDialog = require "screens.dialogs.confirmdialog"
 local ConnectGamepadSidebar = require "widgets.connectgamepadsidebar"
+local Enum = require "util.enum"
 local ExpandingTabGroup = require "widgets/expandingtabgroup"
 local Image = require "widgets.image"
 local ImageButton = require "widgets.imagebutton"
@@ -144,7 +145,7 @@ local PlayersScreen =  Class(Screen, function(self, data)
 		:SetName("Tabs widget")
 		:SetTabOnClick(function(tab_btn) self:OnTabClicked(tab_btn) end)
 		:SetOnTabSizeChange(function()
-			self.tabs_widget:LayoutChildrenInGrid(100, self.tabs_spacing)
+			self.tabs_widget:Layout()
 			local tabs_w, tabs_h = self.tabs_widget:GetSize()
 			self.tabs_background:SetSize(tabs_w + 100, tabs_h + 60)
 			self.tabs_widget:LayoutBounds("center", "center", self.tabs_background)
@@ -181,6 +182,7 @@ PlayersScreen.CONTROL_MAP =
 		control = Controls.Digital.CANCEL,
 		fn = function(self)
 			self:OnClickClose()
+			TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_simulate_click)
 			return true
 		end,
 	},
@@ -188,6 +190,7 @@ PlayersScreen.CONTROL_MAP =
 		control = Controls.Digital.SHOW_PLAYERS_LIST,
 		fn = function(self)
 			self:OnClickClose()
+			TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_simulate_click)
 			return true
 		end,
 	},
@@ -210,8 +213,8 @@ PlayersScreen.CONTROL_MAP =
 
 -- PreControlDown because we're listening to inputs to detect device inputs, so
 -- we don't want buttons intercepting them.
-function PlayersScreen:HandlePreControlDown(controls, device_type, trace, device_id)
-	return self.inputconnect_panel:HandlePreControlDown(controls, device_type, trace, device_id)
+function PlayersScreen:HandlePreControlDown(controls, trace)
+	return self.inputconnect_panel:HandlePreControlDown(controls, trace)
 end
 
 function PlayersScreen:OnOpen()
@@ -223,9 +226,19 @@ function PlayersScreen:OnOpen()
 		self.copycode_btn:Show()
 		self.players_content_bg:SetTexture("images/ui_ftf_online/screen_players_code_bg.tex")
 		self.code_text:Show()
-			:SetText(TheNet:GetJoinCode())
+			:SetText(GetNetworkJoinCode())
 			:LayoutBounds("center", "center", self.players_content_bg)
 			:Offset(0, -73) -- Aligning the text with the texture
+
+
+		self.code_text.on_streamer_mode_changed = function()
+			local newstr = GetNetworkJoinCode()
+			self.code_text:SetText(newstr);
+		end
+
+		self.code_text.inst:ListenForEvent("ui_streamer_mode_changed", self.code_text.on_streamer_mode_changed, TheGlobalInstance)
+
+
 		self.code_label:Show()
 			:LayoutBounds("center", "center", self.players_content_bg)
 			:Offset(0, -177) -- Aligning the text with the texture
@@ -293,54 +306,50 @@ function PlayersScreen:UpdatePlayersList()
 
 		-- Get players in this client
 		local players = TheNet:GetPlayerListForClient(v.id)
-		if players then
-			for j, player_id in pairs(players) do
-				local player_guid = TheNet:FindGUIDForPlayerID(player_id)
-				local player_entity = Ents[player_guid]
+		for j, player_id in pairs(players) do
+			local player_guid = TheNet:FindGUIDForPlayerID(player_id)
+			local player_entity = Ents[player_guid]
 
-				local row_widget = self.players_container.children[player_row_idx]
-					:SetPlayerId(player_id)
-					:SetOnClick(function() end) -- Resets the click function
-					:HideBanButton()
-					:HideRemoveButton()
-					:SetPlayer(player_entity)
-					:SetUsername(player_entity and player_entity:GetCustomUserName())
-					:SetHost(player_id == 0) -- This is the host
+			local row_widget = self.players_container.children[player_row_idx]
+				:SetPlayerId(player_id)
+				:SetPlayer(player_entity)
+				:SetClientId(v.id)
+				:SetUsername(player_entity and player_entity:GetCustomUserName())
+				:SetHost(player_id == 0) -- This is the host
 
-				if not player_entity then
-					row_widget:SetLoading()
-				end
-
-				-- Can this client be banned?
-				if TheNet:IsHost() -- I am the host
-				and j == 1 -- This is a client connected to the host
-				and k > 1 -- and not the host itself
-				then
-					row_widget:ShowBanButton()
-						:SetOnClick(function() self:OnClickBanClient(row_widget, v.id) end)
-				end
-
-				-- Can this local player be removed?
-				if player_entity and player_entity:IsLocal() -- It's a local player
-				and j > 1 -- But not the first
-				then
-					row_widget:ShowRemoveButton()
-						:SetOnClick(function() self:OnClickRemovePlayer(row_widget, player_entity) end)
-				end
-
-				-- Show players indented under their client player
-				row_widget:SetPlayerIndex(j)
-
-				player_row_idx = player_row_idx + 1
+			if not player_entity then
+				row_widget:SetLoading()
 			end
-		end
 
+			-- Can this client be banned?
+			if TheNet:IsHost() -- I am the host
+			and j == 1 -- This is a client connected to the host
+			and k > 1 -- and not the host itself
+			then
+				row_widget:ShowBanButton(function() self:OnClickBanClient(row_widget, v.id) end)
+			else
+				row_widget:HideBanButton()
+			end
+
+			-- Can this local player be removed?
+			if player_entity and player_entity:IsLocal() -- It's a local player
+			and j > 1 -- But not the first
+			then
+				row_widget:ShowRemoveButton(function() self:OnClickRemovePlayer(row_widget, player_entity) end)
+			else
+				row_widget:HideRemoveButton()
+			end
+
+			-- Show players indented under their client player
+			row_widget:SetPlayerIndex(j)
+
+			player_row_idx = player_row_idx + 1
+		end
 	end
 
 	while player_row_idx <= 4 do
 		self.players_container.children[player_row_idx]
 			:SetEmpty()
-			:SetOnClick(function() end) -- Resets the click function
 		player_row_idx = player_row_idx + 1
 	end
 
@@ -404,20 +413,25 @@ end
 function PlayersScreen:OnClickBanClient(row_widget, client_id)
 
 	local player_entity = row_widget:GetPlayer()
+	local Actions = Enum{
+		"Yes_Ban",
+		"Cancel",
+	}
 
 	local title = string.format(STRINGS.UI.PLAYERSSCREEN.POPUP_BAN_TITLE, player_entity:GetCustomUserName())
 	local subtitle = nil
 	local message = STRINGS.UI.PLAYERSSCREEN.POPUP_BAN_TEXT
-	local popup = ConfirmDialog(nil, nil, true,
+	local popup = ConfirmDialog(self:GetOwningPlayer(), nil, true,
 			title,
 			subtitle,
 			message
 		)
 		:HideNoButton()
 		:SetCancelButtonText(STRINGS.UI.BUTTONS.CANCEL)
+		:SetCallbackActionLabels(Actions.s.Yes_Ban, nil, Actions.s.Cancel)
 
 	popup:SetOnDoneFn(function(picked_ban)
-			if picked_ban == true then
+			if picked_ban == Actions.s.Yes_Ban then
 				TheNet:KickClient(client_id)
 			end
 			TheFrontEnd:PopScreen(popup)
@@ -462,7 +476,7 @@ function PlayersScreen:OnCopyCodeClicked()
 		if not self.notification_widget then
 
 			-- Show a notification
-			self.notification_widget = TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/sharecode.tex", STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TITLE, string.format(STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TEXT, TheNet:GetJoinCode()), 6)
+			self.notification_widget = TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/sharecode.tex", STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TITLE, string.format(STRINGS.UI.PLAYERSSCREEN.NOTIFICATION_CODE_COPIED_TEXT, GetNetworkJoinCode()), 6)
 
 			-- Prevent multiple notifications from being triggered
 			self.notification_widget:SetOnRemoved(function() self.notification_widget = nil end)
@@ -534,7 +548,7 @@ function PlayersScreen:OnTabClicked(btn)
 			self.default_focus = self.banned_empty_label
 		end
 	end
-	if TheFrontEnd:IsRelativeNavigation() and self.default_focus then
+	if self:IsRelativeNavigation() and self.default_focus then
 		self.default_focus:SetFocus()
 	end
 end

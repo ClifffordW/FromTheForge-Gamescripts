@@ -879,7 +879,7 @@ function ModWrangler:GetLinkForMod(mod_name)
 			if is_known then
 				url = URLS.mod_forum
 			else
-				url = "http://steamcommunity.com/app/322330/workshop/"
+				url = "http://steamcommunity.com/app/2015270/workshop/"
 			end
 			is_generic_url = true
 		end
@@ -890,7 +890,7 @@ end
 
 function ModWrangler:ShowMoreMods()
     if Platform.IsSteam() then
-        VisitURL("http://steamcommunity.com/app/322330/workshop/")
+        VisitURL("http://steamcommunity.com/app/2015270/workshop/")
     else
         VisitURL("http://forums.kleientertainment.com/files/")
     end

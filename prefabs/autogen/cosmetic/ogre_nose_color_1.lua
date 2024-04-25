@@ -2,16 +2,11 @@
 return {
   __displayName="ogre_nose_color_1",
   cosmetic_data={
-    color={ 0.91388888888889, 0.39, 0.95,},
-    colorgroup="NOSE_COLOR",
+    color={ 0.91388887166977, 0.42084941267967, 0.94594591856003,},
     color_species="ogre",
+    colorgroup="NOSE_COLOR",
     multi_species=true,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

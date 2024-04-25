@@ -2,8 +2,6 @@ require "class"
 require "mathutil"
 
 
-local function noop() end
-
 -- Move from left to right (or vice versa) with a random speed.
 local AutoMover = Class(function(self, inst)
 	self.inst = inst
@@ -20,8 +18,9 @@ function AutoMover:Refresh()
 	self.speed = self.minspeed + math.random() * ( self.maxspeed - self.minspeed )
 end
 
+local pos = Vector3() -- cached temporary to reduce allocs in update
 function AutoMover:OnUpdate(dt)
-	local pos = self.inst:GetPosition()
+	pos:assign_values(self.inst.Transform:GetWorldPosition())
 	pos.x = pos.x + self.speed * dt
 	if self.speed < 0 then
 		if pos.x < self.min then

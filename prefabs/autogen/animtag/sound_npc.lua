@@ -155,6 +155,30 @@ return {
         },
       },
       neutral_mouth_talk={ events={ { frame=1, name="mouth_squeak",}, { frame=11, name="mouth_squeak",},},},
+      over_here_loop={
+        events={
+          { frame=3, name="sfx-whoosh_q",},
+          { frame=9, name="sfx-whoosh_q",},
+          { frame=16, name="sfx-whoosh_q",},
+          { frame=26, name="sfx-whoosh_q",},
+          { frame=5, name="sfx-footstep",},
+          { frame=21, name="sfx-footstep",},
+          { frame=11, name="sfx-foley_cloth",},
+          { frame=25, name="sfx-foley_cloth",},
+        },
+      },
+      over_here_pre={
+        events={
+          { frame=17, name="sfx-footstep",},
+          { frame=19, name="sfx-footstep",},
+          { frame=9, name="sfx-whoosh",},
+          { frame=19, name="sfx-whoosh_q",},
+          { frame=8, name="sfx_vo",},
+          { frame=7, name="sfx-foley_cloth",},
+          { frame=16, name="sfx-foley_cloth",},
+        },
+      },
+      over_here_pst={ events={ { frame=2, name="sfx-foley",},},},
       point_pre={
         events={
           { frame=1, name="sfx-foley_cloth",},

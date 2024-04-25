@@ -99,7 +99,7 @@ local states =
 					if inst.core_drop.components.powerdrop then
 						inst.core_drop:RemoveComponent("roomlock")
 						TheWorld.components.powerdropmanager:PreparePowers()
-						TheWorld.components.powerdropmanager:SpawnPowerItems(inst, inst:GetPosition())
+						TheWorld.components.powerdropmanager:SpawnPowerItems(inst:GetPosition())
 					end
 				end
 			end),
@@ -109,17 +109,20 @@ local states =
 		{
 			EventHandler("animover", function(inst)
 				-- TODO: networking2022, this code is kind of gross and needs to be sorted out more robustly
-				if inst.core_drop and inst.core_drop:IsValid() and inst.core_drop:IsLocal() and not inst.core_drop:IsInLimbo() then
-					if inst.core_drop.components.rotatingdrop:GetDropCount() == 0 then
-						TheLog.ch.RotatingDrop:printf("Scheduling delayed removal of core drop")
-						local core_drop = inst.core_drop
-						core_drop:DoTaskInTime(2, function()
-							TheLog.ch.RotatingDrop:printf("Starting delayed removal of core drop")
-							if core_drop and core_drop:IsValid() then
-								core_drop:DelayedRemove()
-							end
-						end)
-					end
+				local core_drop = inst.core_drop
+				if core_drop
+					and core_drop:IsValid()
+					and core_drop:IsLocal()
+					and not core_drop:IsInLimbo()
+					and core_drop.components.rotatingdrop:GetDropCount() == 0
+				then
+					TheLog.ch.RotatingDrop:printf("Scheduling delayed removal of core drop")
+					core_drop:DoTaskInTime(2, function()
+						TheLog.ch.RotatingDrop:printf("Starting delayed removal of core drop")
+						if core_drop and core_drop:IsValid() then
+							core_drop:DelayedRemove()
+						end
+					end)
 				end
 				if inst:IsLocal() then
 					inst:DelayedRemove()

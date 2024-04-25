@@ -89,22 +89,62 @@ end
 function monsterutil.BuildDropTable(inst)
 	local ld = inst.components.lootdropper
 	local name = inst.prefab:gsub("_elite", "")
+	name = name:gsub("_miniboss", "")
 	-- Monster Drops
-
-	-- for now, everything drops the same loot.
-
-	-- if inst:HasTag("elite") then
-	-- 	ld:AddLootDropTags({LOOT_TAGS.ELITE, "drops_"..name})
-	-- else
+	if inst:HasTag("elite") then
+		ld:AddLootDropTags({LOOT_TAGS.ELITE, "drops_"..name})
+	else
 		ld:AddLootDropTags({LOOT_TAGS.NORMAL, "drops_"..name})
-	-- end
+	end
 end
 
 local function OnMonsterPostSpawn(inst)
+	-- The enemy unlock behavior has been moved here from unlocktracker.lua
+	-- so it is decoupled from needing the player to be alive at the time of spawn
+	local basic_prefab = inst.prefab
+	if (inst:HasTag("miniboss")) then
+		basic_prefab = string.gsub(inst.prefab, "_miniboss", "")
+	elseif (inst:HasTag("elite")) then
+		basic_prefab = string.gsub(inst.prefab, "_elite", "")
+	end
+
+	for _, player_id in ipairs(TheNet:GetAllPlayerIDs()) do
+		ThePlayerData:SetIsUnlocked(player_id, UNLOCKABLE_CATEGORIES.s.ENEMY, basic_prefab, true)
+	end
+
 	TheWorld:PushEvent("spawnenemy", inst)
 end
 
 local MONSTER_SILHOUETTE_COLOR <const> = { 0/255, 0/255, 0/255, 0.2 }
+
+local function AddHitStunPressurePower(inst)
+	-- Only add this power in multiplayer games.
+	if #AllPlayers <= 1 then
+		return
+	end
+
+	assert(inst.components.combat, "Combat component required for adding hitstun pressure power!")
+	assert(inst.components.powermanager, "PowerManager component required for adding hitstun pressure power!")
+
+	-- Need to define hitstun_pressure_frames in order to do hitstun pressure attacks, otherwise no need to add this power to everything.
+	inst.components.combat:SetHitStunPressureFrames(inst.tuning.hitstun_pressure_frames)
+
+	if inst.tuning.hitstun_pressure_frames then
+		inst.components.powermanager:AddPowerByName("hitstunpressure")
+	end
+end
+
+-- Use for monsters to clear any powers they have & prevent them for acquiring any. Used for monster transition states where they go off-screen, for example.
+-- For most cases, make sure to call ReinitializeStatusEffects().
+function monsterutil.RemoveStatusEffects(inst)
+	inst.components.powermanager:ResetData() -- Clear all powers, to remove any stacks of status effects
+	inst.components.powermanager:SetCanReceivePowers(false) -- Prevent monster from gaining any powers while in this state
+end
+
+function monsterutil.ReinitializeStatusEffects(inst)
+	inst.components.powermanager:SetCanReceivePowers(true)
+	AddHitStunPressurePower(inst)
+end
 
 function monsterutil.MakeBasicMonster(inst, physics_size, size_category)
 	size_category = size_category or monsterutil.MonsterSize.MEDIUM
@@ -190,11 +230,11 @@ function monsterutil.MakeBasicMonster(inst, physics_size, size_category)
 	inst:AddComponent("coloradder")
 	inst:AddComponent("hitstopper")
 	inst:AddComponent("timer")
-	inst:AddComponent("powermanager")
 	inst:AddComponent("lowhealthindicator")
 	inst:AddComponent("hitflagmanager")
 	inst:AddComponent("scalable")
 	inst:AddComponent("lootdropper")
+	inst:AddComponent("tilehazard")
 
 	inst:AddComponent("colorshifter")
 	if inst.tuning.colorshift then
@@ -234,7 +274,9 @@ function monsterutil.MakeBasicMonster(inst, physics_size, size_category)
 	inst.components.combat:SetDungeonTierDamageMult(inst, modifiers.DungeonTierDamageMult)
 	inst.components.combat:AddTargetTags(TargetTagGroups.Players)
 	inst.components.combat:AddFriendlyTargetTags(TargetTagGroups.Enemies)
-	inst.components.combat:SetHitStunPressureFrames(inst.tuning.hitstun_pressure_frames or math.huge)
+
+	inst:AddComponent("powermanager")
+	AddHitStunPressurePower(inst)
 
 	inst:AddComponent("damagebonus")
 
@@ -325,7 +367,6 @@ function monsterutil.MakeStationaryMonster(inst, physics_size, size_category)
 	inst:AddComponent("hitstopper")
 	inst:AddComponent("roomlock")
 	inst:AddComponent("timer")
-	inst:AddComponent("powermanager")
 	inst:AddComponent("lowhealthindicator")
 	inst:AddComponent("hitflagmanager")
 	inst:AddComponent("lootdropper")
@@ -350,6 +391,9 @@ function monsterutil.MakeStationaryMonster(inst, physics_size, size_category)
 	inst.components.combat:SetDungeonTierDamageMult(inst, modifiers.DungeonTierDamageMult)
 	inst.components.combat:AddTargetTags(TargetTagGroups.Players)
 	inst.components.combat:AddFriendlyTargetTags(TargetTagGroups.Enemies)
+
+	inst:AddComponent("powermanager")
+	AddHitStunPressurePower(inst)
 
 	inst:AddComponent("damagebonus")
 
@@ -376,6 +420,7 @@ end
 
 function monsterutil.ExtendToBossMonster(inst)
 	inst:AddTag("boss")
+	inst:AddTag("nocharm") -- Cannot charm boss monsters (for now?)
 
 	inst:AddComponent("cororun")
 	inst:AddComponent("boss")
@@ -456,8 +501,6 @@ function monsterutil.AddMonsterCommonEvents(events, data)
 	if data then
 		events[#events + 1] = SGCommon.Events.OnLocomote(data.locomote_data or { walk = true, turn = true })
 		events[#events + 1] = SGCommon.Events.OnAttack(data.chooseattack_fn or SGCommon.Fns.ChooseAttack)
-		events[#events + 1] = SGCommon.Events.OnHitStunPressureAttack()
-
 		events[#events + 1] = SGCommon.Events.OnDying(data.ondying_data or nil)
 
 		-- AddMinibossCommonEvents and AddBossCommonEvents add their own OnQuickDeath handler instead.
@@ -479,8 +522,6 @@ function monsterutil.AddStationaryMonsterCommonEvents(events, data)
 	local SGCommon = require "stategraphs.sg_common"
 	if data then
 		events[#events + 1] = SGCommon.Events.OnAttack(data.chooseattack_fn or SGCommon.Fns.ChooseAttack)
-		events[#events + 1] = SGCommon.Events.OnHitStunPressureAttack()
-
 		events[#events + 1] = SGCommon.Events.OnDying(data.ondying_data or nil)
 
 		-- AddMinibossCommonEvents and AddBossCommonEvents add their own OnQuickDeath handler instead.
@@ -569,19 +610,32 @@ function monsterutil.AddOffsetHitbox(inst, size, name_override)
 end
 
 local elite_str = "_elite"
+local miniboss_str = "_miniboss"
 
 function monsterutil.BuildTuningTable(inst, prefabname_override)
-	local base_prefab, is_elite = string.gsub(prefabname_override or inst.prefab, elite_str, "")
+	local base_prefab, is_elite_or_miniboss = string.gsub(prefabname_override or inst.prefab, elite_str, "")
 	local tuning_tbl = {}
 
-	if is_elite > 0 then
+	if is_elite_or_miniboss > 0 then
 		tuning_tbl = shallowcopy(TUNING[base_prefab..elite_str])
+	else
+		base_prefab, is_elite_or_miniboss = string.gsub(prefabname_override or inst.prefab, miniboss_str, "")
+		if (is_elite_or_miniboss > 0) then
+			tuning_tbl = shallowcopy(TUNING[base_prefab..miniboss_str])
+		end
 	end
 
-	for k, v in pairs(TUNING[base_prefab]) do
-		if not tuning_tbl[k] then
-			tuning_tbl[k] = v
+	if is_elite_or_miniboss > 0 then -- is an elite or miniboss
+		for k, v in pairs(TUNING[base_prefab]) do
+			-- never inherit forced loot value or forced loot priority from the base table
+			if k ~= "forced_loot_value" and k ~= "forced_loot_priority" then
+				if not tuning_tbl[k] then
+					tuning_tbl[k] = v
+				end
+			end
 		end
+	else
+		tuning_tbl = shallowcopy(TUNING[base_prefab])
 	end
 
 	inst.tuning = tuning_tbl
@@ -603,9 +657,7 @@ function monsterutil.ReverseHitFlags(inst)
 	end
 end
 
-function monsterutil.CharmMonster(monster, summoner)
-	monster.summoner = summoner
-	monster:Face(summoner)
+function monsterutil.CharmMonster(monster)
 	monster:RemoveTag("mob")
 	monster:AddTag("playerminion")
 	monster:RemoveComponent("roomlock")
@@ -626,9 +678,9 @@ function monsterutil.CharmMonster(monster, summoner)
 	monster.components.attacktracker:ModifyAllAttackTimers(0)
 
 	-- charmed colouring
-	local color_add = (TUNING[monster.prefab] and TUNING[monster.prefab].charm_colors) and TUNING[monster.prefab].charm_colors.color_add or TUNING.default_charm_colors.color_add
-	local color_mult = (TUNING[monster.prefab] and TUNING[monster.prefab].charm_colors) and TUNING[monster.prefab].charm_colors.color_mult or TUNING.default_charm_colors.color_mult
-	local bloom = (TUNING[monster.prefab] and TUNING[monster.prefab].charm_colors) and TUNING[monster.prefab].charm_colors.bloom or TUNING.default_charm_colors.bloom
+	local color_add = (monster.tuning and monster.tuning.charm_colors) and monster.tuning.charm_colors.color_add or TUNING.default_charm_colors.color_add
+	local color_mult = (monster.tuning and monster.tuning.charm_colors) and monster.tuning.charm_colors.color_mult or TUNING.default_charm_colors.color_mult
+	local bloom = (monster.tuning and monster.tuning.charm_colors) and monster.tuning.charm_colors.bloom or TUNING.default_charm_colors.bloom
 
 	monster.components.coloradder:PushColor("charmed", color_add[1], color_add[2], color_add[3], color_add[4])
 	monster.components.colormultiplier:PushColor("charmed", color_mult[1], color_mult[2], color_mult[3], color_mult[4])
@@ -883,6 +935,73 @@ function monsterutil.GetMonstersInLocation(location)
 	end)
 
 	return mobs
+end
+
+function monsterutil.GetItemsInLocation(location)
+	--doing it here because prob doesn't happen that much, no need to load it all the time
+	local Consumable = require"defs.consumable"
+
+	local full_item_list = {}
+	for _, monsters in pairs(location.monsters) do
+		for _, mob in ipairs(monsters) do
+			local item_list = Consumable.GetItemList(Consumable.Slots.MATERIALS, { "drops_"..mob })
+			for _, item in ipairs(item_list) do
+				if table.find(full_item_list, item) == nil and not item.tags['hide'] then
+					table.insert(full_item_list, item)
+				end
+			end
+		end
+	end
+
+	return full_item_list
+end
+
+local locations_for_items
+
+function monsterutil.GetLocationsForItem(item_name)
+
+	if locations_for_items == nil then
+		locations_for_items = {}
+
+		--cache the location
+		local biomes = require"defs.biomes"
+
+		--add the locations
+		local locations = {}
+		for _, location_group in ipairs( biomes.location_unlock_order ) do
+			for _, location in ipairs(location_group) do
+				table.insert(locations, location)
+			end
+		end
+
+		--look through the locations and figure out what items are in them
+		for _, location in pairs(locations) do
+			local full_item_list = monsterutil.GetItemsInLocation(location)
+			for _, location_item in ipairs(full_item_list) do
+				locations_for_items[location_item.name] = locations_for_items[location_item.name] or {}
+				table.insert( locations_for_items[location_item.name], location )
+			end
+		end
+	end
+
+	return locations_for_items[item_name] or {}
+
+end
+
+--get the index for the location order of the passed in location
+function monsterutil.GetLocationsUnlockIdx(location_name)
+	local biomes = require"defs.biomes"
+
+	local locations = {}
+	for i, location_group in ipairs( biomes.location_unlock_order ) do
+		for _, location in ipairs(location_group) do
+			if location.id == location_name then
+				return i
+			end
+		end
+	end
+
+	return 0
 end
 
 return monsterutil

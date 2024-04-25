@@ -3,15 +3,10 @@ return {
   __displayName="mer_ochre_hair_color_1",
   cosmetic_data={
     color={ 0.11388888888889, 0.51, 0.86,},
-    colorgroup="HAIR_COLOR",
     color_species="mer",
+    colorgroup="HAIR_COLOR",
     multi_species=false,
   },
   group="PLAYER_COLOR",
-  hidden=false,
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
-  
 }

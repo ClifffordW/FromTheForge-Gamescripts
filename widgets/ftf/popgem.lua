@@ -32,14 +32,15 @@ end
 function PopGem:Init(data)
 	local def = data.gem:GetDef()
 
-	local lvl = data.gem.ilvl
-	local lbl
+	local lvl = data.gem:GetEffectiveItemLevel()
+	local lbl = def.pretty.name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[lvl]
 	if data.levelup then
 		self.gem_level:ShowLevelUp(data.gem)
-		lbl = string.format(STRINGS.ITEMS.GEMS.LEVEL_UP_NOTIFICATION, def.pretty.name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[lvl])
+		lbl = STRINGS.ITEMS.GEMS.LEVEL_UP_NOTIFICATION:format({
+				gem_name = lbl,
+			})
 	else
 		self.gem_level:SetGem(data.gem)
-		lbl = def.pretty.name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[lvl]
 	end
 
 	self.gem_level:LayoutBounds("middle", "center", self)

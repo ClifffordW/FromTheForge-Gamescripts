@@ -6,7 +6,7 @@ return {
   clickable=true,
   glowcolor="FF3C00FF",
   gridsize={ { expand={ bottom=2,}, h=5, w=8,},},
-  group="town_buildings",
+  group="town_buildings_deprecated",
   looping=true,
   parallax={
     { anim="1", dist=-1.3, shadow=true,},

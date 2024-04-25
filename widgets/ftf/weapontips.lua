@@ -12,12 +12,12 @@ local function RequireWeaponTypeKeys(t)
 	end
 end
 
-RequireWeaponTypeKeys(STRINGS.UI.WEAPON_TIPS.TIP)
-RequireWeaponTypeKeys(STRINGS.UI.WEAPON_TIPS.HINT)
+RequireWeaponTypeKeys(STRINGS.WEAPON_TIPS.TIP)
+RequireWeaponTypeKeys(STRINGS.WEAPON_TIPS.HINT)
 -- Enable if you are debugging why strings aren't showing.
 --~ for _,weapon_type in pairs(WEAPON_TYPES) do
---~ 	kassert.assert_fmt(STRINGS.UI.WEAPON_TIPS.TIP[weapon_type],  "Missing STRINGS.UI.WEAPON_TIPS.TIP for weapon %s.",  weapon_type)
---~ 	kassert.assert_fmt(STRINGS.UI.WEAPON_TIPS.HINT[weapon_type], "Missing STRINGS.UI.WEAPON_TIPS.HINT for weapon %s.", weapon_type)
+--~ 	kassert.assert_fmt(STRINGS.WEAPON_TIPS.TIP[weapon_type],  "Missing STRINGS.WEAPON_TIPS.TIP for weapon %s.",  weapon_type)
+--~ 	kassert.assert_fmt(STRINGS.WEAPON_TIPS.HINT[weapon_type], "Missing STRINGS.WEAPON_TIPS.HINT for weapon %s.", weapon_type)
 --~ 	kassert.assert_fmt(Equipment.GetPrettyNameForWeaponType(weapon_type), "Missing STRING.NAMES for weapon %s.", weapon_type)
 --~ end
 
@@ -54,8 +54,8 @@ function WeaponTips:SetWeaponType(weapon_type, force)
 
 	self.weapon_type = weapon_type
 	self.tips_title:SetText(Equipment.GetPrettyNameForWeaponType(self.weapon_type))
-	self.tips_text:SetText(STRINGS.UI.WEAPON_TIPS.TIP[self.weapon_type])
-	self.tips_hint:SetText(STRINGS.UI.WEAPON_TIPS.HINT[self.weapon_type])
+	self.tips_text:SetText(STRINGS.WEAPON_TIPS.TIP[self.weapon_type])
+	self.tips_hint:SetText(STRINGS.WEAPON_TIPS.HINT[self.weapon_type])
 
 	self:Layout()
 	return self

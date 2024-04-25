@@ -13,7 +13,18 @@ return {
             eventtype="spawnparticles",
             frame=1,
             param={
-              offx=1.5,
+              offx=5.0,
+              offy=0.0,
+              offz=0.0,
+              particlefxname="forest_gate_fog_e",
+              stopatexitstate=true,
+            },
+          },
+          {
+            eventtype="spawnparticles",
+            frame=1,
+            param={
+              offx=8.6999998092651,
               offy=0.0,
               offz=0.0,
               particlefxname="forest_gate_fog_e",

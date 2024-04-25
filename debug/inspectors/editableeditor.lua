@@ -189,6 +189,9 @@ local EditableEditor = Class(EditorBase, function(self)
 
 	-- Stomp the persistent levelname.
 	self.arena_loader.levelname = levelname
+	if TheSceneGen then
+		self.arena_loader.location = TheSceneGen.prefab
+	end
 
 	self.entrances = TheDungeon:GetDungeonMap():GetCurrentWorldEntrances()
 
@@ -208,8 +211,7 @@ local EditableEditor = Class(EditorBase, function(self)
 		self.propEditor:PrefabDropdownChanged(nil)
 	end
 
-	self.
-	prefabModeList = {"Prop", "Lightspot", "Particle System"}
+	self.prefabModeList = {"Prop", "Lightspot", "Particle System"}
 	self.lightspotSelector = NonPropPrefabSelector("Light Cookies", "lightspot_")
 	self.particleSystemSelector = ParticleSystemSelector("Particle Systems")
 	self.decorAssemblySelector = NonPropPrefabSelector("Decor Assemblies", "decorassembly_")
@@ -441,7 +443,7 @@ local function BuildWorldSceneList(world_prefab)
 end
 
 local function BuildCurrentSceneList()
-	return BuildWorldSceneList(TheWorld.prefab)
+	return TheWorld and TheWorld.prefab and BuildWorldSceneList(TheWorld.prefab)
 end
 
 local function GetAllScenes(groupfilter)
@@ -457,6 +459,9 @@ end
 
 function EditableEditor:RenderLevelSceneSelection(ui)
 	local scenelist = BuildCurrentSceneList()
+	if not scenelist then
+		return
+	end
 	local prefabidx = table.arrayfind(scenelist, self.scenename) or 1
 	local inspecting_other_level = self.arena_loader.levelname ~= TheWorld.prefab
 	local to_pop = 0
@@ -1238,7 +1243,7 @@ function EditableEditor:_TestTown()
 	self:ReopenNodeAfterReset()
 	TheLog.ch.Editor:print("LoadTownLevel from EditableEditor. Invalidating save.")
 
-	TheSaveSystem.town:ClearAllRooms(function(success)
+	TheSaveSystem:GetActiveTownSave():ClearAllRooms(function(success)
 		RoomLoader.LoadTownLevel(self.arena_loader.levelname)
 	end)
 end
@@ -1247,7 +1252,6 @@ function EditableEditor:_TestLevel()
 	self:ReopenNodeAfterReset()
 	self.arena_loader:StartArena(true)
 end
-
 
 local function is_ambiance_prop(prefab)
 	return (prefab:find('_fg_')

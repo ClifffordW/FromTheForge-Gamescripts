@@ -1,7 +1,6 @@
 local fmodtable = require "defs.sound.fmodtable"
 require "class"
 
-
 -- A manager for global audio params. Expected to live on TheWorld and not
 -- generic.
 local AudioParams = Class(function(self, inst)
@@ -26,6 +25,7 @@ end
 function AudioParams:UpdatePlayerCount()
 	TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.numLocalPlayers, TheNet:GetNrLocalPlayers())
 	TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.numPlayers, #AllPlayers)
+	TheAudio:SetGlobalParameter(fmodtable.GlobalParameter.isMultiplayerGame, #AllPlayers == 1 and 0 or 1)
 end
 
 return AudioParams

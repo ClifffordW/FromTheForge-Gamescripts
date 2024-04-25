@@ -63,8 +63,7 @@ return
 
         {key="Y", control=Controls.Digital.TOGGLE_SAY},
         {key="B", control=Controls.Digital.OPEN_CRAFTING},
-        {key="I", control=Controls.Digital.OPEN_INVENTORY}, -- in town
-        {key="I", control=Controls.Digital.SHOW_PLAYER_LOADOUT}, -- in dungeon
+        {key="I", control=Controls.Digital.OPEN_INVENTORY}, -- inventory in town, loadout in dungeon
         {key="TAB", control=Controls.Digital.SHOW_PLAYER_STATUS},
         {key="P", control=Controls.Digital.SHOW_PLAYERS_LIST},
 
@@ -89,6 +88,7 @@ return
         {key="D", control=Controls.Digital.MINIGAME_EAST},
 
         {key="LSHIFT", control=Controls.Digital.INVENTORY_EXAMINE},
+        {key="LSHIFT", control=Controls.Digital.FLIP_PLACER},
 
         {key="F8", control=Controls.Digital.FEEDBACK},
     },
@@ -178,10 +178,9 @@ return
         {button="X", control=Controls.Digital.ATTACK_LIGHT},
         {button="Y", control=Controls.Digital.ATTACK_HEAVY},
 
-        {button="RT", control=Controls.Digital.SHOW_EMOTE_RING},
+        {button="LT", control=Controls.Digital.SHOW_EMOTE_RING},
 
-        {button="LT", control=Controls.Digital.OPEN_INVENTORY}, -- in town
-        {button="LT", control=Controls.Digital.SHOW_PLAYER_LOADOUT}, -- in dungeon
+        {button="RT", control=Controls.Digital.OPEN_INVENTORY}, -- inventory in town, loadout in dungeon
         {button="RS", control=Controls.Digital.OPEN_CRAFTING},
         {button="X",  control=Controls.Digital.UNEQUIP},
         {button="A",  control=Controls.Digital.EQUIP},
@@ -210,5 +209,9 @@ return
         {button="X", control=Controls.Digital.X},
         {button="B", control=Controls.Digital.B},
 
+        {button="A", control=Controls.Digital.CLICK_PRIMARY},
+        {button="X", control=Controls.Digital.CLICK_SECONDARY},
+
+        {button="Y", control=Controls.Digital.FLIP_PLACER},
     }
 }

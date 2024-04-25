@@ -1,10 +1,13 @@
 local GameNode = require "questral.gamenode"
+local NpcAutogenData = require "prefabs.npc_autogen_data"
 local Quest = require "questral.quest"
 local QuestManager = require "questral.questmanager"
 local QuipMatcher = require "questral.quipmatcher"
 local RotwoodActor = require "questral.game.rotwoodactor"
 local RotwoodLocation = require "questral.game.rotwoodlocation"
+local StringFormatter = require "questral.util.stringformatter"
 local biomes = require "defs.biomes"
+local kassert = require "util.kassert"
 local kstring = require "util.kstring"
 local lume = require "util.lume"
 local playerutil = require "util.playerutil"
@@ -21,7 +24,7 @@ require "class"
 -- Maybe also find conversations to start, spawn relevant npcs, move them into
 -- place, etc.
 
--- Throttles town chats by determining which conversations should be valid 
+-- Throttles town chats by determining which conversations should be valid
 -- each time the player enters the town
 
 local QuestCentral = Class(GameNode, function(self, inst)
@@ -41,10 +44,6 @@ local QuestCentral = Class(GameNode, function(self, inst)
     -- this catches cases where an objective was invalid until the player picked up a certain item
     -- or an objective that used to be valid is now invalid because a certain item got consumed.
 
-    local _update_marks = function() self:UpdateQuestMarks() end
-    self.inst:ListenForEvent("inventory_changed", _update_marks)
-    self.inst:ListenForEvent("inventory_stackable_changed", _update_marks)
-
     self.inst:ListenForEvent("on_player_set", function() self:EvaluateTownChats() end)
     self.inst:ListenForEvent("start_gameplay", function() self:EvaluateTownChats() end)
 
@@ -61,7 +60,7 @@ function QuestCentral:OnRemoveEntity()
 		self.qman:TeardownNode()
 	end
 	self.qman = nil
-    self:GetCastManager():DetachPlayer(self.inst)
+    self:GetCastManager():DetachQuester(self.inst)
 
     if self._update_marks_task then
         self._update_marks_task:Cancel()
@@ -86,7 +85,7 @@ function QuestCentral:OnSave()
 end
 
 function QuestCentral:_ActivateSelf()
-    self:GetCastManager():AttachPlayer(self.inst)
+    self:GetCastManager():AttachQuester(self.inst, self)
 end
 
 function QuestCentral:OnLoad(data)
@@ -110,24 +109,58 @@ function QuestCentral:OnPostLoadWorld(data)
     qm:ValidateQuests()
 end
 
-function QuestCentral:OnPostSetPlayerOwner()
+-- This is called manually because players are not loaded until the proper slot is selected.
+function QuestCentral:OnPostSetOwner()
 	-- Do not activate self until after we've loaded quests to prevent them
 	-- from firing callbacks (e.g., OnActivate) based on their default state
-	-- (before we get a chance to load objective state). OnPostSetPlayerOwner
+	-- (before we get a chance to load objective state). OnPostSetOwner
 	-- occurs after OnPostLoadWorld.
+
+
     self:_ActivateSelf()
 
     local qm = self:GetQuestManager()
 
     if not qm:HasLoadedSaveData() then
         dbassert(qm:GetParent() == nil, "Already loaded?")
-
 		self:AttachChild(self:GetQuestManager())
 
-        qm:SpawnQuest(self.gamecontent:GetContentLoader():GetNewGameQuest())
+        -- Setup initial npcs so they are automatically cast in quests. Not using
+        -- NpcAutogenData since they'll start appearing in save files once we add
+        -- to quest system and don't want temp npcs.
+        local initial_npcs = {
+            "npc_armorsmith",
+            "npc_blacksmith",
+            "npc_cook",
+            "npc_dojo_master",
+            "npc_konjurist",
+            "npc_market_merchant",
+            "npc_potionmaker_dungeon",
+            "npc_scout",
+            "npc_specialeventhost",
+        }
+
+        for _,prefab in ipairs(initial_npcs) do
+            -- Getting ensures they exist within the quest system (but not in world).
+            local node = self:GetNpcCastForPrefab(prefab)
+            local role = NpcAutogenData[prefab].role
+            if role then
+                -- For FilterForRole.
+                node:SetNpcRole(role)
+            end
+        end
+
+        -- local new_quest = nil
+        -- if self:GetQuestOwner():HasTag("player") then
+        --     new_quest = self.gamecontent:GetContentLoader():GetNewPlayerQuest()
+        -- else
+        --     new_quest = self.gamecontent:GetContentLoader():GetNewWorldQuest()
+        -- end
+        -- qm:SpawnQuest(new_quest)
     end
 
-    self:UpdateQuestMarks()
+    qm:SpawnValidQuests()
+    qm:CleanUpInvalidQuests()
 
     -----------------------------------------------------------------------------------------------------------------------
     ------------------------------------------- REPEATABLE QUEST LOGIC ----------------------------------------------------
@@ -146,32 +179,33 @@ function QuestCentral:OnPostSetPlayerOwner()
     -----------------------------------------------------------------------------------------------------------------------
     -----------------------------------------------------------------------------------------------------------------------
 
-    -- TODO(dbriscoe): Trigger confront.
+    -- TODO(quest): Trigger confront.
 end
 
 function QuestCentral:__tostring()
     return string.format( "QuestCentral[%s %s]", self.inst, kstring.raw(self) )
 end
 
-function QuestCentral:UpdateQuestMarks()
-    -- if we change a bunch of quests in a row, we don't want this to get called every time. 
-    -- So just do it at the end of the frame, once.
-    if not self._update_marks_task then
-        self._update_marks_task = self.inst:DoTaskInTicks(0, function()
-            if TheWorld then
-                TheWorld.components.questmarkmanager:RefreshQuestMarks(self)
-            end
-            self._update_marks_task = nil
-        end)
-    end
-end
-
 function QuestCentral:GetCastManager()
     return TheDungeon.progression.components.castmanager
 end
 
-function QuestCentral:GetPlayer()
+-- QuestCentral is attached to both players and the world! If you only want
+-- players, call and nil check.
+-- We don't expose GetPlayer so return type is always clear. Use GetQuestOwner
+-- for the general "who owns this".
+function QuestCentral:GetQuestOwner_AsPlayer()
+	if self:IsPlayerOwned() then
+		return self:GetQuestOwner()
+	end
+end
+
+function QuestCentral:GetQuestOwner()
     return self.inst
+end
+
+function QuestCentral:IsPlayerOwned()
+    return self:GetQuestOwner():HasTag("player")
 end
 
 -- Is the player allowed to start scene-setting cinematics?
@@ -186,7 +220,9 @@ function QuestCentral:IsCinematicDirector()
 		return false
 	end
 	-- Use the local player with the lowest hunter id as the leader. Probably it is p1?
-	local player = self:GetPlayer()
+	local player = self:GetQuestOwner()
+
+    -- it's ok if this is the world instead of a player because this statement will still return false
 	return player == playerutil.GetFirstLocalPlayer()
 end
 
@@ -203,6 +239,39 @@ end
 function QuestCentral:GetQuipMatcher()
     return self.quipmatcher
 end
+
+-- For use outside of quests: On screens that could use random quotes.
+-- Conversations *must* use cx:Quip() to play correctly.
+function QuestCentral:Quip(tags, speaker, quest)
+	local player = self:GetQuestOwner_AsPlayer()
+	assert(player, "Only players can use convo features.")
+
+	if type(speaker) == "string" then
+		speaker = self:GetNpcCastForPrefab(speaker)
+	end
+	if type(quest) == "string" then
+		local input_quest = quest
+		quest = self:GetQuestManager():FindQuestByID(quest)
+		kassert.assert_fmt(quest, "Unknown quest: %s", input_quest)
+	end
+
+	local formatter = self:CreateQuipFormatter(quest)
+	formatter:SetSpeaker(speaker)
+	local matcher = self:GetQuipMatcher()
+	tags = matcher:CollectRelevantTags(tags, speaker, player, quest)
+	return matcher:LookupQuip_Raw(tags, formatter, player)
+end
+
+function QuestCentral:CreateQuipFormatter(quest)
+    local formatter = StringFormatter()
+    if quest then
+        quest:FillFormatter( formatter )
+    end
+    local castmanager = self:GetCastManager()
+    formatter:AddLookup("player", castmanager:GetPlayerNode(self:GetQuestOwner_AsPlayer()))
+    return formatter
+end
+
 
 function QuestCentral:GetContentDB()
     return self.gamecontent:GetContentDB()
@@ -222,7 +291,7 @@ function QuestCentral:SpawnNpcIntroQuest(quest_name, npc_prefab)
 end
 
 function QuestCentral:_OnEndRun(data)
-    -- TODO(dbriscoe): How to tell that player hasn't had a run this run of the
+    -- TODO(quest): How to tell that player hasn't had a run this run of the
     -- exe? Write false on game start?
     self.persistdata.had_run = true
     self.persistdata.was_last_run_victorious = data.is_victory
@@ -236,7 +305,7 @@ function QuestCentral:GetDungeonBossForLocation(location_actor)
 end
 
 function QuestCentral:GetRandomDungeon()
-    -- TODO(dbriscoe): Get an actual random dungeon.
+    -- TODO(quest): Get an actual random dungeon.
     if not self.locations.random_hack then
         self.locations.random_hack = self:_GetLocation(biomes.locations.treemon_forest.id)
     end
@@ -325,10 +394,11 @@ function QuestCentral:CollectQuestMarks()
                 local cast_is_present = cast.inst ~= nil
 
                 -- the rate-limit filtering is handled in the hook.fn, as this should be called after :EvaluateTownChats()
-                local is_valid = is_active and cast_is_present and hook.fn(quest, cast, self)
+                -- if this quest is owned by a player pass that player into the hook's filter functions too.
+                local is_valid = is_active and cast_is_present and hook.fn(quest, cast, self, self:IsPlayerOwned() and self:GetQuestOwner())
 
                 if is_valid then
-                    if objective:GetImportance() ~= QUEST_IMPORTANCE.s.LOW then
+                    if objective:GetImportance() == QUEST_IMPORTANCE.s.HIGH then
                         -- by default, mark the cast of the convo
                         _AddMark(marked_actors, cast, objective:GetImportance())
                     end
@@ -394,9 +464,8 @@ function QuestCentral:EvaluateTownChats()
                 local objective = quest.def.objective[hook.objective_id]
                 local cast = quest:GetCastMember(hook.cast_id)
                 local is_active = quest:GetObjectiveState(hook.objective_id) == QUEST_OBJECTIVE_STATE.s.ACTIVE
-                local is_limited = objective:IsRateLimited()
                 local cast_is_present = cast.inst ~= nil
-                local is_valid = is_active and is_limited and cast_is_present and hook.fn(quest, cast, self)
+                local is_valid = is_active and cast_is_present and hook.fn(quest, cast, self)
 
                 if is_valid then
                     table.insert(valid_chats, {
@@ -446,8 +515,6 @@ function QuestCentral:EvaluateTownChats()
             break
         end
     end
-
-    self:UpdateQuestMarks()
 end
 
 function QuestCentral:InsertTownQuest(quest, objective_id)
@@ -494,9 +561,9 @@ function QuestCentral:GetTownQuests()
     return self.selected_town_chats
 end
 
--- TODO(dbriscoe): Rename to GetDay and actually track and saveload the day.
-function QuestCentral:GetCyclesPassed()
-    return 1
+-- Number of runs this player has attempted.
+function QuestCentral:GetRunCount()
+    return TheSaveSystem:GetActiveAboutSlot():GetValue("num_runs") or 0
 end
 
 function QuestCentral:WasLastRunVictorious()
@@ -634,8 +701,8 @@ function QuestCentral:ValidateRemoteQuestCompleted(playerID, contentID, objectiv
                     objective_has_hooks = true
 
                     local cast = quest:GetCastMember(hook.cast_id)
-                    if cast and cast:is_a(RotwoodActor) and cast.inst ~= nil then 
-                        cast:OverrideInteractingPlayerEntity(self:GetPlayer())
+                    if cast and cast:is_a(RotwoodActor) and cast.inst ~= nil then
+                        cast:OverrideInteractingPlayerEntity(self:GetQuestOwner_AsPlayer())
                         -- if this hook is valid, then the quest can be completed.
                         can_complete_quest = hook.fn(quest, cast, self)
                         cast:OverrideInteractingPlayerEntity(nil)

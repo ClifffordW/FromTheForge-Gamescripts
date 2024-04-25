@@ -20,6 +20,9 @@ PrefabBrowserContext = Enum
 
 local POPUP_TITLE = "Prefab Browser"
 
+-- View a filtered list of various kinds of prefabs with custom interaction ui.
+--
+-- See also DebugPrefabs.
 local PrefabBrowser = Class(function(self, ContextUi)
 	self.group_filter = ""
 	self.filter_text = ""

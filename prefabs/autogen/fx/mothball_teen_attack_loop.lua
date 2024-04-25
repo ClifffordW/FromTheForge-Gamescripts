@@ -6,6 +6,7 @@ return {
   bloom=100.0,
   build="fx_mothball_teen",
   glowcolor="9C00FFFF",
+  group="creatures",
   looping=true,
   randomstartframe=true,
 }

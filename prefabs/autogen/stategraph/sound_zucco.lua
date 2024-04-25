@@ -55,6 +55,8 @@ return {
             },
           },
         },
+        windmill_pst_hit={ { eventtype="stopsound", frame=1, param={ name="windmill",},},},
+        windmill_pst_miss={ { eventtype="stopsound", frame=1, param={ name="windmill",},},},
       },
       sg_events={
         {

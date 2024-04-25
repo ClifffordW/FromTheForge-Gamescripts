@@ -16,16 +16,6 @@ local DROP_TYPES =
 	["twigfall"] = { symbol = "item", states = { "solid_fall_high" } },
 }
 
-local prefabs =
-{
-	"item_pickup",
-	"item_pickup_common",
-	"item_pickup_uncommon",
-	"item_pickup_rare",
-	"item_pickup_epic",
-	"item_pickup_legendary",
-}
-
 local ITEM_PICKUP =
 {
 	[ITEM_RARITY.s.COMMON] = "item_pickup_common",
@@ -33,7 +23,8 @@ local ITEM_PICKUP =
 	[ITEM_RARITY.s.RARE] = "item_pickup_rare",
 	[ITEM_RARITY.s.EPIC] = "item_pickup_epic",
 	[ITEM_RARITY.s.LEGENDARY] = "item_pickup_legendary",
-	["LUCKY"] = "item_pickup_lucky"
+	["LUCKY"] = "item_pickup_lucky",
+	konjur = "item_pickup_konjur",
 }
 
 local ITEM_LAND =
@@ -43,7 +34,8 @@ local ITEM_LAND =
 	[ITEM_RARITY.s.RARE] = "item_land_rare",
 	[ITEM_RARITY.s.EPIC] = "item_land_epic",
 	[ITEM_RARITY.s.LEGENDARY] = "item_land_legendary",
-	["LUCKY"] = "item_land_lucky"
+	["LUCKY"] = "item_land_lucky",
+	konjur = "item_land_konjur",
 }
 
 local ITEM_GROUNDTRAIL =
@@ -53,7 +45,8 @@ local ITEM_GROUNDTRAIL =
 	[ITEM_RARITY.s.RARE] = "item_groundtrail_rare",
 	[ITEM_RARITY.s.EPIC] = "item_groundtrail_epic",
 	[ITEM_RARITY.s.LEGENDARY] = "item_groundtrail_legendary",
-	["LUCKY"] = "item_groundtrail_lucky"
+	["LUCKY"] = "item_groundtrail_lucky",
+	konjur = "item_groundtrail_konjur",
 }
 
 local ITEM_AIRTRAIL =
@@ -63,7 +56,27 @@ local ITEM_AIRTRAIL =
 	[ITEM_RARITY.s.RARE] = "item_airtrail_rare",
 	[ITEM_RARITY.s.EPIC] = "item_airtrail_epic",
 	[ITEM_RARITY.s.LEGENDARY] = "item_airtrail_legendary",
+	konjur = "item_airtrail_konjur",
 }
+
+
+local prefabs =
+{
+	"item_pickup",  -- doesn't appear to be used anywhere
+}
+
+local item_collections = {
+	ITEM_PICKUP,
+	ITEM_LAND,
+	ITEM_GROUNDTRAIL,
+	ITEM_AIRTRAIL,
+}
+for key,items in pairs(item_collections) do
+	for rarity,p in pairs(items) do
+		table.insert(prefabs, p)
+	end
+end
+
 
 local function MakePickupable(inst)
 	inst.components.loot:MakePickupable()
@@ -73,7 +86,7 @@ local function OnPickedUp(inst, player, item)
 	local x, z = inst.Transform:GetWorldXZ()
 	local pfx
 	if inst.prefab == "drop_konjur" then
-		pfx = "item_pickup_konjur"
+		pfx = ITEM_PICKUP.konjur
 	else
 		pfx = ITEM_PICKUP[item.rarity]
 	end
@@ -91,7 +104,7 @@ end
 local function OnMove(inst)
 	local pfx
 	if inst.prefab == "drop_konjur" then
-		pfx = "item_groundtrail_konjur"
+		pfx = ITEM_GROUNDTRAIL.konjur
 	else
 		pfx = ITEM_GROUNDTRAIL[inst.rarity]
 	end
@@ -113,7 +126,7 @@ local function OnLand(inst, rarity)
 	local x, z = inst.Transform:GetWorldXZ()
 	local pfx
 	if inst.prefab == "drop_konjur" then
-		pfx = "item_land_konjur"
+		pfx = ITEM_LAND.konjur
 	else
 		pfx = ITEM_LAND[rarity]
 	end
@@ -154,8 +167,10 @@ end
 function MakeAutogenDrop(name, params, debug)
 	local assets =
 	{
+		Asset("PKGREF", "scripts/prefabs/autogen/drops/".. name ..".lua"),
+		Asset("PKGREF", "scripts/prefabs/drops_autogen.lua"),
 		Asset("PKGREF", "scripts/prefabs/drops_autogen_data.lua"),
-		Asset("ANIM", "anim/drop_anims.zip"),
+		Asset("ANIM", "anim/drop_anims.zip"), -- Might be the movement anims for the drops.
 	}
 
 	if params.build ~= nil then
@@ -218,7 +233,7 @@ function MakeAutogenDrop(name, params, debug)
 			rarity = def.rarity
 			inst.rarity = rarity
 			if params.loot_id == "konjur" then
-				pfx = "item_airtrail_konjur"
+				pfx = ITEM_AIRTRAIL.konjur
 			end
 		end
 
@@ -265,26 +280,11 @@ function MakeAutogenDrop(name, params, debug)
 end
 
 local ret = {}
-local groups = {}
 
 for name, params in pairs(DropsAutogenData) do
-	if params.group ~= nil and string.len(params.group) > 0 then
-		local droplist = groups[params.group]
-		if droplist ~= nil then
-			droplist[#droplist + 1] = name
-		else
-			groups[params.group] = { name }
-		end
-	end
 	ret[#ret + 1] = MakeAutogenDrop(name, params)
 end
 
-for groupname, droplist in pairs(groups) do
-	-- Dummy prefab (no fn) for loading dependencies. Ignore "test" groups
-	-- since we won't need to load tests.
-	if not groupname:lower():startswith("test") then
-		ret[#ret + 1] = Prefab(GroupPrefab(groupname), nil, nil, droplist)
-	end
-end
+prefabutil.CreateGroupPrefabs(DropsAutogenData, ret)
 
 return table.unpack(ret)

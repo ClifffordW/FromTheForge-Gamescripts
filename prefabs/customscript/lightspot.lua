@@ -9,7 +9,7 @@ local lightspot = {
 local PREFIX = "lightspot_"
 
 --Treat nil CONFIGURATION as "PRODUCTION" during updateprefabs
-local DEV = CONFIGURATION ~= nil and CONFIGURATION ~= "PRODUCTION"
+local DEV = CONFIGURATION ~= nil and CONFIGURATION ~= "PRODUCTION" and not IS_BUILD_STRIPPED
 
 local function shape_to_texture(prefab, variation)
 	local shape = prefab:gsub(PREFIX, "")
@@ -78,6 +78,7 @@ function lightspot.default.CollectAssets(assets, args)
 	for i,v in pairs(lightspot_textures) do
 		local texture = v
 		prefabutil.TryAddAsset(assets, "IMAGE", texture)
+		-- Don't add the .xml because we only load as whole texture.
 	end
 	if DEV then
 		table.insert(assets, Asset("ANIM", "anim/fx_lightspot_mouseover.zip"))

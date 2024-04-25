@@ -5,6 +5,9 @@ local Enum = require "util.enum"
 local lume = require "util.lume"
 local easing = require "util.easing"
 local SGCommon = require "stategraphs.sg_common"
+local entityutil = require "util.entityutil"
+local soundutil = require "util.soundutil"
+local fmodtable = require "defs.sound.fmodtable"
 
 local Revive = nil -- Forward declaration for Health.Status enum
 Revive = Class(function(self, inst)
@@ -67,21 +70,13 @@ function Revive:OnNetSerialize()
 	end
 end
 
-local function TryGetEntity(entity_id)
-	local guid = TheNet:FindGUIDForEntityID(entity_id)
-	if guid and guid ~= 0 and Ents[guid] and Ents[guid]:IsValid() then
-		return Ents[guid]
-	end
-	return nil
-end
-
 function Revive:OnNetDeserialize()
 	local e = self.inst.entity
 
 	self.last_revive_attempt_success = e:DeserializeBoolean()
 	if self.last_revive_attempt_success then
 		local last_revivee_entity_id = e:DeserializeEntityID()
-		self.last_revivee = TryGetEntity(last_revivee_entity_id)
+		self.last_revivee = entityutil.TryGetEntity(last_revivee_entity_id)
 
 		self:_ReviveeHandleLastReviveSuccess()
 	else
@@ -98,7 +93,7 @@ function Revive:OnNetDeserialize()
 		self.revive_time = e:DeserializeDoubleAs16Bit()
 		self.current_revive_time = e:DeserializeDoubleAs16Bit()
 
-		local revivee_ent = TryGetEntity(revivee_entity_id)
+		local revivee_ent = entityutil.TryGetEntity(revivee_entity_id)
 		if revivee_ent then
 			self.revivee = revivee_ent
 			self:_ReviveeHandleReviveStart()
@@ -110,7 +105,7 @@ function Revive:OnNetDeserialize()
 		local has_reviver = e:DeserializeBoolean()
 		if has_reviver then
 			local reviver_entity_id = e:DeserializeEntityID()
-			self.reviver = TryGetEntity(reviver_entity_id)
+			self.reviver = entityutil.TryGetEntity(reviver_entity_id)
 		else
 			self.reviver = nil
 		end
@@ -178,6 +173,24 @@ function Revive:ReviverStartReviving(target)
 
 	TheDungeon.HUD:HidePrompt(target)
 
+	--sound
+	-- local num_players_alive = 0
+	-- for k, player in pairs(AllPlayers) do
+	-- 	if player:IsAlive() then
+	-- 		num_players_alive = (num_players_alive + 1) or 1
+	-- 	end
+	-- end
+
+	-- self.revive_lp = soundutil.PlayCodeSound(self.inst, fmodtable.Event.fx_heal_revive_LP,
+	-- 	{
+	-- 		name = "fx_heal_revive_LP",
+	-- 		max_count = 1,
+	-- 		is_autostop = true,
+	-- 		fmodparams = { numPlayersAlive = num_players_alive }
+	-- 	})
+
+	-- soundutil.SetLocalInstanceParameter(self.inst, "fx_heal_revive_LP", "isLocalPlayerInvolved", 1)
+
 	self:_ReviveeHandleReviveStart()
 end
 
@@ -197,6 +210,10 @@ end
 function Revive:_ReviverCompleteReviving(last_revive_attempt_success)
 	self:_ReviveeResetState(last_revive_attempt_success)
 	self:_RemoveTimerHUD()
+	-- if self.inst.fx_heal_revive_LP then
+	-- 	soundutil.KillSound(self.inst, "fx_heal_revive_LP")
+	-- 	self.inst.fx_heal_revive_LP = nil
+	-- end
 end
 
 function Revive:ReviverFinishReviving()
@@ -208,6 +225,10 @@ end
 function Revive:ReviverCancelReviving()
 	self:_ReviveeHandleReviveCancel()
 	self:_ReviverCompleteReviving(false)
+	-- if self.inst.fx_heal_revive_LP then
+	-- 	soundutil.KillSound(self.inst, "fx_heal_revive_LP")
+	-- 	self.inst.fx_heal_revive_LP = nil
+	-- end
 end
 
 function Revive:_ReviverSetTimeRemaining(time)
@@ -288,7 +309,8 @@ function Revive:_ReviveeHandleReviveStart()
 	if self.revivee:IsLocal() and
 		self.revivee.components.revive:CanRevive() and
 		not self.revivee.components.revive:HasReviver() then
-		self.revivee.components.revive:_ReviveeStartReviving(self.inst)
+			self.revivee.components.revive:_ReviveeStartReviving(self.inst)
+			-- soundutil.SetLocalInstanceParameter(self.inst, "fx_heal_revive_LP", "isLocalPlayerInvolved", 1)
 	end
 end
 
@@ -339,7 +361,7 @@ function Revive:OnReviveeSGStateChanged(data)
 		self:ReviveeResetState()
 	elseif self.inst:IsLocal() and self.revivee_status ~= Revive.Status.id.REVIVING then
 		-- Set to revivable only if we aren't currently being revived.
-		self:ReviveeSetRevivable() -- TODO: victorc: not sure we want this
+		self:ReviveeSetRevivable() -- TODO: revive - not sure we want this
 	end
 end
 
@@ -348,7 +370,7 @@ end
 
 function Revive:_StartTimerHUD()
 	if not self.revivetimer then
-		self.revivetimer = TheDungeon.HUD:MakeReviveTimerText(self.inst, self.reviver)
+		self.revivetimer = TheDungeon.HUD:MakeReviveTimerText(self.reviver)
 			:SetOffsetFromTarget(Vector3.unit_y * 4.5)
 	end
 	self.inst:StartUpdatingComponent(self)
@@ -360,7 +382,6 @@ function Revive:_RemoveTimerHUD()
 		self.revivetimer = nil
 	end
 end
-
 
 function Revive:OnUpdate(_dt)
 	if self.revivetimer then
@@ -376,10 +397,17 @@ function Revive:OnUpdate(_dt)
 				local duration = self.reviver.components.revive:GetReviveTime()
 				self.revivetimer:SetProgress(easing.outQuad(elapsed_time, 0, change, duration)/change)
 
+				-- --sound
+				-- local revive_progress = (elapsed_time / self.reviver.components.revive:GetReviveTime())
+				-- soundutil.SetInstanceParameter(self.reviver, "fx_heal_revive_LP", "progress", revive_progress)
 			end
 		end
 	else
 		self.inst:StopUpdatingComponent(self)
+		-- if self.inst.fx_heal_revive_LP then
+		-- 	soundutil.KillSound(self.inst, "fx_heal_revive_LP")
+		-- 	self.inst.fx_heal_revive_LP = nil
+		-- end
 	end
 end
 

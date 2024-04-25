@@ -26,6 +26,10 @@ local prefabs =
 	"owlitzer_super_flap_right",
 	"owlitzer_super_flap_left",
 
+	"cine_boss_death_hit_hold",
+	"cine_owlitzer_death",
+	"cine_owlitzer_intro",
+
 	--Drops
 	GroupPrefab("drops_generic"),
 	GroupPrefab("drops_owlitzer"),
@@ -46,6 +50,7 @@ local attacks =
 		startup_frames = 15,
 		cooldown = 2,
 		initialCooldown = 0,
+		is_hitstun_pressure_attack = true,
 		pre_anim = "wind_gust_fly_pre",
 		hold_anim = "wind_gust_hold",
 		start_conditions_fn = function(inst, data, trange)
@@ -77,6 +82,10 @@ local attacks =
 		initialCooldown = 0,
 		pre_anim = "slash_air_pre",
 		hold_anim = "slash_air_hold",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			return is_in_phase(inst, 1) or is_in_phase(inst, 4)
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			return (is_in_phase(inst, 1) or is_in_phase(inst, 4)) and trange:IsInRange(6)
 		end,
@@ -107,6 +116,10 @@ local attacks =
 		initialCooldown = 3,
 		pre_anim = "dive_slam_pre",
 		hold_anim = "dive_slam_hold",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			return is_in_phase(inst, 2) or is_in_phase(inst, 4)
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			return (is_in_phase(inst, 2) or is_in_phase(inst, 4)) and trange:IsInRange(6)
 		end
@@ -122,6 +135,10 @@ local attacks =
 		initialCooldown = 0,
 		pre_anim = "snatch_pre",
 		hold_anim = "snatch_hold",
+		is_hitstun_pressure_attack = true,
+		hitstun_pressure_attack_condition_fn = function(inst)
+			return is_in_phase(inst, 3) or is_in_phase(inst, 4)
+		end,
 		start_conditions_fn = function(inst, data, trange)
 			return (is_in_phase(inst, 3) or is_in_phase(inst, 4)) and trange:IsInRange(12)
 		end,
@@ -160,6 +177,9 @@ local attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
+
 
 local function OnCombatTargetChanged(inst, data)
 	if data.old == nil and data.new ~= nil then
@@ -305,15 +325,14 @@ local function projectile_fn(prefabname)
 	inst.components.hitbox:SetHitFlags(HitGroup.PLAYER | HitGroup.NPC)
 
 	-- Need to add these to allow it to get blown by Owlitzer.
-	inst:AddComponent("powermanager")
+	-- Power manager is added in createcomplexprojectile()
 	inst.components.powermanager:EnsureRequiredComponents()
 	--inst.components.powermanager:IgnorePower("owlitzer_super_flap") -- Spike balls don't get blown by super flap until this is removed.
 
 	inst:AddComponent("locomotor")
 	inst:AddComponent("pushforce")
 
-	-- Spikeballs have slight variance in their weights (0.7 +/- 0.1)
-	local weight = krandom.Float(1.6, 2.1)
+	local weight = 1.8
 	inst.components.pushforce:AddPushForceModifier("weight", weight)
 
 	inst.AnimState:SetShadowEnabled(true)

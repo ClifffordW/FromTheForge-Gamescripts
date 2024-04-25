@@ -11,15 +11,25 @@ local KonjurWidget =  Class(Widget, function(self, size, owner)
 
 	self.roomstart_showtime = 5 -- At the start of a room, how long do we show this widget for until it fades out?
 
-	local icon = Consumable.Items.MATERIALS.konjur.icon
-	self.icon = self:AddChild(Image(icon))
-		:SetSize(self.size, self.size)
+	-- local icon = Consumable.Items.MATERIALS.konjur.icon
+	-- self.icon = self:AddChild(Image(icon))
+	-- 	:SetSize(self.size, self.size)
 
-	self.text_root = self:AddChild(Widget("Text Root"))
-		:LayoutBounds("after", "center", self.icon)
-		:Offset(5, 0)
+	-- self.text_root = self:AddChild(Widget("Text Root"))
+	-- 	:LayoutBounds("after", "center", self.icon)
+	-- 	:Offset(5, 0)
 
-	self.text = self.text_root:AddChild(Text(FONTFACE.DEFAULT, self.size * 0.75, nil, UICOLORS.LIGHT_TEXT_TITLE))
+	-- self.text = self.text_root:AddChild(Text(FONTFACE.DEFAULT, self.size * 0.75, nil, UICOLORS.LIGHT_TEXT_TITLE))
+	-- 	:SetShadowColor(UICOLORS.BLACK)
+	-- 	:SetShadowOffset(1, -1)
+	-- 	:SetOutlineColor(UICOLORS.BLACK)
+	-- 	:EnableShadow()
+	-- 	:EnableOutline()
+
+	local pretty_str = STRINGS.UI.INVENTORYSCREEN.KONJUR
+	self.text = self:AddChild(Text(FONTFACE.DEFAULT, 50, pretty_str, UICOLORS.KONJUR))
+		:SetToolTip(string.format(STRINGS.TOWN.HUD.KONJUR_TT, STRINGS.ITEMS.MATERIALS.konjur.name, STRINGS.ITEMS.MATERIALS.konjur.desc))
+		:SetGlyphColor(UICOLORS.LIGHT_TEXT_TITLE)
 		:SetShadowColor(UICOLORS.BLACK)
 		:SetShadowOffset(1, -1)
 		:SetOutlineColor(UICOLORS.BLACK)
@@ -57,8 +67,8 @@ end)
 
 function KonjurWidget:RefreshCount(def)
 	local konjur = self.owner.components.inventoryhoard:GetStackableCount(def)
-	self.text:SetText(konjur)
-	self:SetToolTip(string.format(STRINGS.UI.KONJURSOULSWIDGET.NUM, konjur))
+	self.text:SetText(string.format(STRINGS.UI.INVENTORYSCREEN.KONJUR, konjur))
+	-- self:SetToolTip(string.format(STRINGS.UI.KONJURSOULSWIDGET.NUM, konjur))
 end
 
 return KonjurWidget

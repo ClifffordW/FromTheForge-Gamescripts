@@ -2,7 +2,11 @@
 --Custom script for auto-generated prop prefabs
 ---------------------------------------------------------------------------------------
 
-local function CustomInit(inst, args)
+local dummies = {
+	default = {},
+}
+
+function dummies.default.CustomInit(inst, args)
 	inst.entity:AddHitBox()
 	inst.HitBox:SetHitGroup(HitGroup.NEUTRAL)
 
@@ -50,10 +54,9 @@ local function EventInit(inst, args)
 	inst:SetStateGraph("sg_event_dummy")
 end
 
-return
-{
-	default =
-	{
-		CustomInit = CustomInit,
-	},
-}
+function dummies.PropEdit(editor, ui, params)
+    -- You can hit them, so require sound.
+    params.sound = true
+end
+
+return dummies

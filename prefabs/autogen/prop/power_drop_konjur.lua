@@ -17,7 +17,7 @@ return {
   parallax={
     { anim="shadow1", dist=-0.001, shadow=true,},
     { anim="1",},
-    { anim="ground1", dist=0.001, onground=true,},
+    { anim="ground", dist=0.001, onground=true,},
   },
   script="hitboxtrigger",
   script_args={ lock_until_hit=true,},

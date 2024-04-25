@@ -11,6 +11,12 @@ return {
       peek_a_boo={ events={ { frame=26, name="vfx-peek_a_boo",},},},
       peek_a_boo_pre={ events={ { frame=0, name="vfx-peek_a_boo_pre",},},},
       peek_a_boo_pst={ events={ { frame=0, name="vfx-peek_a_boo_pst",},},},
+      phase_transition={
+        events={
+          { frame=26, name="vfx-phase_transition_swipe1",},
+          { frame=57, name="vfx-phase_transition_swipe2",},
+        },
+      },
       rage_bite={ events={ { frame=1, name="vfx-rage_bite",},},},
       rage_bite_pre={ events={ { frame=0, name="vfx-rage_bite_pre",},},},
       rage_transition={

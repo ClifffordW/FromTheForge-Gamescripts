@@ -43,9 +43,26 @@ function Boss:ActivateBoss()
 	if self.has_activated then
 		return
 	end
+
+	local music
+	if (self.inst:HasTag("miniboss")) then
+		--This is jank but to get a list of all minibosses passed in at the same time how the healthbars expect, find them in the world, mainly for remotes and late join
+		--In the future bosshealthbar.lua could be updated to accept multiple calls from separate entities to set up each healthbar to remove this
+		local x,z = self.inst.Transform:GetWorldXZ()
+		local minibosses = FindTargetTagGroupEntitiesInRange(x, z, 100, {"miniboss"})
+		for i = 1, #minibosses do
+			--If we've already set the healthbars up then dont do it again, causes them to re-animate
+			if (minibosses[i].components.boss.has_activated) then	
+				return
+			end
+		end
+		TheWorld:PushEvent("minibossactivated", minibosses)
+	else
+		TheWorld:PushEvent("bossactivated", self.inst)
+	end
+
 	self.has_activated = true
 
-	TheWorld:PushEvent("bossactivated", self.inst)
 end
 
 return Boss

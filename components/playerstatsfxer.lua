@@ -4,11 +4,16 @@ local ParticleSystemHelper = require "util.particlesystemhelper"
 
 local rundust_prefabs =
 {
+	default = "dust_footstep_run_3",
 	treemon_forest = "dust_footstep_run_forest",
 	owlitzer_forest = "dust_footstep_run_owlforest",
-	kanft_swamp = "dust_footstep_run_swamp",
+	bandi_swamp = "dust_footstep_run_swamp",
 	thatcher_swamp = "dust_footstep_run_acidswamp",
 	sedament_tundra = "dust_footstep_run_forest",
+}
+
+local misc_prefabs = {
+	crithands = "crit_hands",
 }
 
 local movespeed_emitrate_data =
@@ -159,7 +164,7 @@ local PlayerStatsFXer = Class(function(self, inst)
 	local biome = TheDungeon:GetDungeonMap():GetBiomeLocation()
 	local rundust_param =
 	{
-		particlefxname= biome.id ~= nil and rundust_prefabs[biome.id] or "dust_footstep_run_3",
+		particlefxname = rundust_prefabs[biome.id] or rundust_prefabs.default,
 		use_entity_facing=true,
 		ischild = true,
 	}
@@ -175,7 +180,7 @@ local PlayerStatsFXer = Class(function(self, inst)
 	local crithands_param =
 	{
 		followsymbol="armor_hand",
-		particlefxname="crit_hands",
+		particlefxname= misc_prefabs.crithands,
 		use_entity_facing=true,
 		ischild = true,
 	}
@@ -212,6 +217,15 @@ local PlayerStatsFXer = Class(function(self, inst)
 	self.critchance_emitmult_target = nil
 	self.critchance_emitmult_current = 1
 end)
+
+function PlayerStatsFXer.CollectAssets(assets, prefabs)
+	for key,prefab in pairs(rundust_prefabs) do
+		table.insert(prefabs, prefab)
+	end
+	for key,prefab in pairs(misc_prefabs) do
+		table.insert(prefabs, prefab)
+	end
+end
 
 function PlayerStatsFXer:OnNetSerialize()
 	local e = self.inst.entity
@@ -360,6 +374,15 @@ function PlayerStatsFXer:OnUpdate(dt)
 	if not should_update then
 		self.inst:StopUpdatingComponent(self)
 	end
+end
+
+
+function PlayerStatsFXer:DebugDrawEntity(ui, panel, colors)
+	ui:DrawPiecewiseFn("movespeed_emitrate_data", movespeed_emitrate_data)
+	ui:DrawPiecewiseFn("movespeed_scalemult_data", movespeed_scalemult_data)
+	ui:DrawPiecewiseFn("critchance_emitrate_data", critchance_emitrate_data)
+	ui:DrawPiecewiseFn("critchance_scalemult_data", critchance_scalemult_data)
+	ui:DrawPiecewiseFn("critchance_i_data", critchance_i_data)
 end
 
 return PlayerStatsFXer

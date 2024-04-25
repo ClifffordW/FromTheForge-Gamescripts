@@ -591,6 +591,26 @@ function DebugPanel:AppendValue( ui, v, owning_table, owning_table_key )
 	end
 end
 
+local function image_from_atlastexture(ui, label, atlastexture)
+	local parts = atlastexture:split()
+	if #parts == 2 then
+		ui:AtlasImage(parts[1], parts[2], 200, 200)
+	end
+end
+
+function DebugPanel:AppendImageViewer( ui, tex_str, id )
+	if type(tex_str) == "string" and tex_str:find(".tex") ~= nil then
+        if ui:Button(ui.icon.image .. id .."image") then
+            ui:OpenPopup("image".. id .."image")
+        end
+        if ui:BeginPopup("image".. id .."image") then
+			local atlas, tex = GetAtlasTex(tex_str)
+			image_from_atlastexture(ui, "atlas:texture", string.format("%s:%s", atlas or "", tex or ""))
+            ui:EndPopup()
+        end		
+	end
+end
+
 function DebugPanel:AppendKeyValue( ui, key, v, t )
 	-- Key
 	self:AppendValue( ui, key )
@@ -609,6 +629,19 @@ function DebugPanel:AppendKeyValue( ui, key, v, t )
 	if ui:Button(str .. id) then
 		DebugNodes.DebugWatch.ToggleWatch(key, t, self:GetNode().debug_entity)
 	end
+
+	local function image_from_atlastexture(label, atlastexture)
+		local parts = atlastexture:split()
+		if #parts == 2 then
+			ui:AtlasImage(parts[1], parts[2], 200, 200)
+		end
+	end
+
+	if type(v) == "string" and v:find(".tex") ~= nil then
+		ui:SameLineWithSpace()
+		self:AppendImageViewer( ui, v, id )
+	end
+
 	ui:NextColumn()
 
 end

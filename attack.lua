@@ -115,6 +115,7 @@ function Attack:SetAttacker(attacker)
 	end
 
 	self:InitAttackChainData()
+	dbassert(self._attacker.AnimState, string.format("%s is set as the attacker for %s but has no animstate", self._attacker, attacker))
 	assert(self._attacker.components.combat ~= nil, "You cannot attack without a combat component.")
 	return self
 end

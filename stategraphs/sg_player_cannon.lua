@@ -11,10 +11,13 @@ local SGPlayerCommon = require "stategraphs.sg_player_common"
 local fmodtable = require "defs.sound.fmodtable"
 local combatutil = require "util.combatutil"
 local soundutil = require "util.soundutil"
+local kassert = require "util.kassert"
 local krandom = require "util.krandom"
 local EffectEvents = require "effectevents"
 local ParticleSystemHelper = require "util.particlesystemhelper"
 local Weight = require "components/weight"
+local powerutil = require "util.powerutil"
+local Equipment = require "defs.equipment"
 
 local ATTACKS =
 {
@@ -230,6 +233,7 @@ local WEIGHT_TO_BACKFIRE_MULTIPLIER =
 
 -- MORTAR PARAMETERS:
 local MORTAR_AIM_START_DISTANCE = 7 -- How far away from the player does the mortar aim indicator start?
+local MORTAR_AIM_MAX_DISTANCE = 15 -- How far away from the player is the max distance a mortar can be aimed to?
 local MORTAR_SHOOT_HITSTOP =
 {
 	WEAK = HitStopLevel.LIGHT,
@@ -282,18 +286,6 @@ local BACKFIRE_VELOCITY =
 	STRONG = -34,
 }
 
-local FOCUS_SEQUENCE =
-{
-	-- Of a given clip, which shots are FOCUS shots and which are NORMAL shots?
-	[1] = true,
-	[2] = true,
-	[3] = true,
-	[4] = false,
-	[5] = false,
-	[6] = false,
-}
-local MORTAR_FOCUS_THRESHOLD = 3 -- Equal to and below this much ammo, a mortar becomes focus shots. Match the values in FOCUS_SEQUENCE for best clarity ^
-
 local BLAST_RECOIL_FRAME_TO_SPEEDMULT =
 {
 	-- Doing it this way so that I can count how many frames we've been sliding across multiple possible states.
@@ -314,10 +306,23 @@ local BLAST_RECOIL_FRAME_TO_SPEEDMULT =
 	[16] = 0,
 }
 
+-- number of bullets remaining below which we trigger a low ammo sound
+-- note that this is generally always checked AFTER firing
+local LOW_AMMO_THRESHOLDS =
+{
+	[6] = 3,
+	[5] = 2,
+	[4] = 2,
+	[3] = 1,
+	[2] = 1,
+	[1] = 1,
+}
+
 -- AMMO MANAGEMENT
 local function UpdateAmmoSymbols(inst)
+
 	local ammo = inst.sg.mem.ammo
-	local focus = FOCUS_SEQUENCE[ammo]
+	local focus = inst.sg.mem.focus_sequence and inst.sg.mem.focus_sequence[ammo] or false
 	-- Glow the tip of the weapon blue when focus section is active.
 	if focus then
 		inst.AnimState:SetSymbolBloom("feature01", 0/255, 100/255, 150/255, 200/255)
@@ -358,7 +363,16 @@ local function GetRemainingAmmo(inst)
 end
 
 local function UpdateAmmo(inst, amount)
+	--sound
+	local prev_ammo = inst.sg.mem.ammo
+	
 	inst.sg.mem.ammo = math.max(inst.sg.mem.ammo - amount, 0)
+
+	--sound
+	local change_direction = inst.sg.mem.ammo < prev_ammo and -1 or 1
+	local parameter = ((prev_ammo - inst.sg.mem.ammo) / GetMaxAmmo(inst)) * change_direction
+	inst.sg.statemem.percent_ammo_changed_param = parameter
+
 	UpdateAmmoSymbols(inst)
 
 	local lifetime_reloads = inst.components.progresstracker:GetValue("total_cannon_reloads") or 0
@@ -368,7 +382,17 @@ local function UpdateAmmo(inst, amount)
 end
 
 local function OnReload(inst, amount)
+	local parameter
+	if inst.sg.mem.ammo == inst.sg.mem.ammo_max then
+		parameter = 0
+	else
+		parameter = math.abs(amount / GetMaxAmmo(inst))
+	end
+
+	inst.sg.statemem.percent_ammo_changed_param = parameter
+
 	inst.sg.mem.ammo = math.min(inst.sg.mem.ammo + amount, inst.sg.mem.ammo_max)
+
 	UpdateAmmoSymbols(inst)
 
 	-- if a player tries to fire with an empty clip more than once (we allow for one accidental dry fire)
@@ -397,28 +421,6 @@ local function GetBackfireWeightVelocityMult(inst)
 
 	return weightmult
 	end
-
-local function PlayMortarSound(inst, cannonAmmo, cannonMortarStrength, isFocusAttack)
-	soundutil.PlaySoundWithParams(inst, fmodtable.Event.Cannon_mortar_launch_fire_scatterer, { cannonAmmo = cannonAmmo, cannonMortarStrength = cannonMortarStrength, isFocusAttack = isFocusAttack })
-end
-
-local function PlayMortarTubeSound(inst, cannonMortarStrength, isFocusAttack)
-	local params = {}
-	params.fmodevent = fmodtable.Event.Cannon_mortar_launch_tube
-	params.sound_max_count = 1
-	local handle = soundutil.PlaySoundData(inst, params)
-	soundutil.SetInstanceParameter(inst, handle, "cannonMortarStrength", cannonMortarStrength)
-	soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", isFocusAttack)
-end
-
-local function PlayNoAmmoSound(inst)
-	local params = {}
-	params.fmodevent = fmodtable.Event.Cannon_noammo
-	params.max_count = 1
-	soundutil.PlaySoundData(inst, params)
-	inst.sound_triedToFireWithoutAmmo = (inst.sound_triedToFireWithoutAmmo or 0) + 1
-end
-
 --
 
 local function CreateMortarAimReticles(inst)
@@ -442,7 +444,7 @@ local function CreateMortarAimReticles(inst)
 	inst.sg.mem.aim_root_speed = facingright and MORTAR_AIM_RETICLE_SPEED or -MORTAR_AIM_RETICLE_SPEED
 
 	-- For every bullet we are about to shoot, create an aim indicator
-	local bullets = GetRemainingAmmo(inst)
+	local bullets = inst.sg.mem.cannon_override_mortar_ammopershot or GetRemainingAmmo(inst)
 	for i=1,bullets do
 		local circle = SpawnPrefab("fx_ground_target_player", inst)
 		circle.Transform:SetScale(0.75, 0.75, 0.75)
@@ -466,11 +468,18 @@ local function CreateMortarAimReticles(inst)
 end
 
 local function UpdateMortarAimReticles(inst)
-	for circle,aim_data in pairs(inst.sg.mem.aim_reticles) do
-		aim_data.aim_x = aim_data.aim_x + aim_data.aim_speed
-		circle.Transform:SetPosition(aim_data.aim_x, 0, aim_data.aim_z)
+	local dist = inst:GetDistanceSqToXZ(inst.sg.mem.aim_root_x, inst.sg.mem.aim_root_z)
+
+	if dist <= (MORTAR_AIM_MAX_DISTANCE * MORTAR_AIM_MAX_DISTANCE) then
+		-- Only allow aiming up until the max distance
+
+		for circle,aim_data in pairs(inst.sg.mem.aim_reticles) do
+			aim_data.aim_x = aim_data.aim_x + aim_data.aim_speed
+			circle.Transform:SetPosition(aim_data.aim_x, 0, aim_data.aim_z)
+		end
+
+		inst.sg.mem.aim_root_x = inst.sg.mem.aim_root_x + inst.sg.mem.aim_root_speed
 	end
-	inst.sg.mem.aim_root_x = inst.sg.mem.aim_root_x + inst.sg.mem.aim_root_speed
 end
 
 local function DestroyMortarAimReticles(inst)
@@ -491,7 +500,7 @@ local function ConfigureNewDodge(inst)
 			- probably add a Kickback() function, like DoKickback or DoBlastKickback
 	]]
 	local weightmult = GetWeightVelocityMult(inst)
-	local locomotorspeedmult = inst.components.locomotor.total_speed_mult * 0.75 --(TODO)jambell: use the common dodge func
+	local locomotorspeedmult = inst.components.locomotor.total_speed_mult * 0.75 --TODO: use the common dodge func
 
 	inst.sg.statemem.maxspeed = -TUNING.GEAR.WEAPONS.CANNON.ROLL_VELOCITY * locomotorspeedmult * weightmult
 	inst.sg.statemem.framessliding = 0
@@ -505,14 +514,17 @@ local function CheckIfDodging(inst, data)
 		inst.sg.statemem.speed = data.speed
 		inst.sg.statemem.framessliding = data.framessliding
 
-		if inst.sg.statemem.framessliding ~= nil and inst.sg.statemem.framessliding <= TUNING.PLAYER.ROLL.NORMAL.IFRAMES then -- TODO #weight @jambell make work for different weights
+		if inst.sg.statemem.framessliding ~= nil and inst.sg.statemem.framessliding <= TUNING.PLAYER.ROLL.NORMAL.IFRAMES then -- TODO #weight make work for different weights
 			inst.HitBox:SetInvincible(true)
 		end
 	else
-		-- jambell: Trying to fix a crash I can't repro... we didn't get data here, so just set maxspeed to 0.
+		-- Assert and print the state we came from that failed to pass transitiondata:
+		--~ dbassert(data, inst.sg.laststate and inst.sg.laststate.name or "<no laststate>")
+		-- Trying to fix a crash I can't repro... we didn't get data here, so just set maxspeed to 0.
 		-- Elsewhere, if we received maxspeed = 0 then print some logging to help identify why
 		inst.sg.statemem.maxspeed = 0
 		inst.sg.statemem.speed = 0
+		inst.sg.statemem.framessliding = 0
 		inst.Physics:Stop()
 	end
 end
@@ -534,9 +546,9 @@ local function DoDodgeMovement(inst)
 			end
 		end
 
-		-- JAMBELL: BUG... this keeps invincible for way longer because air-to-air cancel states set framessliding back down to 0.
+		-- BUG... this keeps invincible for way longer because air-to-air cancel states set framessliding back down to 0.
 		-- Either do that movement boost in a different way OR track iframes individually
-		if inst.sg.statemem.framessliding ~= nil and inst.sg.statemem.framessliding > TUNING.PLAYER.ROLL.NORMAL.IFRAMES then -- TODO #weight @jambell make work for different weights
+		if inst.sg.statemem.framessliding ~= nil and inst.sg.statemem.framessliding > TUNING.PLAYER.ROLL.NORMAL.IFRAMES then -- TODO #weight make work for different weights
 			inst.HitBox:SetInvincible(false)
 		else
 			-- print("Invincible this frame:", inst.sg.statemem.framessliding)
@@ -598,6 +610,104 @@ end
 local function DoBackfireStrongKickback(inst)
 	inst.Physics:MoveRelFacing(-250 / 150)
 end
+
+-- SOUND
+local function IsShotOnLowAmmo(inst, current_ammo)
+	local current_ammo = current_ammo or GetRemainingAmmo(inst)
+	-- must be called AFTER AMMO IS UPDATED
+	local threshold
+	
+	if LOW_AMMO_THRESHOLDS[GetMaxAmmo(inst)] then
+		threshold = LOW_AMMO_THRESHOLDS[GetMaxAmmo(inst)]
+	else
+		--some scaling for future weapons
+		local base_scale = 1/3 -- for low ish max ammo counts
+		local adjusted_scale = 1/10 -- for much higher future max ammo counts like, 100
+
+		local startAdjustingAt = 30 -- start adjusting after GetMaxAmmo(inst) is greater this value
+		local adjustOverRange = 70
+
+		if GetMaxAmmo <= startAdjustingAt then
+			return math.floor((GetMaxAmmo * base_scale) + 0.5)
+		elseif GetMaxAmmo >= (startAdjustingAt + adjustOverRange) then
+			-- for values much higher than startAdjustingAt, use the adjusted scale
+			return math.floor((GetMaxAmmo * adjusted_scale) + 0.5)
+		else
+			-- for startAdjustingAt < GetMaxAmmo(inst) < adjustOverRange
+			local progress = (GetMaxAmmo - startAdjustingAt) / adjustOverRange
+			local scale = base_scale * (1 - progress) + adjusted_scale * progress
+			return math.floor((GetMaxAmmo * scale) + 0.5)
+		end
+
+		threshold = math.floor((GetMaxAmmo(inst)/3) + 0.5) -- 
+	end
+	
+	local is_low_ammo = current_ammo < threshold
+	local parameter = current_ammo / threshold
+	-- print("IsShotOnLowAmmo", current_ammo, threshold, is_low_ammo, parameter)
+
+	return is_low_ammo, parameter
+end
+
+local function PlayLowAmmoSound(inst, current_ammo, volume)
+	volume = volume or 100
+	assert(type(volume) == "number", "volume must be a number")
+	if volume <= 1 then
+		volume = volume * 100
+	end
+
+	-- must be called AFTER AMMO IS UPDATED
+	local is_low_ammo, parameter = IsShotOnLowAmmo(inst, current_ammo)
+	if not is_low_ammo then
+		return
+	end
+
+	if inst.sg.mem.ammo_sound then
+		soundutil.KillSound(inst, inst.sg.mem.ammo_sound)
+		inst.sg.mem.ammo_sound = nil
+	end
+
+	inst.sg.mem.ammo_sound = soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_ammoCounter, {
+		volume = volume,
+		max_count = 1,
+		fmodparams = {
+			cannon_ammo_numLowAmmoShotsRemaining_scaled = parameter,
+			cannon_ammo_makeSoundsLouderToAssist = inst.makeAmmoCountSoundsLouderToAssist and 1 or 0,
+		}
+	})
+end
+
+local function PlayMortarSound(inst, ammo_cost, cannonMortarStrength)
+	-- have to do this because we are playing this sound before the ammo updates
+	local cannon_ammo_percentDelta = (ammo_cost / GetMaxAmmo(inst)) * -1
+	local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.focus)
+	soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_mortar_launch_fire_scatterer, {
+		max_count = 1,
+		fmodparams = {
+			isFocusAttack = isFocusAttack,
+			numBombs = ammo_cost,
+			cannon_mortarStrength = cannonMortarStrength,
+			cannon_ammo_percentDelta = cannon_ammo_percentDelta,
+		}
+	})
+end
+
+local function PlayMortarTubeSound(inst, cannonMortarStrength, isFocusAttack)
+	soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_mortar_launch_tube, {
+		max_count = 1,
+		fmodparams = {
+			isFocusAttack = isFocusAttack,
+			cannon_mortarStrength = cannonMortarStrength,
+		}
+	})
+end
+
+local function PlayNoAmmoSound(inst)
+	soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_noammo,{ max_count = 1 })
+	inst.sound_triedToFireWithoutAmmo = (inst.sound_triedToFireWithoutAmmo or 0) + 1
+	local volume = inst.sound_triedToFireWithoutAmmo > 1 and 1 or .7
+	inst:DoTaskInAnimFrames(4,function() PlayLowAmmoSound(inst,0,volume) end)
+end
 --
 
 -- FUNCTIONS FOR DOING SHOTS
@@ -614,25 +724,8 @@ local function DoShoot(inst)
 
 	local remaining_ammo = GetRemainingAmmo(inst)
 
-	if inst.sg.mem.ammo_sound then
-		soundutil.KillSound(inst, inst.sg.mem.ammo_sound)
-		inst.sg.mem.ammo_sound = nil
-	end
-
-	--sound
-	if remaining_ammo <= 3 then
-		--sound
-		local params = {}
-		params.fmodevent = fmodtable.Event.Cannon_ammoCounter_light
-		inst.sg.mem.ammo_sound = soundutil.PlayLocalSoundData(inst, params)
-		soundutil.SetInstanceParameter(inst, inst.sg.mem.ammo_sound, "cannonAmmo", remaining_ammo)
-		if inst.makeAmmoCountSoundsLouderToAssist then
-			soundutil.SetInstanceParameter(inst, inst.sg.mem.ammo_sound, "makeAmmoCountSoundsLouderToAssist", 1)
-		end
-	end
-
 	-- If this is a focus attack, use FOCUS numbers. Otherwise, use default numbers.
-	local focus = FOCUS_SEQUENCE[remaining_ammo]
+	local focus = inst.sg.mem.focus_sequence[remaining_ammo]
 	if focus then
 		damagemod = ATTACK.DAMAGE_FOCUS
 		hitstun = ATTACK.HITSTUN_FOCUS
@@ -649,12 +742,14 @@ local function DoShoot(inst)
 		projectileprefab = "player_cannon_projectile"
 	end
 
-	local params = {}
-	params.fmodevent = fmodtable.Event.Cannon_shoot_light
-	params.sound_max_count = 1
-	local handle = soundutil.PlaySoundData(inst, params)
-	soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", focus and 1 or 0)
-	soundutil.SetInstanceParameter(inst, handle, "cannonAmmo", remaining_ammo)
+	soundutil.PlayCodeSound(inst,fmodtable.Event.Cannon_shoot_light,{
+		max_count = 1,
+		fmodparams = {
+			isFocusAttack = focus and 1 or 0,
+			cannon_remainingAmmo_scaled = GetRemainingAmmo(inst) / GetMaxAmmo(inst),
+			cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+		}
+	})
 
 	-- kill travel sound
 	if inst.sg.mem.bullet and inst.sg.mem.bullet.handle then
@@ -666,7 +761,15 @@ local function DoShoot(inst)
 	-- Neutral shot will have one y value, while airborne shot will have a different y value.
 	local bullet = SGCommon.Fns.SpawnAtDist(inst, projectileprefab, 2)
 	inst.sg.mem.bullet = bullet
-	bullet:Setup(inst, damagemod, hitstun, pushback, speed, range, focus, inst.sg.mem.attack_type, inst.sg.mem.attack_id, 1, 1)
+
+	local pierce = false
+	if inst.sg.mem.lightpierce then
+		pierce = true
+	elseif inst.sg.mem.lightfocuspierce and focus then
+		pierce = true
+	end
+
+	bullet:Setup(inst, damagemod, hitstun, pushback, speed, range, focus, inst.sg.mem.attack_type, inst.sg.mem.attack_id, 1, 1, pierce)
 
 	local bulletpos = bullet:GetPosition()
 	local y_offset = inst.sg.statemem.projectile_y_offset ~= nil and inst.sg.statemem.projectile_y_offset or 1
@@ -675,12 +778,28 @@ local function DoShoot(inst)
 	-- Send an event for power purposes.
 	inst:PushEvent("projectile_launched", { bullet })
 
+	local previous_ammo = inst.sg.mem.ammo
+
 	UpdateAmmo(inst, 1)
+
+	if inst.sg.mem.ammo <= previous_ammo then
+		PlayLowAmmoSound(inst, inst.sg.mem.ammo)
+	end
 end
 
 local function DoShotFX(inst, current_ammo, fxname)
 	-- Create particle FX, depending on how much ammo we have left.
-	local fx_prefab = current_ammo ~= nil and fxname.."_ammo"..current_ammo or fxname
+
+	local fx_prefab = fxname --= current_ammo ~= nil and fxname.."_ammo1" or fxname
+
+	if current_ammo then
+		if inst.sg.mem.focus_sequence[current_ammo] then
+			fx_prefab = fxname.."_ammo1_focus"
+		else
+			fx_prefab = fxname.."_ammo1_normal"
+		end
+	end
+	-- local fx_prefab = current_ammo ~= nil and fxname.."_ammo"..current_ammo or fxname
 
 	local fx = SGPlayerCommon.Fns.AttachSwipeFx(inst, fx_prefab, false, false)
 	local power_fx = SGPlayerCommon.Fns.AttachPowerSwipeFx(inst, fxname, false, false) -- Don't use the ammo-adjusted name for the power prefab
@@ -736,8 +855,8 @@ local function DoBlast(inst)
 	local remaining_ammo = GetRemainingAmmo(inst)
 
 	-- If this is a focus attack, use FOCUS numbers. Otherwise, use default numbers.
-	-- local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)] == "lightattack" and true or false
-	local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
+	-- local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)] == "lightattack" and true or false
+	local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 	if focus then
 		damagemod = ATTACK.DAMAGE_FOCUS
 		hitstun = ATTACK.HITSTUN_FOCUS
@@ -747,34 +866,48 @@ local function DoBlast(inst)
 		projectileprefab = "player_cannon_shotgun_focus_projectile"
 	end
 
-	if inst.sg.mem.ammo_sound then
-		soundutil.KillSound(inst, inst.sg.mem.ammo_sound)
-		inst.sg.mem.ammo_sound = nil
-	end
-
-	if remaining_ammo <= 3 then
-		--sound
-		local params = {}
-		params.fmodevent = fmodtable.Event.Cannon_ammoCounter_light
-		inst.sg.mem.ammo_sound = soundutil.PlayLocalSoundData(inst, params)
-		soundutil.SetInstanceParameter(inst, inst.sg.mem.ammo_sound, "cannonAmmo", remaining_ammo)
-		if inst.makeAmmoCountSoundsLouderToAssist then
-			soundutil.SetInstanceParameter(inst, inst.sg.mem.ammo_sound, "makeAmmoCountSoundsLouderToAssist", 1)
+	local numbullets
+	local startangle
+	local angleperbullet
+	local bulletdelayframedata
+	local bulletrangedata
+	if inst.sg.mem.heavyblastmod then
+		numbullets = inst.sg.mem.heavyblastmod.numbullets
+		startangle = inst.sg.mem.heavyblastmod.startangle
+		angleperbullet = inst.sg.mem.heavyblastmod.angleperbullet
+		bulletdelayframedata = inst.sg.mem.heavyblastmod.delay_frames_per_blast_bullet
+		bulletrangedata = inst.sg.mem.heavyblastmod.extra_range_per_blast_bullet
+		if inst.sg.mem.heavyblastmod.damagemodmult then
+			damagemod = damagemod * inst.sg.mem.heavyblastmod.damagemodmult
 		end
+	else
+		numbullets = 5
+		startangle = -30
+		angleperbullet = 10
+		bulletdelayframedata = delay_frames_per_blast_bullet
+		bulletrangedata = extra_range_per_blast_bullet
 	end
 
 	-- Create 5 tiny bullets and spread them in a shotgun/spread pattern
-	local numbullets = 5
 	local bullets = {}
 	for i=1,numbullets do
-		local angle = -30 + (i * 10)
+		local angle = startangle + (i * angleperbullet)
 		local bullet = SGCommon.Fns.SpawnAtAngleDist(inst, projectileprefab, 2, angle)
 		bullet:Hide()
 		table.insert(bullets, bullet)
 
-		inst:DoTaskInAnimFrames(delay_frames_per_blast_bullet[i], function()
+		local delay_frames = bulletdelayframedata[i]
+		inst:DoTaskInAnimFrames(delay_frames, function()
 			bullet:Show()
-			bullet:Setup(inst, damagemod, hitstun, pushback, speed, range + extra_range_per_blast_bullet[i], focus, inst.sg.mem.attack_type, inst.sg.mem.attack_id, i, numbullets)
+
+			local pierce = false
+			if inst.sg.mem.heavypierce then
+				pierce = true
+			elseif inst.sg.mem.heavyfocuspierce and focus then
+				pierce = true
+			end
+
+			bullet:Setup(inst, damagemod, hitstun, pushback, speed, range + bulletrangedata[i], focus, inst.sg.mem.attack_type, inst.sg.mem.attack_id, i, numbullets, pierce)
 
 			local bulletpos = bullet:GetPosition()
 			local y_offset = inst.sg.statemem.projectile_y_offset ~= nil and inst.sg.statemem.projectile_y_offset or 1.3
@@ -784,7 +917,14 @@ local function DoBlast(inst)
 	end
 
 	inst:PushEvent("projectile_launched", bullets)
+
+	local previous_ammo = inst.sg.mem.ammo
+	
 	UpdateAmmo(inst, 1)
+
+	if inst.sg.mem.ammo <= previous_ammo then
+		inst:DoTaskInAnimFrames(2, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+	end
 end
 
 local function DoMortar(inst, ammo)
@@ -796,7 +936,7 @@ local function DoMortar(inst, ammo)
 	local damagemod = ATTACK.DAMAGE
 	local hitstun = ATTACK.HITSTUN
 	local pushback = ATTACK.PUSHBACK
-	local focus = ammo <= MORTAR_FOCUS_THRESHOLD
+	local focus = inst.sg.mem.mortar_focus_sequence[GetRemainingAmmo(inst)] -- do not use "ammo" here, because we may be shooting 1 bullet while we have 6 left in the chamber
 	local radius = ATTACK.RADIUS
 
 	-- If this is a focus attack, use FOCUS numbers. Otherwise, use default numbers.
@@ -805,11 +945,16 @@ local function DoMortar(inst, ammo)
 		hitstun = ATTACK.HITSTUN_FOCUS
 		pushback = ATTACK.PUSHBACK_FOCUS
 		radius = ATTACK.RADIUS_FOCUS
-
 	end
 
 	-- Create 'num_bombs' mortars and arrange them in a star shape
 	local bullets = {}
+
+	local player = inst
+	if num_bombs then
+		inst.sg.mem.bombs_left_to_explode = num_bombs
+	end
+
 	for i = 1, num_bombs do
 		local delay = MORTAR_SHOOT_TIMING[i]
 		inst:DoTaskInAnimFrames(delay, function(inst)
@@ -821,15 +966,18 @@ local function DoMortar(inst, ammo)
 				local x, z = inst.Transform:GetWorldXZ()
 				bomb.Transform:SetPosition(x + offset.x, offset.y, z + offset.z)
 
-				bomb:Setup(inst, damagemod, hitstun, radius, pushback, focus, "heavy_attack", inst.sg.mem.attack_id, i,
-					num_bombs, num_bombs)
-				-- Setup(inst, owner, damage_mod, hitstun_animframes, hitboxradius, pushback, focus, attacktype, numberinbatch, maxinbatch)
+				bomb:Setup(inst, damagemod, hitstun, radius, pushback, focus, "heavy_attack", i, num_bombs, inst.sg.mem.cannon_mortar_clusterbombs)
+				-- Setup(owner, damage_mod, hitstun_animframes, hitboxradius, pushback, focus, attacktype, numberinbatch, maxinbatch, clusterbomb)
 
 				-- Randomize the scale + rotation speed between a min/max for variance purposes
 				local randomscale = krandom.Float(MORTAR_RANDOM_SCALE_MIN, MORTAR_RANDOM_SCALE_MAX)
 				local randomrotationspeed = krandom.Float(MORTAR_RANDOM_ROTATESPEED_MIN, MORTAR_RANDOM_ROTATESPEED_MAX)
 				bomb.AnimState:SetScale(randomscale, randomscale, randomscale)
 				bomb.AnimState:SetDeltaTimeMultiplier(randomrotationspeed)
+				bomb.owner = player
+				bomb.num_bombs = num_bombs
+				bomb.focus = focus
+				bomb.sound_event = focus and fmodtable.Event.Cannon_Mortar_Explode_Counter_Focus or fmodtable.Event.Cannon_Mortar_Explode_Counter
 
 				-- Set up the target
 				local aim_x = inst.sg.mem.aim_root_x or 1
@@ -853,7 +1001,7 @@ local function OnQuickriseHitBoxTriggered(inst, data)
 	for i = 1, #data.targets do
 		local v = data.targets[i]
 
-		local focushit = FOCUS_SEQUENCE[GetRemainingAmmo(inst)+1] -- Have to add +1 because ammo has already been updated by this point
+		local focushit = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)+1] -- Have to add +1 because ammo has already been updated by this point
 
 		local hitstoplevel = focushit and ATTACK_DATA.HITSTOP_FOCUS or ATTACK_DATA.HITSTOP
 		local damage_mod = focushit and ATTACK_DATA.DAMAGE_FOCUS or ATTACK_DATA.DAMAGE
@@ -890,7 +1038,7 @@ local function OnQuickriseHitBoxTriggered(inst, data)
 
 		inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_cannon_shot", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-		-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
+		-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
 		if v.sg ~= nil and v.sg:HasStateTag("block") then
 		else
 			SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
@@ -905,7 +1053,7 @@ local function OnShockwaveHitBoxTriggered(inst, data)
 	for i = 1, #data.targets do
 		local v = data.targets[i]
 
-		local focushit = FOCUS_SEQUENCE[inst.sg.statemem.shockwave_ammo]
+		local focushit = inst.sg.mem.focus_sequence[inst.sg.statemem.shockwave_ammo]
 
 		local hitstoplevel = focushit and ATTACK_DATA.HITSTOP_FOCUS or ATTACK_DATA.HITSTOP
 		local damage_mod = focushit and ATTACK_DATA.DAMAGE_FOCUS or ATTACK_DATA.DAMAGE
@@ -927,24 +1075,29 @@ local function OnShockwaveHitBoxTriggered(inst, data)
 		dist = math.sqrt(dist)
 
 		local force_knockdown = v.sg ~= nil and v.sg:HasStateTag("airborne")
+
+		local hit_v
+
 		-- If really close to the center of the blast, do a knockdown. Otherwise, do a knockback.
 		if ATTACK_DATA.KNOCKDOWN and dist <= ATTACK_DATA.RADIUS * ATTACK_DATA.KNOCKDOWN_RADIUS or force_knockdown then
-			inst.components.combat:DoKnockdownAttack(attack)
+			hit_v = inst.components.combat:DoKnockdownAttack(attack)
 		else
-			inst.components.combat:DoKnockbackAttack(attack)
+			hit_v = inst.components.combat:DoKnockbackAttack(attack)
 		end
 
-		hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+		if hit_v then
+			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
 
-		local hitfx_x_offset = 0
-		local hitfx_y_offset = 0
+			local hitfx_x_offset = 0
+			local hitfx_y_offset = 0
 
-		inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_cannon_shot", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+			inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_cannon_shot", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-		-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-		if v.sg ~= nil and v.sg:HasStateTag("block") then
-		else
-			SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+			-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+			if v.sg ~= nil and v.sg:HasStateTag("block") then
+			else
+				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+			end
 		end
 	end
 end
@@ -962,7 +1115,7 @@ local function DoShockwaveSelfAttack(inst)
 		return
 	end
 
-	local focushit = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
+	local focushit = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 
 	local hitstoplevel = focushit and ATTACK_DATA.HITSTOP_FOCUS or ATTACK_DATA.HITSTOP
 	local pushback = focushit and ATTACK_DATA.PUSHBACK_FOCUS or ATTACK_DATA.PUSHBACK
@@ -996,7 +1149,7 @@ local function OnBackfireHitBoxTriggered(inst, data)
 	for i = 1, #data.targets do
 		local v = data.targets[i]
 
-		local focushit = FOCUS_SEQUENCE[inst.sg.statemem.backfire_ammo]
+		local focushit = inst.sg.mem.focus_sequence[inst.sg.statemem.backfire_ammo]
 
 		local hitstoplevel = focushit and ATTACK_DATA.HITSTOP_FOCUS or ATTACK_DATA.HITSTOP
 		local damage_mod = focushit and ATTACK_DATA.DAMAGE_FOCUS or ATTACK_DATA.DAMAGE
@@ -1020,25 +1173,28 @@ local function OnBackfireHitBoxTriggered(inst, data)
 
 		local force_knockdown = v.sg ~= nil and v.sg:HasStateTag("airborne")
 
+		local hit_v
 		if ATTACK_DATA.KNOCK == "KNOCKDOWN" or force_knockdown then
-			inst.components.combat:DoKnockdownAttack(attack)
+			hit_v = inst.components.combat:DoKnockdownAttack(attack)
 		elseif ATTACK_DATA.KNOCK == "KNOCKBACK" then
-			inst.components.combat:DoKnockbackAttack(attack)
+			hit_v = inst.components.combat:DoKnockbackAttack(attack)
 		else
-			inst.components.combat:DoBasicAttack(attack)
+			hit_v = inst.components.combat:DoBasicAttack(attack)
 		end
 
-		hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel)
+		if hit_v then
+			hitstoplevel = SGCommon.Fns.ApplyHitstop(attack, hitstoplevel, { disable_self_hitstop = true }) -- Player will be flying through the air, so don't pause.
 
-		local hitfx_x_offset = 0
-		local hitfx_y_offset = 0
+			local hitfx_x_offset = inst.sg.statemem.hitfx_x_offset or 0
+			local hitfx_y_offset = inst.sg.statemem.hitfx_y_offset or 0
 
-		inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_cannon_shot", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
+			inst.components.combat:SpawnHitFxForPlayerAttack(attack, "hits_player_cannon_shot", v, inst, hitfx_x_offset, hitfx_y_offset, dir, hitstoplevel)
 
-		-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
-		if v.sg ~= nil and v.sg:HasStateTag("block") then
-		else
-			SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+			-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
+			if v.sg ~= nil and v.sg:HasStateTag("block") then
+			else
+				SpawnHurtFx(inst, v, hitfx_x_offset, dir, hitstoplevel)
+			end
 		end
 	end
 end
@@ -1056,7 +1212,7 @@ local function DoBackfireSelfAttack(inst)
 		return
 	end
 
-	local focushit = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
+	local focushit = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 
 	local hitstoplevel = focushit and ATTACK_DATA.HITSTOP_FOCUS or ATTACK_DATA.HITSTOP
 	local pushback = focushit and ATTACK_DATA.PUSHBACK_FOCUS or ATTACK_DATA.PUSHBACK
@@ -1083,7 +1239,7 @@ local function DoBackfireSelfAttack(inst)
 	-- Flicker red
 	SGCommon.Fns.BlinkAndFadeColor(inst, { 255/255, 50/255, 50/255, 1 }, 8)
 
-	-- TODO(dbriscoe): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack
+	-- TODO(combat): Why do we only spawn if target didn't block? We unconditionally spawn in hammer. Maybe we should move this to SpawnHitFxForPlayerAttack?
 	if inst.sg ~= nil and inst.sg:HasStateTag("block") then
 	else
 		SpawnHurtFx(inst, inst, hitfx_x_offset, dir, hitstoplevel)
@@ -1152,8 +1308,10 @@ end
 local function CheckForHeavyQuickRise(inst, data)
 	if data.control == "heavyattack" and inst.sg.statemem.canheavydodgespecial then
 		if GetRemainingAmmo(inst) > 0 then
+			inst:PushEvent("quick_rise")
 			inst.sg:GoToState("cannon_quickrise")
 		else
+			inst:PushEvent("quick_rise")
 			inst.sg:GoToState("cannon_quickrise_noammo")
 			return false
 		end
@@ -1163,13 +1321,47 @@ local function CheckForHeavyQuickRise(inst, data)
 	return false
 end
 
+local function ConfigureEquipmentStats(inst)
+	local equipped_weapon = inst.components.inventoryhoard:GetEquippedItem(Equipment.Slots.WEAPON)
+
+	inst.sg.mem.ammo_max = equipped_weapon and equipped_weapon.stats and equipped_weapon.stats.AMMO
+	inst.sg.mem.ammo = inst.sg.mem.ammo_max
+
+	inst.sg.mem.focus_sequence = equipped_weapon and equipped_weapon.stats and equipped_weapon.stats.FOCUS_SEQUENCE
+	inst.sg.mem.mortar_focus_sequence = equipped_weapon and equipped_weapon.stats and equipped_weapon.stats.MORTAR_FOCUS_SEQUENCE
+
+	inst.sg.mem.heavydodge = true -- For quickrising
+
+	UpdateAmmoSymbols(inst)
+end
+
 local events =
 {
 	EventHandler("cannon_reload", function(inst, amount)
 		OnReload(inst, amount)
 	end),
+
+	EventHandler("loadout_changed", function(inst, data)
+		ConfigureEquipmentStats(inst)
+	end),
 	EventHandler("controlevent", function(inst, data)
 		CheckForHeavyQuickRise(inst, data)
+	end),
+	EventHandler("skill_hit", function(inst)
+		-- Reload one ammo whenever the Skill hits.
+		if inst.sg.mem.ammo < inst.sg.mem.ammo_max then
+			inst:PushEvent("cannon_butt_reload")
+			inst:PushEvent("cannon_reload", 1)
+			soundutil.PlayCodeSound(inst, fmodtable.Event.Skill_Cannon_ReloadAmmo, {
+						max_count = 1,
+						fmodparams = {
+							cannon_remainingAmmo_scaled = inst.sg.mem.ammo / inst.sg.mem.ammo_max,
+							cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+						}
+					})
+
+			powerutil.SpawnParticlesAtPosition(inst:GetPosition(), "cannon_skill_recharge", 1, inst)
+		end
 	end),
 }
 SGPlayerCommon.Events.AddAllBasicEvents(events)
@@ -1179,12 +1371,8 @@ local states =
 	State({
 		name = "init",
 		onenter = function(inst)
-			inst.sg.mem.ammo_max = TUNING.GEAR.WEAPONS.CANNON.AMMO
-			inst.sg.mem.ammo = TUNING.GEAR.WEAPONS.CANNON.AMMO
+			ConfigureEquipmentStats(inst)
 
-			inst.sg.mem.heavydodge = true -- For quickrising
-
-			--UpdateAmmoSymbols(inst)
 			inst.sg:GoToState("idle")
 		end,
 	}),
@@ -1243,7 +1431,7 @@ local states =
 				offx=0.9,
 				offy=0.9,
 				offz=0.0,
-				particlefxname= FOCUS_SEQUENCE[GetRemainingAmmo(inst)] and "cannon_shot_focus" or "cannon_shot",
+				particlefxname= inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)] and "cannon_shot_focus" or "cannon_shot",
 				use_entity_facing=true
 			})
 
@@ -1295,15 +1483,17 @@ local states =
 			inst.sg.statemem.fx_x_offset = 0.9
 			inst.sg.statemem.fx_y_offset = 0.91
 
-			local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
-			local params = {}
-			params.fmodevent = fmodtable.Event.Cannon_shoot_heavy
-			params.sound_max_count = 1
-			local handle = soundutil.PlaySoundData(inst, params)
-			soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", focus and 1 or 0)
-			soundutil.SetInstanceParameter(inst, handle, "cannonHeavyShotType", 0)
-			soundutil.SetInstanceParameter(inst, handle, "cannonAmmo", GetRemainingAmmo(inst))
+			local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 
+			soundutil.PlayCodeSound(inst,fmodtable.Event.Cannon_shoot_heavy,{
+				max_count = 1,
+				fmodparams = {
+					isFocusAttack = focus and 1 or 0,
+					cannon_heavyShotType = 0,
+					cannon_remainingAmmo_scaled = GetRemainingAmmo(inst) / GetMaxAmmo(inst),
+					cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param
+				}
+			})
 			--fx
 			ParticleSystemHelper.MakeEventSpawnParticles(inst, {
 				duration=45.0,
@@ -1354,7 +1544,7 @@ local states =
 			inst.HitBox:SetInvincible(false)
 			SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
 			SGCommon.Fns.StopJumpingOverHoles(inst)
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 		end,
 
 		events =
@@ -1549,7 +1739,7 @@ local states =
 						offx=0.5,
 						offy=2.0,
 						offz=0.0,
-						particlefxname= FOCUS_SEQUENCE[GetRemainingAmmo(inst)+1] and "cannon_shot_focus" or "cannon_shot",
+						particlefxname= inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)+1] and "cannon_shot_focus" or "cannon_shot",
 						use_entity_facing=true
 					})
 					DoShotFX(inst, GetRemainingAmmo(inst)+1, "fx_player_cannon_h_to_l")
@@ -1580,7 +1770,7 @@ local states =
 			inst.HitBox:SetInvincible(false)
 			inst.Physics:Stop()
 			SGCommon.Fns.StopJumpingOverHoles(inst)
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 		end,
 
 
@@ -1660,7 +1850,7 @@ local states =
 							DoShoot(inst)
 							DoShotFX(inst, GetRemainingAmmo(inst)+1, "fx_player_cannon_h_to_l")
 
-							local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)+1]
+							local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)+1]
 							ParticleSystemHelper.MakeEventSpawnParticles(inst, {
 								duration=45.0,
 								offx=0.5,
@@ -1748,7 +1938,7 @@ local states =
 
 							inst.AnimState:SetFrame(1) -- Force us to jump to the post-"hitstop" freezeframe
 
-							local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
+							local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 
 							--fx
 							ParticleSystemHelper.MakeEventSpawnParticles(inst, {
@@ -1772,13 +1962,15 @@ local states =
 							})
 
 							-- sound
-							local params = {}
-							params.fmodevent = fmodtable.Event.Cannon_shoot_blast
-							params.sound_max_count = 1
-							local handle = soundutil.PlaySoundData(inst, params)
-							soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", focus and 1 or 0)
-							soundutil.SetInstanceParameter(inst, handle, "cannonHeavyShotType", 1)
-							soundutil.SetInstanceParameter(inst, handle, "cannonAmmo", GetRemainingAmmo(inst))
+							soundutil.PlayCodeSound(inst,fmodtable.Event.Cannon_shoot_blast,{
+								max_count = 1,
+								fmodparams = {
+									isFocusAttack = focus and 1 or 0,
+									cannon_heavyShotType = 1,
+									cannon_remainingAmmo_scaled = GetRemainingAmmo(inst) / GetMaxAmmo(inst),
+									cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param
+								}
+							})
 
 							DoAirBlastKickback(inst)
 							DoShotFX(inst, GetRemainingAmmo(inst), "fx_player_cannon_h_to_h")
@@ -1805,7 +1997,7 @@ local states =
 			FrameEvent(16, function(inst)
 				inst.sg.statemem.speed = 0
 				inst.sg:RemoveStateTag("airborne")
-				inst.Physics:StopPassingThroughObjects()
+				SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 				SGCommon.Fns.StopJumpingOverHoles(inst)
 			end),
 
@@ -1837,7 +2029,7 @@ local states =
 		onexit = function(inst)
 			inst.HitBox:SetInvincible(false)
 			SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 			inst.Physics:Stop()
 			SGCommon.Fns.StopJumpingOverHoles(inst)
 		end,
@@ -2107,7 +2299,7 @@ local states =
 		onenter = function(inst, perfect)
 			local ammo = GetRemainingAmmo(inst)
 			local max_ammo = GetMaxAmmo(inst)
-			local percent = ammo / max_ammo
+			local percent = (ammo > 0 and inst.sg.mem.cannon_override_mortar_ammopercent) or (ammo / max_ammo)
 
 			local mortar_data = { perfect = perfect, ammo_percent = percent }
 			if percent > 0 then
@@ -2277,13 +2469,16 @@ local states =
 
 			inst.sg.statemem.weightmult = GetWeightVelocityMult(inst)
 
-			DoMortarFX(inst, "fx_player_cannon_mortar_weak_atk", true)
+			inst.sg.statemem.ammotospend = inst.sg.mem.cannon_override_mortar_ammopershot or GetRemainingAmmo(inst)
+
+			local focus = inst.sg.mem.mortar_focus_sequence[GetRemainingAmmo(inst)]
+			DoMortarFX(inst, "fx_player_cannon_mortar_weak_atk", focus)
 			ParticleSystemHelper.MakeEventSpawnParticles(inst, {
 				duration=60.0,
 				offx=1.0,
 				offy=1.0,
 				offz=0.0,
-				particlefxname = "cannon_shot_mortar_focus",
+				particlefxname = focus and "cannon_shot_mortar_focus" or "cannon_shot_mortar",
 				use_entity_facing=true,
 			})
 		end,
@@ -2292,22 +2487,31 @@ local states =
 		{
 			--sound
 			FrameEvent(1, function(inst)
-				inst.sg.mem.fmodammo = inst.sg.mem.ammo
-				PlayMortarSound(inst, inst.sg.mem.fmodammo, 0, 1)
+				PlayMortarSound(inst, inst.sg.statemem.ammotospend, 0)
 			end),
 			FrameEvent(3, function(inst)
-				if inst.sg.mem.fmodammo < 2 then
-					PlayMortarTubeSound(inst, 0, 1)
-				end
+				DoMortar(inst, inst.sg.statemem.ammotospend)
 
-				DoMortar(inst, GetRemainingAmmo(inst))
-				inst.sg.mem.ammo = GetRemainingAmmo(inst)
-				UpdateAmmo(inst, GetRemainingAmmo(inst))
+				inst.sg.statemem.previous_ammo = inst.sg.mem.ammo
+
+				UpdateAmmo(inst, inst.sg.statemem.ammotospend)
+
+				if inst.sg.statemem.ammotospend < 2 then
+					local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.mortar_focus_sequence[inst.sg.statemem.previous_ammo])
+					PlayMortarTubeSound(inst, 0, isFocusAttack)
+					if inst.sg.mem.ammo <= inst.sg.statemem.previous_ammo then
+						inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+					end
+				end
 			end),
 
 			FrameEvent(4, function(inst)
-				if inst.sg.mem.fmodammo >= 2 then
-					PlayMortarTubeSound(inst, 0, 1)
+				if inst.sg.statemem.ammotospend >= 2 then
+					local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.mortar_focus_sequence[inst.sg.statemem.previous_ammo])
+					PlayMortarTubeSound(inst, 0, isFocusAttack)
+					if inst.sg.mem.ammo <= inst.sg.statemem.previous_ammo then
+						inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+					end
 				end
 			end),
 
@@ -2347,37 +2551,47 @@ local states =
 			inst.AnimState:PlayAnimation("cannon_mortar_med_atk")
 			inst.sg.mem.attack_id = "MORTAR_MEDIUM"
 			inst.sg.mem.attack_type = "heavy_attack"
+
+			inst.sg.statemem.ammotospend = inst.sg.mem.cannon_override_mortar_ammopershot or GetRemainingAmmo(inst)
 		end,
 
 		timeline =
 		{
 			--sound
 			FrameEvent(1, function(inst)
-				inst.sg.mem.fmodammo = inst.sg.mem.ammo
-				PlayMortarSound(inst, inst.sg.mem.fmodammo, 0, 1)
-				DoMortarFX(inst, "fx_player_cannon_mortar_med_atk", FOCUS_SEQUENCE[GetRemainingAmmo(inst)])
+				local focus = inst.sg.mem.mortar_focus_sequence[GetRemainingAmmo(inst)]
+				DoMortarFX(inst, "fx_player_cannon_mortar_med_atk", focus)
 				ParticleSystemHelper.MakeEventSpawnParticles(inst, {
 					duration=60.0,
 					offx=1.0,
 					offy=1.0,
 					offz=0.0,
-					particlefxname= FOCUS_SEQUENCE[GetRemainingAmmo(inst)] and "cannon_shot_mortar_focus" or "cannon_shot_mortar",
+					particlefxname= inst.sg.mem.focus_sequence[inst.sg.statemem.ammotospend] and "cannon_shot_mortar_focus" or "cannon_shot_mortar",
 					use_entity_facing=true,
 				})
-			end),
-			FrameEvent(4, function(inst)
-				PlayMortarTubeSound(inst, 0, inst.sg.mem.fmodammo <= 3 and 1 or 0)
 			end),
 
 			FrameEvent(1, function(inst)
 				inst.components.hitstopper:PushHitStop(MORTAR_SHOOT_HITSTOP.MEDIUM)
-				DoMortar(inst, GetRemainingAmmo(inst))
-				inst.sg.mem.ammo = GetRemainingAmmo(inst)
-				UpdateAmmo(inst, GetRemainingAmmo(inst))
+				DoMortar(inst, inst.sg.statemem.ammotospend)
+
+				PlayMortarSound(inst, inst.sg.statemem.ammotospend, 1)
+
+				inst.sg.statemem.previous_ammo = inst.sg.mem.ammo
+
+				UpdateAmmo(inst, inst.sg.statemem.ammotospend)
 			end),
 
 			FrameEvent(3, function(inst)
 				DoMortarMediumKickback(inst)
+			end),
+
+			FrameEvent(4, function(inst)
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.mortar_focus_sequence[inst.sg.statemem.previous_ammo])
+				PlayMortarTubeSound(inst, 0, isFocusAttack)
+				if inst.sg.mem.ammo <= inst.sg.statemem.previous_ammo then
+					inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
 			end),
 
 			FrameEvent(12, function(inst)
@@ -2410,6 +2624,7 @@ local states =
 			inst.sg.mem.attack_id = "MORTAR_STRONG"
 			inst.sg.mem.attack_type = "heavy_attack"
 
+			inst.sg.statemem.ammotospend = inst.sg.mem.cannon_override_mortar_ammopershot or GetRemainingAmmo(inst)
 
 			inst.sg.statemem.speed = MORTAR_SHOOT_BLOWBACK.STRONG * GetWeightVelocityMult(inst)
 		end,
@@ -2418,11 +2633,11 @@ local states =
 		{
 			--sound
 			FrameEvent(1, function(inst)
-				inst.sg.mem.fmodammo = inst.sg.mem.ammo
-				PlayMortarSound(inst, inst.sg.mem.fmodammo, 2, 0)
+				PlayMortarSound(inst, inst.sg.statemem.ammotospend, 2)
 			end),
 			FrameEvent(2, function(inst)
-				DoMortarFX(inst, "fx_player_cannon_mortar_heavy_atk", false)
+				local focus = inst.sg.mem.mortar_focus_sequence[GetRemainingAmmo(inst)]
+				DoMortarFX(inst, "fx_player_cannon_mortar_heavy_atk", focus)
 				ParticleSystemHelper.MakeEventSpawnParticles(inst, {
 					duration=60.0,
 					offx=1.0,
@@ -2433,17 +2648,20 @@ local states =
 				})
 			end),
 
-
-			FrameEvent(5, function(inst)
-				PlayMortarTubeSound(inst, 2, 0)
-			end),
-
 			FrameEvent(3, function(inst)
-				DoMortar(inst, GetRemainingAmmo(inst))
-				UpdateAmmo(inst, GetRemainingAmmo(inst))
+				DoMortar(inst, inst.sg.statemem.ammotospend)
+				inst.sg.statemem.previous_ammo = inst.sg.mem.ammo
+				UpdateAmmo(inst, inst.sg.statemem.ammotospend)
 			end),
 			FrameEvent(5, function(inst)
 				inst.components.hitstopper:PushHitStop(MORTAR_SHOOT_HITSTOP.STRONG)
+
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.mortar_focus_sequence[inst.sg.statemem.previous_ammo])
+				PlayMortarTubeSound(inst, 0, isFocusAttack)
+
+				if inst.sg.mem.ammo <= inst.sg.statemem.previous_ammo then
+					inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
 			end),
 			FrameEvent(6, function(inst)
 				DoMortarStrongKickback(inst)
@@ -2530,15 +2748,11 @@ local states =
 			inst.AnimState:PlayAnimation("cannon_shockwave_hold_loop", false)
 			inst.sg.statemem.shockwave_data = shockwave_data or { perfect = false, ammo_percent = 1 }
 
-			--sound
-			if not inst.sg.mem.shockwave_looping_sound then
-				local params = {}
-				params.max_count = 1;
-				params.is_autostop = true;
-				params.stopatexitstate = true;
-				params.fmodevent = fmodtable.Event.Cannon_shockwave_hold_LP
-				inst.sg.mem.shockwave_looping_sound = soundutil.PlaySoundData(inst, params)
-			end
+			soundutil.PlayCodeSound(inst,fmodtable.Event.Cannon_shockwave_hold_LP, {
+					max_count = 1,
+					is_autostop = true,
+					stopatexitstate = true
+				})
 
 		end,
 
@@ -2564,10 +2778,6 @@ local states =
 		},
 
 		onexit = function(inst)
-			if inst.sg.mem.shockwave_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.shockwave_looping_sound)
-				inst.sg.mem.shockwave_looping_sound = nil
-			end
 		end,
 	}),
 
@@ -2702,13 +2912,23 @@ local states =
 				inst.components.hitbox:PushCircle(0, 0, ATTACKS.SHOCKWAVE_WEAK.RADIUS, HitPriority.MOB_DEFAULT)
 
 				DoShockwaveSelfAttack(inst)
-
-				--sound
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_shockwave_shoot_weak
-				soundutil.PlaySoundData(inst, params)
-
 				UpdateAmmo(inst, GetRemainingAmmo(inst))
+				
+				--sound
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.shockwave_ammo])
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_shockwave_shoot_weak, {
+					max_count = 1,
+					fmodparams = {
+						isFocusAttack = isFocusAttack,
+						cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+					}
+				})
+
+				local previous_ammo = inst.sg.statemem.shockwave_ammo
+				if inst.sg.mem.ammo <= previous_ammo then
+					inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
+
 			end),
 
 			FrameEvent(4, function(inst)
@@ -2751,7 +2971,7 @@ local states =
 		timeline =
 		{
 			FrameEvent(1, function(inst)
-				local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
+				local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 				EffectEvents.MakeEventSpawnEffect(inst, {
 					fxname= focus and "fx_cannon_sphere_aoe_focus" or "fx_cannon_sphere_aoe",
 					offz=-0.1,
@@ -2784,13 +3004,23 @@ local states =
 				inst.components.hitbox:PushCircle(0, 0, ATTACKS.SHOCKWAVE_MEDIUM.RADIUS, HitPriority.MOB_DEFAULT)
 
 				DoShockwaveSelfAttack(inst)
+				UpdateAmmo(inst, GetRemainingAmmo(inst))
 
 				--sound
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_shockwave_shoot_medium
-				soundutil.PlaySoundData(inst, params)
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.shockwave_ammo])
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_shockwave_shoot_medium, {
+					max_count = 1,
+					fmodparams = {
+						isFocusAttack = isFocusAttack,
+						cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+					}
+				})
 
-				UpdateAmmo(inst, GetRemainingAmmo(inst))
+				local previous_ammo = inst.sg.statemem.shockwave_ammo
+				if inst.sg.mem.ammo <= previous_ammo then
+					inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
+
 			end),
 
 			FrameEvent(4, function(inst)
@@ -2861,12 +3091,22 @@ local states =
 				combatutil.StartMeleeAttack(inst)
 				inst.components.hitbox:PushCircle(0, 0, ATTACKS.SHOCKWAVE_STRONG.RADIUS, HitPriority.MOB_DEFAULT)
 
-				--sound
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_shockwave_shoot_strong
-				soundutil.PlaySoundData(inst, params)
-
 				UpdateAmmo(inst, GetRemainingAmmo(inst))
+				
+				--sound
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.shockwave_ammo])
+				soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_shockwave_shoot_strong, {
+					max_count = 1,
+					fmodparams = {
+						isFocusAttack = isFocusAttack,
+						cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+					}
+				})
+
+				local previous_ammo = inst.sg.statemem.shockwave_ammo
+				if inst.sg.mem.ammo <= previous_ammo then
+					inst:DoTaskInAnimFrames(7, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
 			end),
 
 			FrameEvent(4, function(inst)
@@ -2948,15 +3188,11 @@ local states =
 			inst.AnimState:PlayAnimation("cannon_backfire_hold_pre", false)
 			inst.AnimState:PushAnimation("cannon_backfire_hold_loop", false)
 
-			--sound
-			if not inst.sg.mem.backfire_looping_sound then
-				local params = {}
-				params.max_count = 1;
-				params.is_autostop = true;
-				params.stopatexitstate = true;
-				params.fmodevent = fmodtable.Event.Cannon_backfire_hold_LP
-				inst.sg.mem.backfire_looping_sound = soundutil.PlaySoundData(inst, params)
-			end
+			soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_backfire_hold_LP, {
+				max_count = 1,
+				is_autostop = true,
+				stopatexitstate = true
+			})
 
 			inst.sg.statemem.backfire_data = backfire_data or { perfect = false, ammo_percent = 1 }
 		end,
@@ -2999,14 +3235,6 @@ local states =
 				end
 			end),
 		},
-
-		onexit = function(inst)
-			--sound
-			if inst.sg.mem.backfire_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.backfire_looping_sound)
-				inst.sg.mem.backfire_looping_sound = nil
-			end
-		end,
 	}),
 
 	State({
@@ -3022,15 +3250,12 @@ local states =
 			inst.AnimState:PlayAnimation("cannon_backfire_hold_loop", false)
 			inst.sg.statemem.backfire_data = backfire_data or { perfect = false, ammo_percent = 1 }
 
-			--sound
-			if not inst.sg.mem.backfire_looping_sound then
-				local params = {}
-				params.max_count = 1;
-				params.is_autostop = true;
-				params.stopatexitstate = true;
-				params.fmodevent = fmodtable.Event.Cannon_backfire_hold_LP
-				inst.sg.mem.backfire_looping_sound = soundutil.PlaySoundData(inst, params)
-			end
+
+			soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_backfire_hold_LP, {
+				max_count = 1,
+				is_autostop = true,
+				stopatexitstate = true
+			})
 
 		end,
 
@@ -3071,14 +3296,6 @@ local states =
 				end
 			end),
 		},
-
-		onexit = function(inst)
-			--sound
-			if inst.sg.mem.backfire_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.backfire_looping_sound)
-				inst.sg.mem.backfire_looping_sound = nil
-			end
-		end,
 	}),
 
 	State({
@@ -3175,12 +3392,6 @@ local states =
 
 			inst.Transform:SetRotation(inst.Transform:GetFacing() == FACING_LEFT and -180 or 0)
 
-			--sound
-			if inst.sg.mem.backfire_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.backfire_looping_sound)
-				inst.sg.mem.backfire_looping_sound = nil
-			end
-
 			local perfect = backfire_data and backfire_data.perfect or false
 			local ammo = backfire_data and backfire_data.ammo_percent or 1
 			local nextstate
@@ -3228,12 +3439,6 @@ local states =
 
 			inst.sg.statemem.speed = BACKFIRE_VELOCITY.WEAK * GetBackfireWeightVelocityMult(inst)
 
-			--sound
-			if inst.sg.mem.backfire_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.backfire_looping_sound)
-				inst.sg.mem.backfire_looping_sound = nil
-			end
-
 			--fx
 			ParticleSystemHelper.MakeEventSpawnParticles(inst, {
 				duration=20.0,
@@ -3251,12 +3456,6 @@ local states =
 			--PHYSICS
 			-- FrameEvent(0, function(inst) inst.components.hitstopper:PushHitStop(HitStopLevel.LIGHT) end),
 			FrameEvent(1, function(inst) DoBackfireWeakKickback(inst) end),
-			FrameEvent(1, function(inst)
-				--sound
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_backfire_shoot_weak
-				inst.sg.mem.backfire_sound = soundutil.PlaySoundData(inst, params)
-			end),
 			FrameEvent(1, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 1) end),
 			FrameEvent(1, function(inst) inst.Physics:StartPassingThroughObjects() end),
 
@@ -3268,7 +3467,7 @@ local states =
 			FrameEvent(8, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.5) end),
 			FrameEvent(10, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.25) end),
 			FrameEvent(12, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.125) end),
-			FrameEvent(12, function(inst) inst.Physics:StopPassingThroughObjects() end),
+			FrameEvent(12, function(inst) SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst) end),
 			FrameEvent(14, function(inst)
 				inst.Physics:Stop()
 			end),
@@ -3282,6 +3481,23 @@ local states =
 				inst.components.hitbox:PushBeam(2, -3, 1, HitPriority.PLAYER_DEFAULT)  -- Thinner in back
 
 				UpdateAmmo(inst, GetRemainingAmmo(inst))
+
+				--sound
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.backfire_ammo])
+				inst.sg.mem.backfire_sound = soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_backfire_shoot_weak,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = isFocusAttack,
+							cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+						}
+					})
+
+				local previous_ammo = inst.sg.statemem.backfire_ammo
+				if inst.sg.mem.ammo <= previous_ammo then
+					inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
+
 			end),
 			FrameEvent(2, function(inst) inst.components.hitbox:PushBeam(2, -1.75, 1, HitPriority.PLAYER_DEFAULT) end),
 			FrameEvent(3, function(inst) inst.components.hitbox:PushBeam(2, -1.75, 1, HitPriority.PLAYER_DEFAULT) end),
@@ -3306,7 +3522,7 @@ local states =
 		},
 
 		onexit = function(inst)
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 			inst.components.hitbox:StopRepeatTargetDelay()
 			if inst.sg.mem.backfire_sound then
 				soundutil.KillSound(inst, inst.sg.mem.backfire_sound)
@@ -3336,17 +3552,11 @@ local states =
 			inst.sg.mem.attack_type = "skill"
 			inst.sg.statemem.backfire_ammo = GetRemainingAmmo(inst)
 
-			local focus = FOCUS_SEQUENCE[inst.sg.statemem.backfire_ammo]
+			local focus = inst.sg.mem.focus_sequence[inst.sg.statemem.backfire_ammo]
 
 			DoShotFX(inst, nil, focus and "fx_player_cannon_backfire_med_focus" or "fx_player_cannon_backfire_med")
 
 			inst.sg.statemem.speed = BACKFIRE_VELOCITY.MEDIUM * GetBackfireWeightVelocityMult(inst)
-
-			--sound
-			if inst.sg.mem.backfire_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.backfire_looping_sound)
-				inst.sg.mem.backfire_looping_sound = nil
-			end
 
 			--fx
 			local param =
@@ -3368,14 +3578,8 @@ local states =
 			FrameEvent(1, function(inst) inst.components.hitstopper:PushHitStop(HitStopLevel.LIGHT) end),
 			FrameEvent(2, function(inst) DoBackfireMediumKickback(inst) end),
 			FrameEvent(2, function(inst)
-				--sound
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_backfire_shoot_medium
-				inst.sg.mem.backfire_sound = soundutil.PlaySoundData(inst, params)
-			end),
-			FrameEvent(2, function(inst)
 				-- Play the FX again now that we're moving. Ka-KLUNK!
-				local focus = FOCUS_SEQUENCE[inst.sg.statemem.backfire_ammo]
+				local focus = inst.sg.mem.focus_sequence[inst.sg.statemem.backfire_ammo]
 				DoShotFX(inst, nil, focus and "fx_player_cannon_backfire_med_focus" or "fx_player_cannon_backfire_med")
 
 				inst.Physics:StartPassingThroughObjects()
@@ -3387,7 +3591,7 @@ local states =
 			FrameEvent(9, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.5) end),
 			FrameEvent(13, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.25) end),
 			FrameEvent(18, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.125) end),
-			FrameEvent(18, function(inst) inst.Physics:StopPassingThroughObjects() end),
+			FrameEvent(18, function(inst) SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst) end),
 			FrameEvent(23, function(inst)
 				inst.Physics:Stop()
 			end),
@@ -3401,6 +3605,23 @@ local states =
 				inst.components.hitbox:PushBeam(2, -3, 1, HitPriority.PLAYER_DEFAULT)  -- Thinner in back
 
 				UpdateAmmo(inst, GetRemainingAmmo(inst))
+
+				--sound
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.backfire_ammo])
+				inst.sg.mem.backfire_sound = soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_backfire_shoot_medium,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = isFocusAttack,
+							cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+						}
+					})
+
+				local previous_ammo = inst.sg.statemem.backfire_ammo
+				if inst.sg.mem.ammo <= previous_ammo then
+					inst:DoTaskInAnimFrames(4, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
+
 			end),
 			FrameEvent(3, function(inst) inst.components.hitbox:PushBeam(2, -3, 1, HitPriority.PLAYER_DEFAULT) end),
 			FrameEvent(4, function(inst) inst.components.hitbox:PushBeam(2, -3, 1, HitPriority.PLAYER_DEFAULT) end),
@@ -3445,7 +3666,7 @@ local states =
 		onexit = function(inst)
 			inst.components.playercontroller:RemoveGlobalControlQueueTicksModifier("backfire_shoot_medium")
 			inst.components.hitbox:StopRepeatTargetDelay()
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 
 			if inst.sg.mem.backfire_sound then
 				soundutil.KillSound(inst, inst.sg.mem.backfire_sound)
@@ -3470,12 +3691,6 @@ local states =
 
 			DoShotFX(inst, nil, "fx_player_cannon_backfire_heavy")
 
-			--sound
-			if inst.sg.mem.backfire_looping_sound then
-				soundutil.KillSound(inst, inst.sg.mem.backfire_looping_sound)
-				inst.sg.mem.backfire_looping_sound = nil
-			end
-
 			--fx
 			local param =
 			{
@@ -3497,12 +3712,6 @@ local states =
 
 			FrameEvent(2, function(inst) DoBackfireStrongKickback(inst) end),
 			FrameEvent(2, function(inst)
-				--sound
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_backfire_shoot_strong
-				inst.sg.mem.backfire_sound = soundutil.PlaySoundData(inst, params)
-			end),
-			FrameEvent(2, function(inst)
 				inst.Physics:StartPassingThroughObjects()
 				inst.Physics:SetMotorVel(inst.sg.statemem.speed)
 			end),
@@ -3513,7 +3722,7 @@ local states =
 			FrameEvent(20, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.25) end), -- Bounce
 			FrameEvent(23, function(inst) inst.Physics:SetMotorVel(inst.sg.statemem.speed * 0.125) end),
 			FrameEvent(27, function(inst) inst.Physics:Stop() end),
-			FrameEvent(27, function(inst) inst.Physics:StopPassingThroughObjects() end),
+			FrameEvent(27, function(inst) SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst) end),
 
 			-- HITBOX STUFF
 			FrameEvent(2, function(inst) inst.sg:AddStateTag("airborne") end),
@@ -3526,47 +3735,105 @@ local states =
 			FrameEvent(2, function(inst)
 				combatutil.StartMeleeAttack(inst)
 				inst.components.hitbox:StartRepeatTargetDelay()
+				inst.sg.statemem.hitflags = Attack.HitFlags.LOW_ATTACK -- Don't hit airborne high yet.
 				inst.components.hitbox:PushBeam(4, 2, 2.5, HitPriority.PLAYER_DEFAULT) -- Thicker in front
 				inst.components.hitbox:PushBeam(2, -3, 1, HitPriority.PLAYER_DEFAULT)  -- Thinner in back
 				DoBackfireSelfAttack(inst)
+
 				UpdateAmmo(inst, GetRemainingAmmo(inst))
+
+				--sound
+				local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.backfire_ammo])
+				inst.sg.mem.backfire_sound = soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_backfire_shoot_strong,
+					{
+						max_count = 1,
+						fmodparams = {
+							isFocusAttack = isFocusAttack,
+							cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+						}
+					})
+
+				local previous_ammo = inst.sg.statemem.backfire_ammo
+				if inst.sg.mem.ammo <= previous_ammo then
+					inst:DoTaskInAnimFrames(7, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+				end
+
+				inst.sg.statemem.hitfx_y_offset = 2
 			end),
 
 			FrameEvent(3, function(inst)
-				inst.components.hitbox:PushBeam(-2, 2, 1, HitPriority.PLAYER_DEFAULT)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
 				inst.sg.statemem.hitflags = Attack.HitFlags.AIR_HIGH
+				inst.sg.statemem.hitfx_y_offset = 3.25
 			end),
 
 			FrameEvent(4, function(inst)
-				inst.components.hitbox:PushBeam(-2, 2, 1, HitPriority.PLAYER_DEFAULT)
-				combatutil.EndMeleeAttack(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.5
 			end),
-			FrameEvent(5, function(inst) inst.components.hitbox:StopRepeatTargetDelay() end),
+			FrameEvent(5, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.5
+			end),
+			FrameEvent(6, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.75
+			end),
+			FrameEvent(7, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.75
+			end),
+			FrameEvent(8, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 4
+			end),
+			FrameEvent(9, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 4.25
+			end),
+			FrameEvent(10, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 4
+			end),
+			FrameEvent(11, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.75
+			end),
+			FrameEvent(12, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.75
+			end),
+			FrameEvent(13, function(inst)
+				inst.components.hitbox:PushBeam(-1, 1, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.5
+			end),
 
 
 			FrameEvent(14, function(inst)
 				inst.sg.mem.attack_id = "BACKFIRE_STRONG_LATE"
-				combatutil.StartMeleeAttack(inst)
-				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.sg.statemem.hitflags = Attack.HitFlags.AIR_HIGH
 				inst.components.hitbox:PushBeam(0, -2, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.5
 			end),
 			FrameEvent(15, function(inst)
 				inst.sg.statemem.hitflags = nil
 				inst.components.hitbox:PushBeam(0, -2, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.5
 			end),
 
 			FrameEvent(16, function(inst)
 				inst.components.hitbox:PushBeam(0, -2, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3.5
 			end),
 
 			FrameEvent(17, function(inst)
 				inst.components.hitbox:PushBeam(0, -2, 1, HitPriority.PLAYER_DEFAULT)
-				combatutil.EndMeleeAttack(inst)
+				inst.sg.statemem.hitfx_y_offset = 3
 			end),
 
 			FrameEvent(18, function(inst)
 				inst.components.hitbox:PushBeam(0, -2, 1, HitPriority.PLAYER_DEFAULT)
+				inst.sg.statemem.hitfx_y_offset = 3
 				DoBackfireSelfAttack(inst)
 				combatutil.EndMeleeAttack(inst)
 			end),
@@ -3602,6 +3869,8 @@ local states =
 			-- SGCommon.Fns.FlickerColor(inst, {.25, .25, .25}, 3, false, true)
 			inst.AnimState:PlayAnimation("cannon_reload_fast")
 			inst.sg.statemem.attacktype = attacktype
+
+			inst:PushEvent("start_cannonreload_fast")
 		end,
 
 		timeline =
@@ -3609,6 +3878,7 @@ local states =
 			FrameEvent(13, function(inst)
 				inst.components.progresstracker:IncrementValue("total_cannon_reloads")
 				OnReload(inst, GetMissingAmmo(inst))
+
 				inst.sg.statemem.lightcombostate = "default_light_attack"
 				inst.sg.statemem.heavycombostate = "default_heavy_attack"
 
@@ -3633,21 +3903,22 @@ local states =
 
 		onenter = function(inst, attacktype)
 			inst.AnimState:PlayAnimation("cannon_reload_slow")
+			inst:PushEvent("start_cannonreload_slow")
 		end,
 
 		timeline =
 		{
 
-			FrameEvent(19, function(inst) --TODO(jambell): retime with actual anim
+			FrameEvent(19, function(inst) --TODO: retime with actual anim
 				inst.components.progresstracker:IncrementValue("total_cannon_reloads")
 				OnReload(inst, 3)
 			end),
 
-			FrameEvent(31, function(inst) --TODO(jambell): retime with actual anim
+			FrameEvent(31, function(inst) --TODO: retime with actual anim
 				OnReload(inst, 3)
 			end),
 
-			-- FrameEvent(31, function(inst) --TODO(jambell): retime with actual anim
+			-- FrameEvent(31, function(inst) --TODO: retime with actual anim
 			-- 	inst.sg.statemem.lightcombostate = "default_light_attack"
 			-- 	inst.sg.statemem.heavycombostate = "default_heavy_attack"
 			-- end),
@@ -3667,17 +3938,18 @@ local states =
 
 		onenter = function(inst, attacktype)
 			inst.AnimState:PlayAnimation("cannon_reload_early")
+			inst:PushEvent("start_cannonreload_early")
 		end,
 
 		timeline =
 		{
 
-			FrameEvent(32, function(inst) --TODO(jambell): retime with actual anim
+			FrameEvent(32, function(inst) --TODO: retime with actual anim
 				inst.components.progresstracker:IncrementValue("total_cannon_reloads")
 				OnReload(inst, GetMissingAmmo(inst))
 			end),
 
-			-- FrameEvent(31, function(inst) --TODO(jambell): retime with actual anim
+			-- FrameEvent(31, function(inst) --TODO: retime with actual anim
 			-- 	inst.sg.statemem.lightcombostate = "default_light_attack"
 			-- 	inst.sg.statemem.heavycombostate = "default_heavy_attack"
 			-- end),
@@ -3733,8 +4005,9 @@ local states =
 			inst:PushEvent("attack_state_start")
 			inst.sg.mem.attack_id = "QUICK_RISE"
 			inst.sg.mem.attack_type = "heavy_attack"
+			inst.sg.statemem.quickrise_ammo = GetRemainingAmmo(inst)
 
-			-- TODO(jambell): commonize this
+			-- TODO: commonize this
 			local hitstop = TUNING.HITSTOP_PLAYER_QUICK_RISE_FRAMES
 			inst.components.hitstopper:PushHitStop(hitstop)
 			inst:DoTaskInAnimFrames(hitstop, function()
@@ -3746,7 +4019,7 @@ local states =
 
 						inst.components.hitbox:PushCircle(0, 0, ATTACKS.QUICKRISE.RADIUS, HitPriority.MOB_DEFAULT)
 
-						local focus = FOCUS_SEQUENCE[GetRemainingAmmo(inst)]
+						local focus = inst.sg.mem.focus_sequence[GetRemainingAmmo(inst)]
 						-- fx, lots that would usually be done in embellisher but since focusness matters we'll do it here:
 						EffectEvents.MakeEventSpawnEffect(inst, {
 							fxname= focus and "cannon_aoe_explosion_med_focus" or "cannon_aoe_explosion_med",
@@ -3780,6 +4053,24 @@ local states =
 						})
 
 						UpdateAmmo(inst, 1)
+
+						-- sound
+						local isFocusAttack = soundutil.CoerceFmodParamToNumber(inst.sg.mem.focus_sequence[inst.sg.statemem.quickrise_ammo])
+						soundutil.PlayCodeSound(inst, fmodtable.Event.Cannon_shoot_quickrise, {
+							max_count = 1,
+							fmodparams = {
+								isFocusAttack = isFocusAttack,
+								cannon_heavyShotType = 2,
+								cannon_remainingAmmo_scaled = GetRemainingAmmo(inst) / GetMaxAmmo(inst),
+								cannon_ammo_percentDelta = inst.sg.statemem.percent_ammo_changed_param,
+							}
+						})
+
+						local previous_ammo = inst.sg.statemem.quickrise_ammo
+						if inst.sg.mem.ammo <= previous_ammo then
+							inst:DoTaskInAnimFrames(2, function(inst) PlayLowAmmoSound(inst, inst.sg.mem.ammo) end)
+						end
+
 						ConfigureNewDodge(inst)
 						StartNewDodge(inst)
 					end
@@ -3796,28 +4087,6 @@ local states =
 			FrameEvent(1, function(inst)
 				combatutil.EndMeleeAttack(inst)
 			end),
-			FrameEvent(1, function(inst)
-				local remaining_ammo = GetRemainingAmmo(inst)+1 -- Have to add +1 because ammo has already been updated, so GetRemainingAmmo() is likely already 1 less than we just shot
-				local focus = FOCUS_SEQUENCE[remaining_ammo]
-				local params = {}
-				params.fmodevent = fmodtable.Event.Cannon_shoot_quickrise
-				params.sound_max_count = 1
-				local handle = soundutil.PlaySoundData(inst, params)
-				soundutil.SetInstanceParameter(inst, handle, "isFocusAttack", focus and 1 or 0)
-				soundutil.SetInstanceParameter(inst, handle, "cannonHeavyShotType", 2)
-				soundutil.SetInstanceParameter(inst, handle, "cannonAmmo", remaining_ammo)
-
-				if remaining_ammo <= 3 then
-					--sound
-					local params = {}
-					params.fmodevent = fmodtable.Event.Cannon_ammoCounter_light
-					inst.sg.mem.ammo_sound = soundutil.PlayLocalSoundData(inst, params)
-					soundutil.SetInstanceParameter(inst, inst.sg.mem.ammo_sound, "cannonAmmo", remaining_ammo)
-					if inst.makeAmmoCountSoundsLouderToAssist then
-						soundutil.SetInstanceParameter(inst, inst.sg.mem.ammo_sound, "makeAmmoCountSoundsLouderToAssist", 1)
-					end
-				end
-			end),
 			FrameEvent(3, function(inst)
 				DoQuickRiseKickback(inst)
 			end),
@@ -3833,7 +4102,7 @@ local states =
 			FrameEvent(11, function(inst)
 				inst.sg.statemem.airplant = false
 				inst.sg.statemem.groundplant = true
-				inst.Physics:StopPassingThroughObjects()
+				SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 			end),
 			FrameEvent(15, SGPlayerCommon.Fns.SetCanAttackOrAbility),
 			FrameEvent(20, SGPlayerCommon.Fns.RemoveBusyState),
@@ -3842,7 +4111,7 @@ local states =
 		onexit = function(inst)
 			inst.HitBox:SetInvincible(false)
 			SGPlayerCommon.Fns.UndoRollPhysicsSize(inst)
-			inst.Physics:StopPassingThroughObjects()
+			SGPlayerCommon.Fns.SafeStopPassingThroughObjects(inst)
 			inst.Physics:Stop()
 			SGCommon.Fns.StopJumpingOverHoles(inst)
 		end,

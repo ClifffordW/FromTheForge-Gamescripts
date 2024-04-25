@@ -1,0 +1,1 @@
+return { biome_exploration_store={ { variation=1, z=-2.0,},},}

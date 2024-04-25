@@ -111,7 +111,7 @@ local SlideshowScreen = Class(Screen, function( self, content_id, ondone, flags)
         :Bloom( 0.05 )
         :SetSize( 650, 250 )
     self.next.text = self.next:AddChild( Text() )
-	:SetText( string.format(STRINGS.UI.SLIDESHOW_SCREEN.SKIP, Controls.Digital.SKIP)) 
+	:SetText( string.format(STRINGS.SLIDESHOW.SKIP, Controls.Digital.SKIP)) 
         :SetFont("title")
         :SetFontSize( FONT_SIZE.SCREEN_SUBTITLE )
         :SetGlyphColor(UICOLORS.SUBTITLE)
@@ -207,8 +207,8 @@ local SlideshowScreen = Class(Screen, function( self, content_id, ondone, flags)
 		local pip1 = self.progress_pips[i-1]
 		local pip2 = self.progress_pips[i]
 		if pip1 and pip2 then
-			pip1:SetFocusChangeDir(MOVE_RIGHT, nil)
-			pip2:SetFocusChangeDir(MOVE_LEFT, nil)
+			pip1:SetFocusChangeDir(FocusMove.s.right, nil)
+			pip2:SetFocusChangeDir(FocusMove.s.left, nil)
 		end
 	end
 ]]
@@ -217,7 +217,7 @@ local SlideshowScreen = Class(Screen, function( self, content_id, ondone, flags)
 	self.default_focus = self.progress_pips[1]
 
     self:StartMusic()
-	-- TODO(luca): Replace StartFMODSnapshot+StopFMODSnapshot with override that's an event.
+	-- Replace StartFMODSnapshot+StopFMODSnapshot with override that's an event.
     TheAudio:StartFMODSnapshot(fmodtable.Snapshot.Slideshow)
 end)
 

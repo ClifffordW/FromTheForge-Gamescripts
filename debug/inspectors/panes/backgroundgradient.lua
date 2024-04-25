@@ -222,6 +222,7 @@ function BackgroundGradientEditorPane:UpdateDrag(w, sx, sy, ex, ey)
 			local ratio = dx/w
 			-- this is a hack, I want the outer ones to stay at 0 and 1
 			ratio = math.clamp(ratio,0,1)
+
 			local oldratio = self.curve[self.dragpoint][1]
 			self.curve[self.dragpoint][1] = ratio
 			if ratio ~= oldratio then

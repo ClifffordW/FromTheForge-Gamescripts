@@ -134,6 +134,21 @@ return {
           name="sfx-whoosh_q",
           param={ soundevent="cabbageroll_whoosh", volume=45.0,},
         },
+        {
+          eventtype="playsound",
+          name="sfx-whistle",
+          param={ soundevent="cabbageroll_behaviour_3",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-behaviour2",
+          param={ soundevent="cabbageroll_behaviour_2",},
+        },
+        {
+          eventtype="playsound",
+          name="sfx-gather",
+          param={ soundevent="cabbageroll_gather",},
+        },
       },
     },
   },

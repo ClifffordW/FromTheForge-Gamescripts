@@ -2,15 +2,14 @@
 -- actual particle systems.
 
 local DebugNodes = require "dbui.debug_nodes"
-local DebugSettings = require "debug.inspectors.debugsettings"
 local EventFuncEditor = require "debug.inspectors.eventfunceditor"
 local FxTimeline = require("components/fxtimeline")
 local PrefabEditorBase = require("debug/inspectors/prefabeditorbase")
 local Timeline = require("util/timeline")
 local eventfuncs = require "eventfuncs"
 local fmodtable = require "defs.sound.fmodtable"
-local iterator = require "util.iterator"
 local lume = require "util.lume"
+local prefabutil = require "prefabs.prefabutil"
 require "mathutil"
 
 --Make sure our util functions are loaded
@@ -260,11 +259,11 @@ function FxEditor:GatherErrors()
 	end
 	local required_impactfx = eventfuncs.spawnimpactfx:GetAllImpactFx()
 	for _,impactfx_set in ipairs(required_impactfx) do
-		-- TODO(dbriscoe): Because there are so many missing, just check
-		-- that any exist. Assuming that Sloth does all of them at once.
+		-- TODO(tool): Because there are so many missing, just check
+		-- that any exist. Assuming that FX Artists do all of them at once.
 		local found = lume.match(impactfx_set, function(impactfx)
 			-- Not clear to me how to tell whether they should be fx or
-			-- particles. I think Sloth just chooses what looks best and sets
+			-- particles. I think FX Artists just choose what looks best and sets
 			-- up embellishments for them.
 			return self.static.data[impactfx.fx] or ParticlesAutogenData[impactfx.particles]
 		end)
@@ -279,52 +278,25 @@ function FxEditor:GatherErrors()
 end
 
 function FxEditor:AddEditableOptions(ui, params)
+	self:SetDirty() -- assume dirty, we'll only show dirty if we actually changed.
 	--~ if ui:Button("c_select fx") then
 	--~ 	c_select(self.testfx)
 	--~ end
 	self.test_looping = ui:_Checkbox("Force Loop for Test", self.test_looping)
+
+	params.target_prefab = PrefabEditorBase.PrefabPicker(ui, "##prefab", params.target_prefab, true)
+	ui:SameLineWithSpace()
+	ui:Text("Primary Player or Creature")
+	ui:SetTooltipIfHovered({
+		"If this fx is used mostly for the player or a monster, select them here.",
+		"If elite, pick the non-elite version.",
+		"If used for multiple, prefer picking the player.",
+	})
+
 	if ui:CollapsingHeader("Animation", ui.TreeNodeFlags.DefaultOpen) then
 		self:AddSectionStarter(ui)
 
-		if ui:TreeNode("Build/Bank (optional if same as Prefab)") then
-			--Build name
-			local _, newbuild = ui:InputText("Build", params.build, imgui.InputTextFlags.CharsNoBlank)
-			if newbuild ~= nil then
-				if string.len(newbuild) == 0 then
-					newbuild = nil
-				end
-				if params.build ~= newbuild then
-					params.build = newbuild
-					self:SetDirty()
-				end
-			end
-
-			--Bank name
-			local _, newbank = ui:InputText("Bank", params.bank, imgui.InputTextFlags.CharsNoBlank)
-			if newbank ~= nil then
-				if string.len(newbank) == 0 then
-					newbank = nil
-				end
-				if params.bank ~= newbank then
-					params.bank = newbank
-					self:SetDirty()
-				end
-			end
-
-			--Bank file
-			local _, newbankfile = ui:InputText("Bank File", params.bankfile, imgui.InputTextFlags.CharsNoBlank)
-			if newbankfile ~= nil then
-				if string.len(newbankfile) == 0 then
-					newbankfile = nil
-				end
-				if params.bankfile ~= newbankfile then
-					params.bankfile = newbankfile
-					self:SetDirty()
-				end
-			end
-
-			self:AddTreeNodeEnder(ui)
-		end
+		prefabutil.EditAnim(ui, self, params)
 
 		if ui:TreeNode("Anim", ui.TreeNodeFlags.DefaultOpen) then
 			--Anim name
@@ -764,7 +736,7 @@ function FxEditor:AddEditableOptions(ui, params)
 		self:AddSectionStarter(ui)
 
 		if ui:TreeNode("Target Tint Color", ui.TreeNodeFlags.DefaultOpen) then
-			--Target tint color
+			-- Used by fx_hits to tint the creature we spawn the fx on during hit pause.
 			local tintcolor = params.target_tint ~= nil and StrToHex(params.target_tint) or 0x00000000
 			local tintr, tintg, tintb = HexToRGBInts(tintcolor)
 			local _, newtintr = ui:SliderInt("+ R##target_tint", tintr, 0, 255, "%+d")
@@ -882,6 +854,24 @@ function FxEditor:AddEditableOptions(ui, params)
 		self:AddSectionEnder(ui)
 	end
 
+	if ui:CollapsingHeader("Debug") then
+		self:AddSectionStarter(ui)
+
+		if ui:Checkbox("Disable Debug History", params.disabledebughistory) then
+			-- toggle isminimal
+			if params.disabledebughistory then
+				params.disabledebughistory = nil
+			else
+				params.disabledebughistory = true
+			end
+			self:SetDirty()
+		end
+		if ui:IsItemHovered() then
+			ui:SetTooltip( "Disable debug history on FX we don't care about its history on. Useful for performance reasons." )
+		end
+
+		self:AddSectionEnder(ui)
+	end
 end
 
 DebugNodes.FxEditor = FxEditor

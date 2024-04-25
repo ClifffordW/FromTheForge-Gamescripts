@@ -182,14 +182,17 @@ function DebugWidget:RenderPanel( ui, panel )
 	if numOpenWidgetPanels <= 1 or ui:IsWindowFocused() then
 		self.can_select = ui:_Checkbox("##shift to select", self.can_select)
 		ui:SameLineWithSpace(5)
-		ui:TextColored(RGB(255, 255, 0), "Hold SHIFT to select the widget under your cursor" )
+		ui:TextColored(RGB(255, 255, 0), "Hold SHIFT or ALT to select the widget under your cursor" )
 
-		if self.can_select and TheInput:IsKeyDown(InputConstants.Keys.SHIFT) and not ui:WantCaptureMouse() then
+		if self.can_select
+			and (TheInput:IsKeyDown(InputConstants.Keys.ALT) or TheInput:IsKeyDown(InputConstants.Keys.SHIFT))
+			and not ui:WantCaptureMouse()
+		then
 			-- Fallback to focus widget to avoid deselection.
-			local selectedWidget = TheFrontEnd:GetHitWidget() or TheFrontEnd:GetFocusWidget()
+			local selectedWidget = TheFrontEnd:GetHitWidget() or TheFrontEnd:GetHoverWidget()
 			if TheInput:IsKeyDown(InputConstants.Keys.CTRL) then
 				-- If you want buttons or other focusables, hold down ctrl too.
-				selectedWidget = TheFrontEnd:GetFocusWidget()
+				selectedWidget = TheFrontEnd:GetFocusWidget(TheInput:GetMouse():GetOwnerId())
 			end
 
 			if selectedWidget and selectedWidget.layoutTestWidget then
@@ -300,8 +303,20 @@ function DebugWidget:RenderPanel( ui, panel )
 			DebugWidgetBoundingBox:DrawDebugBoundingBox(ui, hoveredWidget, color, 2)
 		end
 
-		if ui:CollapsingHeader("Layout Test Widget") then
+		if ui:CollapsingHeader("Widget Info", ui.TreeNodeFlags.DefaultOpen) then
+			-- Type-specific display of widget properties. More specific
+			-- information is added to the bottom.
+			local ok, result = xpcall( function() self.focus_widget:DebugDraw_AddSection(ui, panel) end, generic_error )
+			if not ok then
+				print( result )
+				self.current_error = result
+			end
+		end
 
+		self:AddFilteredAll(ui, panel, self.focus_widget)
+
+		ui:Spacing()
+		if ui:CollapsingHeader("Layout Test Widget") then
 			if ui:Button("Spawn Layout Test Widget") then
 				if self.selectedLayoutTestWidget then
 					self.selectedLayoutTestWidget:Remove()
@@ -320,20 +335,6 @@ function DebugWidget:RenderPanel( ui, panel )
 				end
 			end
 		end
-
-		ui:Separator()
-
-		if ui:CollapsingHeader("Widget Info") then
-			-- This is from the older DST system and recent changes broke bits
-			-- of it, but it's useful to have a type-specific display.
-			local ok, result = xpcall( function() self.focus_widget:DebugDraw_AddSection(ui, panel) end, generic_error )
-			if not ok then
-				print( result )
-				self.current_error = result
-			end
-		end
-
-		self:AddFilteredAll(ui, panel, self.focus_widget)
 	else
 		self.name = "Debug Widget"
 		ui:TextColored( {0.8, 1.0, 0.0, 1.0}, "No widget selected" )

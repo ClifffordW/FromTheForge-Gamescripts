@@ -24,7 +24,7 @@ local ItemDetailsButton = Class(ImageButton, function(self, owner, item)
 	self:SetSize(self.width, self.height)
 
     -- Setup default scale
-    self.focus_scale =  {1.05, 1.05, 1.05} -- TODO(jambell): on focus, make self.icon bigger, without making self.shadow bigger
+    self.focus_scale =  {1.05, 1.05, 1.05} -- TODO: on focus, make self.icon bigger, without making self.shadow bigger
     self.normal_scale = {1, 1, 1}
 
     -- Set default flags

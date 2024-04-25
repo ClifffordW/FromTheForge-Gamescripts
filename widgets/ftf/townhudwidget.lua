@@ -40,8 +40,6 @@ local TownPlayerInfoWidget = Class(Widget, function(self)
 		:SetFacing(FACING_RIGHT)
 		:SetMasked()
 
-	-- TODO(multiplayer): Move out of player widget? Each player won't have
-	-- their own tips, so doesn't make sense to put this here.
 	self.weapontips = self:AddChild(WeaponTips())
 		:SetOnLayoutFn(function() self:LayoutWeaponTips() end)
 
@@ -60,6 +58,8 @@ local TownPlayerInfoWidget = Class(Widget, function(self)
 		:SetFontSize(48)
 		:SetBgColor(1,1,1,0)
 		:SetRemoveVPadding()
+
+	self:OnWeaponChanged(false) -- force refresh. default on to ensure players see (maybe too much in mp?)
 end)
 
 function TownPlayerInfoWidget:SetOwningPlayer(owner)
@@ -79,6 +79,7 @@ function TownPlayerInfoWidget:SetOwningPlayer(owner)
 	self._refresh_frame = function() self:Refresh(self.owner) end
 	self.inst:ListenForEvent("charactercreator_load", self._refresh_frame, self.owner)
 	self.inst:ListenForEvent("player_post_load", self._refresh_frame, self.owner)
+	return self
 end
 
 function TownPlayerInfoWidget:Refresh(player)
@@ -136,6 +137,12 @@ function TownPlayerInfoWidget:SetIsPrimary(is_primary)
 end
 
 function TownPlayerInfoWidget:OnWeaponChanged(sheathed)
+	if TheInput:IsEditMode() then
+		-- tips obscure too much of the world.
+		self.weapontips:AnimateOut()
+		return
+	end
+
 	if sheathed then
 		-- hide tips UI
 		self.weapontips:AnimateOut()
@@ -363,44 +370,58 @@ function TownHudWidget:_AddDebugButtons()
 		:SetOnClickFn(function()
 			d_open_screen("screens.town.heartscreen")
 		end)
-	self.debugButtonsRoot:AddChild(templates.Button("<p img='images/icons_ftf/inventory_head.tex' color=0> Armor Research"))
+	-- self.debugButtonsRoot:AddChild(templates.Button("<p img='images/icons_ftf/inventory_head.tex' color=0> Armor Research"))
+	-- 	:SetDebug()
+	-- 	:SetOnClickFn(function()
+	-- 		local ForgeArmourScreen = require("screens/town/ForgeArmourScreen")
+	-- 		TheFrontEnd:PushScreen(ForgeArmourScreen(self:_GetDebugPlayer()))
+	-- 	end)
+	self.debugButtonsRoot:AddChild(templates.Button("Old Inventory Screen"))
 		:SetDebug()
 		:SetOnClickFn(function()
-			local ForgeArmourScreen = require("screens/town/ForgeArmourScreen")
-			TheFrontEnd:PushScreen(ForgeArmourScreen(self:_GetDebugPlayer()))
+			local Screen = require("screens/town/InventoryScreen")
+			TheFrontEnd:PushScreen(Screen(self:_GetDebugPlayer()))
 		end)
-	self.debugButtonsRoot:AddChild(templates.Button("<p img='images/icons_ftf/inventory_weapon.tex' color=0> Weapon Crafting"))
-		:SetDebug()
-		:SetOnClickFn(function()
-			local ForgeWeaponScreen = require("screens/town/forgeweaponscreen")
-			TheFrontEnd:PushScreen(ForgeWeaponScreen(self:_GetDebugPlayer()))
-		end)
+	-- self.debugButtonsRoot:AddChild(templates.Button("<p img='images/icons_ftf/inventory_weapon.tex' color=0> Weapon Crafting"))
+	-- 	:SetDebug()
+	-- 	:SetOnClickFn(function()
+	-- 		local ForgeWeaponScreen = require("screens/town/forgeweaponscreen")
+	-- 		TheFrontEnd:PushScreen(ForgeWeaponScreen(self:_GetDebugPlayer()))
+	-- 	end)
 	self.debugButtonsRoot:AddChild(templates.Button("<p img='images/icons_ftf/inventory_currency_drops.tex' scale=1.1 color=0> Gem Screen"))
 		:SetDebug()
 		:SetOnClickFn(function()
 			local GemScreen = require("screens.town.gemscreen")
 			TheFrontEnd:PushScreen(GemScreen(GetDebugPlayer()))
 		end)
-	self.debugButtonsRoot:AddChild(templates.Button("<p img='images/ui_ftf_pausescreen/ic_food.tex' scale=1.2 color=0> Food Screen"))
+	self.debugButtonsRoot:AddChild(templates.Button("Mastery Screen"))
 		:SetDebug()
 		:SetOnClickFn(function()
-			local FoodScreen = require("screens.town.foodscreen")
-			TheFrontEnd:PushScreen(FoodScreen(GetDebugPlayer()))
+			local Screen = require("screens.town.masteryscreen")
+			TheFrontEnd:PushScreen(Screen(GetDebugPlayer()))
 		end)
-
-	self.debugButtonsRoot:AddChild(templates.Button("Add Glitz"))
+	self.debugButtonsRoot:AddChild(templates.Button("Armoury Screen"))
 		:SetDebug()
-		:SetOnClickFn(function() self:OnDebugAddKonjurButton() end)
+		:SetOnClickFn(function()
+			local Screen = require("screens.town.armoryscreen")
+			TheFrontEnd:PushScreen(Screen(GetDebugPlayer()))
+		end)
+	-- self.debugButtonsRoot:AddChild(templates.Button("<p img='images/ui_ftf_pausescreen/ic_food.tex' scale=1.2 color=0> Food Screen"))
+	-- 	:SetDebug()
+	-- 	:SetOnClickFn(function()
+	-- 		local FoodScreen = require("screens.town.foodscreen")
+	-- 		TheFrontEnd:PushScreen(FoodScreen(GetDebugPlayer()))
+	-- 	end)
 	self.debugButtonsRoot:AddChild(templates.Button("Unlock all craftables"))
 		:SetDebug()
 		:SetOnClickFn(function() self:OnDebugUnlockAllCraftables() end)
 	self.debugButtonsRoot:AddChild(templates.Button("Reset craftables"))
 		:SetDebug()
 		:SetOnClickFn(function() self:OnDebugResetCraftables() end)
-
-	self.debugButtonsRoot:AddChild(templates.Button("Unlock All Locations"))
+	self.debugButtonsRoot:AddChild(templates.Button("Unlock All Hunts"))
 		:SetDebug()
-		:SetOnClickFn(function() d_unlock_all_locations() end)
+		:SetOnClickFn(function() d_unlock_all_dungeons_and_frenzies() end)
+
 
 	self.debugButtonsRoot:AddChild(templates.Button("Player buildtest"))
 		:SetDebug()
@@ -444,12 +465,21 @@ function TownHudWidget:_AddDebugButtons()
 	self.debug_inventory_btns:AddChild(templates.Button("(WIP) Give Gems"))
 		:SetDebug()
 		:SetOnClickFn(function() self:OnDebugAddGemsButton() end)
-	self.debug_inventory_btns:AddChild(templates.Button("Give Armor Recipes"))
-		:SetToolTip("Allow crafing all armor items with Berna.")
+	self.debug_inventory_btns:AddChild(templates.Button("Give Armour Recipes"))
+		:SetToolTip("Allow crafting all armour items with Berna.")
 		:SetDebug()
 		:SetOnClickFn(function()
 			for _,p in ipairs(AllPlayers) do
 				p.components.unlocktracker:DEBUG_UnlockAllRecipes()
+			end
+			self:OnDebugAddKeyItems()
+		end)
+	self.debug_inventory_btns:AddChild(templates.Button("Give All Craftables"))
+		:SetToolTip("Unlocks all craftables and adds them to the player's inventory")
+		:SetDebug()
+		:SetOnClickFn(function()
+			for _,p in ipairs(AllPlayers) do
+				self:OnDebugGiveAllCraftables(10)
 			end
 			self:OnDebugAddKeyItems()
 		end)
@@ -549,13 +579,19 @@ end
 
 function TownHudWidget:OnDebugUnlockAllCraftables()
 	for _,p in ipairs(AllPlayers) do
-		p.components.playercrafter:UnlockAll()
+		d_unlock_all_playercraftables(p)
+	end
+end
+
+function TownHudWidget:OnDebugGiveAllCraftables(amount)
+	for _,p in ipairs(AllPlayers) do
+		d_give_all_playercraftables(p, amount)
 	end
 end
 
 function TownHudWidget:OnDebugResetCraftables()
 	for _,p in ipairs(AllPlayers) do
-		p.components.playercrafter:ResetData()
+		d_lock_all_playercraftables(p, true)
 	end
 end
 

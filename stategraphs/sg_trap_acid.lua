@@ -19,6 +19,7 @@ local sizes =
 		pfx = "acid_motes_sml",
 		footstep_aura_sizemod_x = 0.5,
 		footstep_aura_sizemod_y = 1,
+		radius = 0.5
 	},
 
 	medium =
@@ -32,6 +33,7 @@ local sizes =
 		pfx = "acid_motes_med",
 		footstep_aura_sizemod_x = 0.5,
 		footstep_aura_sizemod_y = 0.75,
+		radius = 1.15
 	},
 
 	large =
@@ -40,6 +42,20 @@ local sizes =
 		rotation = 30,
 		hitbox_size = 3.75,
 		beam_thickness = 3.45,
+		bubble_chance = 0.04,
+		bubble_dist = 3.5,
+		pfx = "acid_motes_lrg",
+		footstep_aura_sizemod_x = 0.4,
+		footstep_aura_sizemod_y = 0.4,
+		radius = 1.6
+	},
+
+	boss_permanent =
+	{
+		scale = 2,
+		rotation = 45,
+		hitbox_size = 4.0,
+		beam_thickness = 4.0,
 		bubble_chance = 0.04,
 		bubble_dist = 3.5,
 		pfx = "acid_motes_lrg",
@@ -58,13 +74,24 @@ local function ConfigureTrap(inst, data)
 	inst:ListenForEvent("room_complete", function()
 		local frames = math.random(10) -- Slight variation in timing so not everything happens at the exact same time
 		inst:DoTaskInAnimFrames(frames, function(xinst)
-			if xinst ~= nil and xinst:IsValid() then
+			if xinst ~= nil and xinst:IsValid() then--and not xinst:HasTag("permanent") then
 				xinst.sg:GoToState("pst")
 			end
 		end)
 	end, TheWorld)
 
-	inst.sg.mem.lifetimeframes = (inst.sg.mem.trapdata ~= nil and inst.sg.mem.trapdata.temporary) and 300 or nil
+	inst.sg.mem.lifetimeframes = inst.sg.mem.trapdata and inst.sg.mem.trapdata.traplifetime or nil
+
+	-- If set to live forever, change colour to represent permanent acid
+	if not inst.sg.mem.lifetimeframes then
+		inst:AddTag("permanent")
+
+		inst.AnimState:SetHue(0 / 360)
+		inst.AnimState:SetSaturation((57 + 100) / 100)
+		inst.AnimState:SetBrightness((-21 + 100) / 100)
+		inst.AnimState:SetMultColor(0.65, 0.76, 1, 1)
+	end
+
 	inst.sg.mem.bubble_chance = size.bubble_chance
 	inst.sg.mem.bubble_dist = size.bubble_dist
 
@@ -76,7 +103,12 @@ local function ConfigureTrap(inst, data)
 	inst.Transform:SetScale(scale,scale,scale)
 
 	inst.components.auraapplyer:SetEffect("acid")
-	inst.components.auraapplyer:SetupBeamHitbox(-size.hitbox_size*size.footstep_aura_sizemod_x, size.hitbox_size*size.footstep_aura_sizemod_x, size.beam_thickness*size.footstep_aura_sizemod_y) -- Footstepper hitbox is a little smaller
+	inst.components.auraapplyer:IgnoreAerialTargets(true)
+	if (size.radius) then
+		inst.components.auraapplyer:SetRadius(size.radius)
+	else
+		inst.components.auraapplyer:SetupBeamHitbox(-size.hitbox_size*size.footstep_aura_sizemod_x, size.hitbox_size*size.footstep_aura_sizemod_x, size.beam_thickness*size.footstep_aura_sizemod_y) -- Footstepper hitbox is a little smaller
+	end
 end
 
 local function CreateParticles(inst)
@@ -105,7 +137,7 @@ local function StopParticles(inst)
 end
 
 local function SpawnBubble(inst)
-	local bubble = SpawnPrefab("fx_battoad_bubbles", inst)
+	local bubble = SpawnPrefab("fx_acid_bubbles", inst)
 	local dist_mod = math.random() * inst.sg.mem.bubble_dist or 2.2
 	local target_pos = inst:GetPosition()
 	target_pos.y = 0
@@ -136,7 +168,6 @@ local states =
 		events =
 		{
 			EventHandler("acid_start", function(inst, data)
-				ConfigureTrap(inst, data)
 				inst.sg:GoToState("land", data)
 			end),
 		},
@@ -149,8 +180,10 @@ local states =
 		onenter = function(inst, data)
 			ConfigureTrap(inst, data)
 
-			local splash = EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_acid_splash" })
-			--local land = EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_acid_land" })
+			if (not data.disablesplash) then
+				EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_acid_splash" })
+				--local land = EffectEvents.MakeEventSpawnEffect(inst, { fxname = "fx_acid_land" })
+			end
 
 			SGCommon.Fns.PlayAnimOnAllLayers(inst, "ground_land", true)
 		end,
@@ -211,19 +244,20 @@ local states =
 		tags = { "hit", "busy" },
 
 		onenter = function(inst, data)
-			SGCommon.Fns.PlayAnimOnAllLayers(inst, "ground_pst")
+			SGCommon.Fns.PlayAnimOnAllLayers(inst, "ground_pst") -- 30 frames
+			inst.AnimState:SetDeltaTimeMultiplier(1.5)
 			StopParticles(inst)
-			inst.components.auraapplyer:Disable()
 		end,
 
-
-		onexit = function(inst)
-		end,
+		timeline =
+		{
+			FrameEvent(15, function(inst) inst.components.auraapplyer:Disable() end)
+		},
 
 		events =
 		{
 			EventHandler("animover", function(inst)
-				inst:Remove()
+				inst:DelayedRemove()
 			end),
 		},
 	}),

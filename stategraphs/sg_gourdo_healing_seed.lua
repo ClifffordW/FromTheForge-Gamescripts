@@ -33,12 +33,11 @@ local states =
 
 		onenter = function(inst)
 			inst.AnimState:PlayAnimation("open")
-			inst.components.hitbox:StartRepeatTargetDelay()
 		end,
 
 		timeline = {
-			FrameEvent(3, function(inst)
-				--inst.components.hitbox:PushCircle(0, 0, inst.components.healingzone.heal_radius, HitPriority.MOB_DEFAULT)
+			FrameEvent(1, function(inst)
+				inst.components.healingzone:Enable()
 			end),
 		},
 
@@ -48,10 +47,6 @@ local states =
 				inst.sg:GoToState("idle")
 			end),
 		},
-
-		onexit = function(inst)
-			inst.components.hitbox:StopRepeatTargetDelay()
-		end,
 	}),
 
 	State({
@@ -78,9 +73,9 @@ local states =
 			FrameEvent(12, function(inst) inst.sg:GoToState("heal_execute") end),
 		},
 
-		events =
-		{
-		}
+		onexit = function(inst)
+			inst.components.healingzone:Disable()
+		end
 	}),
 
 	State({
@@ -96,7 +91,6 @@ local states =
 			FrameEvent(4, function(inst) SGCommon.Fns.BlinkAndFadeColor(inst, { 0/255, 100/255, 0/255, 0.2}, 2) end),
 			FrameEvent(8, function(inst) SGCommon.Fns.BlinkAndFadeColor(inst, { 0/255, 100/255, 0/255, 0.2}, 1) end),
 			FrameEvent(12, function(inst) SGCommon.Fns.BlinkAndFadeColor(inst, { 0/255, 100/255, 0/255, 0.2}, 1) end),
-
 			FrameEvent(14, function(inst)
 				inst.components.hitbox:StartRepeatTargetDelay()
 				inst.components.hitbox:PushCircle(0, 0, inst.components.healingzone.heal_radius, HitPriority.MOB_DEFAULT)

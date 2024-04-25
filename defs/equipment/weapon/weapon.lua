@@ -1,6 +1,6 @@
 local Enum = require "util.enum"
 local Item = require "defs.equipment.item"
-local Lume = require "util.Lume"
+local Lume = require "util.lume"
 local Slots = require "defs.equipment.slots"
 local Weight = require "components/weight"
 

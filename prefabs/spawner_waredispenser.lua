@@ -7,6 +7,7 @@ local lume = require "util.lume"
 local Enum = require "util.enum"
 
 local assets = SpawnUtil.GetEditableAssets()
+WareDispenser.CollectAssets(assets)
 
 MetaWareDispenser = Enum {
 	"ARMOUR",
@@ -63,7 +64,7 @@ local function fn()
 	inst.components.prop.script = WareDispenser
 	inst.components.prop.script_args = WareDispenser(inst)
 	setmetatable(inst.components.prop.script_args, nil)
-	inst.components.snaptogrid:SetDimensions(1, 1, -10)
+	inst.components.snaptogrid:SetDimensions(2, 2, -10)
 	if TheDungeon:GetDungeonMap():IsDebugMap() then
 		SpawnUtil.MakeEditable(inst, "square")
 		local preview_phantom = GetPreviewPhantom() or FALLBACK_PREVIEW_PHANTOM

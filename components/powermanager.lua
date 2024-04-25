@@ -53,7 +53,10 @@ local PowerManager = Class(function(self, inst)
 	self.can_receive_powers = true
 
 	self.powers_from_equipment = {} -- list of powers we gained from equipment
-	self.overridden_equipment_slots = {}	-- If we got a skill in a run, set that slot as overridden and don't add that skill power back. Can also use to disable armour powers?
+	self.overridden_equipment_powers = {} -- Can also use to disable armour powers? Was split out when skills were separated, but kept for functionality.
+
+	self.skills_from_equipment = {} -- list of skills we gained from equipment
+	self.overridden_equipment_skills = {} --If we got a skill in a run, set that slot as overridden and don't add that skill power back.
 
     self._reset_data_fn =  function() self:ResetData() end
     self.inst:ListenForEvent("start_new_run", self._reset_data_fn)
@@ -102,15 +105,23 @@ end
 function PowerManager:OnLoadoutChanged()
 	local inv = self.inst.components.inventoryhoard
 	local new_powers = {}
+	local new_skills = {} -- we only ever have 1 skill now but I'm leaving the door open for swapping
 
 	for _,slot in pairs(Equipment.Slots) do
 		new_powers[slot] = {} -- Can be multiple powers per slot -- for example, a Gem.
+		new_skills[slot] = {} -- we only ever have 1 skill now but I'm leaving the door open for swapping
 		local item = inv:GetEquippedItem(slot)
 		if item then
 			local usage_data = item:GetUsageData()
+
 			if usage_data and usage_data.power_on_equip then
 				local new_level = item:GetUsageLevel() or 1
 				table.insert(new_powers[slot], { name = usage_data.power_on_equip , level = new_level })
+			end
+
+			if usage_data and usage_data.skill_on_equip then
+				local new_level = 1 -- item:GetUsageLevel() or 1 -- I don't think skills can level up currently.
+				table.insert(new_skills[slot], { name = usage_data.skill_on_equip , level = new_level })
 			end
 
 			if item.gem_slots then
@@ -124,35 +135,73 @@ function PowerManager:OnLoadoutChanged()
 					end
 				end
 			end
+
 		end
 	end
 
 	for _, slot in pairs(Equipment.Slots) do
-		if self:IsEquipmentSlotOverridden(slot) then
-			goto skip_slot
+		if self:IsEquipmentSlotPowerOverridden(slot) then
+			goto skip_slot_power
 		end
 
-		local current_data = self:GetEquipmentPowers(slot)
-		local new_data = new_powers[slot]
+		local current_power_data = self:GetEquipmentPowers(slot)
+		local new_power_data = new_powers[slot]
 
-		local has_changed = not deepcompare(new_data, current_data)
+		local powers_have_changed = not deepcompare(new_power_data, current_power_data)
 
-		if not has_changed then
-			goto skip_slot
+		if not powers_have_changed then
+			goto skip_slot_power
 		end
 
-		if current_data then
+		if current_power_data then
 			self:RemoveEquipmentPowers(slot)
 		end
 
-		if #new_data > 0 then
-			for _,power_data in ipairs(new_data) do
+		if #new_power_data > 0 then
+			for _,power_data in ipairs(new_power_data) do
 				self:AddEquipmentPower(slot, power_data)
 			end
 		end
 
-		::skip_slot::
+		::skip_slot_power::
 	end
+
+	-- Can't do this in a single loop because of how goto functions
+	for _, slot in pairs(Equipment.Slots) do
+		if self:IsEquipmentSlotSkillOverridden(slot) then
+			goto skip_slot_skill
+		end
+
+		local current_skill_data = self:GetEquipmentSkills(slot)
+		local new_skill_data = new_skills[slot]
+
+		local skills_have_changed = not deepcompare(new_skill_data, current_skill_data)
+
+		if not skills_have_changed then
+			goto skip_slot_skill
+		end
+
+		if current_skill_data then
+			self:RemoveEquipmentSkills(slot)
+		end
+
+		if #new_skill_data > 0 then
+			for _, skill_data in ipairs(new_skill_data) do
+				self:AddEquipmentSkill(slot, skill_data)
+			end
+		end
+
+		::skip_slot_skill::
+	end
+end
+
+-- Bypass specific components checked with EnsureRequiredComponents
+-- to avoid them being automatically added.
+-- WARNING: This can open up the entity to having runtime errors when
+-- applying powers that assume those components exist.
+function PowerManager:ExemptRequiredComponents(component_names)
+	assert(type(component_names) == "table")
+	self.exempt_components = component_names
 end
 
 function PowerManager:EnsureRequiredComponents()
@@ -171,8 +220,9 @@ function PowerManager:EnsureRequiredComponents()
 		"hitstopper",
 		"timer",
 	}
+
 	for _,c in ipairs(components) do
-		if not self.inst.components[c] then
+		if not self.inst.components[c] and (self.exempt_components and not self.exempt_components[c]) then
 			self.inst:AddComponent(c)
 			added_components = true
 		end
@@ -204,7 +254,11 @@ function PowerManager:OnSave()
 	local data =
 	{
 		powers_from_equipment = shallowcopy(self.powers_from_equipment),
-		overridden_equipment_slots = shallowcopy(self.overridden_equipment_slots),
+		overridden_equipment_powers = shallowcopy(self.overridden_equipment_powers),
+
+		skills_from_equipment = shallowcopy(self.skills_from_equipment),
+		overridden_equipment_skills = shallowcopy(self.overridden_equipment_skills),
+
 		power_data = power_data,
 	}
 
@@ -214,8 +268,15 @@ end
 function PowerManager:OnLoad(data)
 	self.loading = true
 	if data ~= nil then
-		self.powers_from_equipment = shallowcopy(data.powers_from_equipment)
-		self.overridden_equipment_slots = shallowcopy(data.overridden_equipment_slots)
+		if data.powers_from_equipment then
+			self.powers_from_equipment = shallowcopy(data.powers_from_equipment)
+			self.overridden_equipment_powers = shallowcopy(data.overridden_equipment_powers)
+		end
+
+		if data.skills_from_equipment then
+			self.skills_from_equipment = shallowcopy(data.skills_from_equipment)
+			self.overridden_equipment_skills = shallowcopy(data.overridden_equipment_skills)
+		end
 
 		local power_data = deepcopy(data.power_data)
 		for _,slot in pairs(power_data.powers) do
@@ -258,8 +319,7 @@ function PowerManager:_CountPowerItems()
 	return count
 end
 
--- networking2022, victorc - Not sure this implementation is a good idea
--- since we don't want the logic to run on remote entities, but adding and
+-- We don't want powermanager logic to run on remote entities, but adding and
 -- creating powers has a lot of side effects.
 -- However, we need the power state to be at least synchronized for transferable entities.
 
@@ -274,6 +334,7 @@ local NRBITS <const> = 3
 
 function PowerManager:OnNetSerialize()
 	local e = self.inst.entity
+	e:SerializeBoolean(self.can_receive_powers)
 	local nrPowerItems = #self.powers_acquired_order_cached
 	e:SerializeUInt(nrPowerItems, nrPowerBits)
 
@@ -342,6 +403,7 @@ end
 
 function PowerManager:OnNetDeserialize()
 	local e = self.inst.entity
+	self.can_receive_powers = e:DeserializeBoolean()
 	local nrPowerItems = e:DeserializeUInt(nrPowerBits)
 
 	local deserializedPowers = {}
@@ -456,7 +518,10 @@ function PowerManager:ResetData()
 	end
 
 	self.powers_from_equipment = {}
-	self.overridden_equipment_slots = {}
+	self.overridden_equipment_powers = {}
+
+	self.skills_from_equipment = {}
+	self.overridden_equipment_skills = {}
 
 	assert(not next(self.event_triggers), "Player Powers data is reset but self.event_triggers is not empty.")
 	assert(not next(self.remote_event_triggers), "Player Powers data is reset but self.remote_event_triggers is not empty.")
@@ -629,9 +694,16 @@ function PowerManager:AddPower(power, stacks)
 	if Power.MaxCount[power_def.slot] then
 		local num_powers = lume.count(slot)
 
-		dbassert(power_def.slot == Power.Slots.SKILL or num_powers < Power.MaxCount[power_def.slot],
+		dbassert(power_def.slot == Power.Slots.SKILL or power_def.slot == Power.Slots.PLAYER or num_powers < Power.MaxCount[power_def.slot],
 			string.format("%s power limit reached (%d) - Review Power.AddPowerFamily call",
 				power_def.slot, Power.MaxCount[power_def.slot]))
+
+		-- special case to not allow more player powers
+		if power_def.slot == Power.Slots.PLAYER and num_powers >= Power.MaxCount[power_def.slot] then
+			TheLog.ch.PowerManager:printf("Warning: Limit reached.  Cannot add new power %s (%s limit = %d)",
+				power_def.name, power_def.slot, Power.MaxCount[power_def.slot])
+			return
+		end
 
 		while num_powers >= Power.MaxCount[power_def.slot] do
 			local excess_power = self:_GetOldestAcquiredPower(power_def.slot)
@@ -653,7 +725,7 @@ function PowerManager:AddPower(power, stacks)
 			self:RemovePower(power_def, true)
 		else
 			-- Something has gone wrong! The player is not supposed to be able to get two of the same upgrade.
-			TheLog.ch.PowerManager:printf("Attempted to add a non-stackable power more than once!: "..power_def.name.." on "..self.inst.prefab)
+			TheLog.ch.PowerManager:printf("Attempted to add a non-stackable power more than once!: "..power_def.name.." on ".. tostring(self.inst))
 			return
 		end
 	end
@@ -666,7 +738,8 @@ function PowerManager:AddPower(power, stacks)
 
 	local pow = self:_InitPower(power)
 	assert(pow)
-	self:_RegisterPower(pow)
+
+	self:_RegisterPower(pow) -- calls on_add_fn
 
 	slot[power_def.name] = pow.persistdata
 
@@ -719,8 +792,70 @@ function PowerManager:RemovePower(power_def, force)
 	end
 end
 
-function PowerManager:IsEquipmentSlotOverridden(slot)
-	return self.overridden_equipment_slots[slot] ~= nil
+-- Equipment Skills
+
+function PowerManager:IsEquipmentSlotSkillOverridden(slot)
+	return self.overridden_equipment_skills[slot] ~= nil
+end
+
+function PowerManager:GetEquipmentSkills(slot)
+	return self.skills_from_equipment[slot]
+end
+
+-- Equipment power functions:
+function PowerManager:AddEquipmentSkill(slot, data)
+	-- printf("PowerManager:AddEquipmentSkill(%s)", slot)
+	if not self.skills_from_equipment[slot] then
+		self.skills_from_equipment[slot] = {}
+	end
+
+	table.insert(self.skills_from_equipment[slot], data)
+
+	local def = Power.FindPowerByName(data.name)
+
+	local stacks
+
+	if def.power_type == Power.Types.EQUIPMENT then
+		stacks = def.stacks_per_usage_level[data.level]
+	end
+
+	self:AddPowerByName(data.name, stacks)
+end
+
+function PowerManager:RemoveEquipmentSkills(slot)
+	local skills = self:GetEquipmentSkills(slot)
+	for _, skill_data in ipairs(skills) do
+		local current_skill = self:GetPowerByName(skill_data.name)
+		if current_skill and current_skill.def.stackable then
+			-- if stackable, remove # of stacks.
+			local stacks = current_skill.def.stacks_per_usage_level[skill_data.level]
+			self:DeltaPowerStacks(current_skill.def, -stacks)
+		else
+			-- if not stackable, remove entire power
+			self:RemovePowerByName(skill_data.name)
+		end
+	end
+
+	self.skills_from_equipment[slot] = nil
+end
+
+function PowerManager:AddEquipmentSkillOverride(slot, data)
+	self:RemoveEquipmentSkills(slot)
+	self:AddEquipmentSkill(slot, data)
+	self.overridden_equipment_skills[slot] = true
+end
+
+function PowerManager:RemoveEquipmentSkillOverride(slot)
+	self.overridden_equipment_skills[slot] = nil
+	self:RemoveEquipmentSkills(slot)
+end
+
+----------------------
+
+-- Equipment Powers --
+
+function PowerManager:IsEquipmentSlotPowerOverridden(slot)
+	return self.overridden_equipment_powers[slot] ~= nil
 end
 
 function PowerManager:GetEquipmentPowers(slot)
@@ -769,13 +904,15 @@ end
 function PowerManager:AddEquipmentPowerOverride(slot, data)
 	self:RemoveEquipmentPowers(slot)
 	self:AddEquipmentPower(slot, data)
-	self.overridden_equipment_slots[slot] = true
+	self.overridden_equipment_powers[slot] = true
 end
 
 function PowerManager:RemoveEquipmentPowerOverride(slot)
-	self.overridden_equipment_slots[slot] = nil
+	self.overridden_equipment_powers[slot] = nil
 	self:RemoveEquipmentPowers(slot)
 end
+
+--------------------------
 
 function PowerManager:AddPowerByName(name, stacks)
 	local def = Power.FindPowerByName(name)
@@ -1058,6 +1195,12 @@ function PowerManager:OnUpdatePower(power_def)
 end
 
 function PowerManager:IncrementPowerDropsPickedUp()
+	-- We don't care about how many powers they picked up in market or metaunlock rooms.
+	local roomtype = TheWorld:GetCurrentRoomType()
+	if roomtype == mapgen.roomtypes.RoomType.s.market or roomtype == mapgen.roomtypes.RoomType.s.metaunlock then
+		return
+	end
+
 	self.power_drops_picked_up = self.power_drops_picked_up + 1
 end
 function PowerManager:CanPickUpPowerDrop()
@@ -1135,14 +1278,38 @@ function PowerManager:DebugDrawEntity(ui, panel, colors)
 		}
 		for _, slot in ipairs(SLOT_ORDER) do
 			local data = self.powers_from_equipment[slot]
-			local overridden = self.overridden_equipment_slots[slot] ~= nil
-			local str = string.format("%s : %s x %s [%s]", slot, data and data[1].name or "NONE", data and data[1].level or 0, overridden)
+			local str = string.format("%s : %s [ulvl %s]", slot, data and data[1].name or "NONE", data and data[1].level or 0)
+			ui:BulletText(str)
+			if data then
+				ui:Indent()
+				local power = self:GetPowerByName(data[1].name)
+				panel:AppendTable(ui, power, ("[%s] x %s"):format(power.def.name, power.persistdata.stacks))
+				ui:Unindent()
+			end
+		end
+		ui:Unindent()
+	end
+
+	if ui:CollapsingHeader("Equipment Skills", ui.TreeNodeFlags.DefaultClosed) then
+		ui:Indent()
+		local SLOT_ORDER =
+		{
+			"WEAPON",
+			"HEAD",
+			"BODY",
+			"WAIST"
+		}
+		for _, slot in ipairs(SLOT_ORDER) do
+			local data = self.skills_from_equipment[slot]
+			local overridden = self.overridden_equipment_skills[slot] ~= nil
+			local str = string.format("%s : %s [Overridden: %s]", slot, data and data[1].name or "NONE", overridden)
 			ui:BulletText(str)
 		end
 		ui:Unindent()
 	end
+
 	-- panel:AppendTable(ui, self.powers_from_equipment, "powers_from_equipment")
-	-- panel:AppendTable(ui, self.overridden_equipment_slots, "overridden_equipment_slots")
+	-- panel:AppendTable(ui, self.overridden_equipment_powers, "overridden_equipment_slots")
 
 	if ui:CollapsingHeader("Give Power", ui.TreeNodeFlags.DefaultOpen) then
 		ui:Indent() do
@@ -1164,15 +1331,21 @@ function PowerManager:DebugDrawEntity(ui, panel, colors)
 	if ui:Button("Copy Power Data") then
 		ui:SetClipboardText(self:Debug_GetPowerListing())
 	end
+	if ui:Checkbox("Show empty slots", dbg.show_empty_slots) then
+		dbg.show_empty_slots = not dbg.show_empty_slots
+	end
 	-- Use data.powers so it's ordered by slots.
 	for slot,powerlist in iterator.sorted_pairs(self.data.powers) do
-		local label = ("%s (%d)###%s"):format(slot, lume.count(powerlist), slot)
-		if ui:CollapsingHeader(label) then
-			ui:Indent()
-			for power_name,power in iterator.sorted_pairs(powerlist) do
-				panel:AppendTable(ui, self:GetPower(power:GetDef()), power_name)
+		local count = lume.count(powerlist)
+		local label = ("%s (%d)###%s"):format(slot, count, slot)
+		if count > 0 or dbg.show_empty_slots then
+			if ui:CollapsingHeader(label) then
+				ui:Indent()
+				for power_name,power in iterator.sorted_pairs(powerlist) do
+					panel:AppendTable(ui, self:GetPower(power:GetDef()), power_name)
+				end
+				ui:Unindent()
 			end
-			ui:Unindent()
 		end
 	end
 end

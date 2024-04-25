@@ -134,6 +134,14 @@ function playerutil.SortByHunterId(player_list)
 	return player_list
 end
 
+function playerutil.GetByHunterId(hunter_id)
+	for _,player in ipairs(AllPlayers) do
+		if player:GetHunterId() == hunter_id then
+			return player
+		end
+	end
+end
+
 --- Recipe/ Crafting Util
 
 function playerutil.CanUpgradeAnyHeldEquipment(player, slots)
@@ -146,7 +154,7 @@ function playerutil.CanUpgradeAnyHeldEquipment(player, slots)
 	for _, slot in ipairs(slots) do
 		local items = inv:GetSlotItems(slot)
 		for _, item in ipairs(items) do
-			local recipe = recipes.FindUpgradeRecipeForItem(item)
+			local recipe = recipes.FindUsageUpgradeRecipeForItem(item)
 			if recipe and recipe:CanPlayerCraft(player) then
 				return true
 			end
@@ -202,8 +210,7 @@ end
 
 -- See also playerutil.LocalPlayers()
 function playerutil.DoForAllLocalPlayers(fn)
-    local local_players = TheNet:GetLocalPlayerList()
-    for _, playerID in ipairs(local_players) do
+    for _, playerID in ipairs(TheNet:GetLocalPlayerList()) do
         local player = GetPlayerEntityFromPlayerID(playerID)
         if player then
         	fn(player)
@@ -219,7 +226,7 @@ end
 --
 -- returns: iterator
 function playerutil.LocalPlayers()
-    local local_players = TheNet:GetLocalPlayerList() or table.empty
+    local local_players = TheNet:GetLocalPlayerList()
 	local i = 0
 	return function()
 		i = i + 1
@@ -234,7 +241,8 @@ function playerutil.LocalPlayers()
 end
 
 function playerutil.CountLocalPlayers()
-	return #TheNet:GetLocalPlayerList()
+	local players = TheNet:GetLocalPlayerList()
+	return #players
 end
 
 function playerutil.GetFirstLocalPlayer()
@@ -267,6 +275,46 @@ function playerutil.CountActivePlayers()
 
 	return count
 end
+
+function playerutil.GetUsableUpgradeItemsForPlayer(player)
+	local Recipes = require"defs/recipes"
+	local Equipment = require"defs.equipment"
+
+	local usable_items = {}
+
+	--update all the loot from all players, putting more weight on things I need to upgrade
+	local slots = 
+	{
+		Equipment.Slots.HEAD,
+		Equipment.Slots.BODY,
+		Equipment.Slots.WAIST,
+		Equipment.Slots.WEAPON,
+	}
+
+	-- go over all my equipment and check their upgrade status
+	for _, slot in ipairs(slots) do	
+		local items = player.components.inventoryhoard:GetSlotItems(slot)
+		for _, item in pairs(items) do
+			local level = item:GetUpgradeLevel()
+			local recipe = Recipes.FindItemUpgradeRecipeForItem(item)
+			if recipe then
+				for ing, count in pairs(recipe.ingredients) do
+					usable_items[ing] = true
+				end
+			end
+
+			recipe = Recipes.FindUsageUpgradeRecipeForItem(item)
+			if recipe then
+				for ing, count in pairs(recipe.ingredients) do
+					usable_items[ing] = true
+				end
+			end
+		end
+	end
+
+	return usable_items
+end
+
 ------------------------------
 
 

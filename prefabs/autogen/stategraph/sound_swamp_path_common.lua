@@ -16,12 +16,12 @@ return {
         {
           eventtype="playsound",
           name="sfx-open_magic",
-          param={ autostop=true, soundevent="forestPath_open_magic",},
+          param={ autostop=true, soundevent="swampPath_open_magic",},
         },
         {
           eventtype="playsound",
           name="sfx-open_moan",
-          param={ autostop=true, soundevent="forestPath_open_moan",},
+          param={ autostop=true, soundevent="swampPath_open_moan",},
         },
         {
           eventtype="playsound",

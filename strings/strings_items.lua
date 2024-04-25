@@ -28,107 +28,148 @@ STRINGS.ITEMS =
 			name = "Crumbling Bammer",
 			desc = "A heavy hitter for the unpretentious.",
 		},
-
 		hammer_sledge =
 		{
 			name = "Sludgebammer",
 			desc = "Bash up a {name.rot} real hard-like.",
 		},
-
-		hammer_startingforest =
+		hammer_treemon_forest =
 		{
 			name = "The Tenderizer",
 			desc = "Kills with severe tenderness.",
 		},
-
-		hammer_startingforest2 =
+		--Added this (below) bc I couldn't find an existing string for Thatcher Swamp Hammer. Remove if necessary! - chloe
+		hammer_thatcher_swamp =
+		{
+			name = "The Bam Bamboozler",
+			desc = "It eats away at your enemy's self-esteem.",
+		},
+		hammer_yammo =
 		{
 			name = "The Smashing Pumpkin",
-			desc = "Winning feels so gourd.",
+			desc = "Crushes your enemies into a million rotten pieces.",--Winning feels so gourd.
 		},
-
 		hammer_megatreemon =
 		{
 			name = "The Ocular Gavel",
 			desc = "Kill with one eye open.",
 		},
-
-		hammer_swamp = --slowpoke tail and bulbug jaw
+		hammer_owlitzer_forest =
 		{
 			name = "Grove Bammer",
 			desc = "Exudes the putrid stench of success.",
 		},
-		hammer_swamp2 = --groak tentacle and eye-v vine
+		hammer_gourdo =
+		{
+			name = "Bare Knuckle Bammer",
+			desc = "Fists so furious, they oughta be illegal.",
+		},
+		hammer_groak = --groak tentacle and eye-v vine
 		{
 			name = "Wetwhacker",
 			desc = "Well that's gonna leave a mark.",
+		},
+		hammer_floracrane =
+		{
+			name = "The Grand Finale",
+			desc = "Ushers your foes straight into their final act.",
 		},
 		hammer_bandicoot =
 		{
 			name = "Troublemaker",
 			desc = "It's time to crack some skulls.",
 		},
-
-		polearm_startingforest =
+		polearm_treemon_forest =
 		{
-			name = "The Cold High Five",
-			desc = "For the Hunter who'd only touch a {name.rot} with a ten foot pole.",
+			name = "Long Arm of the Claw",--long-range weapon
+			desc = "For the Hunter who'd only touch a {name.rot} with a ten-foot pole.",
 		},
-
-		polearm_startingforest2 =
+		polearm_yammo =
 		{
-			name = "The Pumpkin Carver",
-			desc = "Poke a pumpkin, gouge a gourd.",
+			name = "{name.rot} Kebabber",--The Pumpkin Carver. Thresh, slash. Gourge Gouger. Hurtler. Body Drop.
+			desc = "Serving up a skewer-ful of raw justice.",--Poke a pumpkin, gouge a gourd.
 		},
-
 		polearm_megatreemon =
 		{
 			name = "The All-Seeing Fork",
 			desc = "It sees you when you're bleeding, it knows when you've been staked.",
 		},
-
-		polearm_swamp =
+		--Owlitzer polearm not in EA. Added for future.
+		--polearm_owlitzer_forest =
+		--{
+		--	name = "The Hurticane",
+		--	desc = "The time is ow.",
+		--},
+		polearm_gourdo =
+		{
+			name = "Pike of Peril",
+			desc = "Packs a multi-perforating punch that leaves foes ragged.",
+		},
+		polearm_bandi_swamp =
 		{
 			name = "Barbed Pike",
 			desc = "For when you don't wanna run 'em <i>clean</i> through.",
 		},
-		polearm_swamp2 =
+		polearm_groak =
 		{
-			name = "The Claw",
-			desc = "It's also a great backscratcher.",
+			name = "Hork Fork",
+			desc = "It's a tough one to swallow.",
+		},
+		polearm_floracrane =
+		{
+			name = "Sharpoon",
+			desc = "Your technique is devastatingly en pointe, my dear.",
 		},
 		polearm_bandicoot =
 		{
 			name = "Cutting Remark",
 			desc = "A well-timed barb in passing can cut a foe to the quick.",
 		},
-
 		polearm_basic =
 		{
 			name = "Rusty Skewer",
 			desc = "A dull blade is sometimes more dangerous than a sharp one.",
 		},
-
 		cleaver_basic = --not used
 		{
 			name = "Extra Dull Cleaver",
 			desc = "Chop yourself a nice slice of {name.rot}.",
 		},
-
 		cannon_basic =
 		{
 			name = "Splintered {name.weapon_cannon}",
 			desc = "When this {name.weapon_cannon} fires in the forest, it definitely makes a sound.",
 		},
-		cannon_swamp1 =
+		cannon_yammo =
 		{
-			name = "Big Batty Boom",
-			desc = "Things are about to get batty.",
+			name = "Doomino Cannon",
+			desc = "Get yer {name_multiple.rot} in a row.",
 		},
-		cannon_swamp2 =
+		cannon_owlitzer_forest =
+		{
+			name = "The Keening",
+			desc = "A shot carried by the righteous tempest flies true.",
+		},
+		cannon_gourdo =
+		{
+			name = "The Beefstick",
+			desc = "Time to meat your maker.",
+		},
+		cannon_groak =
 		{
 			name = "The Bog Blaster",
 			desc = "Your enemies are gonna <i>croak</i>.",
+		},
+		cannon_thatcher_swamp =
+		{
+			-- Has the "cluster bomb" power
+			name = "Hail of Gory",
+			desc = "Be grateful you're not the one cleaning up this mess.",
+		},
+		cannon_floracrane =
+		{
+			name = "Beakon of Hurt",
+			desc = "Elicits the dulcet tones of your enemy's shrieks.",
 		},
 		cannon_bandicoot =
 		{
@@ -140,34 +181,46 @@ STRINGS.ITEMS =
 			name = "One Big Mother",
 			desc = "Walk softly and carry a boomstick.",
 		},
-
 		shotput_basic =
 		{
 			name = "Old Leather {name.weapon_shotput}",
-			desc = "Strike fear into the hearts of {name_multiple.rot}!",
+			desc = "Someone definitely spat on this.",
 		},
-
-		shotput_startingforest1 =
-		{
-			name = "Zesty {name.weapon_shotput}",
-			desc = "Beat your enemies to a pulp.",
-		},
-		shotput_startingforest2 =
+		shotput_treemon_forest =
 		{
 			name = "The Doodlebug Special",
 			desc = "Flies through the air with the greatest of ease.",
 		},
-		shotput_swamp1 =
+		shotput_yammo =
 		{
-			name = "Pokey Ball",
-			desc = "Watch {name_multiple.rot} catch 'em... <i>right in the face</i>.",
+			name = "The Hurler",--Zesty {name.weapon_shotput}
+			desc = "Things are about to get ugly.",--Beat your enemies to a pulp.
 		},
-		shotput_swamp2 =
+		shotput_owlitzer_forest = -- zucco and windmon, it looks like?
 		{
-			name = "Groakshot",
+			name = "Ballmerang",
+			desc = "It always comes back for more.",
+		},
+		shotput_groak = -- zucco and windmon, it looks like?
+		{
+			name = "Splatshot",
 			desc = "As deadly as it is hideously sticky.",
 		},
-
+		shotput_gourdo =
+		{
+			name = "Basherball",
+			desc = "Playtime is over.",
+		},
+		shotput_bandi_swamp =
+		{
+			name = "Boomball",--explodes on contact
+			desc = "More aerodynamic than a boombox.",
+		},
+		shotput_floracrane =
+		{
+			name = "Belle of the Ball",
+			desc = "It's got destructive main character energy.",
+		},
 		shotput_megatreemon =
 		{
 			name = "Mother Treek's Conker",
@@ -321,7 +374,6 @@ STRINGS.ITEMS =
 			name = "{name.treemon} Trunk",
 			desc = "All bark, and some bite.",
 		},
-		-- WRITER!
 		windmon =
 		{
 			name = "{name.windmon} Breastplate",
@@ -336,6 +388,21 @@ STRINGS.ITEMS =
 		{
 			name = "{name.eyev} Wrap",
 			desc = "Just because you're fighting {name_multiple.rot} doesn't mean you can't look cute.",
+		},
+		swarmy =
+		{
+			name = "{name.swarmy} Top Glaze",
+			desc = "Looks like it's painted on. Because it is.",
+		},
+		slowpoke =
+		{
+			name = "{name.slowpoke} Armour",
+			desc = "Someone's gotta keep an eye on you.",
+		},
+		woworm =
+		{
+			name = "{name.woworm} Hauberk",
+			desc = "Harness the protective qualities of {name.woworm} shells.",
 		},
 	},
 	HEAD = {
@@ -424,7 +491,7 @@ STRINGS.ITEMS =
 			desc = "",
 		},
 		groak = {
-			name = "{name.groak} Bow",
+			name = "{name.groak}'s Best",
 			desc = "What makes you pretty on the inside also makes you pretty on the outside.",
 		},
 
@@ -477,18 +544,31 @@ STRINGS.ITEMS =
 			name = "{name.eyev} Shroud",
 			desc = "Woe be upon {name_multiple.rot} who won't leaf you alone.",
 		},
+		swarmy =
+		{
+			name = "{name.swarmy} Laurels",
+			desc = "Try not to rest on it.",
+		},
+		slowpoke =
+		{
+			name = "{name.slowpoke} Helmet",
+			desc = "Now you, too, can be as hard-headed as the humble {name.slowpoke}.",
+		},
+		woworm =
+		{
+			name = "{name.woworm} Helmet",
+			desc = "Open-faced so you don't trap the smell.",
+		},
 	},
 	WAIST = {
 
 		--[[BEAUTIFUL WRITER FRIENDS LOOK HERE:
 
-		Hi Kris I emptied this out to leave a blank template for WAIST which is the lower body -- Shoes + Pants!
-		-jambell
-
 		HEAVY
 		-Chausses (chainmail, covers the whole leg)
 		-Sabaton (foot portion of a suit of armour)
 		-Faulds (the "skirt" part of a suit of armour)
+		-Tonlet (metal skirt of a suit of armour, but flared slightly out)
 
 		MEDIUM
 		-Cuisses (quilted, padded armour for the thigh specifically)
@@ -605,7 +685,6 @@ STRINGS.ITEMS =
 			name = "{name.treemon} Fig Leaf",
 			desc = "A very modest piece of armour.",
 		},
-		-- WRITER!
 		windmon =
 		{
 			name = "{name.windmon} Greaves",
@@ -620,6 +699,21 @@ STRINGS.ITEMS =
 		{
 			name = "{name.eyev} Twine Cinch",
 			desc = "Soft, flowy leaves, secured by an only <i>slightly</i> sticky pink belt.",
+		},
+		swarmy =
+		{
+			name = "{name.swarmy} Slimekilt",
+			desc = "Complete with {name.swarmy} hand clasp.",
+		},
+		slowpoke =
+		{
+			name = "{name.slowpoke} Boots",
+			desc = "A thick hide to cover your own.",
+		},
+		woworm =
+		{
+			name = "{name.woworm} Aketon",
+			desc = "The waistband is very elastic.",
 		},
 	},
 	POTIONS = {
@@ -755,32 +849,6 @@ STRINGS.ITEMS =
 		},
 	},
 
-	--KRIS: jambell here, just filling in what it is asking me to fill in
-	HEART =
-	{
-		heart_megatreemon =
-		{
-			name = "Heart of Mother Treek",
-			desc = "Increase your <#RED>Maximum Health</> by <#RED>{health}</>.",
-		},
-		heart_owlitzer =
-		{
-			name = "Power of Owlitzer",
-			desc = "When you enter a new clearing, <#RED>Heal</> for <#RED>{heal} Health</>."
-		},
-		heart_bandicoot =
-		{
-			name = "Heart of Engimox",
-			desc = "Increase your <#RED>Dodge Speed</> by <#RED>{dodge_speed}%</>.",
-		},
-		heart_thatcher =
-		{
-			name = "Power of Thatcher",
-			desc = "[TEMP] Increase your <#RED>Dodge Speed</> by <#RED>{dodge_speed}%</>.",
-		},
-	},
-
-
 	KEY_ITEMS = {
 		recipe_generic =
 		{
@@ -909,7 +977,7 @@ STRINGS.ITEMS =
 	--When writing material names/descriptions, try to always include the name of the monster it drops from in the item title (if any) and include what area the monster is found in in the description (if any)
 	MATERIALS = {
 		TAKE_SOUL_BUTTON = "<p bind='Controls.Digital.ACTION' color=0> Take",
-		TAKE_SOUL_BUTTON_NAME = "<p bind='Controls.Digital.ACTION' color=0> Take %s",
+		TAKE_SOUL_BUTTON_NAME = "<p bind='Controls.Digital.ACTION' color=0> Take {name}",
 		konjur =
 		{
 			name = "{name.konjur}",
@@ -925,47 +993,54 @@ STRINGS.ITEMS =
 		konjur_soul_lesser =
 		{
 			name = "{name.konjur_soul_lesser}",
-			desc = "A hunk of pure, solidified <#KONJUR>{name.i_konjur}</>.\n\nFound in: <#RED>Special Rooms</>"
+			desc = "A hunk of pure, solidified <#KONJUR>{name.i_konjur}</>.\n\nFound in: <#RED>Special Rooms</>",
+			name_multiple_fmt = "{name_multiple.konjur_soul_lesser} ({count})",
 		},
 
 		konjur_soul_greater =
 		{
 			name = "{name.konjur_soul_greater}",  
-			desc = "Heavily condensed, solid <#KONJUR>{name.i_konjur}</>.\n\nIt was harvested from an especially fearsome <#RED>{name.rot}</>.\n\nFound in: <#RED>{name.rot_miniboss} Rooms</>"
+			desc = "Heavily condensed, solid <#KONJUR>{name.i_konjur}</>.\n\nIt was harvested from an especially fearsome <#RED>{name.rot}</>.\n\nFound in: <#RED>{name.rot_miniboss} Rooms</>",
+			name_multiple_fmt = "{name_multiple.konjur_soul_greater} ({count})",
 		},
 
 		konjur_heart =
 		{
 			name = "{name.konjur_heart}", 
-			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.rot_boss}</>.\n\nIt is prized by the {name_multiple.foxtails}.\n\nFound in: <#RED>{name.rot_boss} Rooms</>"
+			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.rot_boss}</>.\n\nIt is prized by the {name_multiple.foxtails}.\n\nFound in: <#RED>{name.rot_boss} Rooms</>",
+			name_multiple_fmt = "{name_multiple.konjur_heart} ({count})",
 		},
 
 		-- Writer!
 		konjur_heart_megatreemon =
 		{
 			name = "{name.megatreemon} {name.konjur_heart}", 
-			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.megatreemon}</>.\n\nIt is prized by the {name_multiple.foxtails}."
+			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.megatreemon}</>.\n\nIt is prized by the {name_multiple.foxtails}.",
+			name_multiple_fmt = "{name.megatreemon} {name_multiple.konjur_heart} ({count})",
 		},
 
 		-- Writer!
 		konjur_heart_owlitzer =
 		{
 			name = "{name.owlitzer} {name.konjur_heart}", 
-			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.owlitzer}</>.\n\nIt is prized by the {name_multiple.foxtails}."
+			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.owlitzer}</>.\n\nIt is prized by the {name_multiple.foxtails}.",
+			name_multiple_fmt = "{name.owlitzer} {name_multiple.konjur_heart} ({count})",
 		},
 
 		-- Writer!
 		konjur_heart_bandicoot =
 		{
 			name = "{name.bandicoot} {name.konjur_heart}", 
-			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.bandicoot}</>.\n\nIt is prized by the {name_multiple.foxtails}."
+			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.bandicoot}</>.\n\nIt is prized by the {name_multiple.foxtails}.",
+			name_multiple_fmt = "{name.bandicoot} {name_multiple.konjur_heart} ({count})",
 		},
 
 		-- Writer!
 		konjur_heart_thatcher =
 		{
 			name = "{name.thatcher} {name.konjur_heart}", 
-			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.thatcher}</>.\n\nIt is prized by the {name_multiple.foxtails}."
+			desc = "Magnificently powerful, solid <#KONJUR>{name.i_konjur}</>, recovered from a <#RED>{name.thatcher}</>.\n\nIt is prized by the {name_multiple.foxtails}.",
+			name_multiple_fmt = "{name.thatcher} {name_multiple.konjur_heart} ({count})",
 		},
 
 		rotwood_bark =
@@ -1012,7 +1087,7 @@ STRINGS.ITEMS =
 
 		thatcher_wing =
 		{
-			name = "{name.thatcher} Fin",
+			name = "{name.thatcher} Wing",
 			desc = "A transparent wing of a <#RED>{name.thatcher}</>.\n\nFound in: <#RED>{name.thatcher_swamp}</>",
 		},
 
@@ -1067,33 +1142,33 @@ STRINGS.ITEMS =
 		bandicoot_tail =
 		{
 			name = "{name.bandicoot} Tail",
-			desc = "Rarely wags.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Rarely wags.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		--[[
 		bandicoot_hide =
 		{
 			name = "{name.bandicoot} Hide",
-			desc = "Good at keeping in heat.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Good at keeping in heat.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		bandicoot_skull =
 		{
 			name = "{name.bandicoot} Skull",
-			desc = "A {name.bandicoot}'s former skull post removal.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "A {name.bandicoot}'s former skull post removal.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		bandicoot_wing =
 		{
 			name = "{name.bandicoot} Wings",
-			desc = "Leathery wings with incredible tensile strength.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Leathery wings with incredible tensile strength.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		bandicoot_hand =
 		{
 			name = "{name.bandicoot} Hand",
-			desc = "Once-nimble fingers taken from an <#RED>{name.bandicoot}</>.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Once-nimble fingers taken from an <#RED>{name.bandicoot}</>.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		arak_eye =
@@ -1126,10 +1201,10 @@ STRINGS.ITEMS =
 			desc = "Silky and tensile.\n\nFound in: <#RED></>",
 		},
 
-		owlitzer_fur = -- HELLOWRITER
+		owlitzer_fur =
 		{
-			name = "{name.owlitzer} Fur",
-			desc = "[TEMP] Fluffy fur, harvested from an <#RED>{name.owlitzer}</>.\n\nFound in: <#RED>{name.owlitzer_forest}</>",
+			name = "{name.owlitzer} Down",
+			desc = "Fluffy feather down, harvested from an <#RED>{name.owlitzer}</>.\n\nFound in: <#RED>{name.owlitzer_forest}</>",
 		},
 
 		owlitzer_claw =
@@ -1247,8 +1322,8 @@ STRINGS.ITEMS =
 
 		cabbageroll_baby =
 		{
-			name = "{name.cabbageroll} Bulb",
-			desc = "The larval form of a <#RED>{name.cabbageroll}</>. It may look cute, but don't be fooled.\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = "{name.cabbageroll_elite} Bulb",
+			desc = "The larval form of a <#RED>{name.cabbageroll_elite}</>. It may look cute, but don't be fooled.\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 
 		blarmadillo_hide =
@@ -1259,8 +1334,8 @@ STRINGS.ITEMS =
 
 		blarmadillo_trunk =
 		{
-			name = "{name.blarmadillo} Trunk",
-			desc = "The elongated snoot of a felled <#RED>{name.blarmadillo}</>. It squishes in a displeasing manner.\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = "{name.blarmadillo_elite} Trunk",
+			desc = "The elongated snoot of a felled <#RED>{name.blarmadillo_elite}</>. It squishes in a displeasing manner.\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 
 		--[[blarmadillo_scale =
@@ -1277,8 +1352,8 @@ STRINGS.ITEMS =
 
 		treemon_cone =
 		{
-			name = "{name.treemon} Cone",
-			desc = "It's basically a baby <#RED>{name.treemon}</>.\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = "{name.treemon_elite} Cone",
+			desc = "It's basically a baby <#RED>{name.treemon_elite}</>.\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 		--[[
 		treemon_stick =
@@ -1325,14 +1400,14 @@ STRINGS.ITEMS =
 		},
 		yammo_stem =
 		{
-			name = "{name.yammo} Stem",
-			desc = "A rough, fibrous stem that once served as a <#RED>{name.yammo}'s</> horn.\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = "{name.yammo_elite} Stem",
+			desc = "A rough, fibrous stem that once served as a <#RED>{name.yammo_elite}'s</> horn.\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 
 		zucco_claw =
 		{
-			name = "{name.zucco} Claw",
-			desc = "They're a lot safer now they're not attached to a <#RED>{name.zucco}</>.\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = "{name.zucco_elite} Claw",
+			desc = "They're a lot safer now they're not attached to a <#RED>{name.zucco_elite}</>.\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 		zucco_skin =
 		{
@@ -1360,8 +1435,8 @@ STRINGS.ITEMS =
 		},
 		gourdo_skin =
 		{
-			name = '{name.gourdo} Skin',
-			desc = "Dark red rind from a <#RED>{name.gourdo}'s</> behind.\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = '{name.gourdo_elite} Skin',
+			desc = "Dark red rind from a <#RED>{name.gourdo_elite}'s</> behind.\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 		beets_body =
 		{
@@ -1370,8 +1445,8 @@ STRINGS.ITEMS =
 		},
 		beets_leaf =
 		{
-			name = "{name.beets} Leaf",
-			desc = "How can the top of a <#RED>{name.beets}</> be so soft, yet hurt so bad?\n\nFound in: <#RED>{name.treemon_forest}</>",
+			name = "{name.beets_elite} Leaf",
+			desc = "How can the top of a <#RED>{name.beets_elite}</> be so soft, yet hurt so bad?\n\nFound in: <#RED>{name.treemon_forest}</>",
 		},
 
 		gnarlic_cloves =
@@ -1381,22 +1456,18 @@ STRINGS.ITEMS =
 		},
 		gnarlic_sprouts =
 		{
-			name = "{name.gnarlic} Sprouts",
-			desc = "A grassy tuft. It was taken from atop the head of a <#RED>{name.gnarlic}</>.\n\nFound in: <#RED>{name.owlitzer_forest}</>",
+			name = "{name.gnarlic_elite} Sprouts",
+			desc = "A grassy tuft. It was taken from atop the head of a <#RED>{name.gnarlic_elite}</>.\n\nFound in: <#RED>{name.owlitzer_forest}</>",
 		},
-
-		--Writer!
 		windmon_trunk =
 		{
 			name = "{name.windmon} Trunk",
-			desc = "DESC\n\nFound in: <#RED>{name.owlitzer_forest}</>",
+			desc = "A sturdy piece of wood, harvested from the center of a <#RED>{name.windmon}</>\n\nFound in: <#RED>{name.owlitzer_forest}</>",
 		},
-
-		--Writer!
 		windmon_horn =
 		{
-			name = "{name.windmon} Horn",
-			desc = "DESC\n\nFound in: <#RED>{name.owlitzer_forest}</>",
+			name = "{name.windmon_elite} Horn",
+			desc = "Leaves and branches pulled from a <#RED>{name.windmon}'s</> canopy.\n\nFound in: <#RED>{name.owlitzer_forest}</>",
 		},
 
 		------------- SWAMP BIOME DROPS
@@ -1425,88 +1496,88 @@ STRINGS.ITEMS =
 
 		------ SWAMP CREATURE DROPS
 
-		battoad_leg =
-		{
-			name = '{name.battoad} Leg',
-			desc = "A generous hock of <#RED>{name.battoad}</> meat.\n\nFound in: <#RED>{name.kanft_swamp}</>",
-		},
 		battoad_wing =
 		{
 			name = '{name.battoad} Wing',
-			desc = "A stretchy wing with an only mildly offputting odour.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "A stretchy wing with an only mildly offputting odour.\n\nFound in: <#RED>{name.bandi_swamp}</>",
+		},
+		battoad_leg =
+		{
+			name = '{name.battoad_elite} Leg',
+			desc = "A generous hock of <#RED>{name.battoad}</> meat.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		--[[
 		battoad_scale =
 		{
 			name = '{name.battoad} Scale',
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		battoad_tongue =
 		{
 			name = '{name.battoad} Tongue',
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		battoad_eyeball =
 		{
 			name = '{name.battoad} Eyeball',
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		mothball_fluff =
 		{
 			name = "{name.mothball} Fluff",
-			desc = "Cloud-soft down, harvested from a <#RED>{name.mothball}</>.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Cloud-soft down, harvested from a <#RED>{name.mothball}</>.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		mothball_teen_ear =
 		{
-			name = "{name.mothball} Ears",
-			desc = "They tickle.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.mothball_elite} Ears",
+			desc = "They tickle.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		--[[
 		mothball_eyeballs =
 		{
 			name = "{name.mothball} Eyeballs",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		mothball_teen_claw =
 		{
 			name = "{name.mothball} Claw",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		mothball_teen_tail =
 		{
 			name = "{name.mothball} Tail",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		eyev_vine =
 		{
 			name = "{name.eyev} Vine",
-			desc = "A rubbery vine, shorn from an <#RED>{name.eyev}</>.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "A rubbery vine, shorn from an <#RED>{name.eyev}</>.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		eyev_eyelashes =
 		{
-			name = "{name.eyev} Eyelashes",
-			desc = "Frozen forever in a sultry stare.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.eyev_elite} Eyelashes",
+			desc = "Frozen forever in a sultry stare.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		--[[
 		eyev_eyeball =
 		{
 			name = "{name.eyev} Eyeball",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		seeker_wood_stick =
 		{
 			name = "{name.seeker} Wood Stick",
-			desc = "What's the point of a nature walk if you don't come back with a good stick?\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "What's the point of a nature walk if you don't come back with a good stick?\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		seeker_wood_plank =
 		{
@@ -1520,7 +1591,7 @@ STRINGS.ITEMS =
 		},
 		seeker_beard =
 		{
-			name = "{name.seeker} Beard",
+			name = "{name.seeker_elite} Beard",
 			desc = "It feels scratchy and full of wisdom.\n\nFound in: <#RED>{name.thatcher_swamp}</>",
 		},
 		seeker_boquet =
@@ -1532,1524 +1603,141 @@ STRINGS.ITEMS =
 		floracrane_feather =
 		{
 			name = "{name.floracrane} Down",
-			desc = "Soft, elegant feathers harvested from a <#RED>{name.floracrane}</>.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Soft, elegant feathers harvested from a <#RED>{name.floracrane}</>.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		floracrane_beak =
 		{
-			name = "{name.floracrane} Beak",
-			desc = "Are <#RED>{name_multiple.floracrane}</> shy? They're all tongue-tied.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.floracrane_elite} Beak",
+			desc = "Are <#RED>{name_multiple.floracrane_elite}</> shy? They're all tongue-tied.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		--[[
 		floracrane_tail =
 		{
 			name = "{name.floracrane} Plume",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		floracrane_leg =
 		{
 			name = "{name.floracrane} Drumstick",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		floracrane_neck =
 		{
 			name = "{name.floracrane} Vines",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		floracrane_feet =
 		{
 			name = "{name.floracrane} Foot",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		mossquito_cap =
 		{
 			name = "{name.mossquito} Cap",
-			desc = "The <#RED>{name.mossquito}</> fashion world is abuzz over this hat style.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "The <#RED>{name.mossquito}</> fashion world is abuzz over this hat style.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		mossquito_tooth =
 		{
-			name = "{name.mossquito} Tooth",
-			desc = "No wonder their bites hurt so much.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.mossquito_elite} Tooth",
+			desc = "No wonder their bites hurt so much.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		--[[
 		mossquito_nose =
 		{
 			name = "{name.mossquito} Nose",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		slowpoke_eye =
 		{
-			name = "{name.slowpoke} Eye",
-			desc = "A piercing eye, harvested from a <#RED>{name.slowpoke}</>.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.slowpoke_elite} Eye",
+			desc = "A piercing eye, harvested from a <#RED>{name.slowpoke_elite}</>.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		slowpoke_tail =
 		{
 			name = "{name.slowpoke} Tail",
-			desc = "A pleasingly plump tail.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "A pleasingly plump tail.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		--[[
 		slowpoke_jaw =
 		{
 			name = "{name.slowpoke} Jaw",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		bulbug_jaw =
 		{
 			name = "{name.bulbug} Pincers",
-			desc = "Huge insect jaws with impressive piercing power.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "Huge insect jaws with impressive piercing power.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		bulbug_bulb =
 		{
-			name = "{name.bulbug} Bulb",
-			desc = "A classic <#RED>{name.bulbug}</> bulb. The air around it feels fuzzy with energy.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.bulbug_elite} Bulb",
+			desc = "A classic <#RED>{name.bulbug_elite}</> bulb. The air around it feels fuzzy with energy.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		--[[
 		bulbug_claw =
 		{
 			name = "{name.bulbug} Claw",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		groak_tentacle =
 		{
 			name = "{name.groak} Tentacle",
-			desc = "A <#RED>{name.groak}'s</> squishy mustache.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "A <#RED>{name.groak}'s</> squishy mustache.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		groak_elite =
 		{
-			name = "{name.groak} Wigglers",
-			desc = "Wiggly ears taken from a felled <#RED>{name.groak}</>.\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.groak_elite} Wigglers",
+			desc = "Wiggly ears taken from a felled <#RED>{name.groak_elite}</>.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		--[[
 		groak_chin =
 		{
 			name = "{name.groak} Chin",
-			desc = "Found in: <#RED>{name.kanft_swamp}</>",
+			desc = "Found in: <#RED>{name.bandi_swamp}</>",
 		},
 		]]
 
 		totolili_arm =
 		{
 			name = "{name.totolili} Arm",
-			desc = "TEMP\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "{name_multiple.totolili} hostility can be attributed to their lack of a funny bone.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		totolili_hat =
 		{
-			name = "{name.totolili} Hat",
-			desc = "TEMP\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.totolili_elite} Hat",
+			desc = "Or is that its hair?\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		woworm_lip =
 		{
-			name = "{name.woworm} Mouth",
-			desc = "TEMP\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.woworm} Head",
+			desc = "Better than the other end.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		woworm_shield =
 		{
-			name = "{name.woworm} Shell",
-			desc = "TEMP\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			name = "{name.woworm_elite} Shell",
+			desc = "Beware if you're in first place.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 
 		swarmy_slime =
 		{
 			name = "{name.swarmy} Slime",
-			desc = "TEMP\n\nFound in: <#RED>{name.kanft_swamp}</>",
+			desc = "A dollop of pure {name.swarmy}.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 		swarmy_arm =
 		{
-			name = "{name.swarmy} Arm",
-			desc = "TEMP\n\nFound in: <#RED>{name.kanft_swamp}</>",
-		},
-	},
-
-	AMULET = {
-		STATS = {
-			ATTACK = "Attack",
-			HAMMER_ATK = "Bammer attack",
-			POLEARM_ATK = "Skewer attack",
-			CLEAVER_ATK = "Cleaver attack",
-			REFLECT = "Reflect {name.concept_damage}",
-			DEFEND = "Defense",
-			SPEED = "Speed",
-			HEAL_RANDOM = "Random party member heal per hit",
-		},
-
-		shield_bone =
-		{
-			name = "Creaking Bone",
-			desc = "Silence is painful, but when it groans you feel at ease.\n\nReduced <#RED>{name.concept_damage}</> every third hit received.",
-		},
-		rage_guts =
-		{
-			name = "Entrails of Anger",
-			desc = "Increased <#RED>{name.concept_damage}</> every third hit dealt.",
-		},
-		healing_meat =
-		{
-			name = "Healing Flesh",
-			desc = "Enemy attacks refill a bit of potion.",
-		},
-		broken_bone =
-		{
-			name = "Broken Bone",
-			desc = "Brokenness is weakness. Brokenness is pointy.\n\nIncrease <#RED>{name.concept_damage}</> dealt and received.",
-		},
-		spike_bone =
-		{
-			name = "Bone Shards",
-			desc = "Brokenness is pointy.\n\nAttackers receive a portion of <#RED>{name.concept_damage}</> dealt.",
-		},
-		ancient_strike =
-		{
-			name = "Ancient Strike",
-			desc = "Some old battle techniques still have their merits.",
-		},
-		awm_hunger =
-		{
-			name = "Awm's Hunger",
-			desc = "Ingesting of <#KONJUR>{name.i_konjur}</> is a risky habit.",
-		},
-		bludj_anger =
-		{
-			name = "Bludj's Anger",
-			desc = "Draw inspiration from Bludj to strengthen Bammer attacks.",
-		},
-		destruction_frenzy =
-		{
-			name = "Destruction Frenzy",
-			desc = "Unleash a rampage with no regard for consequences.",
-		},
-		healing_roulette =
-		{
-			name = "Healing Roulette",
-			desc = "Each strike will heal a lucky party member.",
-		},
-	},
-
-	--------------------------------------------------------------------------------------------------------------
-	--ABILITY DESC FORMATTING NOTES FOR WRITERS--
-	
-	---Use red highlight on numbers, percentages and key combat concepts, ie, Attack, Dodge, Damage, Heal, Shield Segment, Runspeed, etc
-
-	---"Runspeed"is one word
-
-	---Anything within <#RED></> brackets should be capitalized as if a proper noun, ie <#RED>Damage</> :--VS--: <#RED>damage</>
-
-	---Try to keep numbers next to their associated nouns whenever possible, ie
-	-----"A <#RED>{percent}% Runspeed</> increase":--VS--: "A <#RED>{percent}%</> increase of <#RED>Runspeed</>"
-
-	---If a description has too many elements to highlight, use best judgement to choose the most important 3. Try to view the description in-game to help prioritize
-
-	---End description sentences with a period
-	--------------------------------------------------------------------------------------------------------------
-
-	SHIELD =
-	{
-		-- shield_light_attack =
-		-- {
-		-- 	name = "Even the Odds",
-		-- 	desc = "Gain <#RED>{shield} Shield Segment</> every {attack_count} <#RED>Light</> attacks that connect.", -- {shield} for # of shield added if we make them add >1 shield segment
-		-- },
-
-		shield_heavy_attack =
-		{
-			name = "Heavy Defense",
-			desc = "When your <#RED>Heavy Attacks</> hit <#RED>{targets_required} or More</> enemies at once, gain <#RED>{shield} Shield Segment</>."-- {shield} for # of shield added if we make them add >1 shield segment
-		},
-
-		shield_focus_kill =
-		{
-			name = "Resolute",
-			desc = "When you <#RED>Kill</> an enemy with a <#BLUE>{name.concept_focus_hit}</>, gain <#RED>{shield} Shield Segment</>.", -- {shield} for # of shield added if we make them add >1 shield segment
-		},
-
-		shield_dodge =
-		{
-			name = "Tuck and Roll",
-			desc = "When you <#RED>Perfect Dodge</>, gain <#RED>{shield} Shield Segments</>."
-		},
-
-		shield_hit_streak =
-		{
-			name = "The Best Defense",
-			desc = "Every <#RED>{hitstreak} Hit Streak</>, gain <#RED>{shield} Shield Segment</>."
-		},
-
-		shield_when_hurt =
-		{
-			name = "Automated Defenses",
-			desc = "When you take <#RED>{name.concept_damage}</>, gain <#RED>{shield} Shield Segment</>."
-		},
-
-		shield =
-		{
-			name = "Shield Segment",
-			desc = "When you have <#RED>4 Shield Segments</>, any <#RED>{name.concept_damage}</> taken is reduced to <#RED>{damage}</>, then removes all <#RED>Segments</>."
-		},
-
-		shield_to_health =
-		{
-			name = "Inequivalent Exchange",
-			desc = "When your <#RED>Shield</> breaks, {rarity_text} of the <#RED>{name.concept_damage}</> it prevented.",
-			rarity_text_EPIC = "<#RED>Heal</> for half",
-			rarity_text_LEGENDARY = "<#RED>Heal</> for all",
-		},
-
-		shield_dodge_knockback =
-		{
-			name = "Inertia",
-			desc = "When you have <#RED>Shield</>, your <#RED>Dodge</> becomes an <#RED>Attack</> that deals <#RED>{damage_mod}% Weapon {name.concept_damage}</> and inflicts <#RED>Knockback</>.",
-		},
-
-		shield_move_speed_bonus =
-		{
-			name = "Resistance Training",
-			desc = "Gain <#RED>+{speed}% {name.concept_runspeed}</> for every <#RED>Shield Segment</> you have.",
-		},
-
-		shield_heavy_attack_bonus_damage =
-		{
-			name = "Heavy Hitter",
-			desc = "When you have <#RED>Shield</>, your <#RED>Heavy Attacks</> deal a bonus <#RED>+{percent}% {name.concept_damage}</>.",
-		},
-
-		shield_reduced_damage_on_break =
-		{
-			name = "Plan B",
-			desc = "When your <#RED>Shield</> breaks, take <#RED>{percent}%</> reduced <#RED>{name.concept_damage}</> for <#RED>{time}</> seconds.",
-		},
-
-		shield_bonus_damage_on_break =
-		{
-			name = "Plan C",
-			desc = "When your <#RED>Shield</> breaks, deal an extra <#RED>+{percent}% {name.concept_damage}</> for <#RED>{time}</> seconds.",
-		},
-
-		shield_move_speed_on_break =
-		{
-			name = "Plan Flee",
-			desc = "When your <#RED>Shield</> breaks, gain <#RED>+{percent}% {name.concept_runspeed}</> for <#RED>{time}</> seconds.",
-		},
-
-		shield_steadfast =
-		{
-			name = "Adamantine",
-			desc_EPIC = "When you have <#RED>Shield</>, your <#RED>Attacks</> can no longer be interrupted.",
-			desc_LEGENDARY = "Your <#RED>Attacks</> can no longer be interrupted.",
-		},
-
-		shield_explosion_on_break =
-		{
-			name = "Shield Detonation",
-			desc = "When your <#RED>Shield</> breaks, deal <#RED>{damage} {name.concept_damage}</> to all enemies in a <#RED>{radius}</> unit radius."
-		},
-
-		shield_knockback_on_break =
-		{
-			name = "Aftershock",
-			desc = "When your <#RED>Shield</> breaks, all enemies in a <#RED>{radius}</> unit radius get <#RED>Knocked Down</>."
-		},
-	},
-
-	ELECTRIC =
-	{
-		charged =
-		{
-			name = "Charge",
-			desc = "When you <#RED>Die</>, trigger a <#RED>Chain Reaction</> which causes an additional <#RED>{damage_mod}% Weapon {name.concept_damage}</> to all other enemies that have <#RED>Charge</>, consuming one stack of <#RED>Charge</>."
-		},
-
-		charge_apply_on_light_attack =
-		{
-			name = "Static Charge",
-			desc = "Apply <#RED>{stacks} Charge</> with your <#RED>Light Attacks</>.",
-		},
-
-		charge_apply_on_heavy_attack =
-		{
-			name = "Static Shock",
-			desc = "Apply <#RED>{stacks} Charge</> in a large radius with your <#RED>Heavy Attacks</>."
-		},
-
-		charge_orb_on_dodge =
-		{
-			name = "Orb of ZAP!",
-			desc = "When you <#RED>Dodge</>, drop an orb that applies <#RED>{stacks} Charge</> in a small radius <#RED>{pulses}</> times.", -- jambell: not displaying cooldown here, because the cooldown is == how long the orb lasts. Effectively, you just can't summon two. Trying to avoid time-based cooldowns, personally!
-		},
-
-		charge_consume_on_crit =
-		{
-			name = "Catalyst",
-			desc = "Trigger a <#RED>Chain Reaction</> when you land a <#RED>Critical</> hit.",
-		},
-
-		charge_consume_on_focus =
-		{
-			name = "Lightning Rod",
-			desc = "Trigger a <#RED>Chain Reaction</> when you land a <#BLUE>{name.concept_focus_hit}</>.",
-		},
-
-		charge_consume_all_stacks =
-		{
-			name = "Conductor",
-			desc = "When you trigger a <#RED>Chain Reaction</>, consume all stacks of <#RED>Charge</>.",
-		},
-
-		charge_consume_extra_damage =
-		{
-			name = "Strike Twice",
-			desc = "<#RED>Chain Reaction</> impulses cause an additional <#RED>+{damage_bonus_percent}% Weapon {name.concept_damage}</>.",
-		},
-	},
-
-	SUMMON =
-	{
-		summon_slots =
-		{
-			name = "Summon Slots", --JAMBELL TODO
-			desc = "Summon up to <#RED>{summons} Minions</>."--JAMBELL TODO
-		},
-
-		summon_on_kill =
-		{
-			name = "With A Little Help", --JAMBELL TODO
-			desc = "When you <#RED>Kill</> an enemy, summon a <#RED>Minion</> to fight for you."--JAMBELL TODO
-		},
-
-		charm_on_kill =
-		{
-			name = "Enchantée", --JAMBELL TODO
-			desc = "Once per clearing, when you <#RED>Kill</> an enemy it will return to life as a <#RED>Charmed</> {name.concept_ally}."--JAMBELL TODO
-		},
-
-		summon_wormhole_on_dodge =
-		{
-			name = "Thinking With Portals", --JAMBELL TODO
-			desc = "When you double tap <#RED>Dodge</>, summon up to two portals to teleport between."--JAMBELL TODO
-		},
-	},
-
-	SEED =
-	{
-		seeded =
-		{
-			name = "[TEMP] Seeded",
-			desc = "[TEMP] It... does some stuff!"
-		},
-
-		seeded_on_light_attack =
-		{
-			name = "[TEMP] Seed: Light Attack",
-			desc = "[TEMP]Your <#RED>Light Attack</> applies <#RED>Seed</>."--does <#RED>Half {name.concept_damage}</>, but applies <#RED>Seed</>."
-		},
-
-		seeded_on_heavy_attack =
-		{
-			name = "[TEMP] Seed: Heavy Attack",
-			desc = "[TEMP]Your <#RED>Heavy Attack</> applies <#RED>Seed</> in a large radius."-- does <#RED>0 {name.concept_damage}</>, but applies <#RED>Seed</> in a large radius."
-		},
-
-		acid_on_dodge =
-		{
-			name = "[TEMP] Seed: Acid On Dodge",
-			desc = "[TEMP]When you <#RED>Dodge</>, leave behind a trail of <#RED>Acid</>."-- does <#RED>0 {name.concept_damage}</>, but applies <#RED>Seed</> in a large radius."
-		},
-	},
-
-	CHEAT = {
-		-- They're all hidden, so nothing goes in here.
-	},
-
-
-	FOOD_POWER =
-	{
-		thick_skin =
-		{
-			name = "Silver Lining",
-			desc = "When you take <#RED>{name.concept_damage}</>, reduce it by <#RED>{reduction}</>.",
-		},
-
-		heal_on_enter =
-		{
-			name = "Breath of Fresh Air",
-			desc = "When you enter a new clearing, <#RED>Heal</> for <#RED>{heal} Health</>.",
-		},
-
-		max_health =
-		{
-			name = "Vitality",
-			desc = "Increase <#RED>Maximum Health</> by <#RED>{health}</>."
-		},
-
-		max_health_on_enter =
-		{
-			name = "Trailblazer",
-			desc = "When you enter a new clearing, gain <#RED>+{max_health} Maximum Health</> and <#RED>Heal</> for <#RED>{heal} Health</>."
-		},
-
-		retail_therapy =
-		{
-			name = "Retail Therapy",
-			desc = "When you enter a <#RED>Shop</>, <#RED>Heal</> for <#RED>{heal} Health</>."
-		},
-
-		perfect_pairing =
-		{
-			name = "Perfect Pairing",
-			desc = "Your <#RED>Potion</> will <#RED>Heal</> an additional <#RED>+{bonus_heal}% Health</>."
-		},
-
-		pocket_money =
-		{
-			name = "Pocket Change",
-			desc = "Gain <#KONJUR>{konjur} {name.i_konjur}</>."
-		},
-
-		private_healthcare =
-		{
-			name = "Abundance Mindset",
-			desc = "Whenever you pick up <#KONJUR>{name.i_konjur}</>, <#RED>Heal {percent}%</> of the amount picked up."
-		},
-	},
-
-	POTION_POWER =
-	{
-		soothing_potion =
-		{
-			name = "Soothing Spirits",
-			desc = "Immediately <#RED>Heal</> for <#RED>{heal} Health</>.",
-		},
-		bubbling_potion =
-		{
-			name = "Bubbling Brew",
-			desc = "Immediately <#RED>Heal</> for <#RED>{heal} Health</>.",
-		},
-		misting_potion =
-		{
-			name = "Misting Mixture",
-			desc = "<#RED>Heal</> for <#RED>{heal} Health</> every {tick_time} seconds until you've been healed <#RED>{num_heals}</> times.",
-		},
-	},
-
-	STATUSEFFECT =
-	{
-		juggernaut =
-		{
-			name = "Juggernaut",
-			desc = "Increases your <#RED>Size</> and <#RED>{name.concept_damage}</> by <#RED>+{damage}%</> per stack.\n\nEach stack also causes you to take <#RED>{damagereceivedmult}%</> less <#RED>{name.concept_damage}</>, but reduces your <#RED>{name.concept_runspeed}</> by <#RED>{speed}%</>.\n\nRemoved when combat ends.",
-		},
-
-		smallify =
-		{
-			name = "Tiny",
-			desc = "Shrink in <#RED>Size</> by <#RED>{scale}%</>. Gain <#RED>+{speed}% {name.concept_runspeed}</>, but take <#RED>{damage}% Increased {name.concept_damage}</>.", --this kong's got STYLE, so listen up dudes, she can shrink in size, to suit. her. mood! she's quick and nimble when she needs to be, SHEee can float through the air, and climb. up. trees!
-		},
-		stuffed =
-		{
-			name = "Stuffed",
-			desc = "Reduced <#RED>{name.concept_runspeed}</>.",
-		},
-		freeze =
-		{
-			name = "DEV_FREEZE",
-			desc = "You should never see this in the UI.",
-		},
-		poison =
-		{
-			name = "DEV_POISON",
-			desc = "You should never see this in the UI.",
-		},
-		hammer_totem_buff =
-		{
-			name = "DEV_HAMMER_TOTEM_BUFF",
-			desc = "You should never see this in the UI.",
-		},
-		confused =
-		{
-			name = "DEV_CONFUSED",
-			desc = "You should never see this in the UI.",
-		},
-		acid =
-		{
-			name = "DEV_ACID",
-			desc = "You should never see this in the UI.",
-		},
-		bodydamage =
-		{
-			name = "DEV_BODYDAMAGE",
-			desc = "You should never see this in the UI.",
-		},
-	},
-
-	TONIC =
-	{
-		tonic_rage =
-		{
-			name = "Yammo Rage",
-			desc = "Increase your <#RED>{name.concept_damage}</> by <#RED>+{damage}%</> for <#RED>{time}</> seconds.",
-		},
-		tonic_speed =
-		{
-			name = "Zucco Speed",
-			desc = "Increase your <#RED>{name.concept_runspeed}</> by <#RED>+{speed}%</> for the rest of the encounter.",
-		},
-		tonic_explode =
-		{
-			name = "Explosive",
-			desc = "Explode, dealing <#RED>{damage} {name.concept_damage}</> to all enemies within {radius} unit radius every <#RED>{tick_time}</> second for <#RED>{duration}</> seconds.",
-		},
-		tonic_freeze =
-		{
-			name = "Freeze",
-			desc = "Freeze all enemies in the encounter.",
-		},
-		tonic_projectile =
-		{
-			name = "Mud Spray",
-			desc = "Shoot <#RED>{projectiles} Projectiles</> that deal <#RED>{damage} {name.concept_damage}</> each.",
-		},
-		tonic_projectile_repeat =
-		{
-			name = "Sustained Spray",
-			desc = "Shoot <#RED>{projectiles} Projectiles</> that deal <#RED>{damage} {name.concept_damage}</> every <#RED>{tick_time}</> second for <#RED>{duration}</> seconds.",
-		},
-	},
-
-	PLAYER =
-	{
-
-		snowball_effect =
-		{
-			name = "Snowball Effect",
-			-- TODO(dbriscoe): Can we interpolate On a Roll to ensure
-			-- consistent translation and insert nbsp to prevent bad wrapping?
-			-- For now, I added nbsp inside the string but that seems
-			-- unreliable.
-			desc = "When you <#RED>Kill</> an enemy, gain <#RED>{stacks} Stacks</> of <#RED>On a Roll</>.",
-		},
-
-		damage_until_hit =
-		{
-			name = "On a Roll",
-			desc = "Gain <#RED>+1% {name.concept_damage}</> for each stack.\n\nRemove all stacks whenever you take <#RED>{name.concept_damage}</>.",
-		},
-
-		undamaged_target =
-		{
-			name = "Strong Start",
-			desc = "Your <#RED>Attacks</> against enemies with full <#RED>Health</> deal <#RED>+{bonus}% {name.concept_damage}</>.",
-		},
-
-		thorns =
-		{
-			name = "Retaliation",
-			desc = "When you get attacked, deal <#RED>{reflect} {name.concept_damage}</> back to the attacker.",
-		},
-
-		heal_on_focus_kill =
-		{
-			name = "Concentrated Cure",
-			desc = "When you use a <#BLUE>{name.concept_focus_hit}</> to <#RED>Kill</> an enemy or break something in the environment, <#RED>Heal</> for <#RED>{heal} Health</>.",
-		},
-
-		heal_on_quick_rise =
-		{
-			name = "Stage Fall",
-			desc = "When you <#RED>Quick Rise</>, <#RED>Heal</> for <#RED>{heal} Health</>.",
-		},
-
-		-- extra_damage_after_iframe_dodge =
-		-- {
-		-- 	name = "Sting Like A Bee",
-		-- 	desc = "After a <#RED>Perfect Dodge</>, your next attack deals {damage_mult}x damage.\n\n<z 0.8><i><#GOLD>Perfect Dodge</>: Narrowly dodge an attack at the last second.</i></z>",
-		-- },
-
-		berserk =
-		{
-			name = "Cornered Coyote",
-			desc = "When you have less than <#RED>{health} Health</>, deal <#RED>+{bonus}% {name.concept_damage}</>.",
-		},
-
-
-		max_health_and_heal =
-		{
-			name = "Waffle",
-			desc = "Gain <#RED>+{health} Maximum Health</> and <#RED>Heal</> to full."
-		},
-
-		bomb_on_dodge =
-		{
-			name = "Parting Gifts",
-			desc = "When you <#RED>Dodge</>, launch {rarity_text} in a random direction.\n\n<z 0.8><i>Cooldown: {cd} seconds</i></z>",
-			rarity_text_EPIC = "a <#RED>Bomb</>",
-			rarity_text_LEGENDARY = "<#RED>2 Bombs</>", -- TODO: make a more elegant way of handling this, especially one that can read {num_bombs}
-		},
-
-		attack_dice =
-		{
-			name = "Attack Dice",
-			desc = "When you deal <#RED>{name.concept_damage}</>, do an extra <#RED>{min}-{max} {name.concept_damage}</>, <#RED>{count}</> times."
-		},
-
-		running_shoes =
-		{
-			name = "Running Shoes",
-			desc = "Gain <#RED>+{speed}% {name.concept_runspeed}</>."
-		},
-
-		coin_purse =
-		{
-			name = "Petty Cash",
-			desc = "Inflict an extra <#RED>+{bonus}% {name.concept_damage}</> for every <#KONJUR>{currency} {name.i_konjur}</> you have."
-		},
-
-		extended_range =
-		{
-			name = "Pew Pew!",
-			desc = "Every <#RED>{swings} Attacks</>, shoot {rarity_text} half your weapon's <#RED>{name.concept_damage}</>.",
-			rarity_text_COMMON = "a <#RED>Projectile</> that deals",
-			rarity_text_EPIC = "two <#RED>Projectiles</> that deal",
-			rarity_text_LEGENDARY = "three <#RED>Projectiles</> that deal",
-		},
-
-		bloodthirsty =
-		{
-			name = "Bloodthirsty",
-			desc = "<#RED>Heal {heal}%</> of <#RED>{name.concept_damage}</> you deal. Lose <#RED>{health_penalty}% Maximum Health</>.\n\nTake <#RED>{damage} {name.concept_damage}</> every <#RED>{time}</> seconds. <#RED>Bloodthirsty</> will never deal fatal <#RED>{name.concept_damage}</>.",
-		},
-
-		mulligan =
-		{
-			name = "Mulligan",
-			desc = "When you <#RED>Die</>, remove this Power and <#RED>Heal</> to <#RED>{heal}% Max Health</>.",
-		},
-
-		iron_brew =
-		{
-			name = "Iron Brew",
-			desc = "Refill your <#RED>Potion</>.\n\nEach time you <#RED>Drink</>, <#RED>Heal</> an additional <#RED>+{bonus_heal}%</> and gain <#RED>Shield</>.",
-		},
-
-		risk_reward =
-		{
-			name = "Thrill Seeker",
-			desc = "Deal <#RED>+{outgoing}% Damage</>. Take <#RED>+{incoming}% {name.concept_damage}</>.",
-		},
-
-		retribution =
-		{
-			name = "Righteous Fury", --renamed from Retribution to help differentiate it from Retaliation
-			desc = "When you take <#RED>{name.concept_damage}</>, your next <#RED>Attack</> deals <#RED>+{percent}% {name.concept_damage}</>.",
-		},
-
-		pump_and_dump =
-		{
-			name = "Wind Up",
-			desc = "Every <#RED>{attacks}th Attack</> deals <#RED>+{percent}% {name.concept_damage}</>."
-		},
-
-		volatile_weaponry =
-		{
-			name = "Volatile Weaponry",
-			desc = "Every <#RED>{count} Hit Streak</>, cause an explosion in an area around the target."
-		},
-
-		precision_weaponry =
-		{
-			name = "Precision Weaponry",
-			desc = "Every <#RED>{count} Hit Streak</> is guaranteed to <#RED>Critical Hit</>. "
-		},
-
-		fractured_weaponry =
-		{
-			name = "Fractured Weaponry",
-			desc = "Every <#RED>{count} Hit Streak</>, launch a <#RED>Bomb</> in a random direction."
-		},
-
-		weighted_weaponry =
-		{
-			name = "Weighted Weaponry",
-			desc = "When you have at least <#RED>{count} Hit Streak</>, <#RED>Critical Hits</> deal <#RED>+{percent}% {name.concept_damage}</>."
-		},
-
-		momentum =
-		{
-			name = "Momentum",
-			desc = "When you <#RED>Dodge</>, gain <#RED>+{speed}% {name.concept_runspeed}</> for <#RED>{time}</> seconds."
-		},
-
-		down_to_business =
-		{
-			name = "Straight to Business",
-			desc = "When you enter a new clearing, gain <#RED>+{speed}% {name.concept_runspeed}</> for <#RED>{time}</> seconds."
-		},
-
-		grand_entrance =
-		{
-			name = "Big Stick",
-			desc = "Your first <#RED>Heavy Attack</> per clearing deals <#RED>{damage} {name.concept_damage}</> to all enemies."
-		},
-
-		extroverted =
-		{
-			name = "Extroverted",
-			desc = "When you enter a new clearing, gain <#RED>+{damage}% {name.concept_damage}</> for <#RED>{time}</> seconds."
-		},
-
-		introverted =
-		{
-			name = "Introverted",
-			desc = "When you enter a new clearing, gain <#RED>Shield</>."
-		},
-
-		wrecking_ball =
-		{
-			name = "Wrecking Ball",
-			desc = "Multiply your <#RED>{name.concept_damage}</> by your <#RED>{name.concept_runspeed} {name.powerdesc_modifier}</>"
-		},
-
-		steadfast =
-		{
-			name = "Relentless",
-			desc = "Your <#RED>Attacks</> can no longer be interrupted."
-		},
-
-		getaway =
-		{
-			name = "Post-Kill Zoomies",
-			desc = "When you <#RED>Kill</> an enemy, gain <#RED>+{speed}% {name.concept_runspeed}</> for <#RED>{time}</> seconds."
-		},
-
-		-- stronger_light_attack =
-		-- {
-		-- 	name = "Light Might",
-		-- 	desc = "Your Light attacks deal {bonus}% more damage."
-		-- },
-
-		-- stronger_heavy_attack =
-		-- {
-		-- 	name = "Heavy Hitter",
-		-- 	desc = "Your Heavy attacks deal {bonus}% more damage."
-		-- },
-
-		-- stronger_crits =
-		-- {
-		-- 	name = "Concentration",
-		-- 	desc = "Your Focus attacks deal {bonus}% more damage."
-		-- },
-
-		-- increased_pushback =
-		-- {
-		-- 	name = "Keepaway",
-		-- 	desc = "Your attacks push enemies further away."
-		-- },
-
-		no_pushback =
-		{
-			name = "Constructive Criticism",
-			desc = "Your <#RED>Attacks</> no longer push enemies away."
-		},
-
-		increased_hitstun =
-		{
-			name = "Simply Stunning",
-			desc = "Your <#RED>Attacks</> deal {rarity_text} <#RED>Hitstun</> to enemies.",
-			rarity_text_COMMON = "more",
-			rarity_text_EPIC = "even more",
-			rarity_text_LEGENDARY = "significantly more",
-		},
-
-		combo_wombo =
-		{
-			name = "Confidence Building",
-			desc = "Your <#RED>{name.concept_damage}</> is increased by an amount equal to {rarity_text} until it ends.",
-			rarity_text_EPIC = "your current <#RED>Hit Streak</>",
-			rarity_text_LEGENDARY = "<#RED>{name.powerdesc_double}</> your current <#RED>Hit Streak</>",
-		},
-
-
-		battle_fame =
-		{
-			name = "Surgical",
-			desc = "When combat ends, gain <#KONJUR>{name.i_konjur}</> equal to {rarity_text} in that clearing.",
-			rarity_text_COMMON = "your highest <#RED>Hit Streak</>",
-			rarity_text_EPIC = "<#RED>{name.powerdesc_double}</> your highest <#RED>Hit Streak</>",
-			rarity_text_LEGENDARY = "<#RED>{name.powerdesc_triple}</> your highest <#RED>Hit Streak</>",
-			new_highest_popup = "New high: %s",
-		},
-
-		streaking =
-		{
-			name = "Excitable",
-			desc = "Increase your <#RED>{name.concept_runspeed}</> by a percentage equal to {rarity_text}.",
-			rarity_text_COMMON = "your current <#RED>Hit Streak</>",
-			rarity_text_EPIC = "<#RED>{name.powerdesc_double}</> your current <#RED>Hit Streak</>",
-			rarity_text_LEGENDARY = "<#RED>{name.powerdesc_triple}</> your current <#RED>Hit Streak</>",
-		},
-
-		crit_streak =
-		{
-			name = "Piñata",
-			desc = "Increase your <#RED>Critical Chance</> by a percentage equal to {rarity_text}.",
-			rarity_text_EPIC = "your current <#RED>Hit Streak</>",
-			rarity_text_LEGENDARY = "<#RED>{name.powerdesc_double}</> your current <#RED>Hit Streak</>",
-		},
-
-		crit_movespeed =
-		{
-			name = "Ambush Predator",
-			desc = "Increase your <#RED>Critical Chance</> by a percentage equal to {rarity_text}.",
-			rarity_text_LEGENDARY = "<#RED>{name.powerdesc_double}</> your current <#RED>{name.concept_runspeed}</>",
-		},
-
-		lasting_power =
-		{
-			name = "Encore",
-			desc = "When a <#RED>Hit Streak</> ends, gain <#RED>Critical Chance</> equal to that <#RED>Hit Streak</> for <#RED>{time}</> seconds.",
-		},
-
-		sting_like_a_bee =
-		{
-			name = "Sting Like a Bee",
-			desc = "When you <#RED>Perfect Dodge</>, the next time you deal <#RED>{name.concept_damage}</> is guaranteed to <#RED>Critical Hit</>."
-		},
-
-		advantage =
-		{
-			name = "Good First Impression",
-			desc = "Your <#RED>Attacks</> against enemies with <#RED>{desc} Health</> are guaranteed to <#RED>Critical Hit</>."
-		},
-
-		salted_wounds =
-		{
-			name = "Salted Wounds",
-			desc = "Your <#BLUE>{name_multiple.concept_focus_hit}</> have <#RED>+{bonus}% Critical Chance</>.",
-		},
-
-		crit_knockdown =
-		{
-			name = "High Ground",
-			desc = "Your <#RED>Attacks</> against enemies that are <#RED>Knocked Down</> have <#RED>+{chance}% Critical Chance</>."
-		},
-
-		heal_on_crit =
-		{
-			name = "Morale Booster",
-			desc = "When you <#RED>Critical Hit</>, <#RED>Heal</> for <#RED>{heal}</>.",
-		},
-
-
-		konjur_on_crit =
-		{
-			name = "Jackpot",
-			desc = "<#RED>Critical Hits</> drop <#KONJUR>{konjur} {name.i_konjur}</>."
-		},
-
-		-- reprieve =
-		-- {
-		-- 	name = "Reprieve",
-		-- 	desc = "<#RED>Hit Streaks</> decay {percent}% slower.",
-		-- },
-
-		sanguine_power =
-		{
-			name = "Sanguine Power",
-			desc = "Each time you <#RED>Kill</> an enemy, gain <#RED>+{bonus}% Critical Chance</> for <#RED>{time}</> seconds.",
-		},
-
-		feedback_loop =
-		{
-			name = "Feedback Loop",
-			desc = "Each time you <#RED>Critical Hit</>, gain <#RED>+{bonus}% Critical Chance</> for <#RED>{time}</> seconds."
-		},
-
-		-- crit_to_crit_damage =
-		-- {
-		-- 	name = "Crit to Crit Damage",
-		-- 	desc = "Increase the <#RED>Critical Damage</> of attacks by the <#RED>Critical Chance</> of the attack."
-		-- },
-
-		bad_luck_protection =
-		{
-			name = "Get'em Next Time",
-			desc = "Gain <#RED>+{bonus}% Critical Chance</> each time you hit something.\n\nResets when you <#RED>Critical Hit</>."
-		},
-
-		-- critical_roll =
-		-- {
-		-- 	name = "Counter Argument",
-		-- 	desc = "Each time you <#RED>Perfect Dodge</>, gain <#RED>+{bonus}% Critical Chance</> for <#RED>{time}</> seconds."
-		-- },
-
-		optimism =
-		{
-			name = "Healthy Optimism",
-			desc = "Each time you <#RED>Heal</>, gain <#RED>+{bonus}% Critical Chance</> for <#RED>{time}</> seconds."
-		},
-
-		pick_of_the_litter =
-		{
-			name = "Pick of the Litter",
-			-- desc_EPIC = "When you activate a <#RED>{name.concept_relic}</>, choose from <#RED>{count}</> more option.",
-			desc_LEGENDARY = "When you activate a <#RED>{name.concept_relic}</>, choose from <#RED>{count}</> more option.",
-		},
-
-		-- stronger_counter_hits =
-		-- {
-		-- 	name = "Counter Puncher",
-		-- 	desc = "Your attacks that land during an enemy's attack startup deal <#RED>+{bonus}% Damage</>."
-		-- },
-
-		free_upgrade =
-		{
-			name = "First One's Free",
-			desc = "Whenever you get a new <#RED>Power</>, upgrade it once."
-		},
-
-		shrapnel =
-		{
-			name = "Shrapnel",
-			desc = "Anything you break in the environment shatters into <#RED>{projectiles} Projectiles</> that deal <#RED>{damage} {name.concept_damage}</> each.",
-		},
-
-		analytical =
-		{
-			name = "Lil' Schemer",
-			desc = "If you do not <#RED>Attack</> for <#RED>{seconds}</> seconds, your next <#RED>Attack</> gains <#RED>+{percent}% {name.concept_damage}</>.",
-		},
-
-		dont_whiff =
-		{
-			name = "Strength of Conviction",
-			desc = "Your <#RED>Light Attack</> deals an extra <#RED>{otherdamage} {name.concept_damage}</>, but inflicts <#RED>{selfdamage} {name.concept_damage}</> to you when you miss.",
-		},
-
-		dizzyingly_evasive =
-		{
-			name = "Acrobat",
-			desc = "Your <#RED>Dodge</> can be chained into itself infinitely.",
-		},
-
-		carefully_critical =
-		{
-			name = "Light Precision",
-			desc = "When you land a <#RED>Light Attack</>, gain <#RED>+{bonus}% Critical Chance</>.\n\nWhen you miss with a <#RED>Light Attack</>, reset the bonus.",
-		},
-
-		reflective_dodge =
-		{
-			name = "I'm Rubber, You're Glue",
-			desc = "When you <#RED>Dodge</>, reflect <#RED>{percent}% {name.concept_damage}</> taken for the next <#RED>{time}</> seconds.",
-		},
-
-		ping =
-		{
-			name = "Ping!",
-			desc = "When you <#RED>Light Attack</>, your next <#RED>Attack</> deals double <#RED>{name.concept_damage}</> if it's a <#RED>Heavy Attack</>."--but <#RED>Half Damage</> if it's another <#RED>Light Attack</>.",
-		},
-
-		pong =
-		{
-			name = "Pong!",
-			desc = "When you <#RED>Heavy Attack</>, your next <#RED>Attack</> deals double <#RED>{name.concept_damage}</> if it's a <#RED>Light Attack</>."--but <#RED>Half Damage</> if it's another <#RED>Heavy Attack</>.",
-		},
-
-		-- Skill-specific Powers
-		moment37 =
-		{
-			-- Parry
-			name = "Thirty-Seven", -- from EVO Moment #37, famous fighting game parry
-			desc = "When you <#RED>Parry</>, gain <#RED>100% Critical Chance</> for an extra <#RED>{time}</> seconds.",
-		},
-
-		jury_and_executioner =
-		{
-			-- Hammer Thump - "Order in the Court"
-			name = "Jury and Executioner",
-			desc = "<#RED>Order in the Court</> deals <#RED>{damage_per_consecutive_hit} {name.concept_damage}</> for each consecutive hit.",
-		},
-
-		loot_increase_rarity_loot_chance = {
-			-- Loot powers:
-			COMMON = "more likely",
-			EPIC = "<i>much</i> more likely",
-			LEGENDARY = "<i>significantly</i> more likely",
-			-- We can't really show any meaningful numbers to the players because of the way our loot system works, unfortunately.
-			-- If we want to show numbers instead of "more likely / much more likely / etc", we'll need to find a way to make it grokable.
-		},
-
-		loot_increase_cabbageroll =
-		{
-			name = "Bloomin' {name_multiple.cabbageroll}",
-			desc = "<#RED>{name_multiple.cabbageroll}</> are {loot_chance} to drop <#RED>Materials</> when felled.",
-		},
-		loot_increase_blarmadillo =
-		{
-			name = "Bloated {name_multiple.blarmadillo}",
-			desc = "<#RED>{name_multiple.blarmadillo}</> are {loot_chance} to drop <#RED>Materials</> when felled.",
-
-		},
-
-		max_health_wanderer =
-		{
-			name = "Tendrel", -- jambell name, please ask before changing
-			desc = "Increase <#RED>Maximum Health</> by <#RED>{health}</>."
-		},
-
-		-- REVIVE POWERS:
-		-- Multiplayer-only powers which get triggered when you revive someone.
-		-- do we have macros for revive, 'ally', etc?
-		-- JAMBELL we do now: {name.concept_ally} {name.concept_revive}
-		revive_gain_konjur =
-		{
-			name = "Grave Robber",
-			desc = "When you <#RED>{name.concept_revive}</> an {name.concept_ally}, gain <#KONJUR>{konjur} {name.i_konjur}</>."
-		},
-
-		revive_explosion =
-		{
-			name = "Phoenix Burst",
-			desc = "When you <#RED>{name.concept_revive}</> an {name.concept_ally}, deal <#RED>{damage} {name.concept_damage}</> to all enemies.",
-		},
-
-		revive_damage_bonus =
-		{
-			name = "Lich King",
-			desc = "When you <#RED>{name.concept_revive}</> an {name.concept_ally}, gain <#RED>+{percent_per_revive}% {name.concept_damage}</> for the rest of the {name.run}." --what doesnt kill you makes me stronger :)
-		},
-
-		revive_borrow_power =
-		{
-			name = "Departing Gift", --Dearly Departing Gift too wordy?
-			desc = "When you <#RED>{name.concept_revive}</> an {name.concept_ally}, copy <#RED>{powers_borrowed} {name.concept_relic}</> from their loadout for the rest of the {name.dungeon_room}.",
-			--JAMBELL i imagine this one'll upgrade to copy more powers --kris
-			--rarity_text_COMMON = "<#RED>{powers_borrowed} {name.concept_relic}</>",
-			--rarity_text_EPIC = "<#RED>{powers_borrowed} {name_multiple.concept_relic}</>",
-		},
-	},
-
-	SKILL = {
-		parry =
-		{
-			name = "Parry",
-			desc = "Nullify an incoming <#RED>Attack</> to gain a brief window of <#RED>100% Critical Chance</>."
-		},
-
-		buffnextattack =
-		{
-			name = "Fist Pound", -- This buffs the entire attack, not just until the critical hit. An entire swing will have the buff. Should maybe change to simplify.
-			desc = "Pound your fists together to gain <#RED>+{stackspertrigger}% Critical Chance</> until your next <#RED>Critical Hit</>.",
-		},
-
-		bananapeel =
-		{
-			name = "Banana Peel",
-			desc = "<#RED>Heals</> for <#RED>{heal} Health</> when eaten.\n\nLeaves behind a <#RED>Banana Peel</> that inflicts <#RED>Knock Down</> on any target that steps on it.\n\nRegain <#RED>1 Banana</> for every <#RED>{damage_til_new_banana} {name.concept_damage}</> dealt.",
-		},
-
-		throwstone =
-		{
-			name = "Throw Stone",
-			desc = "Throw a stone <#RED>Projectile</> which deals your <#RED>Weapon {name.concept_damage}</>.",
-		},
-
-		-- POLEARM
-		polearm_shove =
-		{
-			name = "Crosscheck",
-			desc = "Push an enemy away from you, creating space.",
-		},
-
-		polearm_vault =
-		{
-			name = "Pole Vault",
-			desc = "Launch yourself over an obstacle or enemy to help with positioning.",
-		},
-
-		-- SHOTPUT
-		shotput_summon =
-		{
-			name = "Direct Recall", -- Use skill to summon the ball to your hands, which travels quickly horizontally towards you hitting anything in its way
-			desc = "Your <#RED>{name.weapon_shotput}</> surges toward you in a straight line, causing <#RED>{name.concept_damage}</> to all targets in its path.",
-		},
-
-		shotput_recall =
-		{
-			name = "Arcing Recall", -- Use skill to summon the ball to your hands, which travels in an arc and can land on any enemies if you don't catch it.
-			desc = "Your <#RED>{name.weapon_shotput}</> returns to you in a high arc, causing <#RED>{name.concept_damage}</> to all targets it lands on if not caught.",
-		},
-
-		shotput_seek =
-		{
-			name = "Reverse Recall", -- Use skill to throw yourself towards your ball, tackling anything along the way.
-			desc = "Launch yourself toward your <#RED>{name.weapon_shotput}</>, causing <#RED>{name.concept_damage}</> to all targets in your path.",
-		},
-
-		-- HAMMER
-		hammer_thump =
-		{
-			name = "Order in the Court",
-			desc = "Pound the head of your <#RED>{name.weapon_hammer}</> into the ground, causing <#RED>Knockback</> to any nearby enemies.\n\nHold <#RED>Skill</> to charge.",
-		},
-
-		hammer_totem =
-		{
-			name = "Hazard Idol",
-			desc = "Sacrifice <#RED>{healthtocreate} Health</> to summon a Hazard Idol.\n\n<#RED>Everything</> in a large radius of the Idol deals <#RED>+{bonusdamagepercent}% {name.concept_damage}</>.\n\nThe Idol <#RED>Heals</> its destroyer for <#RED>{healthtocreate} Health</>.",
-		},
-
-		-- CANNON
-		cannon_butt =
-		{
-			name = "Battering Ram",
-			desc = "Hit an enemy with the butt of your <#RED>{name.weapon_cannon}</>.\n\nOn hit, <#RED>Gain 1 {name.cannon_ammo}</>.",
-		},
-
-
-		--BOSSES
-		-- MOTHER TREEK
-		megatreemon_weaponskill =
-		{
-			name = "Mother of Methuselah",
-			desc = "Summon a line of <#RED>{name.megatreemon}</> roots.",
-		},
-	},
-
-	EQUIPMENT = {
-		-- basic
-		equipment_basic_head =
-		{
-			name = "equipment_basic_head",
-			desc = "Increase your <#RED>{name.powerdesc_maxhealth}</>.",
-		},
-		equipment_basic_body =
-		{
-			name = "equipment_basic_body",
-			desc = "Increase your <#RED>{name.powerdesc_maxhealth}</>.",
-		},
-		equipment_basic_waist =
-		{
-			name = "equipment_basic_waist",
-			desc = "Increase your <#RED>{name.powerdesc_maxhealth}</>.",
-		},
-
-		-- cabbageroll
-		equipment_cabbageroll_head =
-		{
-			name = "equipment_cabbageroll_head",
-			desc = "Your <#RED>{name.concept_dodge}</> deals a <#RED>Knockback</> hit to enemies.", --\nYour <#RED>Dodge</> temporarily increases your <#RED>{name.concept_runspeed}</>.",
-		},
-		equipment_cabbageroll_body =
-		{
-			name = "equipment_cabbageroll_body",
-			desc = "Your <#RED>{name.concept_dodge}</> is <#RED>Invincible</> for longer.",
-			--Your <#BLUE>Focus Attacks</> deal extra <#RED>{name.concept_damage}</>.
-		},
-		equipment_cabbageroll_waist =
-		{
-			name = "equipment_cabbageroll_waist",
-			desc = "Your <#RED>{name.concept_dodge}</> is faster.",
-		},
-
-		-- blarma
-		equipment_blarmadillo_head =
-		{
-			name = "equipment_blarmadillo_head",
-			desc = "Take less <#RED>{name.concept_damage}</> from <#RED>Projectiles</>.",
-		},
-		equipment_blarmadillo_body =
-		{
-			name = "equipment_blarmadillo_body",
-			desc = "Take less <#RED>{name.concept_damage}</> from <#RED>{name_multiple.rot_miniboss}</>.",
-		},
-		equipment_blarmadillo_waist =
-		{
-			name = "equipment_blarmadillo_waist",
-			desc = "Take less <#RED>{name.concept_damage}</> from <#RED>Traps</>.",
-		},
-
-		-- battoad
-		equipment_battoad_head =
-		{
-			name = "equipment_battoad_head",
-			desc = "When you gain <#KONJUR>{name.i_konjur}</>, gain more.",
-		},
-		equipment_battoad_body =
-		{
-			name = "equipment_battoad_body",
-			desc = "When you take <#RED>Damage</>, lose <#KONJUR>{name.i_konjur}</> and <#RED>Heal</> back some of the <#RED>{name.concept_damage}</> taken.",
-		},
-		equipment_battoad_waist =
-		{
-			name = "equipment_battoad_waist",
-			desc = "Gain <#KONJUR>{name.i_konjur}</> when breaking anything in the environment.", --TODO: come up with strong keyword for "destructible props but NOT traps/windmon projectiles"
-		},
-
-		-- battoad
-		equipment_windmon_head =
-		{
-			name = "equipment_windmon_head",
-			desc = "When you <#RED>{name.concept_dodge}</>, create a gust of <#RED>Wind</> behind you.",
-			variables =
-			{
-				wind_strength = "Wind Strength"
-			}
-		},
-		equipment_windmon_body =
-		{
-			name = "equipment_windmon_body",
-			desc = "When you <#RED>Perfect {name.concept_dodge}</>, drop a <#RED>{name.windmon} Spikeball</> behind you.",
-			variables =
-			{
-				number_of_balls = "Number of Spikeballs"
-			}
-		},
-		equipment_windmon_waist =
-		{
-			name = "equipment_windmon_waist",
-			desc = "Gain <#RED>Wind Resistance</> while standing still.",
-			variables =
-			{
-				wind_resistance = "Wind Resistance",
-			}
-		},
-
-		-- gnarlic
-		equipment_gnarlic_head =
-		{
-			name = "equipment_gnarlic_head",
-			desc = "Your run becomes an <#RED>{name.concept_attack}</> that deals <#RED>{name.concept_damage}</> based on how fast you are moving.",
-		},
-		equipment_gnarlic_body =
-		{
-			name = "equipment_gnarlic_body",
-			desc = "Gain bonus <#RED>{name.concept_runspeed}</> for each second you spend running in a single direction.",
-		},
-		equipment_gnarlic_waist =
-		{
-			name = "equipment_gnarlic_waist",
-			desc = "Your <#RED>{name.concept_dodge}</> travels farther.",
-			variables =
-			{
-				percent_distance_bonus = "{name.concept_dodge} Distance",
-			}
-		},
-
-
-		-- groak
-		equipment_groak_head =
-		{
-			name = "equipment_groak_head",
-			desc = "Enemies are <#RED>Stunned</> longer by your <#RED>Heavy {name_multiple.concept_attack}</>.",
-		},
-		equipment_groak_body =
-		{
-			name = "equipment_groak_body",
-			desc = "Your <#RED>Heavy {name_multiple.concept_attack}</> pull enemies towards you.",
-		},
-		equipment_groak_waist =
-		{
-			name = "equipment_groak_waist",
-			desc = "You have a chance of negating the effect of any <#RED>Spore</>.",
-			variables =
-			{
-				chance = "Spore Negation Chance",
-			}
-		},
-
-		-- yammo
-		equipment_yammo_head =
-		{
-			name = "equipment_yammo_head",
-			desc = "Your <#BLUE>Heavy {name_multiple.concept_focus_hit}</> deal bonus <#RED>{name.concept_damage}</>.",
-		},
-		equipment_yammo_body =
-		{
-			name = "equipment_yammo_body",
-			desc = "Take less <#RED>{name.concept_damage}</> from <#RED>{name_multiple.rot_boss}</>.",
-		},
-		equipment_yammo_waist =
-		{
-			name = "equipment_yammo_waist",
-			desc = "Take less <#RED>{name.concept_damage}</> while you're not <#RED>Attacking</>.",
-		},
-		-- gourdo
-		equipment_gourdo_head =
-		{
-			name = "equipment_gourdo_head",
-			-- HELLOWRITER/jambell: This desc doesn't match the logic (which is bonus heal)
-			desc = "When you <#RED>Heal</>, heal again.",
-		},
-		equipment_gourdo_body =
-		{
-			name = "equipment_gourdo_body",
-			desc = "When you <#RED>Heal</>, heal all <#RED>{name_multiple.concept_ally}</> for a portion.",
-		},
-		equipment_gourdo_waist =
-		{
-			name = "equipment_gourdo_waist",
-			desc = "<#RED>Heal</> when you enter a new clearing.",
-		},
-		-- zucco
-		equipment_zucco_head =
-		{
-			name = "equipment_zucco_head",
-			desc = "Increase your <#RED>{name.concept_runspeed}</>.",
-			variables =
-			{
-				speed = "{name.concept_runspeed}",
-			},
-		},
-		equipment_zucco_body =
-		{
-			name = "equipment_zucco_body",
-			desc = "Your <#BLUE>{name_multiple.concept_focus_hit}</> deal extra <#RED>{name.concept_damage}</>.",
-		},
-		equipment_zucco_waist =
-		{
-			name = "equipment_zucco_waist",
-			desc = "{NAME.powerdesc_nopower}",
-		},
-		-- megatreemon
-		equipment_megatreemon_head =
-		{
-			name = "equipment_megatreemon_head",
-			desc = "Deal increased <#RED>{name.concept_damage}</> to all <#RED>Regular {name_multiple.rot}</>.",
-		},
-		equipment_megatreemon_body =
-		{
-			name = "equipment_megatreemon_body",
-			desc = "Chance to summon a <#RED>Defensive Root</> when hit.",
-			variables =
-			{
-				chance_to_summon = "Summon Chance",
-				root_lifetime = "Root Lifetime",
-			},
-		},
-		equipment_megatreemon_waist =
-		{
-			name = "equipment_megatreemon_waist",
-			desc = "{NAME.powerdesc_nopower}",
-			variables =
-			{
-				chance_to_summon = "Summon Chance",
-				root_lifetime = "Root Lifetime",
-			},
-		},
-
-		-- owlitzer
-		equipment_owlitzer_head =
-		{
-			name = "equipment_owlitzer_head",
-			desc = "<#RED>{damage_per_stack} {name.concept_damage}</> to <#RED>Regular {name_multiple.rot}</>.",
-		},
-		equipment_owlitzer_body =
-		{
-			name = "equipment_owlitzer_body",
-			desc = "<#RED>{damage_per_stack} {name.concept_damage}</> to <#RED>Regular {name_multiple.rot}</>.",
-		},
-		equipment_owlitzer_waist =
-		{
-			name = "equipment_owlitzer_waist",
-			desc = "", -- HELLOWRITER
-		},
-
-		--mothball
-		equipment_mothball_head =
-		{
-			name = "equipment_mothball_head",
-			desc = "Deal more <#RED>{name.concept_damage}</> when fighting near an <#RED>{name.concept_ally}</>.",
-		},
-		equipment_mothball_body =
-		{
-			name = "equipment_mothball_body",
-			desc = "Take less <#RED>{name.concept_damage}</> when fighting near an <#RED>{name.concept_ally}</>.",
-		},
-		equipment_mothball_waist =
-		{
-			name = "equipment_mothball_waist",
-			desc = "Gain more <#RED>Health</> when healing near an <#RED>{name.concept_ally}</>.",
-		},
-
-		--eyev
-		equipment_eyev_head =
-		{
-			name = "equipment_eyev_head",
-			desc = "When you <#RED>Perfect {name.concept_dodge}</>, your attacker takes increased <#RED>{name.concept_damage}</> for a few seconds.",
-			variables =
-			{
-				debuff_stacks = "Debuff Stacks",
-			},
-		},
-		equipment_eyev_body =
-		{
-			name = "equipment_eyev_body",
-			desc = "When you <#RED>Perfect {name.concept_dodge}</>, gain increased <#RED>{name.powerdesc_critchance}</> for a few seconds.",
-		},
-		equipment_eyev_waist =
-		{
-			name = "equipment_eyev_waist",
-			desc = "Your <#RED>{name.concept_dodge}</> is faster and moves through objects.",
-		},
-
-		--bulbug
-		equipment_bulbug_head =
-		{
-			name = "equipment_bulbug_head",
-			desc = "When you break an enemy's <#RED>{name.concept_shield}</>, deal <#RED>{name.concept_damage}</> to the target anyway.",
-		},
-
-		equipment_bulbug_body =
-		{
-			name = "equipment_bulbug_body",
-			desc = "When you break an enemy's <#RED>{name.concept_shield}</>, gain <#RED>{name_multiple.concept_shield_seg}</>.",
-		},
-
-		equipment_bulbug_waist =
-		{
-			name = "equipment_bulbug_waist",
-			desc = "When you gain <#RED>{name.concept_shield}</>, instantly break it and deal <#RED>{name.concept_damage}</> in an area around you.",
-		},
-
-		-- floracrane
-		equipment_floracrane_head =
-		{
-			name = "equipment_floracrane_head",
-			desc = "<#RED>Critical Hits</> deal additional <#RED>{name.concept_damage}</>.",
-		},
-		equipment_floracrane_body =
-		{
-			name = "equipment_floracrane_body",
-			desc = "<#BLUE>{name_multiple.concept_focus_hit}</> have an increased <#RED>{name.powerdesc_critchance}</>.",
-		},
-		equipment_floracrane_waist =
-		{
-			name = "equipment_floracrane_waist",
-			desc = "{NAME.powerdesc_nopower}",
-		},
-		equipment_bandicoot_head =
-		{
-			name = "equipment_bandicoot_head",
-			desc = "Your <#RED>{name_multiple.concept_attack}</> have a chance to <#RED>{name.concept_multistrike}</>.",
-		},
-
-		equipment_bandicoot_body =
-		{
-			name = "equipment_bandicoot_body",
-			desc = "Your <#RED>{name_multiple.concept_attack}</> have a chance to <#RED>{name.concept_multistrike}</>.",
-		},
-		equipment_bandicoot_waist =
-		{
-			name = "equipment_bandicoot_waist",
-			desc = "{NAME.powerdesc_nopower}",
+			name = "{name.swarmy_elite} Arm",
+			desc = "Great for practicing arm wrestling.\n\nFound in: <#RED>{name.bandi_swamp}</>",
 		},
 	},
 
@@ -3112,33 +1800,53 @@ STRINGS.ITEMS =
 		refinery_1 =
 		{
 			name = "{name.station_refiner}",
-			desc = "Refine and Research Monster Materials"
+			desc = "Refine and Research Monster Materials."
 		},
 		refinery =
 		{
 			name = "{name.station_refiner}",
-			desc = "Refine and Research Monster Materials"
+			desc = "Refine and Research Monster Materials."
 		},
 
-		dojo_1 =  -- WRITER
+		dojo_1 = 
 		{
 			name = "{name.station_dojo}",
-			desc = "Learn how to fight stuff!"
+			desc = "Advance Masteries and learn to fight."
 		},
 
-		marketroom_shop = -- WRITER
+		marketroom_shop = 
 		{
 			name = "{name.station_marketroom_shop}",
-			desc = "Buy stuff!",
+			desc = "",
 		},
 	},
 
-	PLACEABLE_PROP =
-	{
+	--[[BEAUTIFUL WRITER FRIENDS LOOK HERE:
 
-	},
+		Here's a list of furniture words, feel free to grab from it or use them as a jumping off point :)
+		It's okay to mix modern and medieval terms in our game.
 
-	FURNISHINGS = {
+		CHAIRS
+		-Chair			-Stool
+		-Seat			-Loveseat
+		-Divan			-Armchair
+		-Desk Chair 	-Rocking Chair
+		-Recliner		-Wishbone Chair
+		-Cushion
+
+		BENCHES
+		-Bench			-Pew
+		-Lounge			-Chesterfield
+		-Couch			-Sofa
+
+		BEDS
+		-Bed 			-Daybed
+		-Futon			-Bunk
+		-Mattress		-Tatami Mat
+		-Bunk Bed 		-Four-Poster Bed
+	]]
+
+	STRUCTURES = {
 		dummy_bandicoot =
 		{
 			name = "{name.bandicoot} Dummy",
@@ -3181,87 +1889,498 @@ STRINGS.ITEMS =
 		},
 		kitchen_chair =
 		{
-			name = "Kitchen chair",
+			name = "Kitchen Chair",
 			desc = "Sit down when you're hungry",
 		},
-		outdoor_seating_stool =
-		{
-			name = "Outdoor Stool",
-			desc = "Like an indoor stool, but with extra steps",
-		},
+		
 		outdoor_seating =
 		{
-			name = "Outdoor seating",
-			desc = "A chill place to chill",
+			name = "Outdoor Seating",
+			desc = "A chill place to chill.",
 		},
 		character_customizer_vshack =
 		{
 			name = "Vanity",
 			desc = "Allows you to customize your character"
-		}
+		},
+
+		-- Basic Set + Dungeon-Specific Sets
+		bench_basic =
+		{
+			name = "Hewn Bench",
+			desc = "Just an old, reliable bench.",
+		},
+		chair_basic =
+		{
+			name = "Hewn Chair",
+			desc = "A perfectly good wicker chair.",
+		},
+		street_lamp = 
+		{
+			name = "Mason Jar Lamp",
+			desc = "You don't need to get fancy to make a place feel like home.",
+		},
+		lamp_basic =
+		{
+			name = "Hewn Lamp",
+			desc = "Good for lighting garden paths.",
+		},
+		bed_basic =
+		{
+			name = "Hewn Cot",
+			desc = "A decent spot to get some shut-eye."
+		},
+		outdoor_seating_basic =
+		{
+			name = "Hewn 'Brelly Table",
+			desc = "A content place to drink your morning brew."
+		},
+		stool_outdoor_seating_basic =
+		{
+			name = "Hewn Stool",
+			desc = "That right there's a stool for sittin'.",
+		},
+
+		-- Megatreemon
+		bench_forest_1 =
+		{
+			name = "Woodland Bench",
+			desc = "There's cobwebs lurking beneath the pillow.",
+		},
+		chair_forest_1 =
+		{
+			name = "Woodland Chair",
+			desc = "The underside houses a bustling community of happy pillbugs.",
+		},
+		lamp_forest_1 =
+		{
+			name = "Woodland Pathway Light",
+			desc = "A shining beacon for both moths and crane flies.",
+		},
+		bed_forest_1 =
+		{
+			name = "Woodland Bed",
+			desc = "The comforter is always slightly damp with dew."
+		},
+		outdoor_seating_forest_1 =
+		{
+			name = "Woodland Garden Table",
+			desc = "Cozy, but the table runner is dotted with old pine needles."
+		},
+		stool_outdoor_seating_forest_1 =
+		{
+			name = "Woodland Stool",
+			desc = "Always gets your butt wet, even when it looks dry.",
+		},
+
+		-- Owlitzer
+		bench_forest_2 =
+		{
+			name = "Chiseled Bench",
+			desc = "Sitting on it fills you with a chill, reminiscent of the grove.",
+		},
+		chair_forest_2 =
+		{
+			name = "Chiseled Chair",
+			desc = "Yes, your butt will be sore.",
+		},
+		lamp_forest_2 =
+		{
+			name = "Chiseled Lantern",
+			desc = "To light your way in the perpetual twilight.",
+		},
+		bed_forest_2 =
+		{
+			name = "Chiseled Nest",
+			desc = "Just close your eyes and pretend you're a warm, happy egg."
+		},
+		outdoor_seating_forest_2 =
+		{
+			name = "Chiseled 'Brelly Table",
+			desc = "Relax in the shade and pretend you're in <#BLUE>{name.owlitzer_forest}</>."
+		},
+		stool_outdoor_seating_forest_2 =
+		{
+			name = "Chiseled Stool",
+			desc = "Step stool? Foot stool? Sitting stool?\nThe possibilities are endless.",
+		},
+
+		-- Bandicoot
+		bench_swamp_1 =
+		{
+			name = "Boggy Chaise Lounge",
+			desc = "You'll faint cozily onto it after getting that whiff of bog stench.",
+		},
+		chair_swamp_1 =
+		{
+			name = "Boggy Wingback Chair",
+			desc = "Perfectly remembers the shape of the butt that last sat on it.",
+		},
+		lamp_swamp_1 =
+		{
+			name = "Boggy Candelabra",
+			desc = "Light your town with that signature <#BLUE>Blisterbane</> glow.",
+		},
+		bed_swamp_1 =
+		{
+			name = "Boggy Bed",
+			desc = "Schlorp yourself into bed and curl up in a nice slime mould blankie."
+		},
+		outdoor_seating_swamp_1 =
+		{
+			name = "Boggy Courtyard Table",
+			desc = "Block out that harsh sun with this perfectly repurposed 'shroom.",
+		},
+		stool_outdoor_seating_swamp_1 =
+		{
+			name = "Boggy Foot Rest",
+			desc = "Kick up your feet after a long day's Hunt.",
+		},
+
+		-- Thatcher
+		bench_swamp_2 =
+		{
+			name = "Fen Garden Bench",
+			desc = "Take a seat, it's nice and squishy.",
+		},
+		chair_swamp_2 =
+		{
+			name = "Fen Swivel Chair",
+			desc = "Weee!",
+		},
+		lamp_swamp_2 =
+		{
+			name = "Fen Reading Lamp",
+			desc = "Do a lil reading, under a lily.",
+		},
+		bed_swamp_2 =
+		{
+			name = "Fen Bed",
+			desc = "Sleep like a distinguished froggy gentleman under your lily pad blanket.",
+		},
+		outdoor_seating_swamp_2 =
+		{
+			name = "Fen 'Brelly Table",
+			desc = "The umbrella's more about style than function.",
+		},
+		stool_outdoor_seating_swamp_2 =
+		{
+			name = "Fen Stool",
+			desc = "Mushroom-shaped and perfect for a toad to sit on.",
+		},
+
+		fence_stone =
+		{
+			name = "Stone Wall",
+			desc = "Give your town the pastoral look.",
+		},
+		r_fence_stone =
+		{
+			name = "Stone Wall (R)",
+			desc = "The right facing L-piece for a Stone Wall.",
+		},
+		l_fence_stone =
+		{
+			name = "Stone Wall (L)",
+			desc = "The left facing L-piece for a Stone Wall.",
+		},
+
+		fence_iron =
+		{
+			name = "Iron Fence",
+			desc = "Now look what you've wrought.",
+		},
+		r_fence_iron =
+		{
+			name = "Iron Fence (R)",
+			desc = "The right facing L-piece for an Iron Fence.",
+		},
+		l_fence_iron =
+		{
+			name = "Iron Fence (L)",
+			desc = "The left facing L-piece for an Iron Fence.",
+		},
+
+		rugged_weapon_rack =
+		{
+			name = "Rustic Weapon Rack",
+			desc = "Comes complete with two decorative spears and an equally decorative greatsword.",
+		},
+		rustic_weapon_rack =
+		{
+			name = "Rugged Weapon Rack",
+			desc = "Decorative greatsword, hammer and spear included.",
+		},
+
+		bread_basket =
+		{
+			name = "Bread Basket",
+			desc = "Comes with unlimited refills.\nToo bad you can't eat it.",
+		},
+		fruit_basket =
+		{
+			name = "Fruit Basket",
+			desc = "Are those real?",
+		},
+		straw_wooden_cart =
+		{
+			name = "Straw Cart",
+			desc = "Looks like a delightful (if itchy) place to nap.",
+		},
+		wood_wooden_cart =
+		{
+			name = "Wood Cart",
+			desc = "Gotta haul logs around somehow.",
+		},
+		hammock_basic =
+		{
+			name = "Lazy Hammock",
+			desc = "Just relax.",
+		},
+
+		megatreemon_town_bossstatue = 
+		{
+			name = "Idol of {name.megatreemon}",
+			desc = "May she watch over us as she once watched over the forest.",
+		},
+
+		owlitzer_town_bossstatue = 
+		{
+			name = "Idol of {name.owlitzer}",
+			desc = "A place to hold night vigil for a worthy adversary.",
+		},
+
+		bandicoot_town_bossstatue = 
+		{
+			name = "Idol of {name.bandicoot}",
+			desc = "May she share her cunning, if only in spirit.",
+		},
+
+		thatcher_town_bossstatue = 
+		{
+			name = "Idol of {name.thatcher}",
+			desc = "Memorialized as a rock idol.\nJust as they would have wanted.",
+		},
 	},
 
 	DECOR = {
-		flower_bush =
+		--PLUSHIES--
+		------------------------------------------------------------------------
+		plushies_stack =
+		{
+			name = "Plushie Pile",
+			desc = "It's BEGGING you to jump in.",
+		},
+
+		--BOSSES
+		thatcher_lrg_plushies =
+		{
+			name = "{name.thatcher} Plushie",
+			desc = "It's <#RED>{NAME.thatcher}</>, the fuzzy bug that really rocks!\n<z 0.8>(Guitar-Scythe sold separately, batteries not included.)</>",
+		},
+		megatreemon_lrg_plushies =
+		{
+			name = "{name.megatreemon} Plushie",
+			desc = "She's the little <#RED>{name_multiple.treemon}'</> mama.",
+		},
+		owlitzer_lrg_plushies =
+		{
+			name = "{name.owlitzer} Plushie",
+			desc = "It has a little pocket under the scruff to hold dried lavender.",
+		},
+		bandicoot_lrg_plushies =
+		{
+			name = "{name.bandicoot} Plushie",
+			desc = "Who's laughing now?",
+		},
+
+		--MINIBOSSES
+		yammo_mid_plushies =
+		{
+			name = "{name.yammo} Plushie",
+			desc = "Not so threatening now, is it?",
+		},
+		gourdo_mid_plushies =
+		{
+			name = "{name.gourdo} Plushie",
+			desc = "A chunky boy who gives great hugs.", wooden_cart =
+		{
+			name = "Wooden Cart",
+			desc = "Take a pleasant ride, once you're finally awake.",
+		},
+		},
+		zucco_sm_plushies =
+		{
+			name = "{name.zucco} Plushie",
+			desc = "Look'it that stout lil sauerkraut!",  
+		},
+		trio_mid_plushies =
+		{
+			name = "Rotrioshka",
+			desc = "It's <#RED>{name_multiple.rot}</>, all the way down.",
+		},
+		floracrane_mid_plushies =
+		{
+			name = "{name.floracrane} Plushie",
+			desc = "Doubles as a cozy scarf.",  
+		},
+		groak_mid_plushies =
+		{
+			name = "{name.groak} Plushie",
+			desc = "A charming lad who really draws you in.",  
+		},
+
+		--REGULAR ROTS
+		--great rotwood forest
+		beets_sm_plushies =
+		{
+			name = "{name.beets} Plushie",
+			desc = "There it is. The perfect little guy.",  
+		},
+		cabbageroll_sm_plushies =
+		{
+			name = "{name.cabbageroll} Plushie",
+			desc = "Don't forget to SMILE!",  
+		},		
+		blarmadillo_sm_plushies =
+		{
+			name = "{name.blarmadillo} Plushie",
+			desc = "Shhh! She's sleeping.",  
+		},
+		treemon_sm_plushies =
+		{
+			name = "{name.treemon} Plushie",
+			desc = "Go on, hug it. It'd be rude not to.",  
+		},
+
+		--owl forest
+		gnarlic_sm_plushies =
+		{
+			name = "{name.gnarlic} Plushie",
+			desc = "Cute? Yes. Evil? Maybe.",  
+		},
+		battoad_sm_plushies =
+		{
+			name = "{name.battoad} Plushie",
+			desc = "Its stuffing is nice and lumpy.",  
+		},
+		windmon_mid_plushies =
+		{
+			name = "{name.windmon} Plushie",
+			desc = "Loves to be hung out the open window on roadtrips.",
+		},
+
+		--bandicoot swamp
+		mothball_sm_plushies =
+		{
+			name = "{name.mothball} Plushie",
+			desc = "Stuffed with real <#RED>{name.mothball}</>!",  
+		},
+		mothball_teen_mid_plushies =
+		{
+			name = "{name.mothball_teen} Plushie",
+			desc = "Little <#RED>{name.mothball}'s</> big bro.",  
+		},
+		bulbug_sm_plushies =
+		{
+			name = "{name.bulbug} Plushie",
+			desc = "Now <i>that's</i> a snugglebug.",  
+		},
+		eyev_sm_plushies =
+		{
+			name = "{name.eyev} Plushie",
+			desc = "This stuffed friend will keep an eye on you.",  
+		},
+		mossquito_sm_plushies =
+		{
+			name = "{name.mossquito} Plushie",
+			desc = "You can prank someone pretty good by hiding it in a fruit basket.",  
+		},
+		sporemon_sm_plushies =
+		{
+			name = "{name.sporemon} Plushie",
+			desc = "It rattles when shaken.",
+		},
+
+		--thatcher swamp
+		slowpoke_mid_plushies =
+		{
+			name = "{name.slowpoke} Plushie",
+			desc = "This <#RED>{name.slowpoke}'s</> bellyflops are more than welcome.",  
+		},
+		woworm_mid_plushies =
+		{
+			name = "{name.woworm} Plushie",
+			desc = "What a snuggly snail!",  
+		},
+		swarmy_sm_plushies =
+		{
+			name = "{name.swarmy} Plushie",
+			desc = "Machine washable, unlike the real thing.",
+		},
+		totolili_mid_plushies =
+		{
+			name = "{name.totolili} Plushie",
+			desc = "Real wire-posable arms!",
+		},
+
+
+		--REGULAR DECOR ITEMS--
+		------------------------------------------------------------------------
+		wooden_cart =
+		{
+			name = "Wooden Cart",
+			desc = "Take a pleasant ride, once you're finally awake.",
+		},
+		town_flower_bush =
 		{
 			name = "Bush Flower",
-			desc = "Something right pretty in vile land.",
+			desc = "Native wildflowers with a sweet scent.",
 		},
-		flower_violet =
+		town_flower_violet =
 		{
-			name = "Violet",
-			desc = "A violet amongst all the violence.",
+			name = "Violets",
+			desc = "Little purple flowers.\nNothing more, or less.",
+		},
+		town_flower_coralbell =
+		{
+			name = "Coral Bells",
+			desc = "A luscious, purple plant.\nRequires no watering.",
+		},
+		town_flower_bluebell =
+		{
+			name = "Bluebells",
+			desc = "A blue flower shaped like a bell.",
+		},
+		pergola =
+		{
+			name = "Pergola",
+			desc = "Rest a moment in the shade.\nYou deserve it.",
 		},
 		tree =
 		{
 			name = "Tree",
 			desc = "It's a tree.",
 		},
-		shrub =
+		town_shrub =
 		{
-			name = "Shrub",
-			desc = "It's a shrub.",
-		},
-		flower_bluebell =
-		{
-			name = "Bluebell",
-			desc = "A blue flower shaped like a bell.",
-		},
-
-		plushies_lrg =
-		{
-			name = "Thatcher Plushie",
-			desc = "Cute? Yes. Evil? Maybe.",
-		},
-		plushies_mid =
-		{
-			name = "Yammo Plushie",
-			desc = "Doesn't look as threatening now",
-		},
-		plushies_sm =
-		{
-			name = "Zucco Plushie",
-			desc = "SO CUTE",
-		},
-		plushies_stack =
-		{
-			name = "Rotrioshka",
-			desc = "It goes on forever",
+			name = "Bush",
+			desc = "A healthy shrub, free of <#KONJUR>{name.konjur}</> contamination.",
 		},
 		basket =
 		{
-			name = "Fruit Basket",
-			desc = "Are those real?",
+			name = "Woven Basket",
+			desc = "Handwoven by delicate paws.",
 		},
 		bulletin_board =
 		{
-			name = "Bulleting Board",
-			desc = "A place to put down notices",
+			name = "Bulletin Board",
+			desc = "A place to post notices.",
 		},
 		bread_oven =
 		{
 			name = "Bread Oven",
-			desc = "If only we had a baker",
+			desc = "Smells delicious, even when it's not burning.",
 		},
 		dye1 =
 		{
@@ -3293,11 +2412,6 @@ STRINGS.ITEMS =
 			name = "Tanning Rack",
 			desc = "Kinda Tan",
 		},
-		pergola =
-		{
-			name = "Pergola",
-			desc = "Rest in the shade and smell the flowers",
-		},
 		stone_lamp =
 		{
 			name = "Stone Lamp",
@@ -3320,35 +2434,73 @@ STRINGS.ITEMS =
 		},
 		well =
 		{
-			name = "Well",
+			name = "Water Well",
 			desc = "Well, well, well, what do we have here?",
-		},
-		wooden_cart =
-		{
-			name = "Wooden Cart",
-			desc = "Pretty self-explanatory I think",
 		},
 	},
 
 	BIOME_EXPLORATION =
 	{
-		forest =
+		treemon_forest =
 		{
-			name = "{name.forest} Exploration",
-			desc = "Advance through expeditions to the <#RED>{name.treemon_forest}</> and <#RED>{name.owlitzer_forest}",
+			name = "{name.treemon_forest} Exploration",
+			desc = "Advance through expeditions to the <#RED>{name.treemon_forest}</>",
+		},
+		owlitzer_forest =
+		{
+			name = "{name.owlitzer_forest} Exploration",
+			desc = "Advance through expeditions to the <#RED>{name.owlitzer_forest}",
 		},
 
-		swamp =
+		bandi_swamp =
 		{
-			name = "{name.swamp} Exploration",
-			desc = "Advance through expeditions to <#RED>{name.kanft_swamp}</> and <#RED>{name.thatcher_swamp}</>",
+			name = "{name.bandi_swamp} Exploration",
+			desc = "Advance through expeditions to <#RED>{name.bandi_swamp}</>",
+		},
+		thatcher_swamp =
+		{
+			name = "{name.thatcher_swamp} Exploration",
+			desc = "Advance through expeditions to <#RED>{name.thatcher_swamp}</>",
 		},
 
-		tundra =
+		sedament_tundra =
 		{
-			name = "{name.tundra} Exploration",
+			name = "{name.sedament_tundra} Exploration",
 			desc = "Advance through expeditions to <#RED>{name.sedament_tundra}</>",
-		}
+		},
+	},
+
+	KONJUR_CONVERSION =
+	{
+		basic =
+		{
+			name = "{name.konjur} Conversion",
+			desc = "Convert {name.konjur} into {name.konjur_soul_lesser}."
+		},
+	},
+
+	WEAPON_UNLOCKS =
+	{
+		hammer =
+		{
+			name = "{name.weapon_hammer} Unlock",
+			desc = "Unlock the ability to use a {name.weapon_hammer}."
+		},
+		polearm =
+		{
+			name = "{name.weapon_polearm} Unlock",
+			desc = "Unlock the ability to use a {name.weapon_polearm}."
+		},
+		shotput =
+		{
+			name = "{name.weapon_shotput} Unlock",
+			desc = "Unlock the ability to use a {name.weapon_shotput}."
+		},
+		cannon =
+		{
+			name = "{name.weapon_cannon} Unlock",
+			desc = "Unlock the ability to use a {name.weapon_cannon}."
+		},
 	},
 
 	MONSTER_RESEARCH =
@@ -3475,71 +2627,139 @@ STRINGS.ITEMS =
 	{
 
 		-- ALL TEMP
-		-- KRIS, JAMBELL
 
 		----- HAMMER -----
+		GENERAL =
+		{
+			perfect_dodge =
+			{
+				name = "Perfect Dodge",
+				desc = "<#RED>Dodge</> an <#RED>Attack</> at the last second, leaving a cloud of dust.",
+			},
+			quick_rise =
+			{
+				name = "Quick Rise",
+				desc = "When getting <#RED>Knocked Down</>, <#RED>Dodge</> as you hit the ground to avoid staying down.",
+			},
+			dodge_cancel =
+			{
+				name = "Dodge Cancel",
+				desc = "<#RED>Dodge</> during the recovery of an <#RED>Attack</>.",
+			},
+			dodge_cancel_on_hit =
+			{
+				name = "Dodge Cancel Advanced",
+				desc = "<#RED>Dodge Cancel</> during the recovery of an <#RED>Attack</> that hit an enemy.",
+			},
+			dodge_cancel_perfect =
+			{
+				name = "Perfect Dodge Cancel",
+				desc = "<#RED>Dodge Cancel</> to evade an incoming <#RED>Attack</> at the last second.",
+			},
+			dodge_cancel_hitstreak =
+			{
+				name = "Dodge Cancel Hit Streak",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat that includes <#RED>{dodgecancels} Dodge Cancels</>.",
+			},
+			hitstreak_perfect_dodge =
+			{
+				name = "Perfect Dodge Cancel Hit Streak",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat that includes a <#RED>Perfect Dodge Cancel</>.",
+			},
+			hitstreak_props =
+			{
+				name = "Environmental Hit Streak",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat that includes {num_prophits} hits against Environmental Objects.",
+			},
+			critical_hit =
+			{
+				name = "Critical Hit",
+				desc = "Deal a <#ATK_CRIT>Critical Hit</> during combat. Increase your <#RED>Critical Hit Chance</> using {name_multiple.concept_relic}.",
+			},
+		},
+
 		HAMMER =
 		{
+			-- Focus Hits
+			hammer_focus_multiple_targets =
+			{
+				name = "Multiple Target {name_multiple.concept_focus_hit}",
+				desc = "Hit multiple targets at once to deal more damage with a <#BLUE>{name.concept_focus_hit}</>.",
+			},
+			hammer_air_spin =
+			{
+				name = "Combo {name_multiple.concept_focus_hit}",
+				desc = "Hit a target with a <#RED>Jumping Heavy Somersault</> (<p bind='Controls.Digital.ATTACK_LIGHT'> <p bind='Controls.Digital.ATTACK_LIGHT'>, hold <p bind='Controls.Digital.ATTACK_HEAVY'>) to get a <#BLUE>{name.concept_focus_hit}</>.",
+			},
 			hammer_focus_hits =
 			{
-				name = "Focus Hits",
-				desc = "Kill an enemy using a <#BLUE>{name.concept_focus_hit}</>",
+				name = "{name.weapon_hammer} {name_multiple.concept_focus_hit}",
+				desc = "Kill an enemy using any <#BLUE>{name.concept_focus_hit}</>.",
 			},
-
 			hammer_focus_hits_destructibles =
 			{
 				name = "Collateral Damage",
-				desc = "Get a <#BLUE>{name.concept_focus_hit}</> by hitting a Prop and an enemy at the same time", --kris
+				desc = "Get a <#BLUE>{name.concept_focus_hit}</> by hitting an <#RED>Environmental Object</> and an enemy at the same time.", --kris
 			},
+
+			hammer_hitstreak_basic =
+			{
+				name = "Basic Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.",
+			},
+			hammer_hitstreak_advanced =
+			{
+				name = "Advanced Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.",
+			},
+
 
 			-- BASIC MOVES
 			hammer_fading_light =
 			{
 				name = "Fading Lights",
-				desc = "Kill an enemy with a Fading Light", --TODO controls
+				desc = "Kill an enemy with a <#RED>Fading Light</>.", --TODO controls
 			},
-
+			hammer_thump =
+			{
+				name = "Order in the Court",
+				desc = "Hit at least {enemies} enemies with a fully charged <#RED>Order in the Court</> Skill.",
+			},
 			hammer_golf_swing =
 			{
 				name = "Golf Swings",
-				desc = "Kill an enemy with a Golf Swing", --TODO controls
-			},
-
-			hammer_air_spin =
-			{
-				name = "Jumping Heavy Somersault",
-				desc = "Kill an enemy with a Jumping Heavy Somersault", --TODO controls
+				desc = "Hit at least {enemies} enemies with a fully charged <#RED>Golf Swing</> (<p bind='Controls.Digital.DODGE'> <p img='images/ui_ftf/arrow_right.tex' scale=0.4> hold Backwards <p bind='Controls.Digital.ATTACK_HEAVY'>).", --TODO controls
 			},
 
 			hammer_lariat =
 			{
 				name = "Spinning Heavy Lariat",
-				desc = "Kill an enemy with a Spinning Heavy Lariat", --TODO controls
+				desc = "Kill an enemy with a <#RED>Spinning Heavy Lariat</>.", --TODO controls
 			},
 
 			hammer_heavy_slam =
 			{
 				name = "Standing Heavy Slam",
-				desc = "Kill an enemy with a Standing Heavy Slam", --TODO controls
+				desc = "Kill an enemy with a <#RED>Standing Heavy Slam</>.", --TODO controls
 			},
 
 			hammer_counterattack =
 			{
 				name = "Counter Attacks",
-				desc = "Kill an enemy while it is in the middle of an attack",
+				desc = "Kill an enemy while it is in the middle of an <#RED>Attack</>.",
 			},
 
 			-- ADVANCED MOVES
 			hammer_hitstreak_dodge_L =
 			{
-				name = "Hitstreak with Rolling Light",
-				desc = "Get a Hitstreak of 10 starting with a Rolling Light",
+				name = "Hitstreak with Rolling Lights",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat starting with a <#RED>Rolling Light Attack</>.",
 			},
 
 			hammer_hitstreak_fading_L =
 			{
 				name = "Hitstreak with Fading Light",
-				desc = "Get a Hitstreak of 10 featuring at least three Fading Lights",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat using at least <#RED>{fading_lights} Fading Light Attacks</> (<p bind='Controls.Digital.DODGE'> <p img='images/ui_ftf/arrow_right.tex' scale=0.4> Backwards <p bind='Controls.Digital.ATTACK_LIGHT'>).",
 			},
 		},
 
@@ -3549,125 +2769,310 @@ STRINGS.ITEMS =
 			polearm_focus_hits_tip =
 			{
 				name = "Tipped {name_multiple.concept_focus_hit}",
-				desc = "Kill an enemy using a <#BLUE>{name.concept_focus_hit}</>", --TODO
+				desc = "Hit a target with the tip of your Spear to deal more damage as a <#BLUE>{name.concept_focus_hit}</>.", --TODO
 			},
 
-			polearm_fading_light =
+			polearm_drill_multiple_enemies_basic =
 			{
-				name = "Fading Lights",
-				desc = "Kill an enemy with a Fading Light", --TODO controls
+				name = "Spinning Drill {name_multiple.concept_focus_hit}",
+				desc = "Hit multiple targets with a <#RED>Spinning Drill</> (<p bind='Controls.Digital.DODGE'>  <p img='images/ui_ftf/arrow_right.tex' scale=0.4>  <p bind='Controls.Digital.ATTACK_LIGHT'>) to deal more damage with a <#BLUE>{name.concept_focus_hit}</>.", --TODO controls
 			},
-
-			polearm_drill =
+			polearm_focus_kills =
 			{
-				name = "Spinning Drill",
-				desc = "Kill an enemy with a Spinning Drill", --TODO controls
+				name = "{name.weapon_polearm} {name_multiple.concept_focus_hit}",
+				desc = "Kill an enemy using any <#BLUE>{name.concept_focus_hit}</>.",
 			},
-
-			polearm_multithrust =
+			polearm_multithrust_focus =
 			{
-				name = "Multi-Thrust",
-				desc = "Kill an enemy with a Multi-Thrust", --TODO controls
+				name = "Multi-thrust Focus Hits",
+				desc = "Hit a target with a <#RED>Multi-thrust</> (<p bind='Controls.Digital.ATTACK_LIGHT'> <p bind='Controls.Digital.ATTACK_LIGHT'> <p bind='Controls.Digital.ATTACK_LIGHT'> <p bind='Controls.Digital.ATTACK_HEAVY'>) where all {num_hits} hits connect with the tip of the Spear.",
 			},
-
-			polearm_heavy_attack =
+			polearm_shove_counterattack =
 			{
-				name = "Jumping Heavy",
-				desc = "Kill an enemy with a Jumping Heavy", --TODO controls
+				name = "Cross Counter",
+				desc = "Hit an enemy with the <#RED>Crosscheck</> Skill (<p bind='Controls.Digital.SKILL'>) while it is in the middle of an <#RED>Attack</>.",
 			},
 
 			polearm_single_hit =
 			{
 				name = "One and Done",
-				desc = "Kill an enemy in a single attack", --TODO controls
+				desc = "Kill an enemy with a single <#RED>Attack</>.", --TODO controls
 			},
 
-			polearm_drill_multiple_enemies_basic =
+
+			polearm_fading_light =
 			{
-				name = "Spinning Drill x3",
-				desc = "Hit three enemies with a single Spinning Drill", --TODO controls
+				name = "Fading Lights",
+				desc = "Kill an enemy with a <#RED>Fading Light</>.", --TODO controls
+			},
+
+			polearm_drill =
+			{
+				name = "Spinning Drill",
+				desc = "Kill an enemy with a <#RED>Spinning Drill</>.", --TODO controls
+			},
+
+			polearm_multithrust =
+			{
+				name = "Multi-Thrust",
+				desc = "Kill an enemy with a <#RED>Multi-thrust</>.", --TODO controls
+			},
+
+			polearm_heavy_attack =
+			{
+				name = "Jumping Heavy",
+				desc = "Kill an enemy with a <#RED>Jumping Heavy</>.", --TODO controls
 			},
 
 			polearm_drill_multiple_enemies_advanced =
 			{
 				name = "Spinning Drill x5",
-				desc = "Hit 5 enemies with a single Spinning Drill", --TODO controls
+				desc = "Hit {num_enemies} targets with a single <#RED>Spinning Drill</>.", --TODO controls
 			},
 
 			polearm_hitstreak_basic =
 			{
-				name = "Drill Hitstreak Basic",
-				desc = "Get a Hitstreak of 15 featuring at least three Spinning Drills", --TODO controls
+				name = "Hitstreak Basic",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.", --TODO controls
 			},
 
 			polearm_hitstreak_advanced =
 			{
 				name = "Drill Hitstreak Advanced",
-				desc = "Get a Hitstreak of 30 featuring at least three Spinning Drills", --TODO controls
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat featuring at least <#RED>{num_drills} Spinning Drills</> (<p bind='Controls.Digital.DODGE'>  <p img='images/ui_ftf/arrow_right.tex' scale=0.4>  <p bind='Controls.Digital.ATTACK_LIGHT'>).", --TODO controls
 			},
 
 			polearm_hitstreak_expert =
 			{
 				name = "Drill Hitstreak Expert",
-				desc = "Get a Hitstreak of 100", --TODO
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.", --TODO
+			},
+		},
+
+		CANNON =
+		{
+			cannon_perfect_reload =
+			{
+				name = "Perfect Reload",
+				desc = "Press <p bind='Controls.Digital.DODGE'> <p bind='Controls.Digital.DODGE'> with good timing to <#RED>Reload</> quickly.",
+			},
+			cannon_butt_reload =
+			{
+				name = "Praetor Reload",
+				desc = "Hit a target with the <#RED>Battering Ram</> Skill (<p bind='Controls.Digital.SKILL'>) to regain <#RED>1 {name.cannon_ammo}</>.",
+			},
+			cannon_perfect_dodge =
+			{
+				name = "Perfect Dodge",
+				desc = "Press <p bind='Controls.Digital.ATTACK_HEAVY'> to <#RED>Dodge</> an <#RED>Attack</> at the last second, leaving a cloud of dust.",
+			},
+			cannon_quick_rise =
+			{
+				name = "Quick Rise",
+				desc = "When getting knocked down, press <p bind='Controls.Digital.ATTACK_HEAVY'> to <#RED>Dodge</> as you hit the ground to avoid staying down.",
+			},
+			cannon_focus =
+			{
+				name = "Focus Shots",
+				desc = "Shoot a target with the last half of your ammo clip to get a <#BLUE>Focus Hit</>.",
+			},
+			cannon_focus_shockwave =
+			{
+				name = "Focus Shockwave",
+				desc = "Create a <#RED>Shockwave</> (<p bind='Controls.Digital.DODGE'> <p img='images/ui_ftf/arrow_right.tex' scale=0.4> <p bind='Controls.Digital.ATTACK_LIGHT'>) with the last half of your ammo clip to get a <#BLUE>Focus Hit</> on an enemy.",
+			},
+
+			cannon_hitstreak_basic =
+			{
+				name = "Basic Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.",
+			},
+			cannon_hitstreak_heavy =
+			{
+				name = "Skilled Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat featuring at least <#RED>{num_butts} Battering Ram</> Skills and <#RED>{num_heavyhits} Heavy Attack</> pellets.",
+			},
+			cannon_hitstreak_advanced =
+			{
+				name = "Advanced Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.",
+			},
+		},
+
+		SHOTPUT =
+		{
+			shotput_focus_thrown =
+			{
+				name = "A Deadly Rhythm",
+				desc = "Throw (<p bind='Controls.Digital.ATTACK_HEAVY'>) a <#RED>Striker</> as you catch it to get a <#BLUE>{name.concept_focus_hit}</>.",
+			},
+
+			shotput_focus_spiked =
+			{
+				name = "Return to Sender",
+				desc = "Hit (<p bind='Controls.Digital.ATTACK_LIGHT'>) an airborne <#RED>Striker</> into a target to get a <#BLUE>{name.concept_focus_hit}</>.",
+			},
+
+			shotput_focus_kills =
+			{
+				name = "Surprise Headers",
+				desc = "Kill an enemy using any <#BLUE>{name.concept_focus_hit}</>.",
+			},
+
+			shotput_focus_rebound =
+			{
+				name = "Two Birds, one Striker",
+				desc = "Let a <#RED>Striker</> land on a target to get a <#BLUE>{name.concept_focus_hit}</>.",
+			},
+
+			shotput_recall = -- Skill Mastery
+			{
+				name = "Pass!",
+				desc = "Kill an enemy with a <#RED>Striker</> that you <#RED>Recalled</> (<p bind='Controls.Digital.SKILL'> or <p bind='Controls.Digital.ATTACK_HEAVY'>).",
+			},
+
+			shotput_juggle_melee_kill = -- Challenge Mastery
+			{
+				name = "Audience Interference",
+				desc = "Kill an enemy with a <#RED>Melee Attack</> while at least one of your <#RED>Strikers</> is airborne.",
+			},
+
+			-- Hitstreak Masteries
+
+			shotput_hitstreak_basic =
+			{
+				name = "Basic Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.",
+			},
+
+			shotput_hitstreak_melee =
+			{
+				name = "Into the Fray",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat that includes at least <#RED>{melee} Melee</> hits and <#RED>{striker} Striker</> hits.",
+			},
+
+			shotput_hitstreak_master =
+			{
+				name = "Masterful Hitstreaks",
+				desc = "Get a <#RED>{hitstreak}+ Hit Streak</> during combat.",
+			},
+
+			-- Hidden Masteries
+
+
+			shotput_juggle_10 =
+			{
+				name = "Master Juggler",
+				desc = "Get a <#RED>Juggle</> streak of 10 by <#RED>Throwing</> or <#RED>Spiking</> your <#RED>Strikers</> without stopping or letting them touch the ground.",
+			},
+
+			shotput_spiked_kick_knockdown =
+			{
+				name = "Poor Sportsmanship",
+				desc = "Kill an enemy using a <#BLUE>Focus Hit</> by kicking (<p bind='Controls.Digital.DODGE'> + <p img='images/ui_ftf/arrow_left.tex' scale=0.4> + <p bind='Controls.Digital.ATTACK_LIGHT'>) a <#RED>Rebounding</> <#RED>Striker</> at the peak of your kick.",
+			},
+
+			shotput_hitstreak_recall =
+			{
+				name = "Pass!",
+				desc = "Get a <#RED>20+ Hit Streak</> during combat that includes at least 2 <#RED>Recall</> (<p bind='Controls.Digital.SKILL'> or <p bind='Controls.Digital.ATTACK_HEAVY'>) hits.",
 			},
 		},
 	},
 
 	MONSTER_MASTERY =
 	{
-		CABBAGEROLL =
+		OTHER =
 		{
-			cabbageroll_kill =
+			megatreemon_kill =
 			{
-				name = "{name.cabbageroll} Kill",
-				desc = "Kill a {name.cabbageroll}",
+				name = "{name.megatreemon} Kill",
+				desc = "Kill the {name.megatreemon}.",
 			},
-			cabbageroll_kill_focus =
+			megatreemon_kill_ascension_1 =
 			{
-				name = "{name.cabbageroll} Focus Kill",
-				desc = "Kill a {name.cabbageroll} with a {name.concept_focus_hit}",
+				name = "{name.megatreemon} {name.ascension} 1",
+				desc = "Kill the {name.megatreemon} at {name.ascension} 1.",
 			},
-			cabbageroll_kill_quickly =
+			megatreemon_kill_ascension_2 =
 			{
-				name = "{name.cabbageroll} Quick Kill",
-				desc = "Kill a {name.cabbageroll} shortly after it enters the battle",
+				name = "{name.megatreemon} {name.ascension} 2",
+				desc = "Kill the {name.megatreemon} at {name.ascension} 2.",
 			},
-			cabbageroll_kill_flawless =
+			megatreemon_kill_ascension_3 =
 			{
-				name = "{name.cabbageroll} Flawless Kill",
-				desc = "Kill a {name.cabbageroll} without taking any <#RED>{name.concept_damage}</> from it",
+				name = "{name.megatreemon} {name.ascension} 3",
+				desc = "Kill the {name.megatreemon} at {name.ascension} 3.",
 			},
-			cabbageroll_kill_onehit =
+			owlitzer_kill =
 			{
-				name = "{name.cabbageroll} One Hit",
-				desc = "Kill a {name.cabbageroll} in a single attack",
+				name = "{name.owlitzer} Kill",
+				desc = "Kill the {name.owlitzer}.",
 			},
-			cabbageroll_kill_lightattack =
+			owlitzer_kill_ascension_1 =
 			{
-				name = "{name.cabbageroll} Light Attack",
-				desc = "Kill a {name.cabbageroll} using a Light Attack",
+				name = "{name.owlitzer} {name.ascension} 1",
+				desc = "Kill the {name.owlitzer} at {name.ascension} 1.",
 			},
-			cabbageroll_kill_heavyattack =
+			owlitzer_kill_ascension_2 =
 			{
-				name = "{name.cabbageroll} Heavy Attack",
-				desc = "Kill a {name.cabbageroll} using a Heavy Attack",
+				name = "{name.owlitzer} {name.ascension} 2",
+				desc = "Kill the {name.owlitzer} at {name.ascension} 2.",
 			},
-			cabbageroll_kill_skill =
+			owlitzer_kill_ascension_3 =
 			{
-				name = "{name.cabbageroll} Skill",
-				desc = "Kill a {name.cabbageroll} using a Skill",
+				name = "{name.owlitzer} {name.ascension} 3",
+				desc = "Kill the {name.owlitzer} at {name.ascension} 3.",
+			},
+			bandicoot_kill =
+			{
+				name = "{name.bandicoot} Kill",
+				desc = "Kill the {name.bandicoot}.",
+			},
+			bandicoot_kill_ascension_1 =
+			{
+				name = "{name.bandicoot} {name.ascension} 1",
+				desc = "Kill the {name.bandicoot} at {name.ascension} 1.",
+			},
+			bandicoot_kill_ascension_2 =
+			{
+				name = "{name.bandicoot} {name.ascension} 2",
+				desc = "Kill the {name.bandicoot} at {name.ascension} 2.",
+			},
+			bandicoot_kill_ascension_3 =
+			{
+				name = "{name.bandicoot} {name.ascension} 3",
+				desc = "Kill the {name.bandicoot} at {name.ascension} 3.",
+			},
+			thatcher_kill =
+			{
+				name = "{name.thatcher} Kill",
+				desc = "Kill the {name.thatcher}.",
+			},
+			thatcher_kill_ascension_1 =
+			{
+				name = "{name.thatcher} {name.ascension} 1",
+				desc = "Kill the {name.thatcher} at {name.ascension} 1.",
+			},
+			thatcher_kill_ascension_2 =
+			{
+				name = "{name.thatcher} {name.ascension} 2",
+				desc = "Kill the {name.thatcher} at {name.ascension} 2.",
+			},
+			thatcher_kill_ascension_3 =
+			{
+				name = "{name.thatcher} {name.ascension} 3",
+				desc = "Kill the {name.thatcher} at {name.ascension} 3.",
 			},
 		},
 	},
 
-	GEMS =
-	{
+	GEMS = {
 
-		LEVEL_UP_NOTIFICATION = "%s Level Up!!!", -- %s is the new name of the gem
+		LEVEL_UP_NOTIFICATION = "{gem_name} Level Up!!!",
 
 		ILVL_TO_NAME =
-		-- usage to find suffix = ILVL_TO_NAME[gem.ilvl] returns the correct suffix
+		-- usage to find suffix = ILVL_TO_NAME[gem:GetEffectiveItemLevel()] returns the correct suffix
 		{
 			"α", --1
 			"β", --2
@@ -3676,9 +3081,9 @@ STRINGS.ITEMS =
 			"Ω", --5
 		},
 
-		PROTOTYPE_DESC_TUTORIAL = "\nSlot into a <#RED>Weapon</> at the <#RED>{name.station_gems}</>, located by {name.npc_blacksmith}.",
+		PROTOTYPE_DESC_TUTORIAL = "Slot into a <#RED>Weapon</> at the <#RED>{name.station_gems}</>, located by {name.npc_blacksmith}.",
 
-		damage_mod = 
+		damage_mod =
 		{
 			-- Adds a flat damage boost
 			name = "Damage Bonus {name.gem}",
@@ -3688,14 +3093,14 @@ STRINGS.ITEMS =
 			stat_name = "Bonus <#RED>{name.concept_damage}</>",
 		},
 
-		-- damage_mult = 
+		-- damage_mult =
 		-- {
 		-- 	-- Adds a % damage boost
 		-- 	name = "Damage Percentage",
 		-- 	desc = "Increase <#RED>Damage</> by a percentage.",
 		-- },
 
-		damage_crit = 
+		damage_crit =
 		{
 			name = "Critical Damage {name.gem}",
 			desc = "Fire appears trapped inside when held up to the sun.\n\nIncreases <#RED>Critical Hit {name.concept_damage}</>.\n\n<#RED>{name_multiple.gem}</> can be set into <#RED>Weapons</> by {name.npc_blacksmith}.",
@@ -3703,7 +3108,7 @@ STRINGS.ITEMS =
 			slotted_desc = "Increases <#RED>Critical Hit {name.concept_damage}</>.",
 		},
 
-		damage_focus = 
+		damage_focus =
 		{
 			name = "Focus Damage {name.gem}",
 			desc = "Smooth to the touch. You feel calmer with it in your palm.\n\nIncreases <#BLUE>{name.concept_focus_hit}</> <#RED>{name.concept_damage}</>.\n\n<#RED>{name_multiple.gem}</> can be set into <#RED>Weapons</> by {name.npc_blacksmith}.",
@@ -3711,7 +3116,7 @@ STRINGS.ITEMS =
 			slotted_desc = "Increases <#BLUE>{name.concept_focus_hit}</> <#RED>{name.concept_damage}</>.",
 		},
 
-		crit_chance = 
+		crit_chance =
 		{
 			name = "Critical Chance {name.gem}",
 			desc = "You can sense this {name.gem} judging you.\n\nIncreases <#RED>Critical Hit Chance</>.\n\n<#RED>{name_multiple.gem}</> can be set into <#RED>Weapons</> by {name.npc_blacksmith}.",
@@ -3720,7 +3125,7 @@ STRINGS.ITEMS =
 		},
 
 
-		speed = 
+		speed =
 		{
 			name = "Runspeed {name.gem}",
 			desc = "You swear lightning crackles through it out the corner of your eye.\n\nIncreases <#RED>{name.concept_runspeed}</>.\n\n<#RED>{name_multiple.gem}</> can be set into <#RED>Weapons</> by {name.npc_blacksmith}.",
@@ -3728,13 +3133,13 @@ STRINGS.ITEMS =
 			slotted_desc = "Increases <#RED>{name.concept_runspeed}</>.",
 		},
 
-		-- sprint = 
+		-- sprint =
 		-- {
 		-- 	name = "Sprint",
 		-- 	desc = "{NAME.powerdesc_nopower}",
 		-- },
 
-		luck = 
+		luck =
 		{
 			name = "Luck {name.gem}",
 			desc = "You're not sure how, but you get the impression this {name.gem} is smiling.\n\nIncreases <#RED>Luck</>.\n\n<#RED>{name_multiple.gem}</> can be set into <#RED>Weapons</> by {name.npc_blacksmith}.",
@@ -3742,7 +3147,7 @@ STRINGS.ITEMS =
 			slotted_desc = "Increases <#RED>Luck</>.",
 		},
 
-		max_health = 
+		max_health =
 		{
 			name = "Max Health {name.gem}",
 			desc = "This thick-cut {name.gem} feels weighty in your hand.\n\nIncreases <#RED>Max Health</>.\n\n<#RED>{name_multiple.gem}</> can be set into <#RED>Weapons</> by {name.npc_blacksmith}.",
@@ -3759,6 +3164,7 @@ STRINGS.ITEMS =
 			stat_name = "Bonus <#RED>{name.concept_damage}</>",
 		},
 	},
+
 
 	REWARDGROUPS =
 	{
@@ -3798,25 +3204,64 @@ STRINGS.ITEMS =
 			name = "Hit Streak Powers",
 			desc = "Maintain your <#RED>Hit Streak</> more effectively!",
 		},
+		hitstreak_2_powers =
+		{
+			name = "Hit Streak Powers",
+			desc = "Build up your <#RED>Critical Chance</> to double your damage!",
+		},
+		weaponry_powers =
+		{
+			name = "Hit Streak Payoffs",
+			desc = "Benefit from your <#RED>Hit Streak</>!",
+		},
 		onheal_powers =
 		{
 			name = "Healing Powers",
 			desc = "Survive longer! Who needs Doc Hoggins?",
 		},
-		critsimple_powers =
+		critchance_1_powers =
 		{
-			name = "Critical Hit Powers",
+			name = "Critical Chance Powers",
 			desc = "Build up your <#RED>Critical Chance</> to double your damage!",
 		},
-		critcomplex_powers =
+		critproc_1_powers =
 		{
 			name = "Critical Hit Powers",
 			desc = "More ways to build up and benefit from <#RED>Critical Chance</>!",
+		},
+		power_modifiers =
+		{
+			name = "Power Drop Modifiers",
+			desc = "TODO",
 		},
 		gamechanger_powers =
 		{
 			name = "Gamechanger Powers",
 			desc = "Fundamentally change what your gameplan is for big rewards!",
 		},
+
+		-- Dungeon Decor Drops
+		treemon_forest_decor =
+		{
+			name = "{name.treemon_forest} Furniture",
+			desc = "treemon_forest_decor desc",
+		},
+		owlitzer_forest_decor =
+		{
+			name = "{name.owlitzer_forest} Furniture",
+			desc = "owlitzer_forest_decor desc",
+		},
+		bandi_swamp_decor =
+		{
+			name = "{name.bandi_swamp} Furniture",
+			desc = "bandi_swamp_decor desc",
+		},
+		thatcher_swamp_decor =
+		{
+			name = "{name.thatcher_swamp} Furniture",
+			desc = "thatcher_swamp_decor desc",
+		},
 	},
 }
+
+require "strings.strings_powers"

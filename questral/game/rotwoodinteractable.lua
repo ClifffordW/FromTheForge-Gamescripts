@@ -16,7 +16,7 @@ function RotwoodInteractable:__tostring()
     return string.format("RotwoodInteractable[%s %s]", tostring(self.inst), kstring.raw(self))
 end
 
-function RotwoodInteractable:GetName()
+function RotwoodInteractable:GetPrettyName()
     if self.prefab then
         return STRINGS.NAMES[self.prefab]
     end

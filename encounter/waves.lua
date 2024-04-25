@@ -316,7 +316,7 @@ waves.adaptive.biome.owlitzer_forest = {
 	},
 }
 
-waves.adaptive.biome.kanft_swamp = {
+waves.adaptive.biome.bandi_swamp = {
 	distribution = {
 		mothball = 3,
 		mossquito = 3,
@@ -336,18 +336,16 @@ waves.adaptive.biome.thatcher_swamp = {
 	distribution = {
 		mothball = 3,
 		swarmy = 3,
-		woworm = 1,
-		slowpoke = 1,
+		-- woworm spawns via encounter
+		-- slowpoke spawns via encounter
 		-- floracrane spawns via encounter
 		-- totolili spawns via trickster
 		-- bulbug spawns via support
 	},
 
 	min_progress = {
-		--mothball = 0,
+		mothball = 0,
 		swarmy = 0,
-		woworm = 0,
-		slowpoke = 0.15,
 	},
 }
 
@@ -462,7 +460,7 @@ waves.trapwaves.biome.owlitzer_forest = {
 	}:SetProgressRange(0.6, 1),
 }
 
-waves.trapwaves.biome.kanft_swamp = {
+waves.trapwaves.biome.bandi_swamp = {
 	-- spores -- What if we want multiple spore types in one room?
 	spores = Wave{
 		sporetrap1 = 4,
@@ -480,55 +478,40 @@ waves.trapwaves.biome.kanft_swamp = {
 		sporetrap1 = 3,
 	}:SetProgressRange(0.65, 1),
 	stalacitite_two_spore = Wave{
-		stalactitetrap1 = 2,
+		stalactitetrap1 = 1,
 		sporetrap1 = 2,
 	}:SetProgressRange(0.65, 1),
 	stalacitite_one_spore = Wave{
-		stalactitetrap1 = 3,
+		stalactitetrap1 = 1,
 		sporetrap1 = 1,
 	}:SetProgressRange(0.65, 1),
 }
 
--- TODO @design #thatcher_swamp - proxy data just to make thatcher_swamp playable
 waves.trapwaves.biome.thatcher_swamp = {
-	-- acid
-	acid = Wave{
-		acidtrap1 = 2,
-	}:SetProgressRange(0, 0.5),
-	two_acid = Wave{
-		acidtrap1 = 3,
-	},
-	three_acid = Wave{
-		acidtrap1 = 4,
-	}:SetProgressRange(0.51, 1),
+	geysers_none = Wave{
+		geysertrap1 = 0,
+	}:SetProgressRange(0, 0.75),
+	geysers1 = Wave{
+		geysertrap1 = 1,
+	}:SetProgressRange(0.5, 1),
+	geysers2 = Wave{
+		geysertrap1 = 2,
+	}:SetProgressRange(0.75, 1),
 }
 
--- TODO @design #sedament_tundra - trap waves
 waves.trapwaves.biome.sedament_tundra = {
-	--spikes
-	one_spike = Wave {
-		spiketrap1 = 1,
-	},
-	two_spikes = Wave {
-		spiketrap1 = 2,
-	},
-	three_spikes = Wave {
-		spiketrap1 = 3,
-	},
-
-	--blends
-	one_bomb_one_spike = Wave {
-		bombtrap1 = 1,
-		spiketrap1 = 1,
-	},
-	one_bomb_two_spikes = Wave {
-		bombtrap1 = 1,
-		spiketrap1 = 2,
-	},
-	one_bomb_three_spikes = Wave {
-		bombtrap1 = 1,
-		spiketrap1 = 3,
-	},
+	cold = Wave {
+		coldtrap1 = 1,
+		torchtrap1 = 3,
+	}:SetProgressRange(0, 0.5),
+	colder = Wave {
+		coldtrap1 = 1,
+		torchtrap1 = 2,
+	}:SetProgressRange(0.25, 1),
+	coldest = Wave {
+		coldtrap1 = 1,
+		torchtrap1 = 1,
+	}:SetProgressRange(0.66, 1),
 }
 -----
 
@@ -621,7 +604,7 @@ waves.cabbage_tower = Wave{
 
 waves.biome = {}
 -- BIOME-SPECIFIC WAVES
-waves.biome.kanft_swamp = {
+waves.biome.bandi_swamp = {
 
 }
 

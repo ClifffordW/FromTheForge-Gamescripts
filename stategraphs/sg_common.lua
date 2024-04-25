@@ -178,8 +178,8 @@ end
 --------------------------------------------------------------------------
 -- Common hitboxtriggered event handler function
 -- (Currently intended for monsters only!)
--- TODO: victorc - move more "data" into attacktracker's attack data that is keyed off data.attackdata_id
--- TODO: victorc - rename data to something more specific like attack_override_data
+-- TODO: OnHitBoxTriggered - move more "data" into attacktracker's attack data that is keyed off data.attackdata_id
+-- TODO: OnHitBoxTriggered - rename data to something more specific like attack_override_data
 
 -- Possible parameters for 'data':
 -- hitstoplevel: The amount of hitstop to apply to the hit target(s). Refer to hitstopmanager.HitStopLevel for levels.
@@ -211,6 +211,7 @@ end
 -- disable_enemy_on_enemy_hitstop: If this is an enemy attacking another enemy, should we disable the hitstop?
 -- disable_self_hitstop: Don't apply hitstop to this entity, only the target
 -- attack_id: Override the attack's ID, used typically on projectiles for "light_attack" or "heavy_attack"
+-- attack_name_id: Set the attack's Name ID, such as "MULTITHRUST" or "LIGHT_ATTACK1"
 -- reduce_friendly_fire: If friendly fire damage, reduce the damage.
 -- knockdown_becomes_projectile: If this attack is a knockdown, should it do damage to things on the way down?
 -- ignore_knockdown: Ignores processing the hit if the target has a 'knockdown' state tag
@@ -239,22 +240,23 @@ function SGCommon.Events.OnHitboxTriggered(inst, hitbox_data, data)
 	for i = 1, #hitbox_data.targets do
 		local v = hitbox_data.targets[i]
 
+		local process_hit = true
 		local hitting_self = (v.owner or v) == (inst.owner or inst)
 		if hitting_self and not data.can_hit_self then
-			return
+			process_hit = false
 		end
 
 		for _, tag in ipairs(data and data.ignore_tags or {}) do
 			if v:HasTag(tag) and not hitting_self then
-				return
+				process_hit = false
 			end
 		end
 
 		if data.ignore_knockdown and v.sg and v.sg:HasStateTag("knockdown") then
-			return
+			process_hit = false
 		end
 
-		if v:IsValid() -- Earlier hitbox handler may have removed the target.
+		if process_hit and v:IsValid() -- Earlier hitbox handler may have removed the target.
 			-- Net: Enabling this forces remote targets to confirm hits (i.e. a "late hit-confirm")
 			-- Early hit-confirms: Remote target appear to get hit, but aren't hit in their sim.  That remote target never has the projectile reach them because it's cancelled by this local sim.
 			-- Late hit-confirms: Bullet passes through remote clients locally until they confirm they're hit.
@@ -310,6 +312,10 @@ function SGCommon.Events.OnHitboxTriggered(inst, hitbox_data, data)
 
 			if data.attack_id then
 				attack:SetID(data.attack_id)
+			end
+
+			if data.attack_name_id then
+				attack:SetNameID(data.attack_name_id)
 			end
 
 			if data.disable_hit_reaction then
@@ -402,7 +408,7 @@ end
 --------------------------------------------------------------------------
 function SGCommon.Events.OnProjectileHitboxTriggered(inst, hitbox_data, data)
 	if not inst:IsLocal() then
-		-- See if the hitflags of this attack will allow the attack to connect. 
+		-- See if the hitflags of this attack will allow the attack to connect.
 		-- If not, we are not going to connect, so we should not take control.
 		-- Taking control of a projectile presumes that we will be destroying that projectile, which will not happen if we aren't actually going to hit.
 
@@ -633,7 +639,7 @@ function SGCommon.States.AddLocomoteStates(states, name, data)
 
 	states[#states + 1] = State({
 		name = "turn_pre_"..name.."_pre",
-		tags = table.appendarrays({ "moving", tag, "turning", "busy" }, data ~= nil and data.addtags or {}),  -- jambell: This used to have 'caninterrupt', not sure if that was needed...
+		tags = table.appendarrays({ "moving", tag, "turning", "busy" }, data ~= nil and data.addtags or {}),  -- This used to have 'caninterrupt', not sure if that was needed...
 
 		onenter = function(inst)
 			local animname = GetModifyAnimName(inst, data, name) or name
@@ -678,7 +684,7 @@ function SGCommon.States.AddLocomoteStates(states, name, data)
 
 	states[#states + 1] = State({
 		name = "turn_pst_"..name.."_pre",
-		tags = table.appendarrays({ "moving", tag, "busy" }, data ~= nil and data.addtags or {}), -- jambell: This used to have 'caninterrupt', not sure if that was needed...
+		tags = table.appendarrays({ "moving", tag, "busy" }, data ~= nil and data.addtags or {}), -- This used to have 'caninterrupt', not sure if that was needed...
 
 		onenter = function(inst)
 			local animname = GetModifyAnimName(inst, data, name) or name
@@ -724,6 +730,7 @@ end
 -- addtags: Add additional tags to each state defined here.
 -- addevents: Add additional event handlers to each state defined here.
 -- alwaysforceattack: makes the state non-interruptable (uses the nointerrupt state tag.)
+-- reposition_state: A intermediary state to go to before the actual pre state. Useful for repositioning entities before the attack.
 
 -- onenter_fn: A function that runs additional actions in onenter.
 -- update_fn: As above, but in onupdate.
@@ -742,6 +749,16 @@ function SGCommon.States.AddAttackPre(states, attack_id, data)
 		end,
 
 		onenter = function(inst, target)
+			if data.reposition_state then
+				if not inst.sg.mem.is_pre_repositioning then
+					inst.sg.mem.is_pre_repositioning = true
+					inst.sg:GoToState(data.reposition_state)
+					return
+				else
+					inst.sg.mem.is_pre_repositioning = nil
+				end
+			end
+
 			local attack_data = inst.components.attacktracker:GetAttackData(attack_id)
 			local anim_name = attack_data.pre_anim or attack_id.."_pre"
 
@@ -769,7 +786,7 @@ function SGCommon.States.AddAttackPre(states, attack_id, data)
 				data.onexit_fn(inst)
 			end
 
-			if not inst.sg.statemem.attack_cancelled then
+			if not inst.sg.statemem.attack_cancelled and not inst.sg.mem.is_pre_repositioning then
 				inst.components.attacktracker:DoStartupFrames(inst.sg:GetAnimFramesInState())
 			end
 		end,
@@ -1073,7 +1090,14 @@ end
 -- Possible parameters for 'configdata':
 -- addtags: Add additional tags to each state defined here.
 -- movement_frames: how long is the creature in the air in the animation?
+-- onenter_fn: Run custom code in knockback onenter().
+-- knockback_onupdate_fn: Run custom code in knockback onupdate().
+-- onexit_fn: Run custom code in knockback onexit().
+-- onenter_pst_fn: Run custom code in knockback_pst onenter().
+-- knockback_pst_onupdate_fn: Run custom code in knockback_pst onupdate().
 -- knockback_pst_timeline: Additional FrameEvents to handle in the 'pst' timeline.
+-- onexit_pst_fn: Run custom code in knockback_pst onexit().
+-- knockback_pst_frames: Set this state to play for anim frames instead of until animover.
 -- modifyanim: optional value or function that can modify the start of the anim name that is played each state
 
 local weight_to_knockdistmult =
@@ -1096,7 +1120,18 @@ local weight_to_knockdistmult =
 function SGCommon.States.AddKnockbackStates(states, configdata)
 	if not configdata then configdata = {} end
 
+	local movement_fn = configdata.movement_fn
 	local movement_frames = configdata.movement_frames or 8
+
+	local knockback_pst_timeline
+	if not configdata.ignore_default_timeline then
+		knockback_pst_timeline = lume.concat(
+		{
+			FrameEvent(movement_frames, function(inst) inst.Physics:Stop() end), -- stop moving backwards
+		}, configdata ~= nil and configdata.knockback_pst_timeline or {})
+	else
+		knockback_pst_timeline = configdata ~= nil and configdata.knockback_pst_timeline or {}
+	end
 
 	local base_anim_name = "flinch"
 
@@ -1128,9 +1163,19 @@ function SGCommon.States.AddKnockbackStates(states, configdata)
 			end
 		end,
 
+		onupdate = function(inst)
+			if configdata.knockback_onupdate_fn then
+				configdata.knockback_onupdate_fn(inst)
+			end
+		end,
+
 		onexit = function(inst)
 			if inst.components.hitshudder then
 				inst.components.hitshudder:Stop()
+			end
+
+			if configdata.onexit_fn then
+				configdata.onexit_fn(inst)
 			end
 		end,
 
@@ -1150,27 +1195,49 @@ function SGCommon.States.AddKnockbackStates(states, configdata)
 			local pushback = (data and data.attack and data.attack:GetPushback()) or 1
 			local weightmult = (inst.components.weight and weight_to_knockdistmult["knockback"][inst.components.weight:GetStatus()]) or 1
 
-			local ticks = movement_frames * ANIM_FRAMES
+			local ticks = movement_fn and movement_fn(inst) * ANIM_FRAMES or movement_frames * ANIM_FRAMES
 			local distance = inst.knockback_distance * pushback * weightmult
 			local speed = (distance/ticks) * SECONDS
 
 			inst.Physics:SetMotorVel(-speed)
+			inst.sg.statemem.knockback_speed = speed
+
+			if configdata.knockback_pst_frames then
+				inst.sg:SetTimeoutAnimFrames(configdata.knockback_pst_frames)
+			end
+
+			if configdata.onenter_pst_fn ~= nil then
+				configdata.onenter_pst_fn(inst, data)
+			end
 		end,
 
-		timeline = lume.concat(
-		{
-			FrameEvent(movement_frames, function(inst) inst.Physics:Stop() end), -- stop moving backwards
-		}, configdata ~= nil and configdata.knockback_pst_timeline or {}),
+		timeline = knockback_pst_timeline,
+
+		onupdate = function(inst)
+			if configdata.knockback_pst_onupdate_fn then
+				configdata.knockback_pst_onupdate_fn(inst)
+			end
+		end,
+
+		ontimeout = function(inst)
+			inst.sg:GoToState("idle")
+		end,
 
 		events =
 		{
 			EventHandler("animover", function(inst)
-				inst.sg:GoToState("idle")
+				if not configdata.knockback_pst_frames then
+					inst.sg:GoToState("idle")
+				end
 			end),
 		},
 
 		onexit = function(inst)
 			inst.Physics:Stop()
+
+			if configdata.onexit_pst_fn then
+				configdata.onexit_pst_fn(inst)
+			end
 		end,
 	})
 end
@@ -1228,11 +1295,16 @@ end
 --------------------
 -- Possible parameters for 'configdata':
 -- addtags: Add additional tags to each state defined here.
+-- chooser_fn: Provides an alt knockdown state to enter.  Default or return nil to continue with default generated state
 -- knockdown_size: Set the physics size of the entity (no default, if it doesn't exist then don't change.)
 -- getup_frames: How long does the get up animation take (physics size is reset after this.) Only necessary if knockdown_size is defined.
 -- movement_frames: How long is the creature in the air in the animation?
 -- knockdown_pre_timeline: Additional FrameEvents to handle in the 'pre' timeline.
+-- knockdown_pre_onupdate_fn: Additional actions to handle in the knockdown_pre onupdate().
 -- knockdown_pre_onexit: A function that runs additional actions in the onexit for the 'pre' state defined here.
+-- knockdown_getup_frames: Set this state to play for anim frames instead of until animover.
+-- knockdown_getup_onupdate_fn: Additional actions to handle in the knockdown_getup onupdate().
+-- knockdown_slide_on_getup: Enable to allow slding on the ground during knockdown getup.
 -- modifyanim: optional value or function that can modify the start of the anim name that is played each state
 	-- NOTE: Does NOT effect the knockdown_idle state.
 -- modifyanim_idle: optional function that can modify that start of the anim name played during knockdown_idle
@@ -1249,6 +1321,9 @@ end
 function SGCommon.States.AddKnockdownStates(states, configdata)
 	if not configdata then configdata = {} end
 
+	local default_chooser_fn = function(_inst, _data) end
+	local chooser_fn = configdata.chooser_fn or default_chooser_fn
+
 	local getup_frames = configdata.getup_frames or 10
 	local movement_frames = configdata.movement_frames or 10
 
@@ -1261,6 +1336,12 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 		default_data_for_tools = Debug_AttackDataForHitStates,
 
 		onenter = function(inst, data)
+			local alt_knockdown_state = chooser_fn(inst, data)
+			if alt_knockdown_state then
+				inst.sg:GoToState(alt_knockdown_state, data)
+				return
+			end
+
 			inst.Physics:Stop()
 
 			local animname = GetModifyAnimName(inst, configdata, base_anim_name) or base_anim_name
@@ -1274,7 +1355,7 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 			end
 
 			if configdata.onenter_hold_fn then
-				configdata.onenter_hold_fn(inst)
+				configdata.onenter_hold_fn(inst, data)
 			end
 
 			if inst.components.foleysounder then
@@ -1319,6 +1400,7 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 			local ticks = movement_frames * ANIM_FRAMES
 			local distance = inst.knockdown_distance * pushback * weightmult
 			local speed = (distance/ticks) * SECONDS
+			inst.sg.mem.knockdown_speed = speed
 
 			inst.Physics:SetMotorVel(-speed)
 
@@ -1335,13 +1417,22 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 				if configdata.knockdown_size then
 					inst.Physics:SetSize(configdata.knockdown_size)
 				end
-				inst.Physics:Stop()
+
+				if not configdata.knockdown_slide_on_getup then
+					inst.Physics:Stop()
+					KnockdownDoDamageOnExit(inst, inst.sg.statemem.data) -- Reset optional knockback damage if set
+				end
 				inst.sg:RemoveStateTag("airborne")
 				inst.sg:RemoveStateTag("nointerrupt")
-				KnockdownDoDamageOnExit(inst, inst.sg.statemem.data) -- Reset optional knockback damage if set
 			end)
 		},
 		configdata ~= nil and configdata.knockdown_pre_timeline or {}),
+
+		onupdate = function(inst)
+			if configdata.knockdown_pre_onupdate_fn then
+				configdata.knockdown_pre_onupdate_fn(inst)
+			end
+		end,
 
 		events =
 		{
@@ -1356,7 +1447,9 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 
 		onexit = function(inst)
 			inst.Physics:SetSize(inst.sg.mem.idlesize)
-			inst.Physics:Stop()
+			if not configdata.knockdown_slide_on_getup then
+				inst.Physics:Stop()
+			end
 			if not inst.sg.statemem.knockdown then
 				inst.components.timer:StopTimer("knockdown")
 			end
@@ -1374,7 +1467,7 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 
 	states[#states + 1] = State({
 		name = "knockdown_idle",
-		tags = table.appendarrays({ "knockdown", "busy", "caninterrupt" }, configdata ~= nil and configdata.addtags or {}),
+		tags = table.appendarrays({ "knockdown", "busy", "doubletoxicity" }, configdata ~= nil and configdata.addtags or {}),
 
 		onenter = function(inst, data)
 			local animname = "knockdown"
@@ -1432,20 +1525,37 @@ function SGCommon.States.AddKnockdownStates(states, configdata)
 			if configdata.onenter_getup_fn then
 				configdata.onenter_getup_fn(inst)
 			end
+
+			if configdata.knockdown_getup_frames then
+				inst.sg:SetTimeoutAnimFrames(configdata.knockdown_getup_frames)
+			end
 		end,
 
 		timeline = lume.concat({FrameEvent(getup_frames, function(inst) inst.Physics:SetSize(inst.sg.mem.idlesize) end)}, configdata ~= nil and configdata.knockdown_getup_timeline or {}),
 
+		onupdate = function(inst)
+			if configdata.knockdown_getup_onupdate_fn then
+				configdata.knockdown_getup_onupdate_fn(inst)
+			end
+		end,
+
+		ontimeout = function(inst)
+			inst.sg:GoToState("idle")
+		end,
+
 		events =
 		{
 			EventHandler("animover", function(inst)
-				inst.sg:GoToState("idle")
+				if not configdata.knockdown_getup_frames then
+					inst.sg:GoToState("idle")
+				end
 			end),
 		},
 
 		onexit = function(inst)
 			inst.Physics:Stop()
 			inst.Physics:SetSize(inst.sg.mem.idlesize)
+			inst.sg.mem.knockdown_speed = nil
 
 			if configdata.onexit_getup_fn then
 				configdata.onexit_getup_fn(inst)
@@ -1838,9 +1948,12 @@ SGCommon.States.AddSpawnWalkableStates = function(states, data)
 			end
 
 			inst:RemoveFromScene()
+			inst.AnimState:PlayAnimation(data.anim, true)
+			inst.AnimState:Pause()
 
 			inst:DoTaskInTime(data.spawn_tell_time or 2, function()
 				inst:ReturnToScene()
+				inst.AnimState:Resume()
 				inst.sg:GoToState("spawn_walkable", inst.sg.statemem.spawn_data)
 			end)
 		end,
@@ -1902,21 +2015,27 @@ end
 -- onexit_fn: As above, but in onexit.
 -- events: A table of events to add to the events list in the state defined here.
 -- timeline: A table of FrameEvents that get called in the state defined here.
-function SGCommon.States.AddSpawnBattlefieldStates(states, data)
+
+-- chooser_fn : Optional runtime chooser function to execute.  Non-nil requires choices table of states
+-- choices : Multiple spawn battlefield states to go with chooser_fn.  Data is the same as a regular spawn battlefield state.
+
+local default_data_for_tools_spawn_battlefield = function(inst, cleanup)
+	local item = DebugSpawn("spawner_plant1")
+	table.insert(cleanup.spawned, item)
+	return {
+		dir = 0,
+		spawner = item,
+	}
+end
+
+local function AddSpawnBattlefieldStateInternal(states, data, name_override)
 	if not data then data = {} end
 
 	states[#states + 1] = State({
-		name = "spawn_battlefield",
+		name = name_override or "spawn_battlefield",
 		tags = table.appendarrays({ "busy", "nointerrupt" }, data.addtags or {}),
 
-		default_data_for_tools = function(inst, cleanup)
-			local item = DebugSpawn("spawner_plant1")
-			table.insert(cleanup.spawned, item)
-			return {
-				dir = 0,
-				spawner = item,
-			}
-		end,
+		default_data_for_tools = default_data_for_tools_spawn_battlefield,
 
 		onenter = function(inst, spawn_data)
 			SGCommon.Fns.PlayAnimOnAllLayers(inst, data.anim)
@@ -1947,6 +2066,34 @@ function SGCommon.States.AddSpawnBattlefieldStates(states, data)
 		onexit = data ~= nil and data.onexit_fn or nil,
 	})
 end
+
+function SGCommon.States.AddSpawnBattlefieldStates(states, data)
+	if not data then data = {} end
+
+	if data.chooser_fn then
+		assert(data.choices)
+		local chooser_fn = data.chooser_fn
+		states[#states + 1] = State({
+			name = "spawn_battlefield",
+			tags = table.appendarrays({ "busy", "nointerrupt" }, data.addtags or {}),
+			default_data_for_tools = default_data_for_tools_spawn_battlefield,
+
+			onenter = function(inst, spawn_data)
+				local state_name = chooser_fn(inst, spawn_data)
+				inst.sg:GoToState(state_name)
+			end,
+		})
+
+		local keys = lume.sort(lume.keys(data.choices))
+		for _i,name in ipairs(keys) do
+			AddSpawnBattlefieldStateInternal(states, data.choices[name], name)
+		end
+	else
+		AddSpawnBattlefieldStateInternal(states, data)
+	end
+end
+
+
 
 
 local function jump_update_fn(inst)
@@ -1996,7 +2143,7 @@ function SGCommon.States.AddSpawnPerimeterStates(states, data)
 
 			inst:FaceXZ(target_pos.x, target_pos.z)
 
-			-- victorc: 60Hz, consider expressing as anim frames
+			-- 60Hz, consider expressing as anim frames
 			-- Tricky thing is that jump_update_fn uses ticks as part of its update loop
 			local pre_anim_ticks = inst.AnimState:GetAnimationNumFrames(data.pre_anim) * ANIM_FRAMES
 			local hold_anim_ticks = inst.AnimState:GetAnimationNumFrames(data.hold_anim) * ANIM_FRAMES
@@ -2006,7 +2153,7 @@ function SGCommon.States.AddSpawnPerimeterStates(states, data)
 			local dist = math.sqrt(inst:GetDistanceSqToXZ(target_pos.x, target_pos.z))
 			data.jump_speed = dist/data.jump_time
 			if dist == 0 then
-				--TEMP(jambell): SUPER temporary for now until the 'holes' are not considered walkable space, or another solution. Find a tile which is ground, spawn there.
+				--TEMP: Way too brute force, but fine for now until the 'holes' are not considered walkable space, or another solution. Find a tile which is ground, spawn there.
 				local x,z = inst.Transform:GetWorldXZ()
 				local final_x, final_z = monsterutil.BruteForceFindWalkableTileFromXZ(x, z)
 
@@ -2331,6 +2478,24 @@ function SGCommon.Fns.FaceActionLocation(inst, x, z, snap)
 	RotateToFace(inst, inst:GetAngleToXZ(x, z), snap)
 end
 
+function SGCommon.Fns.FaceTargetClampedAngle(inst, target, angle)
+	local facingrot = inst.Transform:GetFacingRotation()
+	local diff
+	if target ~= nil and target:IsValid() then
+		local dir = inst:GetAngleTo(target)
+		diff = ReduceAngle(dir - facingrot)
+		if math.abs(diff) >= 90 then
+			diff = nil
+		end
+	end
+	if diff == nil then
+		local dir = inst.Transform:GetRotation()
+		diff = ReduceAngle(dir - facingrot)
+	end
+	diff = math.clamp(diff, -angle, angle)
+	inst.Transform:SetRotation(facingrot + diff)
+end
+
 function SGCommon.Fns.TurnAndActOnTarget(inst, targetordata, snap, nextstate, nextdata, player)
 	local canturn = inst.sg:HasState("turn_pre")
 	local oldfacing = canturn and inst.Transform:GetFacing() or nil
@@ -2390,34 +2555,28 @@ function SGCommon.Fns.ChooseAttack(inst, data)
 end
 
 function SGCommon.Fns.ChooseHitStunPressureAttack(inst, data)
-	if data.target ~= nil and data.target:IsValid() then
-		local attacktracker = inst.components.attacktracker
-		local trange = TargetRange(inst, data.target)
-		local next_attack, backoff_time = attacktracker:PickHitStunPressureAttack(data, trange)
-		if next_attack ~= nil and string.len(next_attack) > 0 then
-			TheLog.ch.AI:printf("[%s]	Next attack: %s", inst, next_attack)
-			attacktracker.force_attack = true -- Force the pressure attack to be non-interruptable
-			local state_name = attacktracker:GetStateNameForAttack(next_attack)
-			SGCommon.Fns.TurnAndActOnTarget(inst, data, false, state_name, data.target)
-			return true
-		end
+	local attacktracker = inst.components.attacktracker
+	local attacker = data.attack:GetAttacker()
+	local trange = TargetRange(inst, attacker)
+	local next_attack = attacktracker:PickHitStunPressureAttack(data, trange)
+	if next_attack ~= nil and string.len(next_attack) > 0 then
+		TheLog.ch.AI:printf("[%s]	Hitstun pressure attack: %s", inst, next_attack)
+		attacktracker.force_attack = true -- Force the pressure attack to be non-interruptable
+
+		-- Some attacks require a target to be passed into its attack. Get the target here.
+		local target = inst.components.combat:GetTarget()
+
+		local state_name = attacktracker:GetStateNameForAttack(next_attack)
+		SGCommon.Fns.TurnAndActOnTarget(inst, attacker, true, state_name, target)
+		return true
 	end
+
 	return false
 end
 
 --------------------------------------------------------------------------
-local function AddHitStunPressureFrames(inst, attack)
-	-- Add hitstun frames to the pressure buffer
-	local combat = inst.components.combat
-	if combat then
-		local hitstunframes = attack and attack:GetHitstunAnimFrames() or 0
-		combat:AddToCurrentHitStunPressureFrames(hitstunframes)
-	end
-end
-
---------------------------------------------------------------------------
 local function OnAttacked(inst, data)
-	-- jambell: in case you're looking here, I think this is only for the Player attacking an Enemy. Not Enemy attacking Player, or Enemy attacking Enemy.
+	-- NOTE: In case you're looking here, this is only for the Player attacking an Enemy. Not Enemy attacking Player, or Enemy attacking Enemy.
 
 	local didHit = false
 
@@ -2425,15 +2584,24 @@ local function OnAttacked(inst, data)
 	dbassert(kassert.assert_fmt(attack:GetHitstunAnimFrames() ~= nil, "Hitstun cannot be nil: [%s] - [%s]", attack._attacker.prefab, attack.id))
 	if attack ~= nil and attack:GetHitstunAnimFrames() > 0 then
 
+		-- "nointerrupt" tag supercedes EVERYTHING!
+		-- Anything with "nointerrupt" cannot do a hit reaction, UNLESS it is overridden by 'caninterrupt'
 		local nointerrupt = (inst.sg:HasStateTag("nointerrupt") or inst:HasTag("nointerrupt")) and not inst.sg:HasStateTag("caninterrupt")
 
-		-- For basic attacks, we normally don't trigger hit state during a busy state.
-		-- Also used later to send an "attack interrupted" event to the target
-		-- However, we -will- allow the enemy to be put back into the 'hit' state
-		local isbusy = inst.sg:HasStateTag("busy") and not inst.sg:HasStateTag("hit") and not inst.sg:HasStateTag("turning")
+		-- For basic attacks, we normally don't trigger hit state during a busy state, like an attack, or etc.
+		-- HOWEVER: "busy" means many different things, so we'll check with more precision below.
 
-		-- "nointerrupt" tag supercedes everything. Anything with "nointerrupt" and not "caninterrupt" can not do a hit reaction.
-		local candohit = not isbusy and (attack:DoHitReaction() or inst.sg:HasStateTag("hit")) and not inst:HasTag("boss") -- re-enter hit state if they're in the hit state already
+		local isbusy = inst.sg:HasStateTag("busy") -- busy means a lot of different things, so we need to be specific about what kind of 'busy' we are:
+			and not inst.sg:HasStateTag("hit") -- allow them to go from one hit reaction into another hit reaction
+			and not inst.sg:HasStateTag("turning") -- allow them to be hit while turning around
+			and not inst.sg:HasStateTag("knockdown") -- allow them to enter their "knockdown hit" state
+
+		-- "isbusy" is also used later to send an "attack interrupted" event to the target
+
+		local candohit = not isbusy
+			and (attack:DoHitReaction() or inst.sg:HasStateTag("hit")) -- re-enter hit state if they're in the hit state already
+			and not inst:HasTag("boss") -- bosses do not play hit reactions
+
 		candohit = candohit and not nointerrupt
 
 		--This was originally triggered by a knockback or knockdown attack:
@@ -2468,14 +2636,14 @@ local function OnAttacked(inst, data)
 					inst.sg:ForceGoToState(data ~= nil and data.front and "block_hit_front" or "block_hit_back", unblock)
 					didHit = true
 				else
-					inst.sg:ForceGoToState("block_hit", unblock)	--JAMBELLHITSTUN
+					inst.sg:ForceGoToState("block_hit", unblock)
 					didHit = true
 				end
 			end
 		elseif inst.sg:HasStateTag("dormant") then
 			if candohit or isknocked then
 				inst.sg.statemem.dormant = true
-				inst.sg:ForceGoToState("dormant_hit")	--JAMBELLHITSTUN
+				inst.sg:ForceGoToState("dormant_hit")
 				didHit = true
 			end
 		elseif candohit then
@@ -2505,8 +2673,6 @@ local function OnAttacked(inst, data)
 			end
 			--]]
 		end
-
-		AddHitStunPressureFrames(inst, attack)
 	end
 end
 
@@ -2564,7 +2730,17 @@ local function OnKnockdown(inst, data)
 				RotateToFace(inst, attack:GetDir() + 180, true)
 			end
 
-			if attack:GetKnockdownBecomesProjectile() then
+			local attacker = attack:GetAttacker()
+			data.attacker = attacker
+
+			local should_become_projectile = false
+
+			if attack:GetKnockdownBecomesProjectile() or
+				(attacker ~= nil and attacker:IsValid() and attacker.components.combat:GetKnockdownBecomesProjectile()) then
+				should_become_projectile = true
+			end
+
+			if should_become_projectile then
 				data.does_damage = true
 				data.owner = attack:GetAttacker()
 			end
@@ -2582,8 +2758,6 @@ local function OnKnockdown(inst, data)
 
 		inst.sg:ForceGoToState(state, data) --GoToState("knockdown    <-- for easier searchability
 	end
-
-	AddHitStunPressureFrames(inst, data and data.attack or nil)
 end
 
 function SGCommon.Events.OnKnockdown()
@@ -2596,8 +2770,6 @@ SGCommon.Fns.OnKnockdown = OnKnockdown
 local function OnKnockback(inst, data)
 	local attack = data and data.attack
 
-	AddHitStunPressureFrames(inst, data and data.attack or nil)
-
 	if attack ~= nil and not data.attack:DoHitReaction() then
 		return
 	end
@@ -2607,12 +2779,14 @@ local function OnKnockback(inst, data)
 
 	local wasbusy = inst.sg:HasStateTag("busy")
 
+	data.attacker = attack:GetAttacker()
+
 	if not nointerrupt then
 		if attack ~= nil and attack:GetDir() ~= nil then
 			RotateToFace(inst, attack:GetDir() + 180, true)
 		end
 
-		inst.sg:ForceGoToState(inst.sg:HasStateTag("block") and "block_knockback" or "knockback", data) --JAMBELLHITSTUN
+		inst.sg:ForceGoToState(inst.sg:HasStateTag("block") and "block_knockback" or "knockback", data)
 
 		if wasbusy then
 			inst:PushEvent("attack_interrupted")
@@ -2708,7 +2882,7 @@ end
 
 function SGCommon.Fns.OnSwallowed(inst, data)
 	local swallower = data.swallower
-	if not swallower or not swallower:IsValid() then return end
+	if not swallower or not swallower:IsValid() or not inst.sg then return end
 
 	TheLog.ch.Groak:printf("Swallowed! inst: %s (%d), swallower: %s (%d)", inst.prefab, inst.Network:GetEntityID(), swallower.prefab, swallower.Network:GetEntityID() or "")
 
@@ -2964,17 +3138,6 @@ function SGCommon.Fns.TryQueuedAttack(inst, chooseattackfn)
 		end
 	end
 	return false
-end
-
---------------------------------------------------------------------------
-function SGCommon.Events.OnHitStunPressureAttack()
-	return EventHandler("dohitstunpressureattack", function(inst, data)
-		if not inst.sg:HasStateTag("attack")
-			and (not inst.sg:HasStateTag("busy") or (inst.sg:HasStateTag("hit") and not inst.sg:HasStateTag("knockdown")))
-			and data.target ~= nil and data.target:IsValid() then
-			SGCommon.Fns.ChooseHitStunPressureAttack(inst, data)
-		end
-	end)
 end
 
 --------------------------------------------------------------------------
@@ -3358,6 +3521,10 @@ function SGCommon.Fns.PlayAnimOnAllLayers(inst, anim, looping)
 	OnAllLayers(inst, 'PlayAnimation', anim, looping)
 end
 
+function SGCommon.Fns.PushAnimOnAllLayers(inst, anim, looping)
+	OnAllLayers(inst, 'PushAnimation', anim, looping)
+end
+
 function SGCommon.Fns.SetAnimPercentOnAllLayers(inst, anim, percent)
 	OnAllLayers(inst, 'SetPercent', anim, percent)
 end
@@ -3372,6 +3539,10 @@ end
 
 function SGCommon.Fns.RemoteAnimUpdate(inst, data)
 	if inst.highlightchildren ~= nil then
+		-- TODO: this does not support arbitrary layer names as setup in props
+
+		local origanim = data.name or inst.baseanim
+
 		-- strip resolved base anim suffix
 		-- i.e. hit_r_front -> hit_r, "broken_front" -> "broken"
 		-- TODO: what about use_baseanim_for_idle, parallax_use_baseanim_for_idle?
@@ -3396,16 +3567,25 @@ function SGCommon.Fns.RemoteAnimUpdate(inst, data)
 			if inst.highlightchildren ~= nil then
 				for i = 1, #inst.highlightchildren do
 					local child = inst.highlightchildren[i]
-					if child.baseanim ~= nil then
-						local resolved_layer_anim = ResolveLayerAnim(anim, child.baseanim)
-						if child.AnimState:GetCurrentAnimationName() ~= resolved_layer_anim then
-							-- prop variations concatenate variant to animation name
-							if inst.components.prop and inst.components.prop:GetVariation() then
-								resolved_layer_anim = resolved_layer_anim .. inst.components.prop:GetVariation()
+					if child.dependent_child ~= nil then
+						-- If a child is a dependent_child, it was automatically generated by the prop editor because it's the underground part of the entity. In this case we want to
+						-- set the same animation as the parent without any modification.
+						if child.AnimState:GetCurrentAnimationName() ~= origanim then
+							CallAnimStateFn(child, fn_name, origanim, looping)
+						end
+					else
+						if child.baseanim ~= nil then
+							local resolved_layer_anim = ResolveLayerAnim(anim, child.baseanim)
+							if child.AnimState:GetCurrentAnimationName() ~= resolved_layer_anim then
+								-- prop variations concatenate variant to animation name
+								if inst.components.prop and inst.components.prop:GetVariation() then
+									resolved_layer_anim = resolved_layer_anim .. inst.components.prop:GetVariation()
+								end
+								CallAnimStateFn(child, fn_name, resolved_layer_anim, looping)
 							end
-							CallAnimStateFn(child, fn_name, resolved_layer_anim, looping)
 						end
 					end
+					child.AnimState:SetScale(inst.AnimState:GetScale())
 				end
 			end
 		end
@@ -3568,8 +3748,9 @@ function SGCommon.Fns.ApplyHitstop(attack, hitstop, data)
 	-- allow_multiple_on_attacker: If this attack has hit multiple targets, should it apply hitstop on the subsequent targets after the first?
 	-- projectile: If this is a projectile, specify that so that the projectile is hitstopped, not the sender of the projectile
 	-- disable_enemy_on_enemy: If this is an enemy, and the target is an enemy, opt out of hitstopping for this hit.
+	-- disable_self_hitstop: Do not apply hitstop to the attacker
 
-	-- jambell: this should be split out, it does way more than "apply hitstop" now
+	-- BIGTODO: this should be split out, it does way more than "apply hitstop" now
 
 	local attacker = attack:GetAttacker()
 	local target = attack:GetTarget()
@@ -3603,7 +3784,7 @@ function SGCommon.Fns.ApplyHitstop(attack, hitstop, data)
 		-- Figure out what extra effects we should be playing, first. Play them below.
 		if kill
 			and ((attacker ~= nil and attacker.sg ~= nil and not attacker.sg.statemem.haskillstopped) or target_is_player)
-			and (target ~= nil and not target.sg.mem.hasbeenkillstopped)
+			and (target ~= nil and target.sg and not target.sg.mem.hasbeenkillstopped)
 		then
 			-- Player died
 			if target_is_player then
@@ -3686,8 +3867,14 @@ function SGCommon.Fns.ApplyHitstop(attack, hitstop, data)
 			end
 		end
 
-		local original_timescale = not target.sg.mem.deathstop_timescaling and TheSim:GetTimeScale() or target.sg.mem.original_timescale -- in case we need it later
-		target.sg.mem.original_timescale = not target.sg.mem.deathstop_timescaling and original_timescale or target.sg.mem.original_timescale
+		local original_timescale
+		if target.sg then
+			original_timescale = target.sg and not target.sg.mem.deathstop_timescaling and TheSim:GetTimeScale() or target.sg.mem.original_timescale -- in case we need it later
+			target.sg.mem.original_timescale = not target.sg.mem.deathstop_timescaling and original_timescale or target.sg.mem.original_timescale
+		else
+			original_timescale = TheSim:GetTimeScale()
+		end
+
 
 		-- Two sequences here... first up is one that delays the HitStop for a few frames for presentation reasons.
 
@@ -4063,6 +4250,7 @@ function SGCommon.Fns.HandlePlayGroundImpact(inst, param)
 
 	local testfx = nil
 	if impact_type == GroundImpactFXTypes.id.ParticleSystem then
+		-- TODO(combat): Pass instigator so audio gets instigator and fx can be networked. Probably inst?
 		testfx = ParticleSystemHelper.MakeOneShotAtPosition(Vector3(x, y, z), fx_name)
 	else
 		-- Animated FX
@@ -4203,7 +4391,7 @@ function SGCommon.Fns.CanTakeControlDefault(sg)
 		and not sg:HasStateTag("getup")
 		and (
 			sg:HasStateTag("idle")
-			-- TODO: networking2022 - victorc, this is currently inconsistent due to how "hit" tags may not align with a state
+			-- TODO: networking2022 - this is currently inconsistent due to how "hit" tags may not align with a state
 			-- example: eyev evade sets "hit" tag but is not in a hit state
 			or sg:GetCurrentState() == "hit"
 			or sg:GetCurrentState() == "hit_pst"

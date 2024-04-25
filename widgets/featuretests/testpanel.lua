@@ -25,7 +25,7 @@ function TestPanel:OnLoseFocus()
 	TestPanel._base.OnLoseFocus(self)
 end
 
-function TestPanel:OnControl(controls, down)
+function TestPanel:OnControl(controls, down, ...)
 end
 
 return TestPanel

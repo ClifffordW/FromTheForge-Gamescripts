@@ -8,9 +8,4 @@ return {
     name_key="emote_ogre_charged_jump",
   },
   group="PLAYER_EMOTE",
-  hidden=false,
-  locked=true,
-  mastery="NONE",
-  purchased=false,
-  rarity="COMMON",
 }

@@ -1,6 +1,8 @@
-local monsterutil = require "util.monsterutil"
-local spawnutil = require "util.spawnutil"
 local lume = require "util.lume"
+local monsterutil = require "util.monsterutil"
+local prefabutil = require "prefabs.prefabutil"
+local spawnutil = require "util.spawnutil"
+
 
 local assets =
 {
@@ -21,10 +23,13 @@ local prefabs =
 {
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
+	"fx_spores_confused_all",
+
 	--Drops
 	GroupPrefab("drops_generic"),
 }
---prefabutil.SetupDeathFxPrefabs(prefabs, "beets") --Just use beets for now
+prefabutil.SetupDeathFxPrefabs(prefabs, "sporemon")
+prefabutil.SetupDeathFxPrefabs(prefabs, "sporemon_elite")
 
 local projectile_prefabs =
 {
@@ -42,7 +47,7 @@ local attacks =
 	{
 		priority = 2,
 		damage_mod = 1,
-		cooldown = 0,
+		cooldown = 1,
 		initialCooldown = 0,
 		startup_frames = 12,
 		pre_anim = "atk_r_bite_pre",
@@ -58,7 +63,7 @@ local attacks =
 	{
 		priority = 2,
 		damage_mod = 1,
-		cooldown = 0,
+		cooldown = 1,
 		initialCooldown = 0,
 		startup_frames = 12,
 		pre_anim = "atk_l_bite_pre",
@@ -86,6 +91,7 @@ local attacks =
 		end
     }
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -105,6 +111,8 @@ local elite_attacks =
 		end
 	}
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
+
 
 local MONSTER_SIZE = 1.3
 

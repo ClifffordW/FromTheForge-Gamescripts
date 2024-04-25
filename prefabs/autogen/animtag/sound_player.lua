@@ -233,7 +233,8 @@ return {
         events={ { frame=9, name="sfx-cannon_run",}, { frame=21, name="sfx-cannon_run",},},
       },
       cannon_sheathe_fast={ events={ { frame=3, name="sfx-cannon_sheathe",},},},
-      cannon_skill_unsheathe={ events={ { frame=1, name="sfx-cannon_unsheathe",},},},
+      cannon_skill_unsheathe={ events={ { frame=2, name="sfx-cannon_unsheathe",},},},
+      cannon_unsheathe_fast={ events={ { frame=1, name="sfx-cannon_unsheathe",},},},
     },
     player_bank_emotes={
       emote_amphibee_bubble_kiss={
@@ -247,6 +248,37 @@ return {
           { frame=15, name="sfx-kiss",},
         },
       },
+      emote_bandicoot_snicker={ events={ { frame=1, name="sfx-mvmt_med",}, { frame=25, name="sfx-mvmt_med",},},},
+      emote_bonion_call={ events={ { frame=3, name="sfx-mvmt_lg",}, { frame=23, name="sfx-mvmt_lg",},},},
+      emote_dejected={ events={ { frame=17, name="sfx-mvmt_lg",}, { frame=41, name="sfx-mvmt_sm",},},},
+      emote_dubious={
+        events={
+          { frame=5, name="sfx-mvmt_sm",},
+          { frame=28, name="sfx-mvmt_sm",},
+          { frame=34, name="sfx-mvmt_sm",},
+        },
+      },
+      emote_excited={ events={ { frame=4, name="sfx-mvmt_lg",}, { frame=35, name="sfx-mvmt_sm",},},},
+      emote_gourdo_face_bash={
+        events={
+          { frame=1, name="sfx-mvmt_lg",},
+          { frame=34, name="sfx-mvmt_lg",},
+          { frame=56, name="sfx-mvmt_lg",},
+        },
+      },
+      emote_mammimal_howl={
+        events={
+          { frame=1, name="sfx-mvmt_lg",},
+          { frame=21, name="sfx-footstep",},
+          { frame=32, name="sfx-footstep",},
+          { frame=30, name="sfx-mvmt_lg",},
+          { frame=57, name="sfx-mvmt_sm",},
+          { frame=1, name="sfx-mammimal",},
+          { frame=5, name="sfx-hand",},
+          { frame=7, name="sfx-hand",},
+          { frame=3, name="sfx-footstep_stop",},
+        },
+      },
       emote_no_thx={
         events={
           { frame=5, name="sfx-mvmt_sm",},
@@ -255,29 +287,76 @@ return {
           { frame=17, name="sfx-no",},
         },
       },
+      emote_nod_cheerful={
+        events={
+          { frame=7, name="sfx-mvmt_med",},
+          { frame=15, name="sfx-mvmt_med",},
+          { frame=8, name="sfx-cheer_02",},
+        },
+      },
       emote_ogre_charged_jump={
         done=true,
         events={
-          { frame=2, name="sfx-ogre_dash",},
-          { frame=13, name="sfx-ogre_dash",},
-          { frame=22, name="sfx-ogre_dash",},
           { frame=35, name="sfx-mvmt_lg",},
           { frame=36, name="sfx-jump",},
           { frame=39, name="sfx-shout",},
           { frame=54, name="sfx-pant_inhale",},
           { frame=62, name="sfx-pant_exhale",},
           { frame=67, name="sfx-mvmt_med",},
+          { frame=13, name="sfx-ogre_dash",},
+          { frame=19, name="sfx-ogre_dash",},
+          { frame=1, name="sfx-swish",},
+          { frame=49, name="sfx-footstep_stop",},
+          { frame=49, name="sfx-footstep",},
+          { frame=51, name="sfx-footstep",},
+          { frame=43, name="sfx-swish",},
+          { frame=3, name="sfx-ogre_dash",},
+        },
+      },
+      emote_over_here={
+        events={
+          { frame=7, name="sfx-mvmt_med",},
+          { frame=8, name="sfx-whoosh",},
+          { frame=39, name="sfx-mvmt_med",},
+          { frame=24, name="sfx-swish",},
+          { frame=4, name="sfx-vo3",},
         },
       },
       emote_pump={
         events={
-          { frame=9, name="sfx-cheer",},
-          { frame=22, name="sfx-cheer",},
           { frame=4, name="sfx-mvmt_sm",},
           { frame=18, name="sfx-mvmt_sm",},
+          { frame=7, name="sfx-cheer_01",},
+          { frame=19, name="sfx-cheer_02",},
         },
       },
-      emote_whistle={ done=true, events={ { frame=8, name="sfx-whistle",},},},
+      emote_shock={ events={ { frame=3, name="sfx-mvmt_lg",}, { frame=4, name="sfx-vo4",},},},
+      emote_shoulder_look={
+        events={
+          { frame=8, name="sfx-footstep",},
+          { frame=4, name="sfx-mvmt_med",},
+          { frame=18, name="sfx-mvmt_med",},
+          { frame=22, name="sfx-ting",},
+          { frame=3, name="sfx-swish",},
+          { frame=16, name="sfx-swish",},
+        },
+      },
+      emote_shrug={ events={ { frame=6, name="sfx-mvmt_lg",}, { frame=31, name="sfx-mvmt_med",},},},
+      emote_think={ events={ { frame=3, name="sfx-mvmt_med",}, { frame=41, name="sfx-mvmt_med",},},},
+      emote_totolili_wiggles={ done=true,},
+      emote_wave={
+        events={
+          { frame=6, name="sfx-cheer_01",},
+          { frame=10, name="sfx-swish",},
+          { frame=19, name="sfx-swish",},
+          { frame=4, name="sfx-mvmt_med",},
+          { frame=36, name="sfx-mvmt_med",},
+        },
+      },
+      emote_whistle={
+        done=true,
+        events={ { frame=8, name="sfx-whistle",}, { frame=3, name="sfx-mvmt_med",},},
+      },
       whistle={ events={ { frame=11, name="sfx-whistle",},},},
     },
     player_bank_flying_machine={
@@ -382,6 +461,7 @@ return {
       hammer_roll_up_loop={ done=true,},
       hammer_skill_thump_atk={ done=true,},
       hammer_skill_thump_pre={ events={ { frame=1, name="sfx-ground_thrust_charge",},},},
+      hammer_skill_unstable={ events={ { frame=1, name="sfx-shout",},},},
       hammer_smash_air={ events={ { frame=1, name="yell",}, { frame=3, name="sfx-land",},},},
       hammer_smash_air_alt={ events={ { frame=1, name="whoosh-heavy",},},},
       hammer_smash_air_pre={ done=true,},
@@ -653,13 +733,49 @@ return {
       shotput_roll_up_loop={ events={ { frame=1, name="roll",},},},
       shotput_tackle={ events={ { frame=10, name="sfx-footstep",}, { frame=1, name="sfx-dash",},},},
     },
-    player_bank_shotput_basic={ shotput_knockdown_pst={ events={ { frame=12, name="sfx-bodyfall",},},},},
+    player_bank_shotput_basic={
+      shotput_knockdown_pst={ events={ { frame=12, name="sfx-bodyfall",},},},
+      shotput_sheathe_fast={ events={ { frame=1, name="sfx-sheath",},},},
+      shotput_unsheathe_fast={ events={ { frame=1, name="sfx-unsheath",},},},
+    },
     player_bank_skills={
       skill_banana_front_pst={ events={ { frame=9, name="banana_land",},},},
       skill_banana_pre={ events={ { frame=16, name="banana_eat",}, { frame=6, name="banana_toss",},},},
       skill_throw_stone_hold={ events={ { frame=2, name="throw_stone_charge",},},},
       skill_throw_stone_pre={ events={ { frame=2, name="throw_stone_sfx-grab",},},},
       skill_throw_stone_pst={ events={ { frame=1, name="throw_stone_throw",},},},
+    },
+    player_bank_skills_miniboss={
+      skill_flora_dive_pst={
+        events={
+          { frame=9, name="sfx-foley_m",},
+          { frame=17, name="sfx-foley_s",},
+          { frame=21, name="sfx-foley_L",},
+          { frame=27, name="sfx-foley_L",},
+          { frame=36, name="sfx-footstep",},
+          { frame=39, name="sfx-foley_m",},
+          { frame=1, name="sfx-hand",},
+          { frame=3, name="sfx-hand",},
+        },
+      },
+      skill_gourdo_slam_pst={
+        events={
+          { frame=3, name="sfx-foley_sm",},
+          { frame=13, name="sfx-hand",},
+          { frame=15, name="sfx-hand",},
+          { frame=17, name="sfx-foley_L",},
+        },
+      },
+      skill_groak_vacuum={ events={ { frame=1, name="sfx-groak_hands",}, { frame=1, name="sfx-groak",},},},
+      skill_groak_vacuum_pst={ events={ { frame=2, name="sfx-foley_m",},},},
+      skill_owlitzer={
+        events={
+          { frame=5, name="sfx-footstep",},
+          { frame=35, name="sfx-footstep_stop",},
+          { frame=36, name="sfx-foley_m",},
+        },
+      },
+      skill_yammo_swing={ events={ { frame=19, name="sfx-footstep",},},},
     },
   },
   group="SOUND_player",

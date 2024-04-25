@@ -10,6 +10,8 @@ return {
   hue=-70.0,
   randomflip=true,
   saturation=-88.0,
+  scalex=1.3999999761581,
+  scaley=1.3999999761581,
   shadow=true,
   soundevent="creature_explode",
 }

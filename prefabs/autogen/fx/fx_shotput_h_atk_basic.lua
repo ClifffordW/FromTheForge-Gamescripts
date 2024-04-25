@@ -2,9 +2,9 @@
 return {
   __displayName="fx_shotput_h_atk_basic",
   anim="shotput_h_atk",
-  bank="fx_player_bank_shotput",
+  bank="fx_player_bank_shotput_basic",
   bloom=100.0,
-  build="fx_player_bank_shotput",
+  build="fx_player_bank_shotput_basic",
   finaloffset=1,
   glowcolor="FCA900FF",
   group="fx_shotput_basic",

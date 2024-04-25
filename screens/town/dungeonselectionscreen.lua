@@ -20,7 +20,11 @@ local templates = require "widgets.ftf.templates"
 
 local DungeonSelectionScreen = Class(Screen, function(self, player)
 	Screen._ctor(self, "DungeonSelectionScreen")
-	self:SetAudioCategory(Screen.AudioCategory.s.Fullscreen)
+	-- not setting a category because we don't want music filtered in this case
+	self:SetAudioSnapshotOverride(fmodtable.Event.FullscreenOverlay_LP)
+	self:SetAudioEnterOverride(fmodtable.Event.ui_fullscreen_enter)
+	self:SetAudioExitOverride(fmodtable.Event.ui_fullscreen_exit)
+
 	self:SetOwningPlayer(player)
 
 	self.bg = self:AddChild(templates.SolidBackground())
@@ -62,6 +66,7 @@ local DungeonSelectionScreen = Class(Screen, function(self, player)
 		:SetHAlign(ANCHOR_MIDDLE)
 		:SetAutoSize(450)
 
+	self:_RefreshTravelButton()
 	self:CreateMap()
 	self.default_focus = self.travel_button
 	self.current_marker = nil
@@ -156,13 +161,13 @@ function AnimMapLayer:PlayLayerAnimation(anim)
 	return self
 end
 
-
 local LocationRevealLayer = Class(AnimMapLayer, function(self, biome_location)
 	AnimMapLayer._ctor(self, biome_location.id)
 	self.biome_location = biome_location
 end)
 
 function LocationRevealLayer:ApplyUnlocks(unlocks)
+	-- playerunlocks component
 	if unlocks:IsLocationUnlocked(self.biome_location.id) then
 		self:Unlock()
 	else
@@ -172,7 +177,7 @@ function LocationRevealLayer:ApplyUnlocks(unlocks)
 end
 
 function LocationRevealLayer:_PlayState(suffix)
-	self.anim:PlayAnimation(self.biome_location.id .. suffix)
+	self.anim:PlayAnimation(self.biome_location.anim_id .. suffix)
 	return self
 end
 
@@ -256,9 +261,7 @@ function DungeonSelectionScreen:DebugDraw_AddSection(ui, panel)
 						-- Clear brackets to simulate first entering screen
 						-- because we only add them *after* clicking on a
 						-- location.
-						self.selection_brackets:Remove()
-						self.selection_brackets = nil
-						self.focus_brackets_enabled = false
+						self:Debug_DestroyFocusBrackets()
 
 						self:_RevealLocation(layer.biome_location, "cheat_reveal")
 					end
@@ -293,7 +296,8 @@ function DungeonSelectionScreen:DebugDraw_AddSection(ui, panel)
 					end
 				end
 				ui:TableNextColumn()
-				local reveal_flag = id .."_reveal"
+				local reveal_flag = string.format("pf_%s_reveal", id)
+
 				should_lock = unlocks:IsFlagUnlocked(reveal_flag)
 				if ui:Button((should_lock and "Mark unrevealed (lock)" or "Mark revealed (unlock)") .."##".. reveal_flag) then
 					if should_lock then
@@ -318,11 +322,11 @@ end
 
 function DungeonSelectionScreen:OnOpen()
 	DungeonSelectionScreen._base.OnOpen(self)
-	self:OnInputModeChanged()
+	self:_RefreshTravelButton()
 end
 
-function DungeonSelectionScreen:OnInputModeChanged(old_device_type, new_device_type)
-	if TheFrontEnd:IsRelativeNavigation() then
+function DungeonSelectionScreen:_RefreshTravelButton()
+	if self:IsRelativeNavigation() then
 		self.travel_button_backing:Hide()
 		self.travel_button:Hide()
 	else
@@ -330,19 +334,6 @@ function DungeonSelectionScreen:OnInputModeChanged(old_device_type, new_device_t
 		self.travel_button:Show()
 	end
 end
-
--- function DungeonSelectionScreen:OnFocusMove(dir, down)
--- 	DungeonSelectionScreen._base.OnFocusMove(self, dir, down)
-
--- 	-- If we're navigating to a new location marker with keys (not with mouse),
--- 	-- click it automatically
--- 	if TheFrontEnd:IsRelativeNavigation() then
--- 		local focus = self:GetDeepestFocus()
--- 		if focus:is_a(MapLocationMarker) then
--- 			focus:Click()
--- 		end
--- 	end
--- end
 
 function DungeonSelectionScreen:_LayoutMarker(marker, data)
 	marker:LayoutBounds("left", "top", self.map_layers.terrain)
@@ -364,6 +355,9 @@ function DungeonSelectionScreen:CreateMap()
 	local all_locations = {}
 
 	local player = self:GetOwningPlayer()
+
+	player.components.huntunlocker:EvaluateHuntUnlocks() -- evaluate unlocked locations again, as a failsafe
+
 	local unlocks = player.components.unlocktracker
 
 	-- we should always show everything the owning players has unlocked.
@@ -472,7 +466,7 @@ function DungeonSelectionScreen:CreateMap()
 
 
 	for id,location in iterator.sorted_pairs(all_locations) do
-		local reveal_flag = id ..'_reveal'
+		local reveal_flag = string.format("pf_%s_reveal", id)
 		if unlocks:IsLocationUnlocked(id)
 			and not unlocks:IsFlagUnlocked(reveal_flag) -- LOCATION OR FLAG
 		then
@@ -499,7 +493,11 @@ function DungeonSelectionScreen:_RevealLocation(biome_location, reveal_flag)
 				self:Show()
 				TheFrontEnd:Fade(FADE_IN, 1)
 			end),
-			Updater.Wait(1.5),
+			Updater.Wait(1.2),
+			Updater.Do(function()
+				map_marker:PlaySpatialSound(fmodtable.Event.dungeonSelectScreen_locationAppear)
+			end),
+			Updater.Wait(0.7),
 			Updater.Do(function()
 				lock_layer:Reveal()
 			end),
@@ -514,12 +512,12 @@ function DungeonSelectionScreen:_RevealLocation(biome_location, reveal_flag)
 			Updater.Wait(0.33),
 			Updater.Do(function()
 				map_marker:Click()
-				self.selection_brackets:SetMultColorAlpha(0) -- hide to fade in
+				self.bracket_root:SetMultColorAlpha(0) -- hide to fade in
 				-- Use unlock as seen because default state is locked.
 				self:GetOwningPlayer().components.unlocktracker:UnlockFlag(reveal_flag)
 			end),
 			Updater.Ease(function(v)
-				self.selection_brackets:SetMultColorAlpha(v)
+				self.bracket_root:SetMultColorAlpha(v)
 			end, 0, 1, 0.66, easing.linear),
 		})
 	)
@@ -546,7 +544,8 @@ function DungeonSelectionScreen:AnimateClouds()
 end
 
 function DungeonSelectionScreen:_GetDefaultMapDestination()
-	local last_location = TheSaveSystem.progress:GetValue("last_selected_location")
+	-- This should be saved on the player instead of TheSaveSystem
+	local last_location = TheSaveSystem:GetLastSelectedLocation()
 
 	if last_location and self.k_mapMarkers[last_location] then
 		return self.k_mapMarkers[last_location]
@@ -557,31 +556,42 @@ function DungeonSelectionScreen:_GetDefaultMapDestination()
 	for k, v in ipairs(self.mapMarkers) do
 		if v:IsUnlocked(v.locationData) then
 			-- this should only run the first time the map is opened, and after
-			-- that there will be data for 'last_selected_location'
+			-- that there will be data for 'TheSaveSystem:GetLastSelectedLocation()'
 			return v
 		end
 	end
 	error("All known locations were locked!")
 end
 
+function DungeonSelectionScreen:OnFocusChanged(new_focus, hunter_id, show_immediately)
+	if self:IsRelativeNavigation() then
+		return DungeonSelectionScreen._base.OnFocusChanged(self, new_focus, hunter_id, show_immediately)
+	end
+	-- else: do nothing on focus change for mouse. We use our focus change
+	-- brackets to show selection.
+end
+
 function DungeonSelectionScreen:OnLocationFocused(locationMarker, locationId, locationData)
 	-- On gamepad, focusing on a location should update the sidebar
-	if TheFrontEnd:IsRelativeNavigation() and self.current_marker ~= locationMarker then
+	if self:IsRelativeNavigation() and self.current_marker ~= locationMarker then
 		self:_ShowLocationInfo(locationMarker, locationId, locationData)
 	end
 end
 
 function DungeonSelectionScreen:OnLocationClicked(locationMarker, locationId, locationData)
-	TheSaveSystem.progress:SetValue("last_selected_location", locationId)
+	-- Actually change our focus. We overlaod OnFocusChanged, so call super directly.
+	DungeonSelectionScreen._base.OnFocusChanged(self, locationMarker, self:GetOwningPlayer():GetHunterId())
+
+	TheSaveSystem:SetLastSelectedLocation(locationId)
 
 	-- If this location was already selected, and clicked on again with a controller, travel to it
-	if TheFrontEnd:IsRelativeNavigation()
+	if self:IsRelativeNavigation()
 		and self.current_marker == locationMarker
 	then
 		local location_data = self.current_marker:GetLocationData()
 		local is_unlocked, invalid_players = playerutil.GetLocationUnlockInfo(location_data)
 		if is_unlocked then
-			self:PromptToTravel(locationMarker, locationData)
+			self:PromptToTravel()
 		else
 			self:_ShowLockedPrompt(locationMarker, invalid_players)
 		end
@@ -596,12 +606,6 @@ function DungeonSelectionScreen:_ShowLocationInfo(locationMarker, locationId, lo
 	self.current_marker = locationMarker
 	self.current_marker:SetFocus() -- Moves the brackets to it
 
-	----------------------------------------------------------------------
-	-- Focus selection brackets
-	if not self.focus_brackets_enabled then
-		self:EnableFocusBracketsForGamepadAndMouse("images/mapicons_ftf/biome_brackets.tex", 66, 74, 114, 106, 1)
-	end
-	----------------------------------------------------------------------
 
 	-- Update sidebar
 	local isPlayerHere = false
@@ -613,6 +617,7 @@ function DungeonSelectionScreen:_ShowLocationInfo(locationMarker, locationId, lo
 	self.sidebar:AnimateIn()
 
 	-- And the travel button
+	self:_RefreshTravelButton()
 	if self.travel_button_done_animating then
 		local target_x, target_y = self.travel_button:GetPos()
 		self.travel_button:Offset(0, -20)
@@ -700,10 +705,11 @@ function DungeonSelectionScreen:PromptToTravel()
 		return
 	end
 
-	self.confirm = ConfirmDialog(nil, self.current_marker, true, STRINGS.UI.DUNGEONSELECTIONSCREEN.CONFIRM_TRAVEL.TITLE)
+	self.confirm = ConfirmDialog(self:GetOwningPlayer(), self.current_marker, true, STRINGS.UI.DUNGEONSELECTIONSCREEN.CONFIRM_TRAVEL.TITLE)
 		:SetArrowUp()
 
-	self.confirm:SetYesButtonText(STRINGS.UI.DUNGEONSELECTIONSCREEN.CONFIRM_TRAVEL.YES)
+	self.confirm
+		:SetYesButtonText(STRINGS.UI.DUNGEONSELECTIONSCREEN.CONFIRM_TRAVEL.YES)
 		:SetNoButtonText(STRINGS.UI.DUNGEONSELECTIONSCREEN.CONFIRM_TRAVEL.NO)
 		:SetOnDoneFn(function(accepted)
 			TheFrontEnd:PopScreen()
@@ -720,7 +726,7 @@ end
 
 function DungeonSelectionScreen:_ShowLockedPrompt(location_marker, invalid_players)
 	local title = self:_BuildLockedRegionText(invalid_players)
-	self.confirm = ConfirmDialog(nil, self.current_marker, true)
+	self.confirm = ConfirmDialog(self:GetOwningPlayer(), self.current_marker, true)
 		:SetSubtitle(title)
 		:SetArrowUp()
 
@@ -735,9 +741,6 @@ function DungeonSelectionScreen:_ShowLockedPrompt(location_marker, invalid_playe
 			TheFrontEnd:PopScreen(self.confirm)
 			self.confirm = nil
 		end)
-
-	-- HACK(demo): ConfirmDialog should set the first visible button as the default. Smallest fix possible for now.
-	self.confirm.default_focus = self.confirm:GetCancelButton()
 
 	TheFrontEnd:PushScreen(self.confirm)
 
@@ -793,7 +796,7 @@ function DungeonSelectionScreen:AnimateIn()
 
 		-- Animate each marker in
 		locationsUpdater:Add(Updater.Parallel({
-			Updater.Do(function() TheFrontEnd:GetSound():PlaySoundWithParams(fmodtable.Event.dungeonSelectScreen_locationAppear, { Count = k, isLastDestinationMarker = (k == numDestinationMarkers) and 1 or 0 }, nil, 1) end),
+			-- Updater.Do(function() TheFrontEnd:GetSound():PlaySoundWithParams(fmodtable.Event.dungeonSelectScreen_locationAppear, { Count = k, isLastDestinationMarker = (k == numDestinationMarkers) and 1 or 0 }, nil, 1) end),
 			Updater.Ease(function(v) marker:SetMultColorAlpha(v) end, 0, 1, 0.11, easing.outQuad),
 			Updater.Ease(function(v) marker:SetScale(v) end, 1.05, 1, 0.08, easing.outQuad),
 			Updater.Ease(function(v) marker:SetPosition(markerX, v) end, markerY + 10, markerY, 0.08, easing.outQuad)
@@ -831,6 +834,7 @@ function DungeonSelectionScreen:AnimateIn()
 			Updater.Do(function()
 				self.default_focus = self.current_marker or self:_GetDefaultMapDestination()
 				self.default_focus:Click()
+				self:EnableFocusBracketsForGamepadAndMouse({ black_fg = "images/mapicons_ftf/biome_brackets_overlay.tex", color_bg = "images/mapicons_ftf/biome_brackets_fill.tex" }, 66, 74, 114, 106, 1)
 			end),
 		}),
 
@@ -868,6 +872,7 @@ function DungeonSelectionScreen:SetOwningPlayer(player)
 			marker:SetOwningPlayer(player)
 		end
 	end
+	return self
 end
 
 function DungeonSelectionScreen:Layout()

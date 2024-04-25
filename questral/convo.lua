@@ -32,6 +32,10 @@ function Convo:SetPriority(p)
     return self
 end
 
+function Convo:IsOneTimeConvo()
+    return self.one_time_convo
+end
+
 function Convo:GetState(id)
     return self.states[id]
 end

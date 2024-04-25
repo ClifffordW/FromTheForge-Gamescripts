@@ -6,7 +6,6 @@ local HITSTUN = 10 -- anim frames
 local SGCommon = require "stategraphs.sg_common"
 
 local function OnProximityHitBoxTriggered(inst, data)
-	--JAMBELL TODO: use the common hitbox function instead
 	local triggered = false
 	for i = 1, #data.targets do
 		local v = data.targets[i]

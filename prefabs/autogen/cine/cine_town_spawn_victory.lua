@@ -2,17 +2,15 @@
 return {
   __displayName="cine_town_spawn_victory",
   pause_role_sg={  },
-  scene_duration=120.0,
+  scene_duration=235.0,
   scene_init={  },
   subactors={  },
   timelines={
-    attachswipefx={  },
-    blurscreen={  },
     cameradist={
       { 0, 1, { eventtype="cameradist", param={ cut=true, dist=22.0, duration=1,},},},
       {
-        65,
-        120,
+        70,
+        125,
         {
           eventtype="cameradist",
           param={
@@ -39,12 +37,11 @@ return {
         },
       },
     },
-    cameraoffset={  },
     camerapitch={
       { 0, 1, { eventtype="camerapitch", param={ cut=true, duration=1, pitch=16.0,},},},
       {
-        77,
-        120,
+        82,
+        125,
         {
           eventtype="camerapitch",
           param={
@@ -85,9 +82,10 @@ return {
     },
     cameratargetend={
       {
-        65,
-        120,
+        70,
+        125,
         {
+          apply_to_all_players=false,
           eventtype="cameratargetend",
           param={
             curve={
@@ -114,10 +112,7 @@ return {
         },
       },
     },
-    cameratargetoverride={  },
-    detachswipefx={  },
-    disableplayinput={ { 0, 120.0, { eventtype="disableplayinput", param={  },},},},
-    facing={  },
+    disableplayinput={ { 0, 235.0, { eventtype="disableplayinput", param={  },},},},
     fade={
       {
         0,
@@ -125,11 +120,10 @@ return {
         { eventtype="fade", param={ duration=50, fade_in=true, fade_type="black",},},
       },
     },
-    gameevent={  },
     gotostate={
       {
-        63,
-        78,
+        51,
+        66,
         {
           apply_to_all_players=true,
           eventtype="gotostate",
@@ -138,31 +132,18 @@ return {
         },
       },
     },
-    letterbox={ { 0, 72, { eventtype="letterbox", param={ duration=72,},},},},
-    lightintensity={  },
-    movetopoint={  },
-    musicbosspause={  },
-    musicbossstart={  },
-    musicbossstop={  },
-    playcountedsound={  },
-    playfoleysound={  },
-    playsound={  },
-    playsound_window={  },
-    pushanim={  },
-    runintoscene={  },
-    setsheathed={  },
-    setsoundparameter={  },
-    setvisible={  },
-    shakecamera={  },
-    spawneffect={  },
-    spawnimpactfx={  },
-    spawnparticles={  },
-    stopallsounds={  },
-    stopparticles={  },
-    stopsound={  },
-    teleport={  },
-    titlecard={  },
-    uibosshealthbar={  },
-    uihidehud={ { 0, 80, { eventtype="uihidehud", param={ duration=80,},},},},
+    letterbox={ { 0, 82.0, { eventtype="letterbox", param={ duration=82,},},},},
+    musicstart={ { 235, 235.0, { eventtype="musicstart", is_unedited=true, param={  },},},},
+    playsound={
+      {
+        49,
+        235.0,
+        {
+          eventtype="playsound",
+          param={ sound_max_count=1.0, soundevent="Mus_Quest_BossFanfare_Stinger",},
+        },
+      },
+    },
+    uihidehud={ { 0, 93, { eventtype="uihidehud", param={ duration=93,},},},},
   },
 }

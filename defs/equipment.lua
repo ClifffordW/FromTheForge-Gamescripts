@@ -56,8 +56,32 @@ function Equipment.CollectAssets(assets, prefabs)
 		-- The animation data is in the _basic bank.
 		assets[#assets + 1] = Asset("ANIM", "anim/player_bank_".. weapon_type .."_basic.zip")
 		table.insert(prefabs, GroupPrefab("fx_".. weapon_type .."_basic"))
+
+		table.insert(prefabs, GroupPrefab("fx_".. weapon_type .."_electric"))
 	end
-	--MIKERproto: Add the banks for the weapon you're prototyping
+
+	-- TODO(buildstrip): Would be nice for weapon types to express their deps
+	-- so we can only include shipping weapons.
+	table.insert(prefabs, GroupPrefab("hammer_charge"))
+	table.insert(prefabs, GroupPrefab("fx_polearm_long"))
+
+	-- Cannon
+	table.insert(prefabs, "fx_ground_target_purple")
+	table.insert(prefabs, "player_cannon_focus_projectile")
+	table.insert(prefabs, "player_cannon_mortar_projectile")
+	table.insert(prefabs, "player_cannon_projectile")
+	table.insert(prefabs, "player_cannon_shotgun_focus_projectile")
+	table.insert(prefabs, "player_cannon_shotgun_projectile")
+
+	-- Shotput
+	table.insert(prefabs, "fx_ground_target_player")
+	table.insert(prefabs, "fx_ground_target_purple")
+	table.insert(prefabs, "fx_pickup_center")
+	table.insert(prefabs, "player_cannon_mortar_projectile")
+	table.insert(prefabs, "player_shotput_projectile")
+	table.insert(prefabs, "shotput_focus_trail")
+
+	--#MAKING_WEAPONS: Add the banks for the weapon you're prototyping
 	--table.insert(assets, Asset("ANIM", "anim/player_bank_ropedart.zip"))
 	--table.insert(assets, Asset("ANIM", "anim/player_bank_ropedart_basic.zip"))
 	return assets, prefabs
@@ -95,7 +119,7 @@ function Equipment.CompareDef_ByRarityAndName(a_def, b_def)
 	if a_rarity == b_rarity then
 		return a_def.pretty.name < b_def.pretty.name
 	end
-	return a_rarity > b_rarity
+	return a_rarity < b_rarity
 end
 function Equipment.CompareId_ByRarityAndName(a, b)
 	local a_def = Equipment.Items.MATERIALS[a]

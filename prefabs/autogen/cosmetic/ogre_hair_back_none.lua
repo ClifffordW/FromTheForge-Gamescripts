@@ -8,9 +8,9 @@ return {
     uitags={  },
   },
   group="PLAYER_BODYPART",
-  hidden=false,
+  
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
+  
+  
+  
 }

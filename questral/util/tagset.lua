@@ -148,8 +148,14 @@ function TagSet:__tostring()
         return "[]"
     else
         local taglist = lume.keys(self.tags)
+        -- We may use string value as an id, so sort it. Easier to read anyway.
+        table.sort(taglist)
         return string.format("[%s]", table.concat(taglist, ", "))
     end
+end
+
+function TagSet:toList()
+    return self:IsEmpty() and {} or lume.keys(self.tags)
 end
 
 function TagSet:IsEmpty()

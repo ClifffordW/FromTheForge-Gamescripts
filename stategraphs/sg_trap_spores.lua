@@ -155,6 +155,7 @@ local function OnExplodeHitBoxTriggered(inst, data)
 
 			-- If it successfully connected with the target, play the effect.
 			if applied and attacker.sporedata.target_fx ~= nil then
+				-- TODO(combat): Pass instigator so audio gets instigator and fx can be networked. Probably attacker?
 				ParticleSystemHelper.MakeOneShotAtPosition(v:GetPosition(), attacker.sporedata.target_fx)
 			end
 		end,
@@ -322,7 +323,16 @@ local states =
 
 		onenter = function(inst, data)
 			-- Here, we spawn the local-only spore and send directly it to the explode_pre state to take over for this one
-			EffectEvents.MakeEventSpawnLocalEntity(inst, inst.prefab, "explode_pre") -- NETWORK: replace this networked version with a local version on all machines
+			local prefab = inst.prefab
+			if inst.override_sporedata then
+				if inst.override_sporedata.override_effect then
+					prefab = "trap_spores_" .. inst.override_sporedata.override_effect
+				else
+					prefab = "trap_spores_" .. inst.override_sporedata.power
+				end
+			end
+
+			EffectEvents.MakeEventSpawnLocalEntity(inst, prefab, "explode_pre") -- NETWORK: replace this networked version with a local version on all machines
 			inst:DelayedRemove()
 		end,
 	}),

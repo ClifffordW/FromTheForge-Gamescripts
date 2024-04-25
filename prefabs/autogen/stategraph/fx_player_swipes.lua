@@ -249,6 +249,88 @@ return {
           name="vfx-polearm_shove",
           param={ fxname="fx_polearm_shove_basic", inheritrotation=true, stopatexitstate=true,},
         },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_roll_atk_loop",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            fxname="fx_polearm_roll_atk_loop",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_roll_atk_loop",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            backgroundfx=true,
+            fxname="fx_polearm_roll_atk_loop_back",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_roll_atk_pre",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            fxname="fx_polearm_roll_atk_pre",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_roll_atk_pst",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            fxname="fx_polearm_roll_atk_pst",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_roll_atk_pst",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            backgroundfx=true,
+            fxname="fx_polearm_roll_atk_pst_back",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_multithrust_atk_loop",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            fxname="fx_polearm_multithrust_atk_loop",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_multithrust_atk_pre",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            fxname="fx_polearm_multithrust_atk_pre",
+            stoponinterruptstate=true,
+          },
+        },
+        {
+          eventtype="attachswipefx",
+          name="vfx-polearm_multithrust_atk_pst",
+          param={
+            auditionfxtype="basic",
+            auditionpowertype="none",
+            fxname="fx_polearm_multithrust_atk_pst",
+            stoponinterruptstate=true,
+          },
+        },
       },
       state_events={
         fading_light_attack={
@@ -323,6 +405,7 @@ return {
             },
           },
         },
+        multithrust_attack_pre={  },
         rolling_drill_attack={
           {
             eventtype="attachswipefx",

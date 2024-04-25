@@ -262,7 +262,7 @@ function MonsterArmourWidget:Refresh()
 		local currently_equipped = self.player.components.inventoryhoard:GetLoadoutItem(selectedLoadoutIndex, slot)
 
 		if owned then
-			recipe = recipes.FindUpgradeRecipeForItem(item)
+			recipe = recipes.FindUsageUpgradeRecipeForItem(item)
 		else
 			item = itemforge.CreateEquipment( itemdef.slot, itemdef )
 		end

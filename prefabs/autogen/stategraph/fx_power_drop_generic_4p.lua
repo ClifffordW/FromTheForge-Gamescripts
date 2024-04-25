@@ -17,7 +17,7 @@ return {
               offx=0.0,
               offy=0.0,
               offz=0.10000000149012,
-              particlefxname="power_drop_generic",
+              particlefxname="power_drop_generic_circle",
               stopatexitstate=true,
             },
           },

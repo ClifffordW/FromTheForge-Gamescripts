@@ -3,7 +3,10 @@ return {
   __displayName="bread_oven",
   clickable=true,
   gridsize={ { h=3, w=3,},},
-  group="town_decor",
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
+  networked=1,
   parallax={
     { anim="shovel", dist=-0.15,},
     { anim="front", dist=-0.1, shadow=true,},

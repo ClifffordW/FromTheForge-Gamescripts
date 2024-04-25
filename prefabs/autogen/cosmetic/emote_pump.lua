@@ -8,9 +8,9 @@ return {
     name_key="emote_pump",
   },
   group="PLAYER_EMOTE",
-  hidden=false,
+  
   locked=false,
-  mastery="NONE",
-  purchased=true,
-  rarity="COMMON",
+  
+  
+  
 }

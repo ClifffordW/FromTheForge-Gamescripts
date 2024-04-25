@@ -22,7 +22,8 @@ local HotkeyWidget = Class(Widget, function(self, control, text)
 
 	self:SetControl(control)
 
-	self.dbg_add_stack = DEV_MODE and debug.traceback() or "<no callstack in prod>"
+	-- disabling by default since it causes a long enter room hitch even in release builds
+	self.dbg_add_stack = false and debug.traceback() or "<enable callstack in widget constructor>"
 end)
 
 function HotkeyWidget:OnAddedToScreen(screen)

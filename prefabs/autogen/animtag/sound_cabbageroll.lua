@@ -2,7 +2,7 @@
 return {
   __displayName="sound_cabbageroll",
   anim_events={
-    cabbageroll_single_bank={
+	cabbageroll4_bank={
       behavior={ done=true, events={ { frame=5, name="sfx-vo_pitched",},},},
       behavior2={ done=true, events={ { frame=1, name="sfx-behaviour2",},},},
       behavior3={ done=true, events={ { frame=1, name="sfx-whistle",},},},

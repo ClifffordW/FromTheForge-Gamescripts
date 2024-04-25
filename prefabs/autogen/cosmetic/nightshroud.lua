@@ -3,10 +3,10 @@ return {
   __displayName="nightshroud",
   cosmetic_data={ title_key="NIGHTSHROUD",},
   group="PLAYER_TITLE",
-  hidden=false,
-  locked=false,
-  mastery="NONE",
-  purchased=false,
-  rarity="LEGENDARY",
+  
+  locked=true,
+  
+  
+  
   
 }

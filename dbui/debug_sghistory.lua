@@ -1,5 +1,6 @@
 local EntitySGFrameData = require "dbui.debug_historyframedata"
 local EntityTracker = require "dbui.entitytracker"
+local Pool = require "util.pool"
 
 
 local USE_SG_FRAME_DATA_POOLS = true

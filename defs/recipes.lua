@@ -53,11 +53,6 @@ local Recipe = Class(function(self, category, slot, name, ...)
 	end
 end)
 
-function Recipe:AddUpgradeLevel(level, ingredients)
-	-- Is this a recipe to upgrade a piece of equipment?
-	self.upgrade_levels[level] = ingredients
-end
-
 function Recipe:SetCount(count)
 	self.count = count
 end
@@ -104,7 +99,7 @@ function Recipe:CanPlayerCraft_Detailed(player)
 				has_enough = count >= needs,
 			})
 	end
-	-- TODO(dbriscoe): Sort to put konjur first
+	-- TODO: Sort to put konjur first
 	return req
 end
 
@@ -166,7 +161,7 @@ function Recipe:CraftItemForPlayer(player, skip_equip)
 		end
 	end
 
-	if slot == Consumable.Slots.MATERIALS or slot == Consumable.Slots.PLACEABLE_PROP then
+	if slot == Consumable.Slots.MATERIALS or Constructable.HasSlot(slot) then
 	else
 	end
 
@@ -182,15 +177,7 @@ function Recipe:CraftMaximumQuantityForPlayer(player, skip_equip)
 	return count
 end
 
-local function Ingredient(name, count)
-	local mat = Consumable.Items.MATERIALS[name]
-	assert(mat, ("Invalid material: %s"):format(name))
-	kassert.typeof("number", count)
-	return {
-		name = name,
-		count = count,
-	}
-end
+local Ingredient = Consumable.CreateIngredient
 
 function recipes.add(recipe)
 	assert(recipe)
@@ -222,8 +209,17 @@ function recipes.FindRecipeForItemDef(def)
 	end
 end
 
-function recipes.FindUpgradeRecipeForItem(item)
-	local name = string.format("%s_upgrade_%s", item:GetDef().name, item:GetUsageLevel())
+function recipes.FindUsageUpgradeRecipeForItem(item)
+	local name = string.format("%s_upgrade_%s_%s", item:GetDef().name, tostring(item.slot):lower(), item:GetUsageLevel())
+	for recipename, recipe in pairs(recipes.ForSlot.PRICE) do
+		if name == recipename then
+			return recipe
+		end
+	end
+end
+
+function recipes.FindItemUpgradeRecipeForItem(item)
+	local name = string.format("%s_item_upgrade_%s_%s", item:GetDef().name, tostring(item.slot):lower(), item:GetUpgradeLevel())
 	for recipename, recipe in pairs(recipes.ForSlot.PRICE) do
 		if name == recipename then
 			return recipe
@@ -260,7 +256,6 @@ RECIPE_COSTS.WAIST = TUNING.CRAFTING.ARMOUR_MEDIUM --ARMOUR_LARGE
 RECIPE_COSTS.FOOD = TUNING.CRAFTING.FOOD
 RECIPE_COSTS.TONICS = TUNING.CRAFTING.TONICS
 RECIPE_COSTS.PRICE = TUNING.CRAFTING.ARMOUR_UPGRADE_PATH
-
 local ILVL_COST_MULT = 0.1
 local function GetScaledCost(cost, ilvl)
 	return math.floor(cost + (cost * ((ilvl-1) * ILVL_COST_MULT)))
@@ -270,7 +265,7 @@ function AddRecipeForItem(slot, name, def, formula, is_upgrade)
 	local recipe = Recipe(Equipment, slot, name)
 
 	local ilvl = def.ilvl or 1
-	formula = formula or RECIPE_COSTS[slot][def.rarity]
+	formula = formula or RECIPE_COSTS[slot][def.rarity] or {}
 	local count = RECIPE_COSTS[slot].COUNT or 1
 
 	if count > 1 then
@@ -340,12 +335,32 @@ function AddRecipeForItem(slot, name, def, formula, is_upgrade)
 
 	recipes.add(recipe)
 
+	-- if not is_upgrade and RECIPE_COSTS[slot].UPGRADE_PATH then
+	-- 	local formulas = TUNING.CRAFTING.WEAPON[def.rarity]
+	-- 	if formulas then
+	-- 		for i, formula in ipairs(formulas) do
+	-- 			local new_name = string.format("%s_upgrade_%s", def.name, i)
+	-- 			AddRecipeForItem("PRICE", new_name, def, formula, true)
+	-- 		end
+	-- 	end
+	-- end
+
 	if not is_upgrade and RECIPE_COSTS[slot].UPGRADE_PATH then
+		--construct formula based on slot, rarity and upgrade lvl
 		local formulas = TUNING.CRAFTING.ARMOUR_UPGRADE_PATH[def.rarity]
 		if formulas then
+			--each i is one level of upgrade
 			for i, formula in ipairs(formulas) do
-				local new_name = string.format("%s_upgrade_%s", def.name, i)
-				AddRecipeForItem("PRICE", new_name, def, formula, true)
+				--copy the basic formula for this upgrade level
+				local new_formula = shallowcopy(formula)
+				local slot_string = tostring(slot):lower()
+
+				--jcheng: there's only one table inside each formula. Not sure why it's a nested table...
+				new_formula[1].a = math.ceil(TUNING.CRAFTING.UPGRADE_COSTS[slot] * TUNING.CRAFTING.RARITY_UPGRADE_MODIFIER[def.rarity])
+
+				--print(string.format("%s_item_upgrade_%s", def.name, i), slot, def.rarity, new_formula[1].a)
+				AddRecipeForItem("PRICE", string.format("%s_upgrade_%s_%s", def.name, slot_string, i), def, new_formula, true)
+				AddRecipeForItem("PRICE", string.format("%s_item_upgrade_%s_%s", def.name, slot_string, i), def, new_formula, true)
 			end
 		end
 	end
@@ -369,84 +384,33 @@ recipes.add(Recipe(Equipment, "POTIONS", "heal1",    	   Ingredient("konjur_soul
 recipes.add(Recipe(Equipment, "POTIONS", "duration_heal1", Ingredient("konjur_soul_lesser", 1), Ingredient("gourdo_hat", 2))) -- gourdo
 recipes.add(Recipe(Equipment, "POTIONS", "quick_heal1",    Ingredient("konjur_soul_lesser", 1), Ingredient("mossquito_cap", 2))) -- mossquito
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "armorer_1"))
-recipes.add(Recipe(Constructable, "BUILDINGS",   "armorer"))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "forge_1"))
-recipes.add(Recipe(Constructable, "BUILDINGS",   "forge"))
+-- TODO @H: remove these
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "armorer_1"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "armorer"))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "scout_tent_1"))
-recipes.add(Recipe(Constructable, "BUILDINGS",   "scout_tent",        Ingredient("konjur_soul_greater", 10)))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "forge_1"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "forge"))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "chemist_1"))
-recipes.add(Recipe(Constructable, "BUILDINGS",   "chemist"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "scout_tent_1"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "scout_tent",        Ingredient("konjur_soul_greater", 10)))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "apothecary"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "chemist_1"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "chemist"))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "kitchen_1"))
-recipes.add(Recipe(Constructable, "BUILDINGS",   "kitchen"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "apothecary"))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "refinery_1",        Ingredient("megatreemon_hand", 1)))
-recipes.add(Recipe(Constructable, "BUILDINGS",   "refinery",          Ingredient("bandicoot_wing", 1)))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "kitchen_1"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "kitchen"))
 
-recipes.add(Recipe(Constructable, "BUILDINGS",   "marketroom_shop"))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "refinery_1",        Ingredient("megatreemon_hand", 1)))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "refinery",          Ingredient("bandicoot_wing", 1)))
 
-function MakePlaceablePropRecipe( category, slot, name, ... )
-	recipes.add(Recipe(category, slot, name, ...))
-	recipes.add(Recipe(Consumable, "PLACEABLE_PROP", name, ...))
-end
-
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "dummy_cabbageroll", Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "dummy_bandicoot",   Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "chair1",            Ingredient("cabbageroll_baby", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "chair2",            Ingredient("yammo_stem", 1))
-
---TODO: tune these
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "bench_megatreemon",     Ingredient("megatreemon_hand", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "bench_rotwood",   	  Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "hammock",   			  Ingredient("cabbageroll_skin", 1), Ingredient("treemon_arm", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "kitchen_barrel",   	  Ingredient("treemon_arm", 1), Ingredient("treemon_cone", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "kitchen_chair",   	  Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "outdoor_seating_stool", Ingredient("treemon_arm", 2), Ingredient("yammo_skin", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "outdoor_seating",   	  Ingredient("treemon_arm", 1))
-MakePlaceablePropRecipe(Constructable, "FURNISHINGS", "character_customizer_vshack",    Ingredient("konjur_soul_lesser", 1))
-
-MakePlaceablePropRecipe(Constructable, "DECOR", "flower_bush",     	Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "flower_violet",   	Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "flower_bluebell", 	Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "tree",     		Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "shrub",   			Ingredient("konjur_soul_lesser", 1))
-
---TODO: tune these
-MakePlaceablePropRecipe(Constructable, "DECOR", "plushies_lrg",    Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "plushies_mid",    Ingredient("yammo_skin", 2))
-MakePlaceablePropRecipe(Constructable, "DECOR", "plushies_sm",     Ingredient("cabbageroll_skin", 2))
-MakePlaceablePropRecipe(Constructable, "DECOR", "plushies_stack",  Ingredient("yammo_skin", 1), Ingredient("gourdo_skin", 1), Ingredient("zucco_skin", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "basket",     	  Ingredient("konjur_soul_lesser", 1))
-
---TODO: tune these
-MakePlaceablePropRecipe(Constructable, "DECOR", "bulletin_board", Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "bread_oven",     Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "dye1", 		  Ingredient("gourdo_hat", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "dye2", 		  Ingredient("blarmadillo_trunk", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "dye3", 		  Ingredient("beets_body", 2))
-MakePlaceablePropRecipe(Constructable, "DECOR", "kitchen_sign",   Ingredient("treemon_cone", 2))
-MakePlaceablePropRecipe(Constructable, "DECOR", "leather_rack",   Ingredient("yammo_skin", 1),Ingredient("zucco_skin", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "tanning_rack",   Ingredient("blarmadillo_hide", 1), Ingredient("treemon_arm", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "pergola", 	      Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "stone_lamp",     Ingredient("blarmadillo_trunk", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "street_lamp",    Ingredient("cabbageroll_baby", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "travel_pack",    Ingredient("konjur_soul_lesser", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "weapon_rack",    Ingredient("megatreemon_hand", 1))
-MakePlaceablePropRecipe(Constructable, "DECOR", "well", 		  Ingredient("blarmadillo_hide", 2))
-MakePlaceablePropRecipe(Constructable, "DECOR", "wooden_cart",    Ingredient("treemon_arm", 2), Ingredient("treemon_cone", 1))
+-- recipes.add(Recipe(Constructable, "BUILDINGS",   "marketroom_shop"))
 
 -- PRICE recipes don"t produce real items, but are used as costs for something
 -- outside our item system.
 recipes.add(Recipe(nil, "PRICE", "potion_refill", Ingredient("konjur", 75)))
-
-recipes.add(Recipe(nil, "PRICE", "town_pillar_upgrade_1", Ingredient("konjur_heart", 1)))
-recipes.add(Recipe(nil, "PRICE", "town_pillar_upgrade_2", Ingredient("konjur_heart", 1)))
 
 --HOGGINS' "BUSINESS VENTURES"
 ---pay hoggins for a tip on where your missing friends are
@@ -482,6 +446,23 @@ local TEMP_ID_TO_COST =
 for _, id in pairs(Equipment.ArmourSets) do
 	local cost = TEMP_ID_TO_COST[id] or 2
 	MakeUnlockRecipe(id, "armour", cost)
+end
+
+function MakePlaceablePropRecipe(def)
+	local ingredients = {}
+	for ingredient, count in pairs(def.ingredients) do
+		table.insert(ingredients, Ingredient(ingredient, count))
+	end
+
+	recipes.add(Recipe(Constructable, def.slot, def.name, table.unpack(ingredients)))
+end
+
+for slot, items in pairs(Constructable.Items) do
+	if slot == "DECOR" or slot == "STRUCTURES" then
+		for name, item in pairs(items) do
+			MakePlaceablePropRecipe(item)
+		end
+	end
 end
 
 return recipes

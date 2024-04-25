@@ -41,9 +41,8 @@ local function SetupDeathFxFor(inst, target)
 	inst.Transform:SetPosition(x, 0, z)
 	SetRotationOnAllLayers(inst, target.Transform:GetFacingRotation() + 180)
 	inst.target = target
-	if target.components.coloradder ~= nil then
-		target.components.coloradder:AttachChild(inst)
-	end
+	-- Skip coloradder so we don't give death fx weird tints that look fine on creatures.
+	-- target.components.coloradder:AttachChild(inst)
 	if target.components.hitstopper ~= nil then
 		target.components.hitstopper:AttachChild(inst)
 	end

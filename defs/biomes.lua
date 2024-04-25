@@ -20,6 +20,7 @@ local biomes = {
 		GATEWAY = 4,
 	}
 }
+
 biomes.location_type_names = lume.invert(biomes.location_type)
 
 local type_to_lock_icon = {
@@ -35,8 +36,9 @@ local default_room_audio = {
 	potion = fmodtable.Event.mus_SnakeOil_LP,
 	powerupgrade = fmodtable.Event.mus_KonjineerLevel_LP,
 	ranger = fmodtable.Event.mus_MinigameLevel_LP,
-	wanderer = fmodtable.Event.mus_MysteriousWandererLevel_LP, -- we should find a way to properly nil this out
-	market = fmodtable.Event.mus_Market_LP
+	wanderer = fmodtable.Event.mus_MysteriousWandererLevel_LP,
+	market = fmodtable.Event.mus_Market_LP,
+	metaunlock = fmodtable.Event.mus_MagitekRoom_LP,
 }
 
 local function Debug_GetRandomRoomWorld(biome_location, roomtype)
@@ -53,6 +55,8 @@ local function Debug_GetRandomRoomWorld(biome_location, roomtype)
 		return ("%s_miniboss_nesw"):format(world_prefix)
 	elseif roomtype == "market" then
 		return ("%s_market_nesw"):format(world_prefix)
+	elseif roomtype == "metaunlock" then
+		return ("%s_metaunlock_nesw"):format(world_prefix)
 	end
 	return ("%s_arena_nesw"):format(world_prefix)
 end
@@ -177,7 +181,10 @@ local TRAP_ROLE_REMAPPER = {
 	stalactite = "stalactite",
 	wind = "wind",
 	windball = "windball",
+	geyser = "geyser",
 	thorn = "thorn",
+	cold = "cold",
+	torch = "torch",
 }
 
 local function ChooseTrap(location_def, role, tier, count)
@@ -215,6 +222,7 @@ function biomes.AddLocation(regionId, locationId, locationType, args)
 		GetRegion = GetRegion_ForLocation,
 		GetSceneGen = GetSceneGen_ForLocation,
 		ChooseTrap = ChooseTrap,
+		anim_id = locationId,  -- so you can remap if renaming
 	}
 
 	-- Add the locked icon based on the type of location
@@ -384,6 +392,7 @@ biomes.AddLocation("forest", "treemon_forest", biomes.location_type.DUNGEON,
 	miniboss_music_intro = fmodtable.Event.mus_StartingForest_Miniboss_Intro,
 	miniboss_music_LP = fmodtable.Event.mus_StartingForest_Miniboss_LP,
 	miniboss_music_victory = fmodtable.Event.mus_StartingForest_Miniboss_Victory,
+	boss_music_LP = fmodtable.Event.mus_megatreemon_LP,
 })
 
 biomes.AddLocation("forest", "owlitzer_forest", biomes.location_type.DUNGEON,
@@ -431,10 +440,12 @@ biomes.AddLocation("forest", "owlitzer_forest", biomes.location_type.DUNGEON,
 	miniboss_music_intro = fmodtable.Event.mus_OwlitzerForest_Miniboss_Intro,
 	miniboss_music_LP = fmodtable.Event.mus_OwlitzerForest_Miniboss_LP,
 	miniboss_music_victory = fmodtable.Event.mus_OwlitzerForest_Miniboss_Victory,
+	boss_music_LP = fmodtable.Event.Mus_Owlitzer_LP,
 })
 
 biomes.AddLocation("tundra", "sedament_tundra", biomes.location_type.DUNGEON,
 {
+	hide = true,
 	icon = "images/ui_ftf_pausescreen/ic_boss_owlitzer.tex",
 	alternate_mapgens = { "sedament_tundra_hard", },
 	description_icon = "images/ui_ftf_pausescreen/ic_boss_owlitzer.tex",
@@ -450,38 +461,38 @@ biomes.AddLocation("tundra", "sedament_tundra", biomes.location_type.DUNGEON,
 	map_y = 0.741,
 	monsters =
 	{
-		bosses = { "owlitzer" },
-		minibosses = { "gourdo" },
+		bosses = { "sediment" },
+		minibosses = { "crystroll" },
 		mobs = {
-			"blarmadillo",
 			"cabbageroll",
-			"cabbagerolls",
-			"cabbagerolls2",
-			"battoad",
-			"gourdo",
-			"yammo",
-			"zucco",
-			"gnarlic",
+			"meowl",
+			"bunippy",
+			"crystroll",
+			"antleer",
+			--"stunk",
+			--"snowballs",
+			--"snowfly",
 		},
 	},
 	traps = {
-		exploding = { "trap_bomb_pinecone", },
-		spike = { "trap_weed_spikes", },
+		cold = { "trap_cold" },
+		torch = { "trap_torch" }
 	},
-	required_unlocks = nil, -- { "scout_tent" }, -- no unlocks for completed_vertical_slice_jan2022
-	worlds = { "startingforest", },
+	required_unlocks = nil,
+	worlds = { "tundra", },
 	gate_prefab_fmt = "forest_gate_root_%s",
 	ambient_bed_sound = fmodtable.Event.amb_StartingForest_LP,
 	ambient_music = fmodtable.Event.mus_OwlitzerForest_LP,
-		miniboss_music_intro = fmodtable.Event.mus_OwlitzerForest_Miniboss_Intro,
-		miniboss_music_LP = fmodtable.Event.mus_OwlitzerForest_Miniboss_LP,
-		miniboss_music_victory = fmodtable.Event.mus_OwlitzerForest_Miniboss_Victory,
+	miniboss_music_intro = fmodtable.Event.mus_OwlitzerForest_Miniboss_Intro,
+	miniboss_music_LP = fmodtable.Event.mus_OwlitzerForest_Miniboss_LP,
+	miniboss_music_victory = fmodtable.Event.mus_OwlitzerForest_Miniboss_Victory,
+	boss_music_LP = fmodtable.Event.Mus_Owlitzer_LP,
 })
 
-biomes.AddLocation("swamp", "kanft_swamp", biomes.location_type.DUNGEON,
+biomes.AddLocation("swamp", "bandi_swamp", biomes.location_type.DUNGEON,
 {
 	icon = "images/ui_ftf_pausescreen/ic_boss_bandicoot.tex",
-	alternate_mapgens = { "kanft_swamp_hard", },
+	alternate_mapgens = { "bandi_swamp_hard", },
 	description_icon = "images/ui_ftf_pausescreen/ic_boss_bandicoot.tex",
 	map_colors = {
 		locator_tint = RGB(49, 172, 255, 150),
@@ -492,6 +503,7 @@ biomes.AddLocation("swamp", "kanft_swamp", biomes.location_type.DUNGEON,
 		room_tint = RGB(150, 141, 224),
 		room_add  = RGB(7, 0, 3),
 	},
+	anim_id = "kanft_swamp",
 	map_x = 0.187,
 	map_y = 0.179,
 	monsters =
@@ -513,7 +525,6 @@ biomes.AddLocation("swamp", "kanft_swamp", biomes.location_type.DUNGEON,
 		},
 	},
 	traps={
-		acid={ "trap_acid",},
 		spores={
 			"trap_spores_confused",
 			"trap_spores_damage",
@@ -532,6 +543,7 @@ biomes.AddLocation("swamp", "kanft_swamp", biomes.location_type.DUNGEON,
 	miniboss_music_intro = fmodtable.Event.mus_Swamp_Miniboss_Intro,
 	miniboss_music_LP = fmodtable.Event.mus_Swamp_Miniboss_LP,
 	miniboss_music_victory = fmodtable.Event.mus_Swamp_Miniboss_Victory,
+	boss_music_LP = fmodtable.Event.Mus_Bandicoot_LP,
 })
 
 biomes.AddLocation("swamp", "thatcher_swamp", biomes.location_type.DUNGEON,
@@ -556,62 +568,30 @@ biomes.AddLocation("swamp", "thatcher_swamp", biomes.location_type.DUNGEON,
 		minibosses = { "floracrane" },
 		mobs = {
 			"mothball",
+			"mothball_teen",
 			"bulbug",
 			"floracrane",
 			"woworm",
 			"totolili",
 			"slowpoke",
 			"swarmy",
-
-			"swamp_stalactite",
-			"swamp_stalagmite",
 		},
 	},
 	traps={
-		acid={ "trap_acid",},
-		stalactite={ "trap_stalactite",},
+		acid={ "trap_acid", "trap_acid_stage"},
+		geyser={"trap_acidgeyser"},
+		acid_geyser={ "thatcher_acid_geyser_left", "thatcher_acid_geyser_right" },
 	},
 	required_unlocks = {},
 	worlds = { "acidswamp", },
 	gate_prefab_fmt = "thatforest_gate_%s",
 	ambient_bed_sound = fmodtable.Event.amb_Swamp_LP,
-	ambient_music = fmodtable.Event.mus_Swamp_LP,
+	ambient_music = fmodtable.Event.mus_ThatcherSwamp_LP,
 	miniboss_music_intro = fmodtable.Event.mus_ThatcherSwamp_Miniboss_Intro,
 	miniboss_music_LP = fmodtable.Event.mus_ThatcherSwamp_Miniboss_LP,
 	miniboss_music_victory = fmodtable.Event.mus_ThatcherSwamp_Miniboss_Victory,
+	boss_music_LP = fmodtable.Event.Mus_Thatcher_LP,
 })
-
--- biomes.AddLocation("tundra", "sedament_tundra", biomes.location_type.DUNGEON,
--- {
--- 	icon = "images/ui_ftf_pausescreen/ic_boss_bandicoot.tex",
--- 	description_icon = "images/ui_ftf_pausescreen/ic_boss_bandicoot.tex",
--- 	map_colors = {
--- 		locator_tint = RGB(49, 172, 255, 150),
--- 		frame_tint = RGB(136, 146, 255),
--- 		frame_add  = RGB(15, 0, 0),
--- 		bg_tint = RGB(150, 141, 224),
--- 		bg_add  = RGB(7, 0, 3),
--- 		room_tint = RGB(150, 141, 224),
--- 		room_add  = RGB(7, 0, 3),
--- 	},
--- 	map_x = 2500 / 3840,
--- 	map_y = 900 / 2610,
--- 	monsters =
--- 	{
--- 		bosses = { "thatcher" },
--- 		minibosses = { "groak" }, --floracrane -- TEMP for network test, to allow network testing more easily without disturbing rest of experience
--- 		mobs = {
--- 			"cabbageroll",
--- 		},
--- 	},
--- 	traps={
--- 	},
--- 	required_unlocks = {},
--- 	worlds = { "swamp", },
--- 	gate_prefab_fmt = "thatforest_gate_%s",
--- 	ambient_bed_sound = fmodtable.Event.amb_Swamp_LP, --TODO: LUCA
--- 	ambient_music = fmodtable.Event.mus_Swamp_LP, --TODO: LUCA
--- })
 
 -- biomes.AddLocation("surrland", "caelden", biomes.location_type.DUNGEON,
 -- {
@@ -650,6 +630,14 @@ biomes.AddLocation("swamp", "thatcher_swamp", biomes.location_type.DUNGEON,
 
 biomes.SetStartingLocation("town", "brundle")
 
+biomes.location_unlock_order =
+{
+	{ biomes.locations.treemon_forest, }, -- hunts in the first entry will be unlocked by default.
+	{ biomes.locations.owlitzer_forest },
+	{ biomes.locations.bandi_swamp },
+	{ biomes.locations.thatcher_swamp },
+}
+
 -- Validation
 local required_keys = {
 	all = {
@@ -668,6 +656,7 @@ local required_keys = {
 		'traps'
 	},
 }
+
 for loc_name,loc in pairs(biomes.locations) do
 	for _,key in ipairs(required_keys.all) do
 		kassert.assert_fmt(loc[key], "Required key '%s' missing from location '%s' in region '%s'.", key, loc_name, loc.region_id)
@@ -677,5 +666,6 @@ for loc_name,loc in pairs(biomes.locations) do
 	end
 	mapgen.validate.all_keys_are_roomtype(loc.room_audio)
 end
+
 
 return biomes

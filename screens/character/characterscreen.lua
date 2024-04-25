@@ -23,8 +23,6 @@ local audioid = require "defs.sound.audioid"
 local soundutil = require "util.soundutil"
 local fmodtable = require "defs.sound.fmodtable"
 
-local MusicTrack = fmodtable.Event.mus_CharacterCreation_LP
-
 local lume = require "util.lume"
 local easing = require "util.easing"
 local krandom = require "util.krandom"
@@ -32,26 +30,28 @@ local krandom = require "util.krandom"
 local Cosmetic = require "defs.cosmetics.cosmetics"
 local Consumable = require "defs.consumable"
 
+local ui = require "dbui.imgui"
+
 -- The categories on the top tabs
 local TOP_TABS =
 {
-	--[1] = STRINGS.CHARACTER_CREATOR.TAB_TITLE,
-	[1] = STRINGS.CHARACTER_CREATOR.TAB_SPECIES,
-	[2] = STRINGS.CHARACTER_CREATOR.TAB_HEAD,
-	[3] = STRINGS.CHARACTER_CREATOR.TAB_BODY,
+	[1] = STRINGS.CHARACTER_CREATOR.TAB_TITLE,
+	[2] = STRINGS.CHARACTER_CREATOR.TAB_SPECIES,
+	[3] = STRINGS.CHARACTER_CREATOR.TAB_HEAD,
+	[4] = STRINGS.CHARACTER_CREATOR.TAB_BODY,
 	--[5] = STRINGS.CHARACTER_CREATOR.TAB_ARMORDYE,
 }
 -- Maps body parts to the top tabs
 local SUB_TABS =
 {
-	-- [1] = {
-	-- 	"PLAYER_TITLE"
-	-- },
-
 	[1] = {
+		"PLAYER_TITLE"
+	},
+
+	[2] = {
 		Cosmetic.BodyPartGroups.HEAD
 	},
-	[2] = {
+	[3] = {
 		Cosmetic.BodyPartGroups.HAIR,
 		Cosmetic.BodyPartGroups.HAIR_BACK,
 		Cosmetic.BodyPartGroups.HAIR_FRONT,
@@ -62,7 +62,7 @@ local SUB_TABS =
 		Cosmetic.BodyPartGroups.EARS,
 		Cosmetic.BodyPartGroups.ORNAMENT,
 	},
-	[3] = {
+	[4] = {
 		Cosmetic.BodyPartGroups.SHIRT,
 		Cosmetic.BodyPartGroups.UNDIES,
 		Cosmetic.BodyPartGroups.ARMS,
@@ -140,19 +140,14 @@ local COLOR_EXCEPTIONS =
 	canine = { "HAIR", "HAIR_FRONT", "HAIR_BACK" },
 }
 
-local COSMETIC_COSTS =
-{
-	COMMON = 500,
-	EPIC = 750,
-	LEGENDARY = 1000,
-}
-
 local ARMOR_HIGHLIGHT_PARTS =
 {
 	["HEAD"]  = { "HEAD", "HAIR", "HAIR_BACK", "HAIR_FRONT", "BROW", "EYES", "MOUTH", "NOSE", "EARS", "ORNAMENT"},
 	["BODY"]  = {"TORSO","SHIRT","ARMS"},
 	["WAIST"] = {"UNDIES", "LEGS", "OTHER"},
 }
+
+local SPECIES_CHANGE_COST = 10
 
 ------------------------------------------------------------------------------------------
 --- Displays a screen for the player to customize their playable character
@@ -189,8 +184,7 @@ local ARMOR_HIGHLIGHT_PARTS =
 
 local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_character_data, debug_mode)
 	Screen._ctor(self, "CharacterScreen")
-	-- technically this looks like an overlay but it's weird to hear people futzing around behind it when you join mid-level
-	self:SetAudioSnapshotOverride(fmodtable.Event.FullscreenOverlay_LP)
+	self:SetAudioCategory(Screen.AudioCategory.s.Fullscreen)
 
 	dbassert(owner)
 	self.owner = owner
@@ -210,10 +204,13 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 	self.is_new_character = new_character_data ~= nil
 	if self.is_new_character then
 		self.owner.components.charactercreator:SetSpecies(new_character_data.species)
-		self.owner.components.charactercreator:OnLoad(new_character_data)
+		self.owner.components.charactercreator:LoadFromTable(new_character_data)
 	end
 
 	self.debug_mode = debug_mode
+	if debug_mode then
+		TheSim:LoadPrefabs({ GroupPrefab("deps_player_cosmetics_dev"), })
+	end
 
 	-- Showing armor by default
 	self.showing_armor = true
@@ -319,7 +316,7 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 		:SetFacing(FACING_RIGHT)
 	self.puppet_shadow = self.customize_character_contents:AddChild(Image("images/ui_ftf_inventory/CharacterShadow.tex"))
 		:SetScale(0.85)
-		:SetMultColorAlpha(0.3)
+		:SetMultColorAlpha(0.08)
 		:LayoutBounds("center", "center", self.puppet)
 	self.puppet:SendToFront()
 
@@ -333,35 +330,10 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 		self.puppet.components.playertitleholder:SetTitle(title_def)
 	end
 
-	self.title_widget = self.customize_character_contents:AddChild(PlayerTitleWidget(self.puppet, FONTSIZE.SCREEN_TITLE))
+	self.title_widget = self.customize_character_contents:AddChild(PlayerTitleWidget(self.puppet, FONTSIZE.SCREEN_TEXT))
+		:SetScale(2)
 		:LayoutBounds("center", "below", self.puppet_shadow)
-		:SetColor(UICOLORS.BLACK)
-		:HideOutline()
 		:Offset(0, -20)
-
-	self.glitz_bg = self.customize_character_contents:AddChild(Image("images/ui_ftf/price_badge_tint.tex"))
-		:LayoutBounds("before", "center", self.puppet)
-		:Offset(-250, 728)
-		:SetScale(0.9)
-		:SetSize(430, 170)
-		:SetToolTip(STRINGS.CHARACTER_CREATOR.CURRENCY_TOOLTIP)
-
-	self.glitz_icon = self.glitz_bg:AddChild(Image("images/hud_images/hud_glitz_drops_currency.tex"))
-		:SetSize(125, 125)
-		--:LayoutBounds("center", "below", self.puppet_shadow)
-		:Offset(-80, 5)
-
-	self.glitz_label = self.glitz_bg:AddChild(Text(FONTFACE.DEFAULT, FONTSIZE.SCREEN_TITLE, 
-		string.format("%.0f",
-			self.owner.components.inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.glitz))
-		))
-		:LayoutBounds("after", "center", self.glitz_icon)
-		:Offset(30, 0)
-		:SetGlyphColor(UICOLORS.BLACK)
-
-	--if self.is_new_character then
-	self.glitz_bg:Hide()
-	--end
 
 	-- Add top nav
 	self.navbar_height = 150
@@ -373,16 +345,18 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 	self.navbar = self.navbar_root:AddChild(TabGroup())
 		:SetName("Navbar")
 		:SetTheme_DarkOnLight()
+		:SetTabSpacing(70)
 
 	-- Added this here as a temp fix to a weird Lua edge case
 	local top_tabs = deepcopy(TOP_TABS)
 	self.sub_tabs = deepcopy(SUB_TABS)
-	if not self.is_new_character then
-		--table.remove(top_tabs, 5)
-		--table.remove(self.sub_tabs, 5)
-		--table.remove(top_tabs, 1)
-		--table.remove(self.sub_tabs, 1)
+	if self.is_new_character then
+		-- table.remove(top_tabs, 5)
+		-- table.remove(self.sub_tabs, 5)
+		table.remove(top_tabs, 1)
+		table.remove(self.sub_tabs, 1)
 	end
+
 	-- Add tabs
 	for k, title in ipairs(top_tabs) do
 		local tab = self.navbar:AddTextTab(title, FONTSIZE.CHARACTER_CREATOR_TAB)
@@ -394,12 +368,12 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 
 	-- Add cycle hotkey icons
 	local icon_size = 60
-	local icon_margin = 70
+	local icon_margin = 60
 	self.navbar:AddCycleIcons(icon_size, icon_margin, UICOLORS.LIGHT_TEXT_DARK)
 
 	-- Resize navbar background to tabs
 	local w, h = self.navbar:GetSize()
-	self.navbar_bg:SetSize(w + 500, self.navbar_height)
+	self.navbar_bg:SetSize(w + 560, self.navbar_height)
 		:LayoutBounds("center", "center", self.navbar)
 	self.navbar_root:LayoutBounds("center", "top", self.panel_bg)
 		:Offset(0, -20)
@@ -429,6 +403,7 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 	self.subnav = self.customize_character_contents:AddChild(TabGroup())
 		:SetName("Subnav")
 		:SetTheme_DarkOnLight()
+		:SetTabSpacing(60)
 		:SetNavFocusable(false) -- rely on CONTROL_MAP
 		:SetIsSubTab(true)
 
@@ -468,8 +443,6 @@ local CharacterScreen = Class(Screen, function(self, owner, on_close_cb, new_cha
 	self.customize_character_contents.start_x, self.customize_character_contents.start_y = self.customize_character_contents:GetPos()
 
 	----------------------------------------------------------------------------------------
-	-- Play background audio
-	TheAudio:PlayPersistentSound(audioid.persistent.ui_music, MusicTrack)
 
 	----------------------------------------------------------------------------------------
 	-- Set default focus widget
@@ -495,7 +468,7 @@ CharacterScreen.CONTROL_MAP =
 		fn = function(self)
 			if self.continue_btn:IsShown() then
 				TheFrontEnd:GetSound():PlaySound(fmodtable.Event.ui_input_up_play)
-				self.continue_btn:Click()
+				self.continue_btn:SetFocus()
 				return true
 			end
 		end,
@@ -565,50 +538,66 @@ function CharacterScreen:OnCloseClicked()
 	if self:IsCharacterEqual() then
 		TheFrontEnd:PopScreen(self)
 	else
-		local popup = ConfirmDialog(nil, nil, true,
-			STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_TITLE,
-			nil,
-			STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_DESC
-			):SetYesButton(STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_YES, function()
-				TheFrontEnd:PopScreen()
-				TheFrontEnd:PopScreen(self)
-			end)
-			:SetNoButton(STRINGS.CHARACTER_CREATOR.PURCHASE_POPUP_NO, function()
-				TheFrontEnd:PopScreen()
-			end)
-			:HideArrow()
-			:SetMinWidth(600)
-			:CenterText()
-			:CenterButtons()
+		self:OnContinueClicked()
+		-- local popup = ConfirmDialog(self:GetOwningPlayer(), nil, true,
+		-- 	STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_TITLE,
+		-- 	nil,
+		-- 	STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_DESC
+		-- 	):SetYesButton(STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_YES, function()
+		-- 		TheFrontEnd:PopScreen()
+		-- 		TheFrontEnd:PopScreen(self)
+		-- 	end)
+		-- 	:SetNoButton(STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_NO, function()
+		-- 		TheFrontEnd:PopScreen()
+		-- 	end)
+		-- 	:HideArrow()
+		-- 	:SetMinWidth(600)
+		-- 	:CenterText()
+		-- 	:CenterButtons()
 		
-		TheFrontEnd:PushScreen(popup)
+		-- TheFrontEnd:PushScreen(popup)
 	end
+end
+
+-- Added due to some issues with the tab refreshing and elements losing focus and trying to Clear the preview
+-- Currently missing dye data
+function CharacterScreen:ForceResetPreviewData()
+	self.current_species = nil
+	self.current_data = nil
+	self.current_bodypart_group = nil 
+	self.current_bodypart_name = nil
+	self.current_colorgroup = nil
+	self.current_color_name = nil
 end
 
 -- Randomize button clicked
 function CharacterScreen:OnRerollClicked()
 	local current_species = self.puppet.components.charactercreator:GetSpecies()
+	if self.is_new_character then
+		current_species = nil
+	end
+
 	self.puppet.components.charactercreator:Randomize(current_species, self.owner)
 
-	-- We might bump into an edge case here if something is purchased but not unlocked
-	-- something would have to go very wrong for that to end in that state, but in case 
-	-- it does this is a note for future @H that here is where we would wanna treat that
-	-- Signed: Past @H
-	-- local purchased_titles = self.owner.components.unlocktracker:GetAllPurchasedCosmetics("PLAYER_TITLE")
-	-- local picked_title = Cosmetic.Items["PLAYER_TITLE"][krandom.PickFromArray(purchased_titles)]
+	local unlocked_titles = self.owner.components.unlocktracker:GetAllUnlockedCosmetics("PLAYER_TITLE")
+	local picked_title = Cosmetic.Items["PLAYER_TITLE"][krandom.PickFromArray(unlocked_titles)]
 	
-	-- self.puppet.components.playertitleholder:SetTitle(picked_title)
-	-- self.title_widget:Refresh() -- Due to some event fuckery in the UI we gotta refresh this manually
+	self:ForceResetPreviewData()
+
+	self.puppet.components.playertitleholder:SetTitle(picked_title)
+	self.title_widget:Refresh() -- Due to some event fuckery in the UI we gotta refresh this manually
 
 	self:RefreshTab()
 	self:CheckForChanges()
+
+	self.reroll_btn:SetFocus()
 end
 
 function CharacterScreen:OnRevertClicked()
-	local owner_data = self.owner.components.charactercreator:OnSave()
+	local owner_data = self.owner.components.charactercreator:SaveToTable()
 
 	self.puppet.components.charactercreator:SetSpecies(owner_data.species)
-	self.puppet.components.charactercreator:OnLoad(owner_data)
+	self.puppet.components.charactercreator:LoadFromTable(owner_data)
 
 	local owner_title_key = self.owner.components.playertitleholder:GetTitleKey()
 	self.puppet.components.playertitleholder:SetTitle(Cosmetic.Items["PLAYER_TITLE"][owner_title_key])
@@ -638,14 +627,34 @@ function CharacterScreen:OnArmorClicked()
 	self.was_showing_armor = self.showing_armor
 end
 
+function CharacterScreen:ApplyChanges()
+	local data = self.puppet.components.charactercreator:SaveToTable()
+	self.owner.components.charactercreator:SetSpecies(data.species)
+	self.owner.components.charactercreator:LoadFromTable(data)
+
+	local title_key = self.puppet.components.playertitleholder:GetTitleKey()
+	if title_key ~= self.owner.components.playertitleholder:GetTitleKey() then
+		self.owner.components.playertitleholder:SetTitle(Cosmetic.Items["PLAYER_TITLE"][title_key])
+	end
+
+	for _, slot in ipairs(Cosmetic.DyeSlots) do
+		local set = self.puppet.components.inventory.equips[slot]
+		local active_dye = self.puppet.components.equipmentdyer:GetActiveDye(slot, set)
+		local dye_name = active_dye ~= nil and active_dye.short_name or nil
+		self.owner.components.equipmentdyer:SetEquipmentDye(slot, set, dye_name)
+	end
+
+	TheSaveSystem:SaveCharacterForPlayerID(self.owner.Network:GetPlayerID())
+end
+
 function CharacterScreen:OnContinueClicked()
 	local wait_for_save_popup = WaitingDialog()
 		:SetTitle(STRINGS.UI.NOTIFICATION.SAVING)
 	TheFrontEnd:PushScreen(wait_for_save_popup)
 
-	local data = self.puppet.components.charactercreator:OnSave()
+	local data = self.puppet.components.charactercreator:SaveToTable()
 	self.owner.components.charactercreator:SetSpecies(data.species)
-	self.owner.components.charactercreator:OnLoad(data)
+	self.owner.components.charactercreator:LoadFromTable(data)
 
 	local title_key = self.puppet.components.playertitleholder:GetTitleKey()
 	if title_key ~= self.owner.components.playertitleholder:GetTitleKey() then
@@ -737,83 +746,6 @@ function CharacterScreen:_AnimateSpeciesDescription(species)
 		:Spool(100)
 end
 
--- This is longer and more convoluted than I wanted and I'm sorry
-function CharacterScreen:_AnimateCurrency(target_number)
-	local function DecomposeNumber(number)
-		local decomposed_numbers = {}
-		while number >= 10 do
-			local n = math.floor(number % 10)
-			table.insert(decomposed_numbers, n)
-			number = number - n
-			number = math.floor(number / 10)
-		end
-
-		if number > 0 then
-			table.insert(decomposed_numbers, number)
-		end
-
-		return lume.reverse(decomposed_numbers)
-	end
-	
-	local current_number = tonumber(self.glitz_label:GetText())
-	local currents = DecomposeNumber(current_number)
-	local targets  = DecomposeNumber(target_number)
-	
-	local diff = #currents - #targets
-	if diff > 0 then
-		for i=1, diff do
-			table.insert(targets, 1, 0)
-		end
-	end
-
-	if self.glitz_updater then
-		self.glitz_updater:Stop()
-	end
-	self.glitz_updater = Updater.Series()
-
-	local tick_index = 1 -- Which number is currently moving to its actual proper position
-	local tick_amt = 10 -- How many ticks we wait until we start moving to the next number to its target
-	local loops = math.abs(current_number - target_number)
-	for i=1, loops do -- Legacy, but keeping it here because I don't have a better approach right now
-		self.glitz_updater:Add(Updater.Series({
-			Updater.Do(function()
-				tick_amt = tick_amt - 1
-				if tick_amt <= 0 then
-					tick_index = tick_index + 1
-					tick_amt = 10
-				end
-
-				local number_txt = ""
-				for i=1, #currents do
-					-- If it's not the numbers turn to be moved to its actual target or if it is but we're not there yet
-					if (i >= tick_index) or (i < tick_index and currents[i] ~= targets[i]) then
-						currents[i] = currents[i] - 1
-						if currents[i] < 0 then
-							currents[i] = 9
-						end
-					end
-					number_txt = number_txt .. tostring(currents[i])
-				end
-
-				while string.sub(number_txt, 1, 1) == "0" and string.len(number_txt) > 1 do
-					number_txt = string.sub(number_txt, 2)
-				end
-
-				self.glitz_label:SetText(number_txt)
-
-				current_number = tonumber(number_txt) -- Converting it back to a number to see if we're done
-				if current_number == target_number then
-					self.glitz_updater:Stop()
-				end
-			end),
-
-			Updater.Wait(0.065),
-		}))
-	end
-
-	self.panel_root:RunUpdater(self.glitz_updater)
-end
-
 function CharacterScreen:_AnimateIn()
 	self.panel_root:RunUpdater(Updater.Parallel{
 		Updater.Ease(function(v) 
@@ -882,9 +814,6 @@ end
 
 function CharacterScreen:OnBecomeInactive()
 	CharacterScreen._base.OnBecomeInactive(self)
-	if ThePlayer.sg.mem.hidden_cosmetics ~= nil then
-		ThePlayer.sg.mem.hidden_cosmetics = nil
-	end
 	TheAudio:StopPersistentSound(audioid.persistent.ui_music)
 end
 
@@ -904,6 +833,12 @@ function CharacterScreen:RefreshTab()
 	self.subnav:OpenTabAtIndex(current_subnav_idx)
 end
 
+function CharacterScreen:FocusFirstElement()
+	if #self.scroll_contents.children > 0 then
+		self.scroll_contents.children[1]:SetFocus()
+	end
+end
+
 function CharacterScreen:OnChangeTab(tab_button)
 	-- Remove old content
 	self.scroll_contents:RemoveAllChildren()
@@ -913,8 +848,7 @@ function CharacterScreen:OnChangeTab(tab_button)
 	local top_tab_index = tab_button.top_tab_index
 	local sub_tabs = self.sub_tabs[top_tab_index]
 
-
-	local is_title = false--top_tab_index == 1 and not self.is_new_character
+	local is_title = top_tab_index == 1 and not self.is_new_character
 	local is_dye = false -- top_tab_index == 5 and not self.is_new_character
 
 	-- Show the correct sub-tabs
@@ -935,9 +869,8 @@ function CharacterScreen:OnChangeTab(tab_button)
 			end
 		end
 
-		--only show the tabs if it's the head, or if you have more than one option
-		if bodypart_count > 1 or id == Cosmetic.BodyPartGroups.HEAD then
-		
+		--only show the tabs if it's the head, title, or if you have more than one option or if it's debug mode
+		if bodypart_count > 1 or is_title or id == Cosmetic.BodyPartGroups.HEAD or self.debug_mode then
 			-- Keep the first tab as the new one
 			if not new_tab_id then
 				new_tab_id = id
@@ -966,19 +899,20 @@ function CharacterScreen:OnChangeTab(tab_button)
 		self:_ShowArmor()
 	end
 
-	self.subnav:AddCycleIcons(60, 0, UICOLORS.LIGHT_TEXT_DARK)
+	self.subnav:AddCycleIcons(50, 40, UICOLORS.LIGHT_TEXT_DARK)
 
 	-- Layout tabs
 	self.subnav:SetTabOnClick(function(tab_btn) self:OnChangeSubTab(tab_btn) end)
-		:LayoutChildrenInGrid(100, 50)
 
 	-- Resize navbar background to tabs
 	local w, h = self.subnav:GetSize()
-	self.subnav_bg:SetSize(w + 200, self.subnav_height)
+	self.subnav_bg:SetScale(1, 1)
+		:SetSize(w + 280, self.subnav_height)
 		:LayoutBounds("center", "above", self.list_bg)
-		:Offset(0, -5)
+		:Offset(0, -1)
+		:SetScale(1, -1)
 	self.subnav:LayoutBounds("center", "center", self.subnav_bg)
-		:Offset(0, 0)
+		:Offset(0, -2)
 
 	-- Select the first sub tab
 	self.subnav:OpenTabAtIndex(1)
@@ -987,7 +921,7 @@ function CharacterScreen:OnChangeTab(tab_button)
 	self.subnav_bg:SetShown(#sub_tabs > 1)
 	self.subnav:SetShown(#sub_tabs > 1)
 
-	local is_species_tab = self.is_new_character and top_tab_index == 1--) or top_tab_index == 2
+	local is_species_tab = (self.is_new_character and top_tab_index == 1) or top_tab_index == 2
 
 	-- And show the species description
 	if is_species_tab then
@@ -995,6 +929,8 @@ function CharacterScreen:OnChangeTab(tab_button)
 	else
 		self.customize_character_description:Hide()
 	end
+
+	self:FocusFirstElement()
 end
 
 function CharacterScreen:OnChangeSubTab(sub_tab)
@@ -1034,6 +970,8 @@ function CharacterScreen:OnChangeSubTab(sub_tab)
 		-- Remove old colors
 		self.color_elements_list:RemoveAllChildren()
 	end
+
+	self:FocusFirstElement()
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1042,12 +980,12 @@ end
 
 function CharacterScreen:SpeciesPreview(species)
 	self.current_species = self.puppet.components.charactercreator:GetSpecies()
-	self.current_data = self.puppet.components.charactercreator:OnSave()
+	self.current_data = self.puppet.components.charactercreator:SaveToTable()
 	
 	for i, data in ipairs(DEFAULT_CHARACTERS_SETUP) do
 		if data.species == species then
 			self.puppet.components.charactercreator:SetSpecies(species)
-			self.puppet.components.charactercreator:OnLoad(data)
+			self.puppet.components.charactercreator:LoadFromTable(data)
 		end
 	end
 end
@@ -1055,7 +993,7 @@ end
 function CharacterScreen:ClearSpeciesPreview()
 	if self.current_species ~= nil and self.current_data ~= nil then
 		self.puppet.components.charactercreator:SetSpecies(self.current_species)
-		self.puppet.components.charactercreator:OnLoad(self.current_data)
+		self.puppet.components.charactercreator:LoadFromTable(self.current_data)
 	end
 end
 
@@ -1120,8 +1058,7 @@ function CharacterScreen:SortCosmeticList(list, category, getactivefn, uitagsort
 	if itemstatusfn == nil then
 		itemstatusfn = function (item)
 			local unlocked = self.owner.components.unlocktracker:IsCosmeticUnlocked  (item.name, category)
-			local purchased = self.owner.components.unlocktracker:IsCosmeticPurchased(item.name, category)
-			return unlocked, purchased
+			return unlocked
 		end
 	end
 
@@ -1129,17 +1066,9 @@ function CharacterScreen:SortCosmeticList(list, category, getactivefn, uitagsort
 		return list
 	end
 
-	local hidden = lume.filter (list, function(item)
-		return item.hidden
-	end)
-
-	list = lume.reject(list, function(item)
-		return item.hidden
-	end)
-
 	local unlocked = lume.filter(list, function(item)
-		local unlocked, purchased = itemstatusfn(item)
-		return unlocked and purchased
+		local unlocked = itemstatusfn(item)
+		return unlocked
 	end)
 
 	if uitagsortfn then
@@ -1163,22 +1092,9 @@ function CharacterScreen:SortCosmeticList(list, category, getactivefn, uitagsort
 		return unlocked
 	end
 
-	local not_purchased = lume.filter(list, function(item)
-		local unlocked, purchased = itemstatusfn(item)
-		return unlocked and not purchased
-	end)
-
-	not_purchased = lume.sort (not_purchased, function(a, b)
-		return COSMETIC_COSTS[a.rarity] < COSMETIC_COSTS[b.rarity]
-	end)
-
-	-- if uitagsortfn then
-	-- 	not_purchased = lume.sort(not_purchased, uitagsortfn)
-	-- end
-
 	local locked = lume.filter(list, function(item)
-		local unlocked, purchased = itemstatusfn(item)
-		return not unlocked and not purchased
+		local unlocked = itemstatusfn(item)
+		return not unlocked
 	end)
 	
 	if uitagsortfn then
@@ -1186,10 +1102,10 @@ function CharacterScreen:SortCosmeticList(list, category, getactivefn, uitagsort
 	end
 
 	if self.debug_mode then
-		return lume.concat(unlocked, not_purchased, locked, hidden)
+		return lume.concat(unlocked, locked)
 	end
 
-	return lume.concat(unlocked, not_purchased, locked)
+	return lume.concat(unlocked)
 end
 
 function CharacterScreen:SortBodyPartList(list, bodypart)
@@ -1230,8 +1146,7 @@ function CharacterScreen:SortDyeList(list, armour_slot, armour_set)
 		end
 
 		local unlocked = self.owner.components.unlocktracker:IsCosmeticUnlocked  (item.armour_slot, item.short_name)
-		local purchased = self.owner.components.unlocktracker:IsCosmeticPurchased(item.armour_slot, item.short_name)
-		return unlocked, purchased
+		return unlocked
 	end
 
 	local function GetActiveDye()
@@ -1249,77 +1164,22 @@ end
 -- Content Generation Functions
 -------------------------------------------------------------------------------------
 
-function CharacterScreen:PurchasePopup(ui_element, cosmetic, cosmetic_type, onpurchasefn, clearpreviewfn)
-	local player_glitz = self.owner.components.inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.glitz)
-	local cost = COSMETIC_COSTS[cosmetic.rarity]
-
-	local popup = ConfirmDialog(nil, nil, false,
-			STRINGS.CHARACTER_CREATOR.PURCHASE_POPUP_TITLE, 
-			nil,
-			STRINGS.CHARACTER_CREATOR.PURCHASE_POPUP_DESC:subfmt({
-				amount = string.format("%d", cost)
-			})
-		):SetYesButton(STRINGS.CHARACTER_CREATOR.PURCHASE_POPUP_YES, function()
-			self.owner.components.unlocktracker:PurchaseCosmetic(cosmetic.name, cosmetic_type)
-			
-			ui_element:SetPurchased(true)
-			ui_element:Nudge("up", 40, 0.4, easing.outBack, easing.outBounce)
-			-- @Luca here's where the UI element gets animated post purchase
-
-			if onpurchasefn then
-				onpurchasefn()
-			end
-
-			if clearpreviewfn then
-				clearpreviewfn()
-			end
-
-			self.owner.components.inventoryhoard:RemoveStackable(Consumable.Items.MATERIALS.glitz, cost)
-			self:_AnimateCurrency(self.owner.components.inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.glitz))
-
-			TheFrontEnd:ShowTextNotification("images/hud_images/hud_glitz_drops_currency.tex",
-				STRINGS.CHARACTER_CREATOR.PURCHASE_NOTIFICATION_TITLE,
-				STRINGS.CHARACTER_CREATOR.PURCHASE_NOTIFICATION_DESC:subfmt({
-					player_name = string.format("%s", self.owner:GetCustomUserName())
-				})
-			)
-
-			self.purchasing = nil
-			TheFrontEnd:PopScreen()
-		end)
-		:SetNoButton(STRINGS.CHARACTER_CREATOR.PURCHASE_POPUP_NO, function()
-			if clearpreviewfn then
-				clearpreviewfn()
-			end
-			self.purchasing = nil
-			TheFrontEnd:PopScreen()
-		end)
-		:HideArrow()
-		:SetMinWidth(600)
-		:CenterText()
-		:CenterButtons()
-		:SetYesButtonEnabled(player_glitz >= cost)
-		:SetYesTooltip(player_glitz >= cost and "" or STRINGS.CHARACTER_CREATOR.PURCHASE_POPUP_NOT_ENOUGH)
-
-	TheFrontEnd:PushScreen(popup)
-end
-
-local function ElementTooltipFn(debug_mode, def, is_head, is_locked, is_purchased)
+function CharacterScreen:ElementTooltipFn(debug_mode, def, is_head, is_locked, is_purchasable)
 	if debug_mode then
-		local status = ""
-		if def.hidden or (ThePlayer.sg.mem.hidden_cosmetics ~= nil and ThePlayer.sg.mem.hidden_cosmetics[def.name]) then
-			status = "\nHIDDEN"
-		else
-			status = is_locked and "\nLOCKED" or "\n UNLOCKED"
-			status = status .. (is_purchased and "\nPURCHASED" or "\n NOT PURCHASED")
-		end
+		local status = is_locked and "\nLOCKED" or "\n UNLOCKED"
 		return def.name .. status
 	elseif is_head then
-		return STRINGS.SPECIES_DESCRIPTIONS[def.species]
+		if is_purchasable then
+			if self.owner.components.inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.konjur_soul_lesser) >= SPECIES_CHANGE_COST then
+				return string.format(STRINGS.CHARACTER_CREATOR.BUY_SPECIES_TT, SPECIES_CHANGE_COST)
+			else
+				return STRINGS.CHARACTER_CREATOR.NOT_ENOUGH_TT
+			end
+		else
+			return STRINGS.SPECIES_DESCRIPTIONS[def.species]
+		end
 	elseif is_locked then
 		return STRINGS.CHARACTER_CREATOR.LOCKED_TOOLTIP
-	elseif not is_purchased then
-		return STRINGS.CHARACTER_CREATOR.PURCHASE_TOOLTIP
 	end
 
 	return nil
@@ -1341,48 +1201,30 @@ function CharacterScreen:GenerateBodyPartList(bodypart)
 	for i, def in ipairs(bodypart_list) do
 		-- Check if this part is locked
 		local is_locked = not self.owner.components.unlocktracker:IsCosmeticUnlocked(def.name, "PLAYER_BODYPART")
-		local is_purchased =  self.owner.components.unlocktracker:IsCosmeticPurchased(def.name, "PLAYER_BODYPART")
+		local is_purchasable = false
 
 		if is_head and not self.is_new_character  then
-			is_locked = self.puppet.components.charactercreator:GetSpecies() ~= def.species
+			is_purchasable = self.puppet.components.charactercreator:GetSpecies() ~= def.species
 		end
 
 		-- Add button
 		local bodypart_element = self.scroll_contents:AddChild(SelectableBodyPart(image_w))
 			:SetBodyPartId(def.name) -- TODO @H: pass the whole def here
-			:SetCost(COSMETIC_COSTS[def.rarity])
-			:SetLocked(is_locked)
-			:SetPurchased(is_purchased)
 			:SetSelected(i == 1)
+			:SetLocked(is_locked)
+			:SetPurchasable(is_purchasable, SPECIES_CHANGE_COST)
 			
-		if self.debug_mode then
-			bodypart_element:SetHidden(def.hidden)
-		end
-
 		bodypart_element:SetOnClick(function()
 			if self.debug_mode and not is_head then
-				is_locked, is_purchased = self:Debug_UpdateAvailability(bodypart_element, def.name, "PLAYER_BODYPART")
-			else
-				if not is_locked then
-					if not is_purchased then
-							self.purchasing = true
-							self:PurchasePopup(bodypart_element, def, "PLAYER_BODYPART",
-								function() 
-									is_purchased = true
-									self:OnBodyPartElementSelected(bodypart, def)
-								end, 
-								function() self:ClearBodyPartPreview() 
-							end)
-						else
-							self:OnBodyPartElementSelected(bodypart, def)
-						end
-					end
+				--is_locked = self:Debug_UpdateAvailability(bodypart_element, def.name, "PLAYER_BODYPART")
+				ui:SetClipboardText(def.name)
+				TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/clipboard.tex", "Copied", def.name, 3)
+			elseif is_head and is_purchasable then
+				if self.owner.components.inventoryhoard:GetStackableCount(Consumable.Items.MATERIALS.konjur_soul_lesser) >= SPECIES_CHANGE_COST then
+					self:OnSwitchSpecies(bodypart, def)
 				end
-			end)
-
-		bodypart_element:SetOnClickAltFn(function()
-			if self.debug_mode and not is_head then
-				self:Debug_ChangePrice(bodypart_element, def.name, "PLAYER_BODYPART")
+			elseif not is_locked then
+				self:OnBodyPartElementSelected(bodypart, def)
 			end
 		end)
 
@@ -1399,19 +1241,21 @@ function CharacterScreen:GenerateBodyPartList(bodypart)
 		:SetOnLoseFocus(function()
 			bodypart_element:OnFocusChange(false)
 			if is_head then
-				if self.current_species ~= def.species then
+				if self.current_species ~= def.species and not self.unlocking_species then
 					self:ClearSpeciesPreview()
 				end
 			else
-				if self.purchasing == nil and not bodypart_element:IsSelected() then
+				if not bodypart_element:IsSelected() then
 					self:ClearBodyPartPreview()
 				end
 			end
 		end)
 
 		bodypart_element:SetToolTipFn(function()
-			return ElementTooltipFn(self.debug_mode, def, is_head, is_locked, is_purchased)
+			return self:ElementTooltipFn(self.debug_mode, def, is_head, is_locked, is_purchasable)
 		end)
+		:ShowToolTipOnFocus(true)
+
 		
 		if not is_head or self.puppet.components.charactercreator:GetSpecies() == def.species then
 			bodypart_element:CloneCharacterAppearance(self.puppet)
@@ -1456,9 +1300,9 @@ function CharacterScreen:GenerateBodyPartList(bodypart)
 
 		-- Don't colorize heads because they share palettes we don't want
 		-- canine head color applied to mer.
-		if not is_head then
+		if not is_head and not self.debug_mode then
 			bodypart_elements_list[i]:HighlightBodyPart(bodypart)
-			table.insert(self.colorize_puppets, bodypart_elements_list[i]:GetPuppet())	
+			table.insert(self.colorize_puppets, bodypart_elements_list[i]:GetPuppet())
 		end
 	end
 
@@ -1473,6 +1317,33 @@ function CharacterScreen:GenerateBodyPartList(bodypart)
 	if def ~= nil and def.colorgroup ~= nil then
 		self:ApplyColorToPartsList(def.colorgroup, self.puppet.components.charactercreator:GetColor(def.colorgroup))
 	end
+end
+
+function CharacterScreen:OnSwitchSpecies(bodypart, def)
+	self.unlocking_species = true
+	local popup = ConfirmDialog(self:GetOwningPlayer(), nil, true,
+		STRINGS.CHARACTER_CREATOR.SWITCH_SPECIES_POPUP_TITLE,
+		nil,
+		string.format(STRINGS.CHARACTER_CREATOR.SWITCH_SPECIES_POPUP_DESC, SPECIES_CHANGE_COST)
+		):SetYesButton(STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_YES, function()
+			self:OnBodyPartElementSelected(bodypart, def)
+			self:GenerateBodyPartList(bodypart)
+			self:ApplyChanges()
+			self:CheckForChanges()
+			self.owner.components.inventoryhoard:RemoveStackable(Consumable.Items.MATERIALS.konjur_soul_lesser, SPECIES_CHANGE_COST)
+			TheFrontEnd:PopScreen()
+			self.unlocking_species = nil
+		end)
+		:SetNoButton(STRINGS.CHARACTER_CREATOR.UNSAVED_POPUP_NO, function()
+			self.unlocking_species = nil
+			TheFrontEnd:PopScreen()
+		end)
+		:HideArrow()
+		:SetMinWidth(600)
+		:CenterText()
+		:CenterButtons()
+		
+	TheFrontEnd:PushScreen(popup)
 end
 
 function CharacterScreen:OnBodyPartElementSelected(bodypart, def)
@@ -1493,7 +1364,7 @@ function CharacterScreen:OnBodyPartElementSelected(bodypart, def)
 
 	if bodypart == Cosmetic.BodyPartGroups.HEAD then
 		self.puppet.components.charactercreator:SetSpecies(def.species)
-		self.puppet.components.charactercreator:OnLoad(selected_btn.puppet.components.charactercreator:OnSave())
+		self.puppet.components.charactercreator:LoadFromTable(selected_btn.puppet.components.charactercreator:SaveToTable())
 		self:_AnimateSpeciesDescription(self.puppet.components.charactercreator:GetSpecies())
 
 		self.current_species = nil
@@ -1528,48 +1399,29 @@ function CharacterScreen:GenerateColorList(colorgroup)
 		for i, def in ipairs(colors_list) do
 			-- Check if this color is locked
 			local is_locked = not self.owner.components.unlocktracker:IsCosmeticUnlocked(def.name, "PLAYER_COLOR")
-			local is_purchased = self.owner.components.unlocktracker:IsCosmeticPurchased(def.name, "PLAYER_COLOR")
 
 			-- Add button
 			local color_element = self.color_elements_list:AddChild(SelectableItemColor())
 				:SetImageColor (def.rgb)
 				:SetItemColorId(def.name)
-				:SetCost(COSMETIC_COSTS[def.rarity])
 				:SetLocked(is_locked)
-				:SetPurchased(is_purchased)
 				:SetControlUpSound(nil)
 			
 			color_element:SetToolTipFn(function() 
-				return ElementTooltipFn(self.debug_mode, def, false, is_locked, is_purchased)
+				return self:ElementTooltipFn(self.debug_mode, def, false, is_locked)
 			end)
+			:ShowToolTipOnFocus(true)
 
 			color_element:SetOnClick(function()
 				if self.debug_mode then
-					is_locked, is_purchased = self:Debug_UpdateAvailability(color_element, def.name, "PLAYER_COLOR")
-				else
-					if not is_locked then
-						if not is_purchased then
-								self.purchasing = true
-								self:PurchasePopup(color_element, def, "PLAYER_COLOR",
-									function() 
-										is_purchased = true
-										self:OnColorElementSelected(colorgroup, def.name)
-									end,
-									function() self:ClearColorPreview() end
-								)
-							else
-								self:OnColorElementSelected(colorgroup, def.name)
-							end
-						end
-					end
-				end)
-			
-			color_element:SetOnClickAltFn(function()
-				if self.debug_mode then
-					self:Debug_ChangePrice(color_element, def.name, "PLAYER_COLOR")
+					--is_locked = self:Debug_UpdateAvailability(color_element, def.name, "PLAYER_COLOR")
+					ui:SetClipboardText(def.name)
+					TheFrontEnd:ShowTextNotification("images/ui_ftf_notifications/clipboard.tex", "Copied", def.name, 3)
+				elseif not is_locked then
+					self:OnColorElementSelected(colorgroup, def.name)
 				end
 			end)
-
+			
 			color_element:SetOnGainFocus(function()
 				color_element:OnFocusChange(true)
 					if not is_locked and not color_element:IsSelected() then
@@ -1641,52 +1493,37 @@ function CharacterScreen:GenerateArmorDyeList(armorslot)
 	for i, def in ipairs(dye_list) do
 
 		local is_locked
-		local is_purchased
 		if def.name == "NONE" then
 			is_locked = false
-			is_purchased = true
 		else
 			is_locked = not self.owner.components.unlocktracker:IsCosmeticUnlocked  (def.armour_slot, def.short_name)
-			is_purchased = self.owner.components.unlocktracker:IsCosmeticPurchased (def.armour_slot, def.short_name)
 		end
 
 		local dye_element = self.scroll_contents:AddChild(SelectableArmorDye(image_w))
 			:SetDyeId(def.name) -- TODO @H: pass the whole def here
 			:SetLocked(is_locked)
-			:SetPurchased(is_purchased)
 			:SetSelected(i == 1)
 
 		dye_element:CloneCharacterAppearance(self.puppet)
 			:SetPuppetArmorDye(armorslot, equipped_set, def.short_name)
 			--:HighlightParts(ARMOR_HIGHLIGHT_PARTS[armorslot])
 
-		if self.debug_mode then
-			dye_element:SetHidden(def.hidden)
-		end
-	
 		dye_element:SetToolTipFn(function()
 			if is_locked then
 				return STRINGS.CHARACTER_CREATOR.LOCKED_DYE_TOOLTIP
-			elseif not is_purchased then
-				return STRINGS.CHARACTER_CREATOR.PURCHASABLE_DYE_TOOLTIP
 			end
 
 			return STRINGS.CHARACTER_CREATOR.CLICK_TOOLTIP
 		end)
+		:ShowToolTipOnFocus(true)
 	
 		dye_element:SetOnClick(function()
 			if self.debug_mode then
 				--is_locked, is_purchased = self:Debug_UpdateAvailability(dye_element, def.name, "PLAYER_TITLE")
 			else
-				if not is_locked and is_purchased then
+				if not is_locked then
 					self:OnDyeElementSelected(def)
 				end
-			end
-		end)
-	
-		dye_element:SetOnClickAltFn(function()
-			if self.debug_mode then
-				--self:Debug_ChangePrice(dye_element, def.name, "PLAYER_TITLE")
 			end
 		end)
 	
@@ -1749,47 +1586,22 @@ function CharacterScreen:GenerateTitleList()
 
 	for i, def in ipairs(sortable_list) do
 		local is_locked = not self.owner.components.unlocktracker:IsCosmeticUnlocked(def.name, "PLAYER_TITLE")
-		local is_purchased = self.owner.components.unlocktracker:IsCosmeticPurchased(def.name, "PLAYER_TITLE")
 
 		local title_element = self.scroll_contents:AddChild(SelectablePlayerTitle(title_width, title_height))
 			:SetTitle(def)
-			:SetCost(COSMETIC_COSTS[def.rarity])
 			:SetLocked(is_locked)
-			:SetPurchased(is_purchased)
 			:SetSelected(i == 1)
 
-		if self.debug_mode then
-			title_element:SetHidden(def.hidden)
-		end
-
 		title_element:SetToolTipFn(function()
-			return ElementTooltipFn(self.debug_mode, def, false, is_locked, is_purchased)
+			return self:ElementTooltipFn(self.debug_mode, def, false, is_locked)
 		end)
+		:ShowToolTipOnFocus(true)
 
 		title_element:SetOnClick(function()
 			if self.debug_mode then
-				is_locked, is_purchased = self:Debug_UpdateAvailability(title_element, def.name, "PLAYER_TITLE")
-			else
-				if not is_locked then
-					if not is_purchased then
-						self.purchasing = true
-						self:PurchasePopup(title_element, def, "PLAYER_TITLE",
-							function() 
-								is_purchased = true
-								self:OnTitleElementSelected(def)
-							end, 
-							function() end
-						)
-					else
-						self:OnTitleElementSelected(def)
-					end
-				end
-			end
-		end)
-
-		title_element:SetOnClickAltFn(function()
-			if self.debug_mode then
-				self:Debug_ChangePrice(title_element, def.name, "PLAYER_TITLE")
+				is_locked = self:Debug_UpdateAvailability(title_element, def.name, "PLAYER_TITLE")
+			elseif not is_locked then
+				self:OnTitleElementSelected(def)
 			end
 		end)
 
@@ -1832,71 +1644,20 @@ end
 
 -- Changes status
 function CharacterScreen:Debug_UpdateAvailability(element, cosmetic_name, cosmetic_category)
-	-- Bit of a hack because I didn't wanna create a whole new category in the unlocktracker to check for hidden items
-	-- since that would require a bit of a work around when saving and loading. Intead I'm temporarily adding the data
-	-- to the player sg and clearing it in the CosmeticEditor or when this screen closes
-	if ThePlayer.sg.mem.hidden_cosmetics == nil then
-		ThePlayer.sg.mem.hidden_cosmetics = {}
-	end
-
 	local is_locked = not self.owner.components.unlocktracker:IsCosmeticUnlocked(cosmetic_name, cosmetic_category)
-	local is_purchased = self.owner.components.unlocktracker:IsCosmeticPurchased(cosmetic_name, cosmetic_category)
-	local is_hidden = ThePlayer.sg.mem.hidden_cosmetics[cosmetic_name]
-	if is_hidden == nil then
-		is_hidden = Cosmetic.Items[cosmetic_category][cosmetic_name].hidden
-	end
 
-	if is_hidden then
-		ThePlayer.sg.mem.hidden_cosmetics[cosmetic_name] = false
-		is_hidden = false
-	elseif is_locked then
+	if is_locked then
 		self.owner.components.unlocktracker:UnlockCosmetic(cosmetic_name, cosmetic_category)
 		is_locked = false
-	elseif not is_purchased then
-		self.owner.components.unlocktracker:PurchaseCosmetic(cosmetic_name, cosmetic_category)
-		is_purchased = true
 	else
-		self.owner.components.unlocktracker:UnpurchaseCosmetic(cosmetic_name, cosmetic_category)
 		self.owner.components.unlocktracker:LockCosmetic(cosmetic_name, cosmetic_category)
-		ThePlayer.sg.mem.hidden_cosmetics[cosmetic_name] = true
 		
 		is_locked = true
-		is_purchased = false
-		is_hidden = true
 	end
 
-	element:SetHidden(is_hidden)
-		   :SetLocked(is_locked)
-		   :SetPurchased(is_purchased)
+	element:SetLocked(is_locked)
 
-	return is_locked, is_purchased
-end
-
--- Changes prices
-function CharacterScreen:Debug_ChangePrice(element, cosmetic_name, cosmetic_category)
-	if ThePlayer.sg.mem.rarity_changes == nil then
-		ThePlayer.sg.mem.rarity_changes = {}
-	end
-
-	if ThePlayer.sg.mem.rarity_changes[cosmetic_category] == nil then
-		ThePlayer.sg.mem.rarity_changes[cosmetic_category] = {}
-	end
-
-	local current_rarity = ThePlayer.sg.mem.rarity_changes[cosmetic_category][cosmetic_name]
-	if current_rarity == nil then
-		current_rarity = Cosmetic.Items[cosmetic_category][cosmetic_name].rarity
-	end
-
-	if current_rarity == "COMMON" then
-		current_rarity = "EPIC"
-	elseif current_rarity == "EPIC" then
-		current_rarity = "LEGENDARY"
-	else
-		current_rarity = "COMMON"
-	end
-
-	ThePlayer.sg.mem.rarity_changes[cosmetic_category][cosmetic_name] = current_rarity
-	element:SetCost(COSMETIC_COSTS[current_rarity])
+	return is_locked
 end
 
 -------------------------------------------------------------------------------------
@@ -1931,8 +1692,8 @@ function CharacterScreen:_HideArmor()
 end
 
 function CharacterScreen:IsCharacterEqual()
-	local owner_body_data = self.owner.components.charactercreator:OnSave()
-	local are_bodyparts_equal = deepcompare(self.puppet.components.charactercreator:OnSave(), owner_body_data)
+	local owner_body_data = self.owner.components.charactercreator:SaveToTable()
+	local are_bodyparts_equal = deepcompare(self.puppet.components.charactercreator:SaveToTable(), owner_body_data)
 
 	local owner_title_key = self.owner.components.playertitleholder:GetTitleKey()
 	local are_titles_equal = self.puppet.components.playertitleholder:GetTitleKey() == owner_title_key

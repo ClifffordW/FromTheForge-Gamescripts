@@ -1,8 +1,7 @@
 local Enum = require "util.enum"
 local krandom = require "util.krandom"
 local lume = require "util.lume"
-local monsterutil = require "util.monsterutil"
-local SGCommon = require("stategraphs/sg_common")
+local MegaTreemonShared = require "prefabs.monsters.bosses.megatreemonshared"
 
 local RootCommand <const> = Enum {
 	"DoGridAttack",
@@ -19,48 +18,6 @@ local RootCommand <const> = Enum {
 }
 
 local RootCommandIdle <const> = 0
-
--- TODO: networking2022, make these visible via require so no duplication is needed
--- from sg_megatreemon.lua
-
-local function OnFlailHitBoxTriggered(inst, data)
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		hitstoplevel = HitStopLevel.HEAVY,
-		set_dir_angle_to_target = true,
-		damage_mod = 0,
-		pushback = 1.5,
-		combat_attack_fn = "DoKnockbackAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		hit_fx_offset_x = 0.5,
-		keep_it_local = true,
-	})
-end
-
-local function OnPokeRootHitBoxTriggered(inst, data)
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		hitstoplevel = HitStopLevel.LIGHT,
-		set_dir_angle_to_target = true,
-		damage_mod = 0.5,
-		pushback = 0.1,
-		hitflags = Attack.HitFlags.GROUND,
-		combat_attack_fn = "DoKnockbackAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		keep_it_local = true,
-	})
-end
-
-local function OnAttackRootHitBoxTriggered(inst, data)
-	SGCommon.Events.OnHitboxTriggered(inst, data, {
-		attackdata_id = "root",
-		hitstoplevel = HitStopLevel.HEAVY,
-		set_dir_angle_to_target = true,
-		pushback = 0.5,
-		hitflags = Attack.HitFlags.GROUND,
-		combat_attack_fn = "DoKnockdownAttack",
-		hit_fx = monsterutil.defaultAttackHitFX,
-		keep_it_local = true,
-	})
-end
 
 local RootAttacker = Class(function(self, inst)
 	self.inst = inst
@@ -265,6 +222,7 @@ function RootAttacker:SpawnRootAt(x, z, event, data, skip_rot)
 	-- hit you there, but there's no visual reason they can't spawn there.
 	if TheWorld.Map:IsGroundAtXZ(x, z) then
 		local root = SpawnPrefab("megatreemon_growth_root", self.inst)
+		-- TODO: networking2022, this is not mirrored across the network due to rng use
 		local offset_size = 0.6
 		local horizontal_offset = math.random() * offset_size
 		x = x + (-(offset_size / 2) + horizontal_offset)
@@ -303,7 +261,7 @@ function RootAttacker:SpawnGuardRoots()
 		local root = self:SpawnRootAt(root_pos.x, root_pos.y, "guard")
 		table.insert(self.guard_roots, root)
 	end
-	self:_ClientListenForHitboxTrigger(OnFlailHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnFlailHitBoxTriggered)
 end
 
 function RootAttacker:DespawnGuardRoots()
@@ -331,7 +289,7 @@ function RootAttacker:DoTargettedAttackPre(data)
 
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._targetted_attack_pre_coro, self, data)
 	self:SetSyncCommand(RootCommand.id.DoTargettedAttackPre, data)
-	self:_ClientListenForHitboxTrigger(OnAttackRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnAttackRootHitBoxTriggered)
 end
 
 function RootAttacker:FinishTargettedAttack()
@@ -370,7 +328,7 @@ function RootAttacker:DoLinesAttack(data)
 	data = data or { x = math.random(0, 2^32 - 1) }
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._lines_coro, self, data)
 	self:SetSyncCommand(RootCommand.id.DoLinesAttack, data)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:DoSpinAttack(data)
@@ -382,7 +340,7 @@ function RootAttacker:DoSpinAttack(data)
 	data = data or { x = math.random(0, 2^32 - 1) }
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._spin_coro, self, data)
 	self:SetSyncCommand(RootCommand.id.DoSpinAttack, data)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:DoCircleAttack(_data)
@@ -393,7 +351,7 @@ function RootAttacker:DoCircleAttack(_data)
 
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._circle_coro, self, nil)
 	self:SetSyncCommand(RootCommand.id.DoCircleAttack)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:DoHorizontalLineAttack(_data)
@@ -404,7 +362,7 @@ function RootAttacker:DoHorizontalLineAttack(_data)
 
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._h_line_coro, self, nil)
 	self:SetSyncCommand(RootCommand.id.DoHorizontalLineAttack)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:DoVerticalLineAttack(_data)
@@ -415,7 +373,7 @@ function RootAttacker:DoVerticalLineAttack(_data)
 
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._v_line_coro, self, nil)
 	self:SetSyncCommand(RootCommand.id.DoVerticalLineAttack)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:DoCirclesAttack(data)
@@ -427,7 +385,7 @@ function RootAttacker:DoCirclesAttack(data)
 	data = data or { x = math.random(0, 2^32 - 1) }
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._circles_attack, self, data)
 	self:SetSyncCommand(RootCommand.id.DoCirclesAttack, data)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:DoGridAttack(_data)
@@ -438,7 +396,7 @@ function RootAttacker:DoGridAttack(_data)
 
 	self.attack_thread = self.inst.components.cororun:StartCoroutine(RootAttacker._grid_coro, self, nil)
 	self:SetSyncCommand(RootCommand.id.DoGridAttack)
-	self:_ClientListenForHitboxTrigger(OnPokeRootHitBoxTriggered)
+	self:_ClientListenForHitboxTrigger(MegaTreemonShared.OnPokeRootHitBoxTriggered)
 end
 
 function RootAttacker:_circles_attack(data)

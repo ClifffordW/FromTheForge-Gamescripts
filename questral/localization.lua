@@ -12,9 +12,11 @@ Localization.VALIDATOR = Validator()
     :Req("id", "string")
     :Req("name", "string") -- LocString
     :Req("default_languages", "table")
+    :Opt("fallback_languages", "table", table.empty)
     :Opt("fonts", "table", table.empty )
     :Opt("plurality_fn", "string" ) -- Lua chunk in raw string
     :Opt("po_filenames", "table", table.empty )
+    :Opt("is_game_authored_language", "boolean", false)
     :Opt("incomplete", "boolean", false)
 
 Localization.FONT_FACE_SCALE = {} --  Map of font -> number (scaling factor)
@@ -49,15 +51,18 @@ function Localization:ApplyFonts()
 
     if self.fonts then
         for alias, fontinfo in pairs( self.fonts ) do
-            TheSim:LoadFont(
-                fontinfo.font,
-                alias,
-                fontinfo.sdfthreshold,
-                fontinfo.sdfboldthreshold,
-                fontinfo.sdfshadowthreshold,
-                -- fontinfo.kernAdvance, -- GLN: no kern in Rotwood
-                fontinfo.supportsitalics
-                )
+            -- TODO(L10n): Load fonts here instead of LoadFonts()
+            -- Also need to setup fallbacks and unloading.
+            -- Currenty, we only use font setup for text scaling.
+            --~ TheSim:LoadFont(
+            --~     fontinfo.font,
+            --~     alias,
+            --~     fontinfo.sdfthreshold,
+            --~     fontinfo.sdfboldthreshold,
+            --~     fontinfo.sdfshadowthreshold,
+            --~     -- fontinfo.kernAdvance, -- GLN: no kern in Rotwood
+            --~     fontinfo.supportsitalics
+            --~     )
             Localization.FONT_FACE_SCALE[alias] = fontinfo.scale
             Localization.LINE_HEIGHT_SCALE[alias] = fontinfo.line_height_scale
             Localization.EMPTY_LINE_HEIGHT_SCALE[alias] = fontinfo.empty_line_height_scale
@@ -98,8 +103,16 @@ function Localization:SupportsLocale(locale_id)
     return self.default_languages and table.arrayfind(self.default_languages, locale_id)
 end
 
+function Localization:IsFallbackForLocale(locale_id)
+    return self.fallback_languages and table.arrayfind(self.fallback_languages, locale_id)
+end
+
 function Localization:GetString(id)
     return self.strings and self.strings[id]
+end
+
+function Localization:GetAllStrings()
+    return self.strings
 end
 
 

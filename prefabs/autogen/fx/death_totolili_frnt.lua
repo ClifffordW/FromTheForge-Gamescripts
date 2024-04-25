@@ -13,5 +13,5 @@ return {
   scalex=0.89999997615814,
   scaley=0.80000001192093,
   shadow=true,
-  soundevent="battoad_death",
+  soundevent="totolili_death",
 }

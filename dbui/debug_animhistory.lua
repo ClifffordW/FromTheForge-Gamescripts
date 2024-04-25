@@ -1,5 +1,6 @@
 local EntityAnimFrameData = require "dbui.debug_historyframedata"
 local EntityTracker = require "dbui.entitytracker"
+local Pool = require "util.pool"
 
 
 local ANIM_HISTORY_VERBOSE = false
@@ -77,8 +78,8 @@ local DebugAnimHistory = Class( function(self, max_history)
 
 	self._on_charactercreator_load = function(inst)
 		local proxy_table = self.proxies[inst.GUID]
-		proxy_table.charactercreator_data = inst.components.charactercreator:OnSave()
-		proxy_table.entity.components.charactercreator:OnLoad(proxy_table.charactercreator_data)
+		proxy_table.charactercreator_data = inst.components.charactercreator:SaveToTable()
+		proxy_table.entity.components.charactercreator:LoadFromTable(proxy_table.charactercreator_data)
 	end
 	self._on_inventorychanged = function(inst)
 		local proxy_table = self.proxies[inst.GUID]
@@ -105,7 +106,7 @@ function DebugAnimHistory:OnTrackEntity(inst)
 		bank = inst.AnimState:GetCurrentBankName(),
 		build = inst.AnimState:GetBuild(),
 		layer = inst.AnimState:GetLayer(),
-		charactercreator_data = inst.components.charactercreator and inst.components.charactercreator:OnSave() or nil,
+		charactercreator_data = inst.components.charactercreator and inst.components.charactercreator:SaveToTable() or nil,
 		inventory_data = inst.components.inventory and inst.components.inventory:OnSave() or nil
 	})
 	if ANIM_HISTORY_VERBOSE then
@@ -172,7 +173,7 @@ function DebugAnimHistory:Save(save_data_file)
 			last_alive = proxy_data.last_alive,
 			guid = guid,
 			prefab_name = proxy_data.prefab_name,
-			charactercreator_data = proxy_entity.components.charactercreator and proxy_entity.components.charactercreator:OnSave() or nil,
+			charactercreator_data = proxy_entity.components.charactercreator and proxy_entity.components.charactercreator:SaveToTable() or nil,
 			inventory_data = proxy_entity.components.inventory and proxy_entity.components.inventory:OnSave() or nil,
 			bank = proxy_entity.AnimState:GetCurrentBankName(),
 			build = proxy_entity.AnimState:GetBuild(),
@@ -262,7 +263,7 @@ function DebugAnimHistory:SpawnProxy( to_spawn )
 	--if player, you need to equip the player
 	if to_spawn.charactercreator_data then
 		proxy:AddComponent("charactercreator")
-		proxy.components.charactercreator:OnLoad( to_spawn.charactercreator_data )
+		proxy.components.charactercreator:LoadFromTable( to_spawn.charactercreator_data )
 	end
 
 	if to_spawn.inventory_data or to_spawn.prefab_name == "player_side" then

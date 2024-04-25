@@ -2,9 +2,12 @@
 return {
   __displayName="bed_swamp_2",
   clickable=true,
-  gridsize={ { h=3, w=3,},},
-  group="town_decor",
+  gridsize={ { h=2, w=3,},},
+  group="construct_structure",
+  hostspawn=true,
+  isminimal=true,
   looping=true,
+  networked=1,
   parallax={
     { anim="leg_front", dist=-0.4, shadow=true,},
     { anim="frame_front", dist=-0.2, shadow=true,},

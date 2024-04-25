@@ -9,6 +9,7 @@ local assets =
 {
 	Asset("ANIM", "anim/slowpoke_bank.zip"),
 	Asset("ANIM", "anim/slowpoke_build.zip"),
+	Asset("ANIM", "anim/fx_shadow.zip"),
 }
 
 local elite_assets =
@@ -21,6 +22,8 @@ local prefabs =
 {
 	"fx_hurt_sweat",
 	"fx_low_health_ring",
+	"fx_acid_projectile",
+	GroupPrefab("fx_acid"),
 	"slowpoke_spit",
 	"trap_acid",
 	"slowpoke_aoe",
@@ -31,6 +34,7 @@ local prefabs =
 	GroupPrefab("drops_slowpoke"),
 }
 prefabutil.SetupDeathFxPrefabs(prefabs, "slowpoke")
+prefabutil.SetupDeathFxPrefabs(prefabs, "slowpoke_elite")
 
 local LocoState = Enum{ "SITTING", "STANDING" }
 
@@ -63,7 +67,7 @@ local attacks =
 		damage_mod = 0.6,
 		startup_frames = 30,
 		cooldown = 6,
-		initialCooldown = 0,
+		initialCooldown = 2.5,
 		pre_anim = "spit_bomb_pre",
 		hold_anim = "spit_bomb_hold",
 		start_conditions_fn = function(inst, data, trange)
@@ -82,10 +86,11 @@ local attacks =
 		loop_hold_anim = true,
 		is_hitstun_pressure_attack = true,
 		start_conditions_fn = function(inst, data, trange)
-			return not inst:IsSitting() and trange:IsInRange(6)
+			return not inst:IsSitting() and trange:IsInRange(7)
 		end
 	},
 }
+export_timer_names_grab_attacks(attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local elite_attacks =
 {
@@ -119,6 +124,7 @@ local elite_attacks =
 		end
 	},
 }
+export_timer_names_grab_attacks(elite_attacks) -- This needs to be here to extract the names of cooldown timers for the network strings
 
 local MONSTER_SIZE = 1.5
 
@@ -201,7 +207,7 @@ local function spit_fn(prefabname)
 		name = prefabname,
 		hits_targets = true,
 		stategraph = "sg_slowpoke_spit",
-		fx_prefab = "fx_battoad_projectile"
+		fx_prefab = "fx_acid_projectile"
 	})
 
 	inst.components.complexprojectile:SetHorizontalSpeed(30)
@@ -245,8 +251,13 @@ local function aoe_fn(prefabname)
 	-- This is called slightly after aoe_fn, same frame, and contains the instigator reference which is networked
 	inst.OnSetSpawnInstigator = function(inst, instigator)
 		inst.owner = instigator
-		inst.components.hitbox:SetHitGroup(HitGroup.MOB) --instigator.components.hitbox:GetHitGroup())
-		inst.components.hitbox:SetHitFlags(HitGroup.CHARACTERS) --instigator.components.hitbox:GetHitFlags())
+		if (instigator) then
+			inst.components.hitbox:SetHitGroup(instigator.components.hitbox:GetHitGroup())
+			inst.components.hitbox:SetHitFlags(instigator.components.hitbox:GetHitFlags())
+		else
+			inst.components.hitbox:SetHitGroup(HitGroup.MOB)
+			inst.components.hitbox:SetHitFlags(HitGroup.CHARACTERS)
+		end
 		inst.components.hitbox:PushCircle(0.30, 0.00, 6, HitPriority.MOB_DEFAULT)
 	end
 
@@ -267,8 +278,13 @@ local function aoe_elite_fn(prefabname)
 	-- This is called slightly after aoe_fn, same frame, and contains the instigator reference which is networked
 	inst.OnSetSpawnInstigator = function(inst, instigator)
 		inst.owner = instigator
-		inst.components.hitbox:SetHitGroup(HitGroup.MOB) --instigator.components.hitbox:GetHitGroup())
-		inst.components.hitbox:SetHitFlags(HitGroup.CHARACTERS) --instigator.components.hitbox:GetHitFlags())
+		if (instigator) then
+			inst.components.hitbox:SetHitGroup(instigator.components.hitbox:GetHitGroup())
+			inst.components.hitbox:SetHitFlags(instigator.components.hitbox:GetHitFlags())
+		else
+			inst.components.hitbox:SetHitGroup(HitGroup.MOB)
+			inst.components.hitbox:SetHitFlags(HitGroup.CHARACTERS)
+		end
 		inst.components.hitbox:PushCircle(0.30, 0.00, 6, HitPriority.MOB_DEFAULT)
 	end
 

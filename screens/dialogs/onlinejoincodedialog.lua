@@ -64,7 +64,16 @@ local OnlineJoinCodeDialog = Class(PopupDialog, function(self, device_type, devi
 		:SetUppercase(true)
 		:SetCharacterFilter("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 		:SetForceEdit(true)
+		:SetPasswordMode(TheGameSettings:Get("network.streamer_mode"))
 		:SetFn(function(text) self:HandleJoinCodeInputted() end)
+
+
+	self.dialog_inputbox.on_streamer_mode_changed = function()
+		self.dialog_inputbox:SetPasswordMode(TheGameSettings:Get("network.streamer_mode"))
+	end
+
+	self.dialog_inputbox.inst:ListenForEvent("ui_streamer_mode_changed", self.dialog_inputbox.on_streamer_mode_changed, TheGlobalInstance)
+
 
 	self.dialog_inputbox.OnTextEntered = function(text)
 		self:HandleJoinCodeInputted(text)

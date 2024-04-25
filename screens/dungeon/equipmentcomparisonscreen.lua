@@ -19,6 +19,8 @@ local Consumable = require "defs.consumable"
 local EffectEvents = require "effectevents"
 local SGPlayerCommon = require "stategraphs.sg_player_common"
 
+local EquipmentTooltip = require"widgets/ftf/equipmenttooltip"
+
 local EquipmentPreview = Class(Widget, function(self, player, itemDef, owned)
 	Widget._ctor(self, "EquipmentPreview")
 
@@ -30,7 +32,11 @@ local EquipmentPreview = Class(Widget, function(self, player, itemDef, owned)
 	self.item = itemforge.CreateEquipment(self.itemDef.slot, self.itemDef)
 
 	local recipe = recipes.FindRecipeForItemDef(self.itemDef)
-	self.details = self:AddChild(UpgradeableItemWidget(self.width, self.player, self.item, recipe, owned, false, true))
+
+	self.details = self:AddChild(EquipmentTooltip())
+		:LayoutWithContent({player = player, item = self.item, hide_deltas = true})
+
+	-- self.details = self:AddChild(UpgradeableItemWidget(self.width, self.player, self.item, recipe, owned, false, true))
 end)
 
 --------------------------------------------------------------
@@ -50,14 +56,10 @@ local function PurchaseEquipmentItem(player, item_def, item, equip)
 	end
 end
 
-local WEIGHT_CHANGED_TO <const> = {
-	[Weight.Status.s.Light] = STRINGS.UI.WARE_PURCHASE_POPUP.WEIGHT_CHANGED_TO.LIGHT,
-	[Weight.Status.s.Normal] = STRINGS.UI.WARE_PURCHASE_POPUP.WEIGHT_CHANGED_TO.MEDIUM,
-	[Weight.Status.s.Heavy] = STRINGS.UI.WARE_PURCHASE_POPUP.WEIGHT_CHANGED_TO.HEAVY,
-}
-
 local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_def, currency_type, cost)
 	Screen._ctor(self, "EquipmentComparisonScreen")
+
+	self:SetOwningPlayer(player)
 
 	self.player = player
 	self.itemDef = new_item_def
@@ -70,15 +72,17 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 		self.equippedItemDef = equippedItem:GetDef()
 	end
 
-
 	self.bg = self:AddChild(Image("images/global/square.tex"))
 		:SetScale(100)
-		:SetMultColor(0, 0, 0, 0.5)
+		:SetMultColor(0, 0, 0, 0.65)
 
-	self.title = self:AddChild(Text(FONTFACE.DEFAULT, 100, "", UICOLORS.LIGHT_TEXT))
+	self.popup_dialog_bg = self:AddChild(Image("images/ui_ftf_unlock/popup_dialog_bg.tex"))
+		:SetName("Dialog background")
+
+	self.title = self:AddChild(Text(FONTFACE.DEFAULT, 100, "", UICOLORS.BACKGROUND_MID))
 		:SetText(STRINGS.UI.WARE_PURCHASE_POPUP.DECISION_TITLE)
 
-	self.text = self:AddChild(Text(FONTFACE.DEFAULT, 70, "", UICOLORS.LIGHT_TEXT))
+	self.text = self:AddChild(Text(FONTFACE.DEFAULT, 70, "", UICOLORS.LIGHT_TEXT_DARKER))
 		:SetText(STRINGS.UI.WARE_PURCHASE_POPUP.DECISION_TEXT)
 
 	-- Containers
@@ -86,9 +90,11 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 	if self.equippedItemDef then
 		self.equippedItemDetails = self.itemsContainer:AddChild(EquipmentPreview(self.player, self.equippedItemDef, true))
 
-		self.arrows_container = self:AddChild(Widget())
+		self.arrows_container = self.itemsContainer:AddChild(Widget())
 			:SetName("Arrows container")
 			:SetMultColorAlpha(0)
+			:SetScale(0.7)
+
 		self.arrow_widget_left = self.arrows_container:AddChild(Image("images/ui_ftf_powers/upgrade_arrow_left.tex"))
 			:SetName("Arrow left")
 			:Offset(-60, 0)
@@ -97,18 +103,24 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 			:Offset(60, 0)
 
 		-- Animate arrows
-		local arrow_left_x = self.arrow_widget_left:GetPos()
-		local arrow_right_x = self.arrow_widget_right:GetPos()
 		local duration = 2
 		local distance = 125
-		local y_pos = 150
-		self.arrows_container:Offset(-distance/2 + 10, y_pos)
+
+		local arrow_left_x, arrow_left_y = self.arrow_widget_left:GetPos()
+		local arrow_right_x, arrow_right_y = self.arrow_widget_right:GetPos()
+		
+		local arrow_left_x_start = arrow_left_x - distance/2
+		local arrow_left_x_end = arrow_left_x + distance/2
+
+		local arrow_right_x_start = arrow_right_x - distance/2
+		local arrow_right_x_end = arrow_right_x + distance/2
+
 		self.arrows_container:RunUpdater(
 			Updater.Loop({
 				Updater.Parallel{
 					Updater.Ease(function(v) self.arrows_container:SetMultColorAlpha(v) end, 0, 1, duration*0.25, easing.inOutQuad),
-					Updater.Ease(function(v) self.arrow_widget_left:SetPos(v, y_pos) end, arrow_left_x, arrow_left_x+distance, duration*0.9, easing.inOutQuad),
-					Updater.Ease(function(v) self.arrow_widget_right:SetPos(v, y_pos) end, arrow_right_x, arrow_right_x+distance, duration, easing.inOutQuad),
+					Updater.Ease(function(v) self.arrow_widget_left:SetPos(v, arrow_left_y) end, arrow_left_x_start, arrow_left_x_end, duration*0.9, easing.inOutQuad),
+					Updater.Ease(function(v) self.arrow_widget_right:SetPos(v, arrow_right_y) end, arrow_right_x_start, arrow_right_x_end, duration, easing.inOutQuad),
 					Updater.Series{
 						Updater.Wait(duration*0.75),
 						Updater.Ease(function(v) self.arrows_container:SetMultColorAlpha(v) end, 1, 0, duration*0.25, easing.inOutQuad),
@@ -121,18 +133,32 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 	self.newItemDetails = self.itemsContainer:AddChild(EquipmentPreview(self.player, self.itemDef, false))
 
 	-- Changes to our Build
-	self.buildPreview = self:AddChild(Panel("images/ui_ftf_research/research_item_bg.tex"))
-		:SetName("Background")
-		:SetNineSliceCoords(43, 36, 162, 271)
-		:SetSize(650, 600)
-	self.buildDetails = self.buildPreview:AddChild(Widget("Build Details"))
 
-	self.weightWidget = self.buildDetails:AddChild(TotalWeightWidget(self.player, 0.7))
-	self:PreviewWeight()
-	self.buildStats = self.buildDetails:AddChild(Widget("Stat Container"))
-	self:RefreshStats(self.itemDef.slot, self.item)
+
+	self.build_weight_bg = self:AddChild(Panel("images/ui_ftf/price_badge_normal.tex"))
+		:SetName("Build weight background")
+		:SetNineSliceCoords(46, 0, 494, 170)
+		:SetSize(550, 170)
+
+	self.build_stats_bg = self:AddChild(Panel("images/ui_ftf/price_badge_normal.tex"))
+		:SetName("Build stats background")
+		:SetNineSliceCoords(46, 0, 494, 170)
+		:SetSize(550, 170)
+
+	self.buildWeight = self:AddChild(TotalWeightWidget(self.player, 0.7))
+
+	self.buildStats = self:AddChild(Widget("Stat Container"))
+
+	self:RefreshBuildPreview()
 
 	self.buttons = self:AddChild(Widget("Buttons"))
+
+	-- Cannot cache strings at file scope or they won't be translated!
+	local WEIGHT_CHANGED_TO <const> = {
+		[Weight.Status.s.Light] = STRINGS.UI.WARE_PURCHASE_POPUP.WEIGHT_CHANGED_TO.LIGHT,
+		[Weight.Status.s.Normal] = STRINGS.UI.WARE_PURCHASE_POPUP.WEIGHT_CHANGED_TO.MEDIUM,
+		[Weight.Status.s.Heavy] = STRINGS.UI.WARE_PURCHASE_POPUP.WEIGHT_CHANGED_TO.HEAVY,
+	}
 
 	self.purchaseButton = self.buttons:AddChild(ActionButton())
 		:SetName("Purchase Button")
@@ -154,7 +180,7 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 				message = message.."\n"..WEIGHT_CHANGED_TO[preview_weight_status]
 			end
 
-			local screen = ConfirmDialog(nil, nil, false,
+			local screen = ConfirmDialog(self:GetOwningPlayer(), nil, false,
 				title, -- Optional
 				subtitle, -- Optional
 				message -- Optional
@@ -206,7 +232,7 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 					-- local subtitle = "Decorative Pink Hedge"
 					local message = STRINGS.UI.WARE_PURCHASE_POPUP.SHIPPED_TEXT
 
-					local shipped_screen = ConfirmDialog(nil, nil, false,
+					local shipped_screen = ConfirmDialog(self:GetOwningPlayer(), nil, false,
 						title, -- Optional
 						nil, -- Optional
 						message -- Optional
@@ -233,52 +259,58 @@ local EquipmentComparisonScreen = Class(Screen, function(self, player, new_item_
 				:Offset(0, y_offset)
 			TheFrontEnd:PushScreen(screen)
 			screen:AnimateIn()
-			
+
 		end)
 
 	self.cancelButton = self.buttons:AddChild(ActionButton())
 		:SetName("Cancel Button")
 		:SetSize(BUTTON_W * .75, BUTTON_H)
 		:SetSecondary()
+		:SetFlipped()
 		:SetText(STRINGS.UI.WARE_PURCHASE_POPUP.CANCEL_OPTION)
 		:SetOnClick(function()
 			self:Close()
 		end)
 
-	self.buildDetails:LayoutChildrenInRow(50)
-		:LayoutBounds("center", "center", self.buildPreview)
-		:Offset(20, 0)
+	self.popup_dialog_bg:LayoutBounds("center", "center", self):Offset(0, 160)
 
-	self.itemsContainer:LayoutChildrenInRow(300)
-		:LayoutBounds("center", "center", self)
-		:Offset(0, 300)
+	local w, h = self.buildWeight
+		:SetRotation(0)
+		:GetSize()
+	self.build_weight_bg:SetSize(h + 100, w + 100)
+		:LayoutBounds("left", "bottom", self.popup_dialog_bg)
+		:Offset(50, 0)
+	self.buildWeight:LayoutBounds("center", "center", self.build_weight_bg)
+		:Offset(-20, 20)
+		:SetRotation(90)
 
+	local w, h = self.buildStats:GetSize()
+	self.build_stats_bg:SetSize(w + 200, h + 100)
+		:LayoutBounds("right", "bottom", self.popup_dialog_bg)
+		:Offset(-20, 10)
+	self.buildStats:LayoutBounds("center", "center", self.build_stats_bg)
 
-	self.title:LayoutBounds("center", "above", self.itemsContainer)
-		:Offset(0, 40)
-	self.text:LayoutBounds("center", "below", self.title)
-		:Offset(0, -20)
+	self.itemsContainer:LayoutChildrenInRow(50)
+		:LayoutBounds("center", "center", self.popup_dialog_bg)
+		:Offset(0, 0)
 
-	self.itemsContainer:LayoutBounds("center", "below", self.text)
-		:Offset(0, -40)
+	self.text:LayoutBounds("center", "above", self.itemsContainer)
+		:Offset(0, 60)
+	self.title:LayoutBounds("center", "above", self.text)
+		:Offset(0, 10)
 
 	self.buttons:LayoutChildrenInColumn(20)
-	self.buttons:LayoutBounds("center", "below", self.itemsContainer)
-		:Offset(0, -70)
-
-	self.buildPreview:LayoutBounds("before", "top", self.purchaseButton)
-		:Offset(-300, 0)
-		-- :Hide()
+		:LayoutBounds("center", "below", self.itemsContainer)
+		:Offset(0, -60)
 
 	self:Offset(0, -200)
 	self.default_focus = self.purchaseButton
-
-	if self.equippedItemDetails ~= nil then
-		self.equippedItemDetails.details:Refresh()
-	end
-
-	self.newItemDetails.details:Refresh()
 end)
+
+function EquipmentComparisonScreen:RefreshBuildPreview()
+	self:PreviewWeight()
+	self:RefreshStats(self.itemDef.slot, self.item)
+end
 
 function EquipmentComparisonScreen:GetPreviewWeights()
 	local weights = self.player.components.weight:GetWeights()
@@ -290,7 +322,7 @@ function EquipmentComparisonScreen:GetPreviewWeights()
 end
 
 function EquipmentComparisonScreen:PreviewWeight()
-	self.weightWidget:PreviewByListOfWeights(self:GetPreviewWeights())
+	self.buildWeight:PreviewByListOfWeights(self:GetPreviewWeights())
 end
 
 function EquipmentComparisonScreen:SetDefaultFocus()
@@ -299,7 +331,7 @@ end
 
 
 function EquipmentComparisonScreen:RefreshStats(previewed_slot, previewed_item)
-	-- note: jambell, taken from inventory screen -- once desire is known, align these two.
+	-- note: taken from inventory screen -- once desire is known, align these two.
 
 	self.buildStats:RemoveAllChildren()
 

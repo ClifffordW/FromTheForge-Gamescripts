@@ -27,23 +27,6 @@ function GameContent:GetLocalization()
 end
 
 
-local function GetDefaultLanguage(self)
-	-- if no language is provided, figure out a default from the system
-
-	-- I don't think this locale detection is worthwhile. Instead, we'll only
-	-- rely on the platform language.
-	--~ local userlocalename = TheSim:GetUserLocaleName()
-	--~ if userlocalename ~= "" then
-	--~ 	for _, localization in pairs(self.content_db:GetAll( Localization )) do
-	--~ 		if localization:SupportsLocale(userlocalename) then
-	--~ 			return localization.id
-	--~ 		end
-	--~ 	end
-	--~ end
-
-	return TheSim:GetPreferredLanguage()
-end
-
 function GameContent:SetLanguage(language_id)
 	local settings_language = TheGameSettings:Get("language.selected")
 	assert(settings_language, "Failed to get default language.")
@@ -56,8 +39,13 @@ function GameContent:SetLanguage(language_id)
 	assert(self.localization, "Missing default localization?")
 
 	self.localization:ApplyStage1_DataOnly( self.content_db )
+	LOC.TranslateStringTable( STRINGS )
 
-	TranslateStringTable( STRINGS )
+	-- Apply replacements to translated string tables.
+	--
+	-- Always process ContentDB strings since we'll fall back to them if a line
+	-- is untranslated. Default (english) localization won't have any strings.
+	self:GetContentLoader().PostLoadStrings(STRINGS, self.content_db:GetAllStrings(), self.localization:GetAllStrings() or {})
 
 	print( "GameContent:InitLanguage", language_id)
 end

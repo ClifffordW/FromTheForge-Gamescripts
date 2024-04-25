@@ -9,6 +9,7 @@ function DungeonTravel:ReadyToTravel(cardinal)
 	self.inst:PushEvent("travelpreview_start", cardinal)
 end
 
+-- Note: Abandon is not currently supported.
 function DungeonTravel:AbandonTravel()
 	-- Once any player is not ready, we must try to stop.
 	self.inst:PushEvent("travelpreview_stop")

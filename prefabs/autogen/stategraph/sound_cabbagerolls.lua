@@ -4,9 +4,9 @@ return {
   group="sound_creature",
   isfinal=true,
   needSoundEmitter=true,
-  prefab={ "cabbagerolls",},
+  prefab={ "cabbagerolls", "cabbagerolls_elite",},
   stategraphs={
-    sg_cabbagerolls={
+    sg_cabbageroll={
       sg_events={
         {
           eventtype="playsound",

@@ -41,8 +41,6 @@ function Cosmetic.GetBodyPartList(bodypart, tags)
 	return ret
 end
 
--- Passing nil for filtertags or symboltags will match as if we supported every tag.
--- TODO(dbriscoe): POSTVS Pass tags as named keys in a tags table to avoid errors.
 function Cosmetic.AddBodyPart(name, data)
 	local cosmetic_data = data.cosmetic_data
 
@@ -74,7 +72,7 @@ function Cosmetic.GetSpeciesBodyParts(bodypart, species)
 	local bodyparts = Cosmetic.BodyParts[bodypart]
 
 	for name, def in pairs(bodyparts) do
-		if def.filtertags and def.filtertags[species] then
+		if def.species and def.species == species then
 			table.insert(selected_bodyparts, def)
 		end
 	end
@@ -82,13 +80,18 @@ function Cosmetic.GetSpeciesBodyParts(bodypart, species)
 	return selected_bodyparts
 end
 
-function Cosmetic.CollectBodyPartAssets(assets)
-	local dupe = {}
+function Cosmetic.CollectBodyPartAssets(asset_pack, included_cosmetics)
+	local dupe = {
+		prod = {},
+		dev = {},
+	}
 	for bodypart, items in pairs(Cosmetic.BodyParts) do
 		for name, def in pairs(items) do
-			if def.build ~= nil and not dupe[def.build] then
-				dupe[def.build] = true
-				assets[#assets + 1] = Asset("ANIM", "anim/"..def.build..".zip")
+			local build = def.build
+			local dest = included_cosmetics[name] and "prod" or "dev"
+			if build and not dupe[dest][build] then
+				dupe[dest][build] = true
+				table.insert(asset_pack[dest], Asset("ANIM", "anim/"..build..".zip"))
 			end
 		end
 	end

@@ -80,7 +80,7 @@ function GemItemWidget:SetGemItem(gem)
 	self.type = def.gem_type
 
 	self.icon:SetTexture(def.icon)
-	self.gem_name:SetText(name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[self.gem.ilvl])
+	self.gem_name:SetText(name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[self.gem:GetEffectiveItemLevel()])
 	self.gem_level:SetGem(self.gem)
 
 	if self.gem.equipped_in then
@@ -271,11 +271,12 @@ function GemSlotDetailsWidget:ShowEquippedGem(gem)
 		:Show()
 	self.gem_level:SetGem(self.gem)
 		:Show()
-	self.title:SetText(def.pretty.name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[self.gem.ilvl])
+	self.title:SetText(def.pretty.name.." "..STRINGS.ITEMS.GEMS.ILVL_TO_NAME[self.gem:GetEffectiveItemLevel()])
 	self.desc_empty:Hide()
-	self.slot_max_level:SetShown(gem.ilvl == #def.base_exp)
-	self.desc_widget:SetItem(self.gem, true)
-		:Show()
+	self.slot_max_level:SetShown(gem:GetEffectiveItemLevel() == #def.base_exp)
+	TheLog.ch.FrontEnd:print("GemScreen needs updating to match new EquipmentDescriptionWidget behaviour.")
+	--~ self.desc_widget:SetItem(self.gem, true)
+	--~ 	:Show()
 
 	self:_Layout()
 	return self
@@ -356,7 +357,7 @@ local WeaponGemSlotsContainer = Class(Widget, function(self, weapon, player)
 		local slot_widget = self.slot_container:AddChild(GemSlotDetailsWidget(player, slot_data))
 		slot_widget:SetOnClick(function() self:OnClickSlot(slot_widget, slot_data, i) end)
 		slot_widget:SetOnClickAlt(function() self:OnRightClickSlot(slot_widget, slot_data, i) end)
-		-- slot_widget:SetOnGainFocus(function() if TheFrontEnd:IsRelativeNavigation() then self:OnClickSlot(slot_widget, slot_data, i) end end)
+		-- slot_widget:SetOnGainFocus(function() if screen:IsRelativeNavigation() then self:OnClickSlot(slot_widget, slot_data, i) end end)
 	end
 
     self.slot_container:LayoutChildrenInColumn(40)
@@ -519,7 +520,7 @@ function GemsCollectionWidget:PopulateWithGemsOfType(type, player, current_gem)
 		-- Useful to debug extra exp/levels into gems
 		-- gem_widget:SetOnClickAlt(function() 
 		-- 	gem_item.ilvl_max = #def.base_exp
-		-- 	gem_item.exp_max = def.base_exp[gem_item.ilvl]
+		-- 	gem_item.exp_max = def.base_exp[gem_item:GetEffectiveItemLevel()]
 		-- 	d_view(gem_item) end)
 
 		-- If a gem is meant to be shown as selected, do so
@@ -681,26 +682,6 @@ local GemScreen = Class(Screen, function(self, player, on_close_cb)
 	-- Selection brackets
 	----------------------------------------------------------------------------------
 
-	-- Focus brackets
-	self.focus_brackets = self:AddChild(Panel("images/ui_ftf_gems/selection_brackets.tex"))
-		:SetName("Selection brackets")
-		:SetNineSliceCoords(78, 94, 80, 96)
-		:SetHiddenBoundingBox(true)
-		:IgnoreInput(true)
-		:Hide()
-
-	-- Animate them too
-	local speed = 1.35
-	local amplitude = 14
-	self.focus_brackets_w = 100
-	self.focus_brackets_h = 100
-	self.focus_brackets:RunUpdater(
-		Updater.Loop({
-			Updater.Ease(function(v) self.focus_brackets:SetSize(self.focus_brackets_w + v, self.focus_brackets_h + v) end, amplitude, 0, speed, easing.inOutQuad),
-			Updater.Ease(function(v) self.focus_brackets:SetSize(self.focus_brackets_w + v, self.focus_brackets_h + v) end, 0, amplitude, speed, easing.inOutQuad),
-		}))
-
-
 	-- Slot selection arrows
 	self.slot_selection_arrow_left = self:AddChild(Image("images/ui_ftf_gems/selection_arrow_left.tex"))
 		:SetName("Slot selection arrow left")
@@ -777,87 +758,17 @@ local GemScreen = Class(Screen, function(self, player, on_close_cb)
 			self.slots_container:GetIndexSlot(1):Click():SetFocus()
 	    end
     end)
+
+	self:EnableFocusBracketsForGamepad()
+	self:HideFocusBracketsUntilMove() -- shows after animation
 end)
 
 function GemScreen:OnInputModeChanged(old_device_type, new_device_type)
-	if not TheFrontEnd:IsRelativeNavigation() then
-		self.focus_brackets:Hide()
-	end
 	self.info_label:RefreshText()
-end
-
-function GemScreen:OnFocusMove(dir, down)
-	GemScreen._base.OnFocusMove(self, dir, down)
-	local focus = self:GetDeepestFocus()
-	if focus and TheFrontEnd:IsRelativeNavigation() then
-		if self.focus_brackets:IsShown() == false then
-			-- The player moved the gamepad joystick for the first time. Focus on the button
-			self.focus_brackets:Show()
-			self.default_focus:SetFocus()
-			self:_UpdateFocusBrackets(self.default_focus)
-		else
-			-- Move brackets to this element
-			self:_UpdateFocusBrackets(focus)
-		end
-	end
 end
 
 -- TODO: The gem list scrolled, so make sure the selection brackets and arrows are still on the correct items
 function GemScreen:OnGemContainerScrolled()
-end
-
-function GemScreen:_UpdateFocusBrackets(target_widget)
-
-	if self.last_target_widget == target_widget then return self end
-
-	-- Get the brackets' starting position
-	local start_pos = self.focus_brackets:GetPositionAsVec2()
-	-- Get starting size
-	local start_w, start_h = self.focus_brackets:GetSize()
-
-	-- Align them with the target
-	self.focus_brackets:LayoutBounds("center", "center", target_widget)
-		:Offset(0, 0)
-
-	-- Get the new position
-	local end_pos = self.focus_brackets:GetPositionAsVec2()
-	-- And the new size
-	local w, h = target_widget:GetSize()
-	local end_w, end_h = w + 120, h + 100
-
-	-- Calculate midpoint
-	local mid_pos = start_pos:lerp(end_pos, 0.2)
-	-- Calculate a perpendicular vector from the midpoint
-	local dir = start_pos - end_pos
-	dir = dir:perpendicular()
-	dir = dir:normalized()
-	dir = mid_pos + dir*250
-
-	-- Move them back and animate them in
-	self.focus_brackets:SetPos(start_pos.x, start_pos.y)
-		:CurveTo(end_pos.x, end_pos.y, dir.x, dir.y, 0.35, easing.outElasticUI)
-		-- :SizeTo(start_w, end_w, start_h, end_h, 0.35, easing.outQuad)
-		:Ease2dTo(function(w, h)
-			self.focus_brackets_w = w
-			self.focus_brackets_h = h
-		end, start_w, end_w, start_h, end_h, 0.1, easing.linear)
-
-	self.last_target_widget = target_widget
-
-	-- If this widget is a gem, save the index, so we can focus on the
-	-- same index when changing slots
-	if self.gems_container:IsAncestorOf(target_widget) then
-		self.last_focused_gem_idx = 1
-		for k, v in ipairs(self.gems_container:GetGemWidgets()) do
-			if v == target_widget then
-				self.last_focused_gem_idx = k
-			end
-		end
-	else
-		self.last_focused_gem_idx = false -- Not a gem
-	end
-
-	return self
 end
 
 function GemScreen:_UpdateSlotSelectionArrows(target_row)
@@ -981,40 +892,28 @@ end
 -- If a gem is focused, and the list changed, set focus on a new gem
 -- (in the same position, if possible)
 function GemScreen:_RestoreGemFocus()
-	if self.last_focused_gem_idx and TheFrontEnd:IsRelativeNavigation() then
+	if self.last_focused_gem_idx and self:IsRelativeNavigation() then
 		-- Set focus to the new gem in that index
 		self.gems_container:FocusOnIndex(self.last_focused_gem_idx)
-		-- And move the brackets over
-		local target_widget = self:GetDeepestFocus()
-		if target_widget then
-			self:_UpdateFocusBrackets(target_widget)
-		end
 	end
 end
 
 function GemScreen:_ShowSelectedGem()
-	if self.last_focused_gem_idx and TheFrontEnd:IsRelativeNavigation() then
+	if self.last_focused_gem_idx and self:IsRelativeNavigation() then
 		-- Set focus to the new gem in that index
 		self.gems_container:FocusOnIndex(self.last_focused_gem_idx)
-		-- And move the brackets over
-		local target_widget = self:GetDeepestFocus()
-		if target_widget then
-			self:_UpdateFocusBrackets(target_widget)
-		end
 	end
 end
 
-function GemScreen:SetDefaultFocus()
+function GemScreen:SetDefaultFocus(hunter_id)
 	if #self.slots_container.slot_container.children > 0 then
-		self.slots_container.slot_container.children[1]:SetFocus()
+		self.slots_container.slot_container.children[1]:SetFocus(hunter_id)
 	else
-		self.weapon_icon:SetFocus()
+		self.weapon_icon:SetFocus(hunter_id)
 	end
 	self.focused_on_slots = true
 	self.slots_container:SetFocusLock(self.focused_on_slots)
 	self.gems_container:SetFocusLock(not self.focused_on_slots)
-	local focus = self:GetDeepestFocus()
-	self:_UpdateFocusBrackets(focus)
 end
 
 function GemScreen:OnOpen()
@@ -1045,7 +944,10 @@ function GemScreen:OnOpen()
 			Updater.Parallel{
 				Updater.Ease(function(a) self.gems_panel:SetMultColorAlpha(a) end, 0, 1, pacing, easing.outQuad),
 				Updater.Ease(function(x) self.gems_panel:SetPos(x, gems_y) end, gems_x-150, gems_x, pacing*5, easing.outElasticUI),
-			}
+			},
+			Updater.Do(function()
+				self:_ImmediatelyShowFocusBrackets()
+			end),
 		}
 	})
 end
@@ -1089,10 +991,8 @@ function GemScreen:OnGemSlotSelected(slot_widget, slot_data, slot_number)
 	self.focused_on_slots = false
 	self.slots_container:SetFocusLock(self.focused_on_slots)
 	self.gems_container:SetFocusLock(not self.focused_on_slots)
-	if TheFrontEnd:IsRelativeNavigation() and self.gems_container:HasGems() then
+	if self:IsRelativeNavigation() and self.gems_container:HasGems() then
 		self.gems_container:FocusOnIndex(1)
-		local focus = self:GetDeepestFocus()
-		self:_UpdateFocusBrackets(focus)
 	end
 
 end
@@ -1118,13 +1018,9 @@ function GemScreen:OnGemClicked(gem_widget, gem_item)
 		self.focused_on_slots = true
 		self.slots_container:SetFocusLock(self.focused_on_slots)
 		self.gems_container:SetFocusLock(not self.focused_on_slots)
-		if TheFrontEnd:IsRelativeNavigation() then
+		if self:IsRelativeNavigation() then
 			slot_widget:SetFocus()
-			local focus = self:GetDeepestFocus()
-			self:_UpdateFocusBrackets(focus)
 		end
-		-- self:_UpdateGemSelectionArrows(gem_widget)
-		-- self:_RestoreGemFocus()
 	end
 end
 
@@ -1174,10 +1070,8 @@ GemScreen.CONTROL_MAP =
 				self.focused_on_slots = true
 				self.slots_container:SetFocusLock(self.focused_on_slots)
 				self.gems_container:SetFocusLock(not self.focused_on_slots)
-				if TheFrontEnd:IsRelativeNavigation() then
+				if self:IsRelativeNavigation() then
 					self:SetDefaultFocus()
-					local focus = self:GetDeepestFocus()
-					self:_UpdateFocusBrackets(focus)
 				end
 			end
 
@@ -1195,7 +1089,7 @@ GemScreen.CONTROL_MAP =
 		control = Controls.Digital.ATTACK_HEAVY,
 		fn = function(self)
 
-			if TheFrontEnd:IsRelativeNavigation() then
+			if self:IsRelativeNavigation() then
 				local slot_widget, slot_number = self.slots_container:GetFocusedSlot()
 				if slot_widget then
 					slot_widget:AltClick()

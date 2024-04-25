@@ -7,11 +7,10 @@ return {
   clip_at_worldedge=true,
   finaloffset=7,
   group="bombs_traps",
-  layer="bg",
   looping=true,
   multcolor="FFFFFFC2",
   onground=true,
   randomstartframe=true,
-  sortorder=2,
+  sortorder=-1,
   variations=1,
 }
